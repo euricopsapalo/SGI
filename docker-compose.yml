@@ -1,0 +1,65 @@
+﻿services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: sgi_postgres
+    environment:
+      POSTGRES_DB: app_development
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: app_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: sgi_backend
+    command: npm run start:dev
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: app_user
+      DB_PASSWORD: app_password
+      DB_NAME: app_development
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend:/app       # Sincroniza o seu código local com o container          
+      - /app/node_modules     # Protege as dependências instaladas dentro do container
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: sgi_frontend
+    environment:
+      REACT_APP_API_URL: http://localhost:3001
+      # Estas duas variáveis forçam o hot-reload a funcionar dentro do Docker:
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+  adminer:
+    image: adminer:latest
+    container_name: sgi_adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
