@@ -9,6 +9,7 @@ import {
 import { Cliente } from '../clientes/cliente.entity';
 import { Equipamento } from '../equipamentos/equipamento.entity';
 import { OrdemDeServico } from '../ordens-servico/ordem-de-servico.entity';
+import { MaquinaHistorico } from './maquina-historico.entity';
 
 export enum EstadoMaquina {
     ATIVA = 'ativa',
@@ -46,4 +47,7 @@ export class MaquinaInstalada {
 
     @OneToMany(() => OrdemDeServico, (os) => os.maquinaInstalada)
     ordensServico: OrdemDeServico[];
+
+    @OneToMany(() => MaquinaHistorico, (h) => h.maquina, { cascade: true })
+    historico: MaquinaHistorico[];
 }

@@ -6,9 +6,12 @@
 
 -- ENUM types
 CREATE TYPE user_role AS ENUM ('admin', 'suporte', 'campo', 'vendedor');
+CREATE TYPE tipo_cliente AS ENUM ('empresa', 'particular');
 CREATE TYPE tipo_equipamento AS ENUM ('maquina', 'filtro', 'peca', 'filtro_maquina');
 CREATE TYPE estado_maquina AS ENUM ('ativa', 'com_problema', 'desativada');
 CREATE TYPE tipo_tecnico AS ENUM ('suporte', 'campo');
+CREATE TYPE tipo_historico AS ENUM ('montagem', 'preventiva', 'corretiva', 'remota');
+CREATE TYPE estado_historico AS ENUM ('concluida', 'cancelada');
 CREATE TYPE tipo_os AS ENUM ('montagem', 'preventiva', 'corretiva', 'remota');
 CREATE TYPE estado_os AS ENUM ('aberta', 'em_execucao', 'concluida', 'cancelada', 'resolvida_remotamente');
 CREATE TYPE estado_fatura AS ENUM ('pendente', 'paga');
@@ -59,12 +62,24 @@ CREATE TABLE IF NOT EXISTS users (
 -- --------------------------------------------------------
 CREATE TABLE IF NOT EXISTS clientes (
     id           SERIAL PRIMARY KEY,
+    tipo         tipo_cliente NOT NULL DEFAULT 'empresa',
     nome         VARCHAR(200) NOT NULL,
     nif          VARCHAR(20),
     email        VARCHAR(200),
     telefone     VARCHAR(30),
-    morada       TEXT,
     data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- --------------------------------------------------------
+-- Endereços dos Clientes (múltiplos por cliente)
+-- --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS cliente_enderecos (
+    id         SERIAL PRIMARY KEY,
+    cliente_id INT NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    descricao  VARCHAR(100),
+    morada     TEXT NOT NULL,
+    cidade     VARCHAR(100) NOT NULL,
+    principal  BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 -- --------------------------------------------------------
@@ -76,7 +91,6 @@ CREATE TABLE IF NOT EXISTS equipamentos (
     tipo             tipo_equipamento NOT NULL,
     marca            VARCHAR(100),
     modelo           VARCHAR(100),
-    nr_serie         VARCHAR(100),
     preco_venda      NUMERIC(10,2),
     quantidade_stock INT NOT NULL DEFAULT 0,
     stock_minimo     INT NOT NULL DEFAULT 0,
@@ -119,6 +133,19 @@ CREATE TABLE IF NOT EXISTS maquinas_instaladas (
     data_ultima_manutencao  DATE,
     data_proxima_manutencao DATE,
     estado                  estado_maquina NOT NULL DEFAULT 'ativa'
+);
+
+-- --------------------------------------------------------
+-- Histórico de Intervenções por Máquina
+-- --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS maquina_historico (
+    id         SERIAL PRIMARY KEY,
+    maquina_id INT NOT NULL REFERENCES maquinas_instaladas(id) ON DELETE CASCADE,
+    data       DATE NOT NULL,
+    tipo       tipo_historico NOT NULL,
+    descricao  TEXT NOT NULL,
+    tecnico    VARCHAR(150),
+    estado     estado_historico NOT NULL DEFAULT 'concluida'
 );
 
 -- --------------------------------------------------------

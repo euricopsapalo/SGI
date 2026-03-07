@@ -31,9 +31,6 @@ export class Equipamento {
     @Column({ nullable: true, length: 100 })
     modelo: string;
 
-    @Column({ name: 'nr_serie', nullable: true, length: 100 })
-    nrSerie: string;
-
     @Column({ name: 'preco_venda', type: 'numeric', precision: 10, scale: 2, nullable: true })
     precoVenda: number;
 
