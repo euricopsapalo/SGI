@@ -8,7 +8,7 @@
 :root {
   /* Topnav */
   --topnav-bg: #2B2B2B;
-  --topnav-h: 52px;
+  --topnav-h: 62px;
   --topnav-text: #E8E8E8;
   --topnav-active-bg: #0D6EBF;
   --topnav-hover-bg: rgba(255, 255, 255, 0.10);
@@ -218,7 +218,9 @@ a:hover {
   display: flex;
   align-items: stretch;
   flex-shrink: 0;
+  position: relative;
   z-index: 100;
+  overflow: visible;
   user-select: none;
 }
 
@@ -254,7 +256,7 @@ a:hover {
   display: flex;
   align-items: stretch;
   flex: 1;
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .topnav-item {
@@ -262,15 +264,12 @@ a:hover {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 0 var(--sp-4);
-  min-width: 72px;
+  gap: 4px;
+  padding: 0 14px;
+  min-width: 70px;
   cursor: pointer;
-  color: var(--topnav-text);
+  color: rgba(255, 255, 255, 0.72);
   text-decoration: none !important;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
   border-right: 1px solid var(--topnav-border);
   transition: background var(--t), color var(--t);
   position: relative;
@@ -284,7 +283,7 @@ a:hover {
 }
 
 .topnav-item.active {
-  background: var(--topnav-active-bg);
+  background: rgba(255, 255, 255, 0.10);
   color: #ffffff;
 }
 
@@ -295,11 +294,23 @@ a:hover {
   left: 0;
   right: 0;
   height: 3px;
-  background: rgba(255, 255, 255, 0.4);
+  background: var(--blue, #0D6EBF);
+  border-radius: 2px 2px 0 0;
 }
 
 .topnav-item svg {
   flex-shrink: 0;
+}
+
+.topnav-item-label {
+  font-size: 0.64rem;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: inherit;
 }
 
 .topnav-divider {
@@ -520,7 +531,7 @@ a:hover {
 }
 
 .stat-value {
-  font-size: 1.6rem;
+  font-size: 1.25rem;
   font-weight: 800;
   color: var(--text-primary);
   line-height: 1;
@@ -631,6 +642,7 @@ a:hover {
   border: 1px solid var(--panel-border);
   border-radius: var(--r-sm);
   overflow: hidden;
+  overflow-x: auto; /* tables scroll horizontally on all screen sizes */
 }
 
 .table-scroll {
@@ -1502,6 +1514,9 @@ a:hover {
 }
 
 
+/* ════════════════════════════════════════════════
+   RESPONSIVE — Tablets (≤ 900px)
+════════════════════════════════════════════════ */
 @media (max-width: 900px) {
   .settings-layout {
     grid-template-columns: 1fr;
@@ -1534,16 +1549,139 @@ a:hover {
   }
 }
 
-@media (max-width: 600px) {
-  .topnav-modules {
-    overflow-x: auto;
+/* ════════════════════════════════════════════════
+   RESPONSIVE — Small tablets / large phones (≤ 640px)
+════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* TopNav */
+  .topnav-logo {
+    min-width: auto;
+    padding: 0 var(--sp-3);
   }
 
   .topnav-logo-sub {
     display: none;
   }
 
+  .topnav-modules {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .topnav-user {
+    display: none;
+  }
+
+  .topnav-item {
+    min-width: 48px;
+    padding: 0 10px;
+  }
+
+  /* ActionBar */
+  .actionbar {
+    padding: 0 var(--sp-3);
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--actionbar-h);
+    padding-top: 4px;
+    padding-bottom: 4px;
+    gap: 4px;
+  }
+
+  .actionbar-title {
+    font-size: 0.72rem;
+  }
+
+  /* Page */
   .page-content {
     padding: var(--sp-3);
+  }
+
+  /* Panel */
+  .panel-body {
+    padding: var(--sp-3);
+  }
+
+  .panel-header {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 34px;
+    padding: var(--sp-2) var(--sp-3);
+    gap: 4px;
+  }
+
+  /* Modal — full-width sheet on mobile */
+  .modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .modal {
+    max-width: 100% !important;
+    max-height: 92vh;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+  }
+
+  /* Tables */
+  .table-container {
+    overflow-x: auto;
+  }
+
+  /* Filters */
+  .search-wrap {
+    max-width: 100%;
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  .filters-bar {
+    row-gap: var(--sp-2);
+  }
+
+  /* Stats — 2 per row */
+  .stat-card {
+    min-width: calc(50% - var(--sp-3));
+  }
+
+  /* Dropdown */
+  .dropdown-menu {
+    max-width: calc(100vw - 32px);
+  }
+
+  /* Settings tabs */
+  .settings-tab {
+    min-width: 80px;
+    font-size: 0.75rem;
+  }
+
+  /* Toast */
+  .toast {
+    bottom: 12px;
+    right: 12px;
+    left: 12px;
+    font-size: 0.78rem;
+  }
+}
+
+/* ════════════════════════════════════════════════
+   RESPONSIVE — Small phones (≤ 480px)
+════════════════════════════════════════════════ */
+@media (max-width: 480px) {
+  .topnav-item {
+    min-width: 40px;
+    padding: 0 8px;
+  }
+
+  .stat-card {
+    min-width: 100%;
+  }
+
+  .abtn {
+    font-size: 0.72rem;
+    padding: 2px 7px;
+  }
+
+  .page-content {
+    padding: var(--sp-2);
   }
 }

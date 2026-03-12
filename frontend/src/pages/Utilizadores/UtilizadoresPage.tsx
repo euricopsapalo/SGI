@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import UtilizadorModal from './UtilizadorModal';
+import { useGlobal } from '../../contexts/GlobalContext';
 import {
     Search, Plus, Filter, Pencil, Trash2,
     ToggleLeft, ToggleRight, MoreVertical, Check,
@@ -17,20 +18,22 @@ export interface Utilizador {
     ativo: boolean;
     ultimoAcesso: string;
     iniciais: string;
+    tecnicoId?: string;
+    tecnicoNome?: string;
 }
 
 /* ── Mock data ── */
 const MOCK: Utilizador[] = [
     { id: 1, nome: 'Ana Ferreira', email: 'ana.ferreira@aquatex.ao', telefone: '+244 923 111 111', perfil: 'Administrador', ativo: true, ultimoAcesso: '06/03/2026 08:12', iniciais: 'AF' },
-    { id: 2, nome: 'Bruno Cunha', email: 'bruno.cunha@aquatex.ao', telefone: '+244 912 222 222', perfil: 'Técnico Campo', ativo: true, ultimoAcesso: '06/03/2026 07:50', iniciais: 'BC' },
+    { id: 2, nome: 'Bruno Cunha', email: 'bruno.cunha@aquatex.ao', telefone: '+244 912 222 222', perfil: 'Técnico Campo', ativo: true, ultimoAcesso: '06/03/2026 07:50', iniciais: 'BC', tecnicoId: 'TEC-002', tecnicoNome: 'Gabriel Teixeira' },
     { id: 3, nome: 'Carla Mendes', email: 'carla.mendes@aquatex.ao', telefone: '+244 934 333 333', perfil: 'Técnico Suporte', ativo: true, ultimoAcesso: '05/03/2026 16:45', iniciais: 'CM' },
     { id: 4, nome: 'Daniel Nkosi', email: 'daniel.nkosi@aquatex.ao', telefone: '+244 944 444 444', perfil: 'Vendedor', ativo: true, ultimoAcesso: '04/03/2026 11:30', iniciais: 'DN' },
     { id: 5, nome: 'Eurico Sapalo', email: 'eurico.sapalo@aquatex.ao', telefone: '+244 926 555 555', perfil: 'Administrador', ativo: true, ultimoAcesso: '06/03/2026 09:01', iniciais: 'ES' },
-    { id: 6, nome: 'Fátima Rodrigues', email: 'fatima.rodrigues@aquatex.ao', telefone: '+244 915 666 666', perfil: 'Técnico Campo', ativo: true, ultimoAcesso: '05/03/2026 14:22', iniciais: 'FR' },
-    { id: 7, nome: 'Gabriel Teixeira', email: 'gabriel.teixeira@aquatex.ao', telefone: '+244 932 777 777', perfil: 'Técnico Campo', ativo: false, ultimoAcesso: '01/03/2026 09:00', iniciais: 'GT' },
+    { id: 6, nome: 'Fátima Rodrigues', email: 'fatima.rodrigues@aquatex.ao', telefone: '+244 915 666 666', perfil: 'Técnico Campo', ativo: true, ultimoAcesso: '05/03/2026 14:22', iniciais: 'FR', tecnicoId: 'TEC-005', tecnicoNome: 'Carla Mendes' },
+    { id: 7, nome: 'Gabriel Teixeira', email: 'gabriel.teixeira@aquatex.ao', telefone: '+244 932 777 777', perfil: 'Técnico Campo', ativo: false, ultimoAcesso: '01/03/2026 09:00', iniciais: 'GT', tecnicoId: 'TEC-003', tecnicoNome: 'Pedro Neto' },
     { id: 8, nome: 'Helena Campos', email: 'helena.campos@aquatex.ao', telefone: '+244 942 888 888', perfil: 'Técnico Suporte', ativo: true, ultimoAcesso: '06/03/2026 08:55', iniciais: 'HC' },
     { id: 9, nome: 'Ivan Lopes', email: 'ivan.lopes@aquatex.ao', telefone: '+244 927 999 999', perfil: 'Vendedor', ativo: false, ultimoAcesso: '28/02/2026 17:30', iniciais: 'IL' },
-    { id: 10, nome: 'Joana Tavares', email: 'joana.tavares@aquatex.ao', telefone: '+244 912 000 000', perfil: 'Técnico Campo', ativo: true, ultimoAcesso: '06/03/2026 07:15', iniciais: 'JT' },
+    { id: 10, nome: 'Joana Tavares', email: 'joana.tavares@aquatex.ao', telefone: '+244 912 000 000', perfil: 'Técnico Campo', ativo: true, ultimoAcesso: '06/03/2026 07:15', iniciais: 'JT', tecnicoId: 'TEC-006', tecnicoNome: 'Sofia Gomes' },
 ];
 
 const PERF_BADGE: Record<string, string> = {
@@ -85,6 +88,7 @@ const RowMenu: React.FC<RowMenuProps> = ({ user, onEdit, onToggle, onDelete }) =
    MAIN PAGE
 ════════════════════════════════════════════════ */
 const UtilizadoresPage: React.FC = () => {
+    const { tecnicos } = useGlobal();
     const [users, setUsers] = useState<Utilizador[]>(MOCK);
     const [search, setSearch] = useState('');
     const [filterPerfil, setFilterPerfil] = useState('');
@@ -110,7 +114,7 @@ const UtilizadoresPage: React.FC = () => {
     });
 
     const handleSave = (data: Omit<Utilizador, 'id' | 'ultimoAcesso' | 'iniciais'>) => {
-        const iniciais = data.nome.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+        const iniciais = (data.tecnicoNome ?? data.nome).split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
         if (editUser) {
             setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, ...data, iniciais } : u));
             showToast('Utilizador atualizado com sucesso.');
@@ -257,6 +261,11 @@ const UtilizadoresPage: React.FC = () => {
                                                 </div>
                                                 <div>
                                                     <div className="user-name">{u.nome}</div>
+                                                    {u.tecnicoNome && (
+                                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                                            ↳ {u.tecnicoNome}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </td>
@@ -307,6 +316,7 @@ const UtilizadoresPage: React.FC = () => {
             {modalOpen && (
                 <UtilizadorModal
                     initial={editUser}
+                    tecnicos={tecnicos}
                     onClose={() => { setModalOpen(false); setEditUser(null); }}
                     onSave={handleSave}
                 />

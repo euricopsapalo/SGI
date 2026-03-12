@@ -46,4 +46,7 @@ export class MaquinaHistorico {
 
     @Column({ type: 'enum', enum: EstadoHistorico, default: EstadoHistorico.CONCLUIDA })
     estado: EstadoHistorico;
+
+    @Column({ type: 'text', nullable: true })
+    observacoes: string;
 }

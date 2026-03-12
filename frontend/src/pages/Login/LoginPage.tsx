@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react';
-import logo from '../../assets/aquatex-logo.png';
+import AquatexLogo from '../../components/AquatexLogo';
+import { useGlobal } from '../../contexts/GlobalContext';
+
+const USERS = [
+    { email: 'admin@aquatex.ao',   password: 'admin123',   nome: 'Eurico Sapalo', role: 'Administrador',    tecnicoId: undefined as string | undefined,  tecnicoNome: undefined as string | undefined },
+    { email: 'tecnico@aquatex.ao', password: 'tecnico123', nome: 'Manuel Silva',  role: 'Técnico de Campo', tecnicoId: 'TEC-001' as string | undefined,   tecnicoNome: 'António Silva' as string | undefined },
+];
 
 const LoginPage: React.FC = () => {
     const navigate = useNavigate();
+    const { setCurrentUser } = useGlobal();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPw, setShowPw] = useState(false);
@@ -16,9 +23,10 @@ const LoginPage: React.FC = () => {
         setError('');
         if (!email || !password) { setError('Por favor preencha todos os campos.'); return; }
         setLoading(true);
-        // Simulate auth (replace with real API call)
         await new Promise(r => setTimeout(r, 900));
-        if (email === 'admin@aquatex.ao' && password === 'admin123') {
+        const user = USERS.find(u => u.email === email && u.password === password);
+        if (user) {
+            setCurrentUser({ nome: user.nome, email: user.email, role: user.role, tecnicoId: user.tecnicoId, tecnicoNome: user.tecnicoNome });
             navigate('/dashboard');
         } else {
             setError('Email ou password incorretos.');
@@ -54,19 +62,9 @@ const LoginPage: React.FC = () => {
                     padding: '28px 32px 24px',
                     textAlign: 'center',
                 }}>
-                    <img
-                        src={logo}
-                        alt="AQUATEX"
-                        style={{
-                            height: 42, width: 'auto', objectFit: 'contain',
-                            filter: 'brightness(0) invert(1)',
-                            opacity: 0.92,
-                            display: 'block',
-                            margin: '0 auto 10px',
-                        }}
-                    />
+                    <AquatexLogo height={48} style={{ margin: '0 auto 10px' }} />
                     <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', margin: 0 }}>
-                        Sistema de Gestão Integrado
+                        Sistema de Gestão de Intervenções
                     </p>
                 </div>
 
@@ -190,7 +188,7 @@ const LoginPage: React.FC = () => {
 
             {/* Footer */}
             <p style={{ marginTop: 20, fontSize: '0.72rem', color: '#aaa' }}>
-                © 2026 AQUATEX, LDA — Sistema de Gestão de Serviços Técnicos
+                © 2026 AQUATEX, LDA — Sistema de Gestão de Intervenções
             </p>
 
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

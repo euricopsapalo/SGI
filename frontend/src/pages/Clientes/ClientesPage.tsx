@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
-import { Search, Plus, Pencil, Eye, Phone, Mail, MapPin, Building2, User, X, Check, AlertCircle, Trash2 } from 'lucide-react';
+import ExportModal, { ExportCol } from '../../components/ExportModal';
+import { Search, Plus, Pencil, Eye, Phone, Mail, MapPin, Building2, User, X, Check, AlertCircle, Trash2, Download } from 'lucide-react';
 
 /* ══════════════════════════════════════════
    Types
@@ -380,7 +381,7 @@ const ClienteDetail: React.FC<DetailProps> = ({ cliente, onClose, onEdit }) => {
                 </div>
 
                 <div className="modal-body">
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div className="form-row">
                         <div className="form-group">
                             <label className="form-label">{cliente.tipo === 'empresa' ? 'NIF' : 'BI / NIF'}</label>
                             <div style={{ padding: '5px 10px', border: '1px solid var(--border)', borderRadius: 3, fontSize: '0.82rem' }}>{cliente.nif}</div>
@@ -418,7 +419,7 @@ const ClienteDetail: React.FC<DetailProps> = ({ cliente, onClose, onEdit }) => {
                         </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div className="form-row">
                         <div className="form-group">
                             <label className="form-label">Telefone</label>
                             <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
@@ -433,7 +434,7 @@ const ClienteDetail: React.FC<DetailProps> = ({ cliente, onClose, onEdit }) => {
                         </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 8 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 12, marginTop: 8 }}>
                         {[
                             { label: 'Máquinas Instaladas', value: cliente.maquinas, color: 'var(--blue)' },
                             { label: 'OS Realizadas', value: cliente.osTotal, color: 'var(--green)' },
@@ -466,6 +467,7 @@ const ClientesPage: React.FC = () => {
     const [editTarget, setEditTarget] = useState<Cliente | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
     const [toast, setToast] = useState('');
+    const [showExport, setShowExport] = useState(false);
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
@@ -492,10 +494,30 @@ const ClientesPage: React.FC = () => {
         return !q || c.nome.toLowerCase().includes(q) || c.codigo.toLowerCase().includes(q) || c.nif.includes(q);
     });
 
+    const exportData = filtered.map(c => ({
+        ...c,
+        tipo: c.tipo === 'empresa' ? 'Empresa' : 'Particular',
+    }));
+
+    const EXPORT_COLS: ExportCol[] = [
+        { key: 'codigo',       label: 'Código'    },
+        { key: 'nome',         label: 'Nome'      },
+        { key: 'tipo',         label: 'Tipo'      },
+        { key: 'nif',          label: 'NIF / BI'  },
+        { key: 'email',        label: 'Email'     },
+        { key: 'telefone',     label: 'Telefone'  },
+        { key: 'maquinas',     label: 'Máquinas'  },
+        { key: 'osTotal',      label: 'OT Total'  },
+        { key: 'dataCriacao',  label: 'Desde'     },
+    ];
+
     return (
         <AppLayout>
             <ActionBar title="Gestão de Clientes" breadcrumb="AQUATEX SGI · Clientes">
                 <div className="actionbar-spacer" />
+                <button className="abtn abtn-secondary" type="button" onClick={() => setShowExport(true)}>
+                    <Download size={13} /> Exportar
+                </button>
                 <button id="btn-novo-cliente" className="abtn abtn-primary" type="button" onClick={openNew}>
                     <Plus size={13} /> Novo Cliente
                 </button>
@@ -628,6 +650,16 @@ const ClientesPage: React.FC = () => {
                     <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
                     <span>{toast}</span>
                 </div>
+            )}
+
+            {showExport && (
+                <ExportModal
+                    title="Clientes"
+                    columns={EXPORT_COLS}
+                    data={exportData}
+                    filename="clientes"
+                    onClose={() => setShowExport(false)}
+                />
             )}
         </AppLayout>
     );

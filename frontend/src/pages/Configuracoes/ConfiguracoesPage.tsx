@@ -1,12 +1,14 @@
 import React, { useState, useRef } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
+import { useGlobal } from '../../contexts/GlobalContext';
 import {
     Building2, DollarSign, TrendingUp, Shield, Upload, Check,
+    Table2, Plus, X, Edit2,
 } from 'lucide-react';
 
 /* ── Types ── */
-type Tab = 'empresa' | 'moeda' | 'comissoes' | 'seguranca';
+type Tab = 'empresa' | 'moeda' | 'comissoes' | 'seguranca' | 'tabelas';
 
 interface Currency { code: string; name: string; symbol: string; }
 
@@ -20,10 +22,11 @@ const CURRENCIES: Currency[] = [
 ];
 
 const TABS: { id: Tab; label: string; icon: React.FC<any> }[] = [
-    { id: 'empresa', label: 'Empresa', icon: Building2 },
-    { id: 'moeda', label: 'Moeda & Financeiro', icon: DollarSign },
-    { id: 'comissoes', label: 'Comissões', icon: TrendingUp },
-    { id: 'seguranca', label: 'Segurança', icon: Shield },
+    { id: 'empresa',  label: 'Empresa',          icon: Building2 },
+    { id: 'moeda',    label: 'Moeda & Financeiro', icon: DollarSign },
+    { id: 'comissoes',label: 'Comissões',          icon: TrendingUp },
+    { id: 'tabelas',  label: 'Tabelas do Sistema', icon: Table2 },
+    { id: 'seguranca',label: 'Segurança',           icon: Shield },
 ];
 
 /* ── Initial state ── */
@@ -48,7 +51,92 @@ const initSeguranca = {
 /* ════════════════════════════════════════════════
   MAIN PAGE
 ════════════════════════════════════════════════ */
+/* ── Tabelas do Sistema ── */
+const TabelaInlineEditor: React.FC<{
+    titulo: string;
+    colunas: { key: string; label: string; type?: 'text' | 'number' }[];
+    rows: Record<string, any>[];
+    onAdd: (row: Record<string, any>) => void;
+    onUpdate: (id: string, field: string, val: any) => void;
+    onRemove: (id: string) => void;
+}> = ({ titulo, colunas, rows, onAdd, onUpdate, onRemove }) => {
+    const emptyRow = () => Object.fromEntries(colunas.map(c => [c.key, c.type === 'number' ? 0 : '']));
+    const [newRow, setNewRow] = useState<Record<string, any>>(emptyRow());
+    const [editId, setEditId] = useState<string | null>(null);
+
+    return (
+        <div className="settings-section">
+            <div className="settings-section-hdr">
+                <div className="settings-section-title">{titulo}</div>
+            </div>
+            <div className="settings-section-body">
+                <table className="data-table" style={{ marginBottom: 8 }}>
+                    <thead>
+                        <tr>
+                            {colunas.map(c => <th key={c.key}>{c.label}</th>)}
+                            <th style={{ width: 70 }} />
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map(r => (
+                            <tr key={r.id}>
+                                {colunas.map(c => (
+                                    <td key={c.key}>
+                                        {editId === r.id ? (
+                                            <input
+                                                type={c.type === 'number' ? 'number' : 'text'}
+                                                className="form-input"
+                                                style={{ padding: '3px 6px', height: 28, fontSize: '0.78rem' }}
+                                                value={r[c.key]}
+                                                onChange={e => onUpdate(r.id, c.key, c.type === 'number' ? Number(e.target.value) : e.target.value)}
+                                            />
+                                        ) : (
+                                            <span style={{ fontSize: '0.8rem' }}>{r[c.key]}</span>
+                                        )}
+                                    </td>
+                                ))}
+                                <td>
+                                    <div className="row-actions">
+                                        <button className="icon-btn" title={editId === r.id ? 'Concluir' : 'Editar'}
+                                            onClick={() => setEditId(editId === r.id ? null : r.id)}>
+                                            {editId === r.id ? <Check size={12} /> : <Edit2 size={12} />}
+                                        </button>
+                                        <button className="icon-btn" title="Remover" onClick={() => onRemove(r.id)}>
+                                            <X size={12} />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {/* New row */}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {colunas.map(c => (
+                        <input key={c.key} type={c.type === 'number' ? 'number' : 'text'}
+                            className="form-input" placeholder={c.label}
+                            style={{ flex: 1, minWidth: 80, padding: '4px 8px', height: 30, fontSize: '0.78rem' }}
+                            value={newRow[c.key]}
+                            onChange={e => setNewRow(p => ({ ...p, [c.key]: c.type === 'number' ? Number(e.target.value) : e.target.value }))}
+                        />
+                    ))}
+                    <button type="button" className="abtn abtn-primary" style={{ flexShrink: 0, fontSize: '0.78rem', padding: '4px 12px', height: 30 }}
+                        onClick={() => { onAdd(newRow); setNewRow(emptyRow()); }}>
+                        <Plus size={11} /> Adicionar
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const ConfiguracoesPage: React.FC = () => {
+    const {
+        tiposTrabalho, addTipoTrabalho, updateTipoTrabalho, removeTipoTrabalho,
+        funcoesTecnico, addFuncaoTecnico, updateFuncaoTecnico, removeFuncaoTecnico,
+        tiposDocumento, addTipoDocumento, updateTipoDocumento, removeTipoDocumento,
+    } = useGlobal();
+
     const [tab, setTab] = useState<Tab>('empresa');
     const [empresa, setEmpresa] = useState(initEmpresa);
     const [moeda, setMoeda] = useState(initMoeda);
@@ -293,6 +381,44 @@ const ConfiguracoesPage: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
+                        </>}
+
+                        {/* ── TABELAS DO SISTEMA ── */}
+                        {tab === 'tabelas' && <>
+                            <TabelaInlineEditor
+                                titulo="Tipos de Trabalho"
+                                colunas={[
+                                    { key: 'codigo', label: 'Código' },
+                                    { key: 'descricao', label: 'Descrição' },
+                                ]}
+                                rows={tiposTrabalho}
+                                onAdd={r => addTipoTrabalho({ codigo: r.codigo, descricao: r.descricao })}
+                                onUpdate={(id, field, val) => updateTipoTrabalho(id, { [field]: val })}
+                                onRemove={id => removeTipoTrabalho(id)}
+                            />
+                            <TabelaInlineEditor
+                                titulo="Funções de Técnico"
+                                colunas={[
+                                    { key: 'codigo',    label: 'Código' },
+                                    { key: 'descricao', label: 'Descrição' },
+                                    { key: 'custo',     label: 'Custo/h (AOA)', type: 'number' },
+                                ]}
+                                rows={funcoesTecnico}
+                                onAdd={r => addFuncaoTecnico({ codigo: r.codigo, descricao: r.descricao, custo: Number(r.custo) })}
+                                onUpdate={(id, field, val) => updateFuncaoTecnico(id, { [field]: val })}
+                                onRemove={id => removeFuncaoTecnico(id)}
+                            />
+                            <TabelaInlineEditor
+                                titulo="Tipos de Documento"
+                                colunas={[
+                                    { key: 'codigo',    label: 'Código' },
+                                    { key: 'descricao', label: 'Descrição' },
+                                ]}
+                                rows={tiposDocumento}
+                                onAdd={r => addTipoDocumento({ codigo: r.codigo, descricao: r.descricao })}
+                                onUpdate={(id, field, val) => updateTipoDocumento(id, { [field]: val })}
+                                onRemove={id => removeTipoDocumento(id)}
+                            />
                         </>}
 
                         {/* ── SEGURANÇA ── */}

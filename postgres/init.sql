@@ -139,13 +139,14 @@ CREATE TABLE IF NOT EXISTS maquinas_instaladas (
 -- Histórico de Intervenções por Máquina
 -- --------------------------------------------------------
 CREATE TABLE IF NOT EXISTS maquina_historico (
-    id         SERIAL PRIMARY KEY,
-    maquina_id INT NOT NULL REFERENCES maquinas_instaladas(id) ON DELETE CASCADE,
-    data       DATE NOT NULL,
-    tipo       tipo_historico NOT NULL,
-    descricao  TEXT NOT NULL,
-    tecnico    VARCHAR(150),
-    estado     estado_historico NOT NULL DEFAULT 'concluida'
+    id          SERIAL PRIMARY KEY,
+    maquina_id  INT NOT NULL REFERENCES maquinas_instaladas(id) ON DELETE CASCADE,
+    data        DATE NOT NULL,
+    tipo        tipo_historico NOT NULL,
+    descricao   TEXT NOT NULL,
+    tecnico     VARCHAR(150),
+    estado      estado_historico NOT NULL DEFAULT 'concluida',
+    observacoes TEXT
 );
 
 -- --------------------------------------------------------
