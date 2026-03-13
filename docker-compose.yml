@@ -28,6 +28,13 @@
       DB_PASSWORD: app_password
       DB_NAME: app_development
       PORT: 3001
+      # ── Configuração SMTP (preencher com as credenciais reais) ──
+      MAIL_HOST: smtp.gmail.com
+      MAIL_PORT: "587"
+      MAIL_SECURE: "false"
+      MAIL_USER: ${MAIL_USER:-}
+      MAIL_PASS: ${MAIL_PASS:-}
+      MAIL_FROM: '"SGI — Aquatex" <${MAIL_USER:-noreply@aquatex.ao}>'
     ports:
       - "3001:3001"
     volumes:

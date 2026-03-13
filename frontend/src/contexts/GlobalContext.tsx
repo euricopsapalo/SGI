@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import axios from 'axios';
+
+const API = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
 /* ══════════════════════════════════════════════════════════════
    INTERFACES
@@ -72,6 +75,19 @@ export interface OrdemTrabalho {
     estado: OTEstado;
 }
 
+// ── Warehouse ──────────────────────────────────────────────
+export interface Armazem {
+    id: string; codigo: string; nome: string; descricao?: string; ativo: boolean;
+}
+
+// ── Stock Movements ────────────────────────────────────────
+export type TipoMovimento = 'entrada' | 'saida' | 'ajuste' | 'transferencia' | 'devolucao';
+export interface MovimentoStock {
+    id: string; artigoId: string; tipo: TipoMovimento;
+    quantidade: number; armazemId?: string; armazemDestinoId?: string;
+    referencia?: string; usuario?: string; observacao?: string; data: string;
+}
+
 // ── Stock ──────────────────────────────────────────────────
 export interface Artigo {
     id: string; codigo: string; descricao: string;
@@ -119,295 +135,79 @@ export const EMPRESA_INFO = {
 };
 
 /* ══════════════════════════════════════════════════════════════
-   INITIAL MOCK DATA
+   NORMALIZATION HELPERS
 ══════════════════════════════════════════════════════════════ */
+const norm = (item: any) => ({ ...item, id: item.id?.toString() });
+const normProvincia = (p: any): Provincia => ({ id: p.id?.toString(), nome: p.nome, paisId: p.pais?.id?.toString() ?? '' });
+const normMunicipio = (m: any): Municipio => ({ id: m.id?.toString(), nome: m.nome, provinciaId: m.provincia?.id?.toString() ?? '' });
+const normFuncaoTecnico = (f: any): FuncaoTecnico => ({ id: f.id?.toString(), codigo: f.codigo, descricao: f.descricao, custo: Number(f.custo) });
+const normArtigo = (a: any): Artigo => ({ ...a, id: a.id?.toString(), precoUnitario: Number(a.precoUnitario), existencia: Number(a.existencia), nivelMaximo: Number(a.nivelMaximo), stockSeguranca: Number(a.stockSeguranca), custoMedio: Number(a.custoMedio) });
 
-const INIT_TIPOS_TRABALHO: TipoTrabalho[] = [
-    { id: 'TT-001', codigo: 'PREV', descricao: 'Sistemático Preventivo' },
-    { id: 'TT-002', codigo: 'CORR', descricao: 'Corretivo' },
-    { id: 'TT-003', codigo: 'MONT', descricao: 'Montagem / Instalação' },
-];
-const INIT_TIPOS_DOCUMENTO: TipoDocumento[] = [
-    { id: 'TD-001', codigo: 'FAT', descricao: 'Fatura' },
-    { id: 'TD-002', codigo: 'FP',  descricao: 'Fatura Pro-Forma' },
-];
-const INIT_FUNCOES: FuncaoTecnico[] = [
-    { id: 'FT-001', codigo: 'TEC-SR', descricao: 'Técnico Sénior', custo: 5000 },
-    { id: 'FT-002', codigo: 'TEC-JR', descricao: 'Técnico Júnior', custo: 3000 },
-    { id: 'FT-003', codigo: 'CHF-EQ', descricao: 'Chefe de Equipa', custo: 7000 },
-];
-const INIT_MOEDAS: Moeda[] = [
-    { id: 'MOE-001', codigo: 'AOA', descricao: 'Kwanza Angolano', simbolo: 'Kz' },
-    { id: 'MOE-002', codigo: 'EUR', descricao: 'Euro',             simbolo: '€'  },
-    { id: 'MOE-003', codigo: 'USD', descricao: 'Dólar Americano',  simbolo: '$'  },
-];
-const INIT_PAISES: Pais[] = [
-    { id: 'PA-001', nome: 'Angola',   codigo: 'AO' },
-    { id: 'PA-002', nome: 'Portugal', codigo: 'PT' },
-];
-const INIT_PROVINCIAS: Provincia[] = [
-    { id: 'PR-001', nome: 'Luanda',     paisId: 'PA-001' },
-    { id: 'PR-002', nome: 'Benguela',   paisId: 'PA-001' },
-    { id: 'PR-003', nome: 'Huíla',      paisId: 'PA-001' },
-    { id: 'PR-004', nome: 'Kwanza Sul', paisId: 'PA-001' },
-];
-const INIT_MUNICIPIOS: Municipio[] = [
-    { id: 'MU-001', nome: 'Luanda',   provinciaId: 'PR-001' },
-    { id: 'MU-002', nome: 'Belas',    provinciaId: 'PR-001' },
-    { id: 'MU-003', nome: 'Cacuaco',  provinciaId: 'PR-001' },
-    { id: 'MU-004', nome: 'Benguela', provinciaId: 'PR-002' },
-    { id: 'MU-005', nome: 'Lobito',   provinciaId: 'PR-002' },
-    { id: 'MU-006', nome: 'Lubango',  provinciaId: 'PR-003' },
-    { id: 'MU-007', nome: 'Sumbe',    provinciaId: 'PR-004' },
-];
+const normCliente = (c: any): Cliente => ({
+    id: c.id?.toString(), tipo: c.tipo, nome: c.nome, nif: c.nif ?? '',
+    email: c.email ?? '', telefone: c.telefone ?? '',
+    morada: c.enderecos?.[0]?.morada ?? '', municipio: c.enderecos?.[0]?.cidade ?? '',
+    provincia: '', ativo: c.ativo ?? true,
+});
 
-const INIT_CLIENTES: Cliente[] = [
-    { id: 'CLI-001', tipo: 'empresa',    nome: 'Hotel Marina Palace',         nif: '5000012345', email: 'geral@marinapalace.ao',  telefone: '923 100 200', morada: 'Av. 4 de Fevereiro, 120',                   municipio: 'Luanda',  provincia: 'Luanda', ativo: true },
-    { id: 'CLI-002', tipo: 'empresa',    nome: 'Clínica São João',            nif: '5000023456', email: 'admin@clinicasj.ao',     telefone: '923 200 300', morada: 'Rua Amilcar Cabral, 45',                      municipio: 'Luanda',  provincia: 'Luanda', ativo: true },
-    { id: 'CLI-003', tipo: 'empresa',    nome: 'Supermercado Maxi',           nif: '5000034567', email: 'compras@maxi.ao',        telefone: '923 300 400', morada: 'Talatona Shopping Center',                    municipio: 'Belas',   provincia: 'Luanda', ativo: true },
-    { id: 'CLI-004', tipo: 'empresa',    nome: 'Empresa Alpha, LDA',          nif: '5000045678', email: 'financeiro@alpha.ao',    telefone: '923 400 500', morada: 'Rua da Missão, 22',                           municipio: 'Luanda',  provincia: 'Luanda', ativo: true },
-    { id: 'CLI-005', tipo: 'empresa',    nome: 'Universidade Agostinho Neto', nif: '5000056789', email: 'reitoria@uan.ao',        telefone: '923 500 600', morada: 'Av. 21 de Janeiro, 58',                      municipio: 'Luanda',  provincia: 'Luanda', ativo: true },
-    { id: 'CLI-006', tipo: 'empresa',    nome: 'Banco Millennium Angola',     nif: '5000067890', email: 'admin@bma.ao',           telefone: '923 600 700', morada: 'Av. Lenine, 206',                             municipio: 'Luanda',  provincia: 'Luanda', ativo: true },
-    { id: 'CLI-007', tipo: 'particular', nome: 'Manuel Costa',                nif: '006123456LA', email: 'manuelcosta@gmail.com', telefone: '912 111 222', morada: 'Condomínio Vida, B2-45',                     municipio: 'Belas',   provincia: 'Luanda', ativo: true },
-    { id: 'CLI-008', tipo: 'empresa',    nome: 'Oficina Mecânica Progresso',  nif: '5000089012', email: 'progresso@gmail.com',    telefone: '923 800 900', morada: 'Estrada de Cacuaco, 12',                     municipio: 'Cacuaco', provincia: 'Luanda', ativo: true },
-    { id: 'CLI-009', tipo: 'empresa',    nome: 'Farmácia Saúde Total',        nif: '5000090123', email: 'geral@saudetotal.ao',    telefone: '923 900 001', morada: 'Av. Ho Chi Minh, 34',                        municipio: 'Luanda',  provincia: 'Luanda', ativo: true },
-    { id: 'CLI-010', tipo: 'empresa',    nome: 'Construtora Horizonte',       nif: '5000012340', email: 'obra@horizonte.ao',      telefone: '923 010 020', morada: 'Av. Pedro de Castro Van-Dúnem Loy, 67',     municipio: 'Luanda',  provincia: 'Luanda', ativo: true },
-];
+const normEquip = (e: any): EquipInstalado => ({
+    id: e.id?.toString(), clienteId: e.cliente?.id?.toString() ?? e.clienteId?.toString() ?? '',
+    modeloId: e.modelo?.id?.toString() ?? e.modeloId?.toString() ?? '',
+    nrSerie: e.nrSerie, dataInstalacao: e.dataInstalacao, estado: e.estado,
+    dataUltimaManutencao: e.dataUltimaManutencao, dataProximaManutencao: e.dataProximaManutencao,
+    localizacao: e.localizacao,
+});
 
-const INIT_TECNICOS: Tecnico[] = [
-    { id: 'TEC-001', nome: 'António Silva',    telefone: '912 001 001', email: 'antonio.silva@aquatex.ao',  funcaoId: 'FT-001', custoHora: 5000, ativo: true },
-    { id: 'TEC-002', nome: 'Gabriel Teixeira', telefone: '912 002 002', email: 'gabriel.t@aquatex.ao',      funcaoId: 'FT-002', custoHora: 3000, ativo: true },
-    { id: 'TEC-003', nome: 'Pedro Neto',       telefone: '912 003 003', email: 'pedro.neto@aquatex.ao',     funcaoId: 'FT-001', custoHora: 5000, ativo: true },
-    { id: 'TEC-004', nome: 'Rui Cunha',        telefone: '912 004 004', email: 'rui.cunha@aquatex.ao',      funcaoId: 'FT-003', custoHora: 7000, ativo: true },
-    { id: 'TEC-005', nome: 'Carla Mendes',     telefone: '912 005 005', email: 'carla.mendes@aquatex.ao',   funcaoId: 'FT-001', custoHora: 4500, ativo: true },
-    { id: 'TEC-006', nome: 'Sofia Gomes',      telefone: '912 006 006', email: 'sofia.gomes@aquatex.ao',    funcaoId: 'FT-002', custoHora: 3500, ativo: true },
-];
+const normPlano = (p: any): PlanoManutencao => ({
+    id: p.id?.toString(),
+    equipInstaladoId: p.equipInstalado?.id?.toString() ?? p.equipInstaladoId?.toString() ?? '',
+    descricao: p.descricao, tipoTrabalhoId: p.tipoTrabalhoId?.toString() ?? '',
+    periodicidade: p.periodicidade, previsaoTempo: Number(p.previsaoTempo), ativo: p.ativo ?? true,
+    maosDeObra: (p.maosObra ?? []).map((m: any) => ({ funcaoId: m.funcaoId?.toString() ?? '', custo: Number(m.custo) })),
+    artigos: (p.artigos ?? []).map((a: any) => ({ artigoId: a.artigoId?.toString() ?? '', quantidade: Number(a.quantidade), preco: Number(a.preco) })),
+});
 
-const INIT_FORNECEDORES: Fornecedor[] = [
-    { id: 'FOR-001', nome: 'Grundfos Angola, LDA',    nif: '5100001111', telefone: '222 001 100', email: 'angola@grundfos.com',  morada: 'Zona Industrial, Luanda',            ativo: true },
-    { id: 'FOR-002', nome: 'Filtronix, SA',           nif: '5100002222', telefone: '222 002 200', email: 'vendas@filtronix.ao',  morada: 'Av. de Portugal, 45, Benguela',      ativo: true },
-    { id: 'FOR-003', nome: 'EcoWater Systems Angola', nif: '5100003333', telefone: '222 003 300', email: 'angola@ecowater.com',  morada: 'Talatona Business Park, Luanda',     ativo: true },
-];
+const normOrdem = (o: any): OrdemTrabalho => ({
+    id: o.id?.toString(), tipo: o.tipo, clienteId: o.cliente?.id?.toString() ?? o.clienteId?.toString() ?? '',
+    equipInstaladoId: o.equipInstaladoId?.toString() ?? '', descricao: o.descricao,
+    previsaoTempo: Number(o.previsaoTempo), periodicidade: o.periodicidade,
+    planoId: o.planoId?.toString(), tipoTrabalho: o.tipoTrabalho ?? '',
+    responsavel: o.responsavel ?? '', maosDeObra: (o.maosObra ?? []).map((m: any) => ({ funcao: m.funcao, custo: Number(m.custo), hora: m.hora })),
+    artigos: (o.artigos ?? []).map((a: any) => ({ artigoId: a.artigoId?.toString() ?? '', descricao: a.descricao, quantidade: Number(a.quantidade), preco: Number(a.preco) })),
+    orgao: o.orgao, sintoma: o.sintoma, causa: o.causa,
+    dataProgInicio: o.dataProgInicio, dataProgFim: o.dataProgFim,
+    dataEmissao: o.dataEmissao, dataInicio: o.dataInicio, dataFim: o.dataFim, dataEncerramento: o.dataEncerramento,
+    estado: o.estado,
+});
 
-const INIT_MODELOS: ModeloEquipamento[] = [
-    { id: 'MOD-001', nome: 'Osmose Inversa Industrial 500L/h', marca: 'Aquatex',   tipo: 'maquina' },
-    { id: 'MOD-002', nome: 'Sistema Purificação Aquatex Pro',  marca: 'Aquatex',   tipo: 'maquina' },
-    { id: 'MOD-003', nome: 'Filtro Ultra-filtrante 1000L/h',   marca: 'Filtronix', tipo: 'filtro'  },
-    { id: 'MOD-004', nome: 'Filtro de Carbono Activado 20"',   marca: 'EcoWater',  tipo: 'filtro'  },
-    { id: 'MOD-005', nome: 'Softener Industrial 200L',         marca: 'Grundfos',  tipo: 'maquina' },
-];
+const normEncomenda = (e: any): Encomenda => ({
+    id: e.id?.toString(), numero: e.numero,
+    fornecedorId: e.fornecedor?.id?.toString() ?? e.fornecedorId?.toString() ?? '',
+    data: e.data, dataEntrega: e.dataEntrega, condicoesPagamento: e.condicoesPagamento ?? '',
+    responsavel: e.responsavel ?? '', moeda: e.moeda ?? 'AOA', descricao: e.descricao ?? '',
+    observacoes: e.observacoes, estado: e.estado,
+    linhas: (e.linhas ?? []).map((l: any) => ({
+        artigoId: l.artigoId?.toString() ?? '', codigo: l.codigo, descricao: l.descricao,
+        qtdEncomendada: Number(l.qtdEncomendada), qtdRecebida: Number(l.qtdRecebida),
+        unidade: l.unidade ?? 'UN', custoUnit: Number(l.custoUnit), desconto: Number(l.desconto),
+    })),
+});
 
-const INIT_EQUIP_INST: EquipInstalado[] = [
-    { id: 'EI-001', clienteId: 'CLI-001', modeloId: 'MOD-001', nrSerie: 'AQ-OI-0021', dataInstalacao: '2025-06-15', estado: 'ativo',        dataUltimaManutencao: '2026-02-15', dataProximaManutencao: '2026-03-15', localizacao: 'Cozinha Industrial'  },
-    { id: 'EI-002', clienteId: 'CLI-002', modeloId: 'MOD-002', nrSerie: 'AQ-SP-0037', dataInstalacao: '2025-09-10', estado: 'ativo',        dataUltimaManutencao: '2026-01-10', dataProximaManutencao: '2026-04-10', localizacao: 'Farmácia Interna'    },
-    { id: 'EI-003', clienteId: 'CLI-003', modeloId: 'MOD-003', nrSerie: 'FX-UF-0014', dataInstalacao: '2025-04-20', estado: 'com_problema', dataUltimaManutencao: '2025-10-20', dataProximaManutencao: '2026-03-05', localizacao: 'Armazém B'           },
-    { id: 'EI-004', clienteId: 'CLI-004', modeloId: 'MOD-004', nrSerie: 'EW-CA-0008', dataInstalacao: '2024-11-01', estado: 'ativo',        dataUltimaManutencao: '2026-02-01', dataProximaManutencao: '2026-05-01', localizacao: 'Escritório Principal'},
-    { id: 'EI-005', clienteId: 'CLI-005', modeloId: 'MOD-005', nrSerie: 'GF-SI-0029', dataInstalacao: '2025-01-18', estado: 'ativo',        dataUltimaManutencao: '2025-12-18', dataProximaManutencao: '2026-03-18', localizacao: 'Laboratório A'       },
-    { id: 'EI-006', clienteId: 'CLI-006', modeloId: 'MOD-001', nrSerie: 'AQ-OI-0045', dataInstalacao: '2026-01-20', estado: 'ativo',                                                                                   localizacao: 'Sala de Servidores'  },
-];
-
-const INIT_PLANOS: PlanoManutencao[] = [
-    {
-        id: 'PL-001', equipInstaladoId: 'EI-001', descricao: 'Manutenção Preventiva Mensal — OI 500L/h',
-        tipoTrabalhoId: 'TT-001', periodicidade: 'Mensal', previsaoTempo: 3, ativo: true,
-        maosDeObra: [{ funcaoId: 'FT-001', custo: 5000 }],
-        artigos: [{ artigoId: 'ART-001', quantidade: 1, preco: 8500 }, { artigoId: 'ART-003', quantidade: 2, preco: 3200 }],
-    },
-    {
-        id: 'PL-002', equipInstaladoId: 'EI-002', descricao: 'Manutenção Semestral — Sistema Purificação',
-        tipoTrabalhoId: 'TT-001', periodicidade: 'Semestral', previsaoTempo: 6, ativo: true,
-        maosDeObra: [{ funcaoId: 'FT-001', custo: 5000 }, { funcaoId: 'FT-002', custo: 3000 }],
-        artigos: [{ artigoId: 'ART-002', quantidade: 2, preco: 4500 }, { artigoId: 'ART-004', quantidade: 1, preco: 12000 }],
-    },
-    {
-        id: 'PL-003', equipInstaladoId: 'EI-005', descricao: 'Manutenção Trimestral — Softener Industrial',
-        tipoTrabalhoId: 'TT-001', periodicidade: 'Trimestral', previsaoTempo: 4, ativo: true,
-        maosDeObra: [{ funcaoId: 'FT-002', custo: 3000 }],
-        artigos: [{ artigoId: 'ART-005', quantidade: 5, preco: 1200 }],
-    },
-];
-
-const INIT_LOGS: SysLog[] = [
-    { id: 'LOG-001', timestamp: '2026-03-11T08:05:12', usuario: 'admin@aquatex.ao', modulo: 'Autenticação',    acao: 'Login',             detalhes: 'Sessão iniciada com sucesso.',                                  tipo: 'info'    },
-    { id: 'LOG-002', timestamp: '2026-03-11T08:12:34', usuario: 'admin@aquatex.ao', modulo: 'Ordens',          acao: 'OT Emitida',        detalhes: 'OT-0001 emitida. Estado: Programado → Em curso.',               tipo: 'info'    },
-    { id: 'LOG-003', timestamp: '2026-03-11T09:01:00', usuario: 'admin@aquatex.ao', modulo: 'Stock',           acao: 'Inventário',        detalhes: 'Ajuste de inventário para 3 artigos (ARM-01).',                tipo: 'info'    },
-    { id: 'LOG-004', timestamp: '2026-03-10T17:45:20', usuario: 'admin@aquatex.ao', modulo: 'Encomendas',      acao: 'Recepção parcial',  detalhes: 'ENC-003: 4 UN Lâmpada UV recebidas → ARM-01.',                 tipo: 'info'    },
-    { id: 'LOG-005', timestamp: '2026-03-10T15:33:00', usuario: 'admin@aquatex.ao', modulo: 'Ordens',          acao: 'OT Criada',         detalhes: 'OT-0008 criada (pontual, Corretivo).',                          tipo: 'info'    },
-    { id: 'LOG-006', timestamp: '2026-03-10T14:10:05', usuario: 'admin@aquatex.ao', modulo: 'Faturação',       acao: 'Fatura emitida',    detalhes: 'FAT-0101 emitida. Total: 45.486 Kz.',                           tipo: 'info'    },
-    { id: 'LOG-007', timestamp: '2026-03-09T11:22:41', usuario: 'admin@aquatex.ao', modulo: 'Stock',           acao: 'Stock crítico',     detalhes: 'Filtro Sedimentos 10" abaixo do stock de segurança (3/8).',    tipo: 'warning' },
-    { id: 'LOG-008', timestamp: '2026-03-09T09:00:00', usuario: 'admin@aquatex.ao', modulo: 'Técnicos',        acao: 'Técnico criado',    detalhes: 'Novo técnico registado: TEC-007.',                              tipo: 'info'    },
-    { id: 'LOG-009', timestamp: '2026-03-08T16:55:10', usuario: 'admin@aquatex.ao', modulo: 'Parque',          acao: 'Equip. registado',  detalhes: 'EI-006 registado. OT de Montagem criada automaticamente.',      tipo: 'info'    },
-    { id: 'LOG-010', timestamp: '2026-03-07T10:30:00', usuario: 'admin@aquatex.ao', modulo: 'Autenticação',    acao: 'Tentativa falhada', detalhes: 'Login falhado para o utilizador desconhecido@aquatex.ao.',       tipo: 'error'   },
-];
-
-const INIT_ORDENS: OrdemTrabalho[] = [
-    {
-        id: 'OT-0001', tipo: 'programada', equipInstaladoId: 'EI-001', clienteId: 'CLI-001',
-        descricao: 'Manutenção preventiva mensal — substituição membranas e limpeza geral',
-        previsaoTempo: 3, periodicidade: 'Mensal', planoId: 'PL-001', tipoTrabalho: 'Sistemático Preventivo', responsavel: 'António Silva',
-        maosDeObra: [{ funcao: 'Técnico Sénior', custo: 5000, hora: '08:00' }],
-        artigos: [{ artigoId: 'ART-001', descricao: 'Membrana Osmose Inversa 4040', quantidade: 1, preco: 8500 }, { artigoId: 'ART-003', descricao: 'Filtro Carvão Activado 20"', quantidade: 2, preco: 3200 }],
-        dataProgInicio: '2026-03-15', dataProgFim: '2026-03-15', dataEmissao: '2026-03-10', dataInicio: '2026-03-10',
-        estado: 'Em curso',
-    },
-    {
-        id: 'OT-0002', tipo: 'programada', equipInstaladoId: 'EI-002', clienteId: 'CLI-002',
-        descricao: 'Manutenção semestral — substituição filtros e calibração',
-        previsaoTempo: 6, periodicidade: 'Semestral', planoId: 'PL-002', tipoTrabalho: 'Sistemático Preventivo', responsavel: 'Pedro Neto',
-        maosDeObra: [{ funcao: 'Técnico Sénior', custo: 5000, hora: '08:00' }],
-        artigos: [{ artigoId: 'ART-002', descricao: 'Filtro Sedimentos 10"', quantidade: 2, preco: 4500 }],
-        dataProgInicio: '2026-04-10', dataProgFim: '2026-04-10',
-        estado: 'Programado',
-    },
-    {
-        id: 'OT-0003', tipo: 'pontual', equipInstaladoId: 'EI-003', clienteId: 'CLI-003',
-        descricao: 'Avaria — sistema parado com alarme de baixa pressão',
-        previsaoTempo: 4, tipoTrabalho: 'Corretivo', responsavel: 'Gabriel Teixeira',
-        maosDeObra: [{ funcao: 'Técnico Júnior', custo: 3000, hora: '09:30' }],
-        artigos: [],
-        orgao: 'Bomba de Alta Pressão', sintoma: 'Baixa pressão', causa: 'Desgaste da bomba',
-        dataEmissao: '2026-03-05', dataInicio: '2026-03-05', dataFim: '2026-03-06',
-        estado: 'Terminado',
-    },
-    {
-        id: 'OT-0004', tipo: 'programada', equipInstaladoId: 'EI-001', clienteId: 'CLI-001',
-        descricao: 'Manutenção preventiva mensal — Fevereiro 2026',
-        previsaoTempo: 3, periodicidade: 'Mensal', planoId: 'PL-001', tipoTrabalho: 'Sistemático Preventivo', responsavel: 'António Silva',
-        maosDeObra: [{ funcao: 'Técnico Sénior', custo: 5000, hora: '08:00' }],
-        artigos: [{ artigoId: 'ART-001', descricao: 'Membrana Osmose Inversa 4040', quantidade: 1, preco: 8500 }],
-        dataProgInicio: '2026-02-15', dataProgFim: '2026-02-15',
-        dataEmissao: '2026-02-15', dataInicio: '2026-02-15', dataFim: '2026-02-15', dataEncerramento: '2026-02-16',
-        estado: 'Encerrado',
-    },
-    {
-        id: 'OT-0005', tipo: 'programada', equipInstaladoId: 'EI-005', clienteId: 'CLI-005',
-        descricao: 'Manutenção trimestral — reposição de sal e teste de dureza',
-        previsaoTempo: 4, periodicidade: 'Trimestral', planoId: 'PL-003', tipoTrabalho: 'Sistemático Preventivo', responsavel: 'Rui Cunha',
-        maosDeObra: [{ funcao: 'Chefe de Equipa', custo: 7000, hora: '09:00' }],
-        artigos: [{ artigoId: 'ART-005', descricao: 'Sal para Resina 25kg', quantidade: 5, preco: 1200 }],
-        dataProgInicio: '2026-03-18', dataProgFim: '2026-03-18',
-        estado: 'Programado',
-    },
-    {
-        id: 'OT-0006', tipo: 'pontual', equipInstaladoId: 'EI-006', clienteId: 'CLI-006',
-        descricao: 'Montagem e comissionamento — Osmose Inversa Industrial',
-        previsaoTempo: 8, tipoTrabalho: 'Montagem / Instalação', responsavel: 'Rui Cunha',
-        maosDeObra: [{ funcao: 'Chefe de Equipa', custo: 7000, hora: '08:00' }, { funcao: 'Técnico Júnior', custo: 3000, hora: '08:00' }],
-        artigos: [{ artigoId: 'ART-006', descricao: 'O-Ring Kit 100 peças', quantidade: 1, preco: 5600 }],
-        dataProgInicio: '2026-01-20', dataProgFim: '2026-01-20',
-        dataEmissao: '2026-01-20', dataInicio: '2026-01-20', dataFim: '2026-01-20', dataEncerramento: '2026-01-21',
-        estado: 'Encerrado',
-    },
-    {
-        id: 'OT-0007', tipo: 'pontual', equipInstaladoId: 'EI-004', clienteId: 'CLI-004',
-        descricao: 'Substituição filtro de carbono — mau cheiro na água',
-        previsaoTempo: 2, tipoTrabalho: 'Corretivo', responsavel: 'António Silva',
-        maosDeObra: [{ funcao: 'Técnico Sénior', custo: 5000, hora: '14:00' }],
-        artigos: [{ artigoId: 'ART-003', descricao: 'Filtro Carvão Activado 20"', quantidade: 1, preco: 3200 }],
-        orgao: 'Filtro de Carbono', sintoma: 'Odor na água', causa: 'Filtro saturado',
-        dataProgInicio: '2026-03-20',
-        estado: 'Programado',
-    },
-    {
-        id: 'OT-0008', tipo: 'pontual', equipInstaladoId: 'EI-003', clienteId: 'CLI-003',
-        descricao: 'Verificação pós-reparação — testes finais do sistema',
-        previsaoTempo: 2, tipoTrabalho: 'Corretivo', responsavel: 'Gabriel Teixeira',
-        maosDeObra: [{ funcao: 'Técnico Júnior', custo: 3000, hora: '10:00' }],
-        artigos: [], dataProgInicio: '2026-03-12',
-        estado: 'Programado',
-    },
-];
-
-const INIT_ARTIGOS: Artigo[] = [
-    { id: 'ART-001', codigo: 'MEM-RO-4040', descricao: 'Membrana Osmose Inversa 4040',    classe: 'Consumíveis', familia: 'Membranas',    precoUnitario: 8500,  moeda: 'AOA', existencia: 24, nivelMaximo: 40, stockSeguranca: 5,  custoMedio: 7800,  codigoArmazem: 'ARM-01', inativo: false, critico: false },
-    { id: 'ART-002', codigo: 'FLT-SED-10',  descricao: 'Filtro Sedimentos 10" 5 micron',  classe: 'Consumíveis', familia: 'Filtros',      precoUnitario: 4500,  moeda: 'AOA', existencia: 3,  nivelMaximo: 30, stockSeguranca: 8,  custoMedio: 4100,  codigoArmazem: 'ARM-01', inativo: false, critico: true  },
-    { id: 'ART-003', codigo: 'FLT-CAR-20',  descricao: 'Filtro Carvão Activado 20"',      classe: 'Consumíveis', familia: 'Filtros',      precoUnitario: 3200,  moeda: 'AOA', existencia: 18, nivelMaximo: 25, stockSeguranca: 4,  custoMedio: 2900,  codigoArmazem: 'ARM-01', inativo: false, critico: false },
-    { id: 'ART-004', codigo: 'UV-LAMP-25',  descricao: 'Lâmpada UV 25W Germicida',        classe: 'Consumíveis', familia: 'Electricidade',precoUnitario: 12000, moeda: 'AOA', existencia: 7,  nivelMaximo: 15, stockSeguranca: 3,  custoMedio: 11000, codigoArmazem: 'ARM-02', inativo: false, critico: false },
-    { id: 'ART-005', codigo: 'SAL-RES-25',  descricao: 'Sal para Resina 25kg',            classe: 'Consumíveis', familia: 'Reagentes',    precoUnitario: 1200,  moeda: 'AOA', existencia: 35, nivelMaximo: 60, stockSeguranca: 10, custoMedio: 1050,  codigoArmazem: 'ARM-01', inativo: false, critico: false },
-    { id: 'ART-006', codigo: 'O-RING-K100', descricao: 'O-Ring Kit 100 peças surtidas',   classe: 'Peças',       familia: 'Vedantes',     precoUnitario: 5600,  moeda: 'AOA', existencia: 12, nivelMaximo: 20, stockSeguranca: 3,  custoMedio: 5200,  codigoArmazem: 'ARM-02', inativo: false, critico: false },
-];
-
-const INIT_ENCOMENDAS: Encomenda[] = [
-    {
-        id: 'ENC-001', numero: 'N-000001', fornecedorId: 'FOR-001',
-        data: '2026-03-01', dataEntrega: '2026-03-20', condicoesPagamento: '30 Dias',
-        responsavel: 'Carla Mendes', moeda: 'AOA', descricao: 'Pedido Compra N.º 0000001',
-        estado: 'Aberta',
-        linhas: [
-            { artigoId: 'ART-001', codigo: 'MEM-RO-4040', descricao: 'Membrana Osmose Inversa 4040', qtdEncomendada: 10, qtdRecebida: 0,  unidade: 'UN', custoUnit: 7800, desconto: 0 },
-            { artigoId: 'ART-006', codigo: 'O-RING-K100', descricao: 'O-Ring Kit 100 peças',          qtdEncomendada: 5,  qtdRecebida: 0,  unidade: 'UN', custoUnit: 5200, desconto: 5 },
-        ],
-    },
-    {
-        id: 'ENC-002', numero: 'N-000002', fornecedorId: 'FOR-002',
-        data: '2026-02-10', dataEntrega: '2026-02-25', condicoesPagamento: '15 Dias',
-        responsavel: 'Sofia Gomes', moeda: 'AOA', descricao: 'Pedido Compra N.º 0000002',
-        estado: 'Recebida',
-        linhas: [
-            { artigoId: 'ART-002', codigo: 'FLT-SED-10', descricao: 'Filtro Sedimentos 10"',     qtdEncomendada: 20, qtdRecebida: 20, unidade: 'UN', custoUnit: 4100, desconto: 0 },
-            { artigoId: 'ART-003', codigo: 'FLT-CAR-20', descricao: 'Filtro Carvão Activado 20"', qtdEncomendada: 10, qtdRecebida: 10, unidade: 'UN', custoUnit: 2900, desconto: 0 },
-        ],
-    },
-    {
-        id: 'ENC-003', numero: 'N-000003', fornecedorId: 'FOR-003',
-        data: '2026-03-05', dataEntrega: '2026-03-25', condicoesPagamento: '30 - 30 Dias',
-        responsavel: 'Carla Mendes', moeda: 'AOA', descricao: 'Pedido Compra N.º 0000003',
-        estado: 'Parcial',
-        linhas: [
-            { artigoId: 'ART-004', codigo: 'UV-LAMP-25', descricao: 'Lâmpada UV 25W Germicida', qtdEncomendada: 10, qtdRecebida: 4,  unidade: 'UN', custoUnit: 11000, desconto: 0 },
-            { artigoId: 'ART-005', codigo: 'SAL-RES-25', descricao: 'Sal para Resina 25kg',      qtdEncomendada: 20, qtdRecebida: 20, unidade: 'UN', custoUnit: 1050,  desconto: 0 },
-        ],
-    },
-];
-
-const INIT_FATURAS: Fatura[] = [
-    {
-        id: 'FAT-0101', tipoDocumento: 'FAT', otId: 'OT-0001', clienteId: 'CLI-001', dataEmissao: '2026-03-10',
-        linhas: [
-            { descricao: 'Serviço Preventivo Mensal',      quantidade: 1, precoUnit: 25000 },
-            { descricao: 'Membrana Osmose Inversa 4040',   quantidade: 1, precoUnit: 8500  },
-            { descricao: 'Filtro Carvão Activado 20"',     quantidade: 2, precoUnit: 3200  },
-        ],
-        precoServico: 25000, taxaIva: 14, valorSubtotal: 39900, valorIva: 5586, valorTotal: 45486,
-        moeda: 'AOA', estado: 'Pendente', nrSerieEquip: 'AQ-OI-0021',
-    },
-    {
-        id: 'FAT-0102', tipoDocumento: 'FAT', otId: 'OT-0003', clienteId: 'CLI-003', dataEmissao: '2026-03-06',
-        linhas: [{ descricao: 'Serviço Corretivo — Bomba Alta Pressão', quantidade: 1, precoUnit: 45000 }],
-        precoServico: 45000, taxaIva: 14, valorSubtotal: 45000, valorIva: 6300, valorTotal: 51300,
-        moeda: 'AOA', estado: 'Paga', nrSerieEquip: 'FX-UF-0014', dataPagamento: '2026-03-07',
-    },
-    {
-        id: 'FAT-0103', tipoDocumento: 'FAT', otId: 'OT-0004', clienteId: 'CLI-001', dataEmissao: '2026-02-16',
-        linhas: [
-            { descricao: 'Serviço Preventivo Mensal',    quantidade: 1, precoUnit: 25000 },
-            { descricao: 'Membrana Osmose Inversa 4040', quantidade: 1, precoUnit: 8500  },
-        ],
-        precoServico: 25000, taxaIva: 14, valorSubtotal: 33500, valorIva: 4690, valorTotal: 38190,
-        moeda: 'AOA', estado: 'Paga', nrSerieEquip: 'AQ-OI-0021', dataPagamento: '2026-02-20',
-    },
-    {
-        id: 'FAT-0104', tipoDocumento: 'FAT', otId: 'OT-0006', clienteId: 'CLI-006', dataEmissao: '2026-01-21',
-        linhas: [
-            { descricao: 'Serviço Montagem e Comissionamento', quantidade: 1, precoUnit: 85000 },
-            { descricao: 'O-Ring Kit 100 peças',               quantidade: 1, precoUnit: 5600  },
-        ],
-        precoServico: 85000, taxaIva: 14, valorSubtotal: 90600, valorIva: 12684, valorTotal: 103284,
-        moeda: 'AOA', estado: 'Paga', nrSerieEquip: 'AQ-OI-0045', dataPagamento: '2026-01-25',
-    },
-];
+const normFatura = (f: any): Fatura => ({
+    id: f.id?.toString(), tipoDocumento: f.tipoDocumento ?? 'FAT',
+    otId: f.otId?.toString() ?? '', clienteId: f.cliente?.id?.toString() ?? f.clienteId?.toString() ?? '',
+    dataEmissao: f.dataEmissao, precoServico: Number(f.precoServico),
+    taxaIva: Number(f.taxaIva ?? 14), valorSubtotal: Number(f.valorSubtotal),
+    valorIva: Number(f.valorIva), valorTotal: Number(f.valorTotal),
+    moeda: f.moeda ?? 'AOA', estado: f.estado ?? 'Pendente',
+    observacoes: f.observacoes, dataPagamento: f.dataPagamento,
+    motivoAnulacao: f.motivoAnulacao, comprovativo: f.comprovativo, nrSerieEquip: f.nrSerieEquip,
+    linhas: (f.linhas ?? []).map((l: any) => ({ descricao: l.descricao, quantidade: Number(l.quantidade), precoUnit: Number(l.precoUnit) })),
+});
 
 /* ══════════════════════════════════════════════════════════════
    CONTEXT DEFINITION
 ══════════════════════════════════════════════════════════════ */
-let otCounter = 9;
-const nextOTId = () => `OT-${String(otCounter++).padStart(4, '0')}`;
-let fatCounter = 105;
-let fpCounter = 1;
-const nextDocId = (codigo: string) => {
-    if (codigo === 'FP') return `FP-${String(fpCounter++).padStart(4, '0')}`;
-    return `FAT-${String(fatCounter++).padStart(4, '0')}`;
-};
 
 interface GlobalContextType {
     // System tables
@@ -434,8 +234,11 @@ interface GlobalContextType {
     emitirOT: (id: string, dataEmissao?: string, dataInicio?: string) => void;
     terminarOT: (id: string, dataFim?: string) => void;
     encerrarOT: (id: string, dataEncerramento?: string) => void;
+    // Warehouse
+    armazens: Armazem[]; addArmazem: (a: Omit<Armazem, 'id'>) => Armazem; updateArmazem: (id: string, a: Partial<Armazem>) => void;
     // Stock
     artigos: Artigo[]; addArtigo: (a: Omit<Artigo, 'id'>) => Artigo; updateArtigo: (id: string, a: Partial<Artigo>) => void; adjustExistencia: (id: string, delta: number) => void;
+    movimentosStock: MovimentoStock[]; addMovimento: (m: Omit<MovimentoStock, 'id'>) => MovimentoStock;
     // Purchases
     encomendas: Encomenda[]; addEncomenda: (e: Omit<Encomenda, 'id'>) => Encomenda; updateEncomenda: (id: string, e: Partial<Encomenda>) => void;
     receberLinhas: (encId: string, recebidas: { artigoId: string; qtd: number }[]) => void;
@@ -451,114 +254,431 @@ export const useGlobal = () => {
     return ctx;
 };
 
-const mkId = (prefix: string, list: { id: string }[]) =>
-    `${prefix}-${String(list.length + 1).padStart(3, '0')}`;
-
 export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [currentUser, setCurrentUserState] = useState<CurrentUser | null>({ nome: 'Eurico Sapalo', email: 'admin@aquatex.ao', role: 'Administrador' });
     const setCurrentUser = (u: CurrentUser | null) => setCurrentUserState(u);
     const logout = () => setCurrentUserState(null);
-    const [logs, setLogs] = useState<SysLog[]>(INIT_LOGS);
-    let logCounter = INIT_LOGS.length + 1;
-    const addLog = (l: Omit<SysLog, 'id'>) => {
-        const n: SysLog = { ...l, id: `LOG-${String(logCounter++).padStart(3, '0')}` };
-        setLogs(p => [n, ...p]);
-    };
 
-    const [tiposTrabalho, setTiposTrabalho] = useState(INIT_TIPOS_TRABALHO);
-    const [tiposDocumento, setTiposDocumento] = useState(INIT_TIPOS_DOCUMENTO);
-    const [funcoesTecnico, setFuncoesTecnico] = useState(INIT_FUNCOES);
-    const [moedas, setMoedas] = useState(INIT_MOEDAS);
-    const [clientes, setClientes] = useState(INIT_CLIENTES);
-    const [tecnicos, setTecnicos] = useState(INIT_TECNICOS);
-    const [fornecedores, setFornecedores] = useState(INIT_FORNECEDORES);
-    const [modelosEquipamento, setModelosEquipamento] = useState(INIT_MODELOS);
-    const [equipInstalados, setEquipInstalados] = useState(INIT_EQUIP_INST);
-    const [planos, setPlanos] = useState(INIT_PLANOS);
-    const [ordens, setOrdens] = useState(INIT_ORDENS);
-    const [artigos, setArtigos] = useState(INIT_ARTIGOS);
-    const [encomendas, setEncomendas] = useState(INIT_ENCOMENDAS);
-    const [faturas, setFaturas] = useState(INIT_FATURAS);
+    const [logs, setLogs] = useState<SysLog[]>([]);
+    const [tiposTrabalho, setTiposTrabalho] = useState<TipoTrabalho[]>([]);
+    const [tiposDocumento, setTiposDocumento] = useState<TipoDocumento[]>([]);
+    const [funcoesTecnico, setFuncoesTecnico] = useState<FuncaoTecnico[]>([]);
+    const [moedas, setMoedas] = useState<Moeda[]>([]);
+    const [paises, setPaises] = useState<Pais[]>([]);
+    const [provincias, setProvincias] = useState<Provincia[]>([]);
+    const [municipios, setMunicipios] = useState<Municipio[]>([]);
+    const [clientes, setClientes] = useState<Cliente[]>([]);
+    const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
+    const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
+    const [modelosEquipamento, setModelosEquipamento] = useState<ModeloEquipamento[]>([]);
+    const [equipInstalados, setEquipInstalados] = useState<EquipInstalado[]>([]);
+    const [planos, setPlanos] = useState<PlanoManutencao[]>([]);
+    const [ordens, setOrdens] = useState<OrdemTrabalho[]>([]);
+    const [armazens, setArmazens] = useState<Armazem[]>([]);
+    const [artigos, setArtigos] = useState<Artigo[]>([]);
+    const [movimentosStock, setMovimentosStock] = useState<MovimentoStock[]>([]);
+    const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
+    const [faturas, setFaturas] = useState<Fatura[]>([]);
 
     const today = () => new Date().toISOString().split('T')[0];
 
-    // System tables
-    const addTipoTrabalho = (t: Omit<TipoTrabalho, 'id'>) => setTiposTrabalho(p => [...p, { ...t, id: mkId('TT', p) }]);
-    const updateTipoTrabalho = (id: string, t: Partial<TipoTrabalho>) => setTiposTrabalho(p => p.map(x => x.id === id ? { ...x, ...t } : x));
-    const removeTipoTrabalho = (id: string) => setTiposTrabalho(p => p.filter(x => x.id !== id));
-    const addFuncaoTecnico = (f: Omit<FuncaoTecnico, 'id'>) => setFuncoesTecnico(p => [...p, { ...f, id: mkId('FT', p) }]);
-    const updateFuncaoTecnico = (id: string, f: Partial<FuncaoTecnico>) => setFuncoesTecnico(p => p.map(x => x.id === id ? { ...x, ...f } : x));
-    const removeFuncaoTecnico = (id: string) => setFuncoesTecnico(p => p.filter(x => x.id !== id));
-    const addMoeda = (m: Omit<Moeda, 'id'>) => setMoedas(p => [...p, { ...m, id: mkId('MOE', p) }]);
-    const updateMoeda = (id: string, m: Partial<Moeda>) => setMoedas(p => p.map(x => x.id === id ? { ...x, ...m } : x));
-    const removeMoeda = (id: string) => setMoedas(p => p.filter(x => x.id !== id));
-    const addTipoDocumento = (t: Omit<TipoDocumento, 'id'>) => setTiposDocumento(p => [...p, { ...t, id: mkId('TD', p) }]);
-    const updateTipoDocumento = (id: string, t: Partial<TipoDocumento>) => setTiposDocumento(p => p.map(x => x.id === id ? { ...x, ...t } : x));
-    const removeTipoDocumento = (id: string) => setTiposDocumento(p => p.filter(x => x.id !== id));
+    /* ── Initial data load ──────────────────────────────────── */
+    useEffect(() => {
+        const load = async () => {
+            try {
+                const [tt, td, ft, mo, pa, pr, mu, cl, te, fo, me, ei, pl, or, ar, ar2, mv, en, fa, lg] = await Promise.all([
+                    axios.get(`${API}/api/tipos-trabalho`),
+                    axios.get(`${API}/api/tipos-documento`),
+                    axios.get(`${API}/api/funcoes-tecnico`),
+                    axios.get(`${API}/api/moedas`),
+                    axios.get(`${API}/api/paises`),
+                    axios.get(`${API}/api/provincias`),
+                    axios.get(`${API}/api/municipios`),
+                    axios.get(`${API}/api/clientes`),
+                    axios.get(`${API}/api/tecnicos`),
+                    axios.get(`${API}/api/fornecedores`),
+                    axios.get(`${API}/api/modelos-equipamento`),
+                    axios.get(`${API}/api/equip-instalados`),
+                    axios.get(`${API}/api/planos`),
+                    axios.get(`${API}/api/ordens`),
+                    axios.get(`${API}/api/armazens`),
+                    axios.get(`${API}/api/artigos`),
+                    axios.get(`${API}/api/movimentos-stock`),
+                    axios.get(`${API}/api/encomendas`),
+                    axios.get(`${API}/api/faturas`),
+                    axios.get(`${API}/api/logs`),
+                ]);
+                setTiposTrabalho(tt.data.map(norm));
+                setTiposDocumento(td.data.map(norm));
+                setFuncoesTecnico(ft.data.map(normFuncaoTecnico));
+                setMoedas(mo.data.map(norm));
+                setPaises(pa.data.map(norm));
+                setProvincias(pr.data.map(normProvincia));
+                setMunicipios(mu.data.map(normMunicipio));
+                setClientes(cl.data.map(normCliente));
+                setTecnicos(te.data.map(norm));
+                setFornecedores(fo.data.map(norm));
+                setModelosEquipamento(me.data.map(norm));
+                setEquipInstalados(ei.data.map(normEquip));
+                setPlanos(pl.data.map(normPlano));
+                setOrdens(or.data.map(normOrdem));
+                setArmazens(ar.data.map(norm));
+                setArtigos(ar2.data.map(normArtigo));
+                setMovimentosStock(mv.data.map(norm));
+                setEncomendas(en.data.map(normEncomenda));
+                setFaturas(fa.data.map(normFatura));
+                setLogs(lg.data.map(norm));
+            } catch (e) {
+                console.error('Error loading data', e);
+            }
+        };
+        load();
+    }, []);
 
-    // Entities
-    const addCliente = (c: Omit<Cliente, 'id'>) => { const n = { ...c, id: mkId('CLI', clientes) }; setClientes(p => [...p, n]); return n; };
-    const updateCliente = (id: string, c: Partial<Cliente>) => setClientes(p => p.map(x => x.id === id ? { ...x, ...c } : x));
-    const addTecnico = (t: Omit<Tecnico, 'id'>) => { const n = { ...t, id: mkId('TEC', tecnicos) }; setTecnicos(p => [...p, n]); return n; };
-    const updateTecnico = (id: string, t: Partial<Tecnico>) => setTecnicos(p => p.map(x => x.id === id ? { ...x, ...t } : x));
-    const addFornecedor = (f: Omit<Fornecedor, 'id'>) => { const n = { ...f, id: mkId('FOR', fornecedores) }; setFornecedores(p => [...p, n]); return n; };
-    const updateFornecedor = (id: string, f: Partial<Fornecedor>) => setFornecedores(p => p.map(x => x.id === id ? { ...x, ...f } : x));
-
-    // Equipment
-    const addModelo = (m: Omit<ModeloEquipamento, 'id'>) => { const n = { ...m, id: mkId('MOD', modelosEquipamento) }; setModelosEquipamento(p => [...p, n]); return n; };
-    const updateModelo = (id: string, m: Partial<ModeloEquipamento>) => setModelosEquipamento(p => p.map(x => x.id === id ? { ...x, ...m } : x));
-    const addEquipInstalado = (e: Omit<EquipInstalado, 'id'>) => { const n = { ...e, id: mkId('EI', equipInstalados) }; setEquipInstalados(p => [...p, n]); return n; };
-    const updateEquipInstalado = (id: string, e: Partial<EquipInstalado>) => setEquipInstalados(p => p.map(x => x.id === id ? { ...x, ...e } : x));
-
-    // Plans
-    const addPlano = (p: Omit<PlanoManutencao, 'id'>) => { const n = { ...p, id: mkId('PL', planos) }; setPlanos(prev => [...prev, n]); return n; };
-    const updatePlano = (id: string, p: Partial<PlanoManutencao>) => setPlanos(prev => prev.map(x => x.id === id ? { ...x, ...p } : x));
-    const removePlano = (id: string) => setPlanos(prev => prev.filter(x => x.id !== id));
-
-    // Work Orders
-    const addOrdem = (o: Omit<OrdemTrabalho, 'id'>) => { const n = { ...o, id: nextOTId() }; setOrdens(p => [...p, n]); return n; };
-    const updateOrdem = (id: string, o: Partial<OrdemTrabalho>) => setOrdens(p => p.map(x => x.id === id ? { ...x, ...o } : x));
-    const removeOrdem = (id: string) => setOrdens(p => p.filter(x => x.id !== id));
-    const emitirOT = (id: string, dataEmissao?: string, dataInicio?: string) =>
-        updateOrdem(id, { estado: 'Em curso', dataEmissao: dataEmissao ?? today(), dataInicio: dataInicio ?? today() });
-    const terminarOT = (id: string, dataFim?: string) => {
-        const ot = ordens.find(o => o.id === id);
-        updateOrdem(id, { estado: 'Terminado', dataFim: dataFim ?? today() });
-        if (ot?.periodicidade && ot.periodicidade !== 'Única') {
-            const nextDate = calcNextDate(ot.dataProgInicio ?? today(), ot.periodicidade);
-            addOrdem({ ...ot, estado: 'Programado', dataProgInicio: nextDate, dataProgFim: nextDate, dataEmissao: undefined, dataInicio: undefined, dataFim: undefined, dataEncerramento: undefined });
+    /* ── Logs ───────────────────────────────────────────────── */
+    const addLog = async (l: Omit<SysLog, 'id'>) => {
+        try {
+            const { data } = await axios.post(`${API}/api/logs`, l);
+            const n = norm(data) as SysLog;
+            setLogs(p => [n, ...p]);
+        } catch (e) {
+            console.error('addLog error', e);
         }
     };
-    const encerrarOT = (id: string, dataEncerramento?: string) =>
-        updateOrdem(id, { estado: 'Encerrado', dataEncerramento: dataEncerramento ?? today() });
 
-    // Stock
-    const addArtigo = (a: Omit<Artigo, 'id'>) => { const n = { ...a, id: mkId('ART', artigos) }; setArtigos(p => [...p, n]); return n; };
-    const updateArtigo = (id: string, a: Partial<Artigo>) => setArtigos(p => p.map(x => x.id === id ? { ...x, ...a } : x));
-    const adjustExistencia = (id: string, delta: number) =>
-        setArtigos(p => p.map(x => x.id === id ? { ...x, existencia: Math.max(0, x.existencia + delta) } : x));
-
-    // Purchases
-    const addEncomenda = (e: Omit<Encomenda, 'id'>) => { const n = { ...e, id: mkId('ENC', encomendas) }; setEncomendas(p => [...p, n]); return n; };
-    const updateEncomenda = (id: string, e: Partial<Encomenda>) => setEncomendas(p => p.map(x => x.id === id ? { ...x, ...e } : x));
-    const receberLinhas = (encId: string, recebidas: { artigoId: string; qtd: number }[]) => {
-        setEncomendas(p => p.map(enc => {
-            if (enc.id !== encId) return enc;
-            const novasLinhas = enc.linhas.map(l => {
-                const rec = recebidas.find(r => r.artigoId === l.artigoId);
-                return rec ? { ...l, qtdRecebida: Math.min(l.qtdEncomendada, l.qtdRecebida + rec.qtd) } : l;
-            });
-            const totalEnc = novasLinhas.reduce((s, l) => s + l.qtdEncomendada, 0);
-            const totalRec = novasLinhas.reduce((s, l) => s + l.qtdRecebida, 0);
-            const estado: EncomendaEstado = totalRec >= totalEnc ? 'Recebida' : totalRec > 0 ? 'Parcial' : enc.estado;
-            return { ...enc, linhas: novasLinhas, estado };
-        }));
-        recebidas.forEach(r => adjustExistencia(r.artigoId, r.qtd));
+    /* ── System tables ──────────────────────────────────────── */
+    const addTipoTrabalho = async (t: Omit<TipoTrabalho, 'id'>) => {
+        try {
+            const { data } = await axios.post(`${API}/api/tipos-trabalho`, t);
+            setTiposTrabalho(p => [...p, norm(data)]);
+        } catch (e) { console.error('addTipoTrabalho error', e); throw e; }
+    };
+    const updateTipoTrabalho = async (id: string, t: Partial<TipoTrabalho>) => {
+        try {
+            await axios.put(`${API}/api/tipos-trabalho/${id}`, t);
+            setTiposTrabalho(p => p.map(x => x.id === id ? { ...x, ...t } : x));
+        } catch (e) { console.error('updateTipoTrabalho error', e); throw e; }
+    };
+    const removeTipoTrabalho = async (id: string) => {
+        try {
+            await axios.delete(`${API}/api/tipos-trabalho/${id}`);
+            setTiposTrabalho(p => p.filter(x => x.id !== id));
+        } catch (e) { console.error('removeTipoTrabalho error', e); throw e; }
     };
 
-    // Invoices
-    const addFatura = (f: Omit<Fatura, 'id'>) => { const n = { ...f, id: nextDocId(f.tipoDocumento) }; setFaturas(p => [...p, n]); return n; };
-    const updateFatura = (id: string, f: Partial<Fatura>) => setFaturas(p => p.map(x => x.id === id ? { ...x, ...f } : x));
+    const addFuncaoTecnico = async (f: Omit<FuncaoTecnico, 'id'>) => {
+        try {
+            const { data } = await axios.post(`${API}/api/funcoes-tecnico`, f);
+            setFuncoesTecnico(p => [...p, norm(data)]);
+        } catch (e) { console.error('addFuncaoTecnico error', e); throw e; }
+    };
+    const updateFuncaoTecnico = async (id: string, f: Partial<FuncaoTecnico>) => {
+        try {
+            await axios.put(`${API}/api/funcoes-tecnico/${id}`, f);
+            setFuncoesTecnico(p => p.map(x => x.id === id ? { ...x, ...f } : x));
+        } catch (e) { console.error('updateFuncaoTecnico error', e); throw e; }
+    };
+    const removeFuncaoTecnico = async (id: string) => {
+        try {
+            await axios.delete(`${API}/api/funcoes-tecnico/${id}`);
+            setFuncoesTecnico(p => p.filter(x => x.id !== id));
+        } catch (e) { console.error('removeFuncaoTecnico error', e); throw e; }
+    };
+
+    const addMoeda = async (m: Omit<Moeda, 'id'>) => {
+        try {
+            const { data } = await axios.post(`${API}/api/moedas`, m);
+            setMoedas(p => [...p, norm(data)]);
+        } catch (e) { console.error('addMoeda error', e); throw e; }
+    };
+    const updateMoeda = async (id: string, m: Partial<Moeda>) => {
+        try {
+            await axios.put(`${API}/api/moedas/${id}`, m);
+            setMoedas(p => p.map(x => x.id === id ? { ...x, ...m } : x));
+        } catch (e) { console.error('updateMoeda error', e); throw e; }
+    };
+    const removeMoeda = async (id: string) => {
+        try {
+            await axios.delete(`${API}/api/moedas/${id}`);
+            setMoedas(p => p.filter(x => x.id !== id));
+        } catch (e) { console.error('removeMoeda error', e); throw e; }
+    };
+
+    const addTipoDocumento = async (t: Omit<TipoDocumento, 'id'>) => {
+        try {
+            const { data } = await axios.post(`${API}/api/tipos-documento`, t);
+            setTiposDocumento(p => [...p, norm(data)]);
+        } catch (e) { console.error('addTipoDocumento error', e); throw e; }
+    };
+    const updateTipoDocumento = async (id: string, t: Partial<TipoDocumento>) => {
+        try {
+            await axios.put(`${API}/api/tipos-documento/${id}`, t);
+            setTiposDocumento(p => p.map(x => x.id === id ? { ...x, ...t } : x));
+        } catch (e) { console.error('updateTipoDocumento error', e); throw e; }
+    };
+    const removeTipoDocumento = async (id: string) => {
+        try {
+            await axios.delete(`${API}/api/tipos-documento/${id}`);
+            setTiposDocumento(p => p.filter(x => x.id !== id));
+        } catch (e) { console.error('removeTipoDocumento error', e); throw e; }
+    };
+
+    /* ── Entities ───────────────────────────────────────────── */
+    const addCliente = (c: Omit<Cliente, 'id'>): Cliente => {
+        const placeholder: Cliente = { ...c, id: '' };
+        axios.post(`${API}/api/clientes`, c)
+            .then(({ data }) => {
+                const n = normCliente(data);
+                setClientes(p => [...p, n]);
+            })
+            .catch(e => console.error('addCliente error', e));
+        return placeholder;
+    };
+    const updateCliente = async (id: string, c: Partial<Cliente>) => {
+        try {
+            await axios.put(`${API}/api/clientes/${id}`, c);
+            setClientes(p => p.map(x => x.id === id ? { ...x, ...c } : x));
+        } catch (e) { console.error('updateCliente error', e); throw e; }
+    };
+
+    const addTecnico = (t: Omit<Tecnico, 'id'>): Tecnico => {
+        const placeholder: Tecnico = { ...t, id: '' };
+        axios.post(`${API}/api/tecnicos`, t)
+            .then(({ data }) => {
+                const n = norm(data) as Tecnico;
+                setTecnicos(p => [...p, n]);
+            })
+            .catch(e => console.error('addTecnico error', e));
+        return placeholder;
+    };
+    const updateTecnico = async (id: string, t: Partial<Tecnico>) => {
+        try {
+            await axios.put(`${API}/api/tecnicos/${id}`, t);
+            setTecnicos(p => p.map(x => x.id === id ? { ...x, ...t } : x));
+        } catch (e) { console.error('updateTecnico error', e); throw e; }
+    };
+
+    const addFornecedor = (f: Omit<Fornecedor, 'id'>): Fornecedor => {
+        const placeholder: Fornecedor = { ...f, id: '' };
+        axios.post(`${API}/api/fornecedores`, f)
+            .then(({ data }) => {
+                const n = norm(data) as Fornecedor;
+                setFornecedores(p => [...p, n]);
+            })
+            .catch(e => console.error('addFornecedor error', e));
+        return placeholder;
+    };
+    const updateFornecedor = async (id: string, f: Partial<Fornecedor>) => {
+        try {
+            await axios.put(`${API}/api/fornecedores/${id}`, f);
+            setFornecedores(p => p.map(x => x.id === id ? { ...x, ...f } : x));
+        } catch (e) { console.error('updateFornecedor error', e); throw e; }
+    };
+
+    /* ── Equipment ──────────────────────────────────────────── */
+    const addModelo = (m: Omit<ModeloEquipamento, 'id'>): ModeloEquipamento => {
+        const placeholder: ModeloEquipamento = { ...m, id: '' };
+        axios.post(`${API}/api/modelos-equipamento`, m)
+            .then(({ data }) => {
+                const n = norm(data) as ModeloEquipamento;
+                setModelosEquipamento(p => [...p, n]);
+            })
+            .catch(e => console.error('addModelo error', e));
+        return placeholder;
+    };
+    const updateModelo = async (id: string, m: Partial<ModeloEquipamento>) => {
+        try {
+            await axios.put(`${API}/api/modelos-equipamento/${id}`, m);
+            setModelosEquipamento(p => p.map(x => x.id === id ? { ...x, ...m } : x));
+        } catch (e) { console.error('updateModelo error', e); throw e; }
+    };
+
+    const addEquipInstalado = (e: Omit<EquipInstalado, 'id'>): EquipInstalado => {
+        const placeholder: EquipInstalado = { ...e, id: '' };
+        axios.post(`${API}/api/equip-instalados`, e)
+            .then(({ data }) => {
+                const n = normEquip(data);
+                setEquipInstalados(p => [...p, n]);
+            })
+            .catch(err => console.error('addEquipInstalado error', err));
+        return placeholder;
+    };
+    const updateEquipInstalado = async (id: string, e: Partial<EquipInstalado>) => {
+        try {
+            await axios.put(`${API}/api/equip-instalados/${id}`, e);
+            setEquipInstalados(p => p.map(x => x.id === id ? { ...x, ...e } : x));
+        } catch (e) { console.error('updateEquipInstalado error', e); throw e; }
+    };
+
+    /* ── Plans ──────────────────────────────────────────────── */
+    const addPlano = (p: Omit<PlanoManutencao, 'id'>): PlanoManutencao => {
+        const placeholder: PlanoManutencao = { ...p, id: '' };
+        axios.post(`${API}/api/planos`, p)
+            .then(({ data }) => {
+                const n = normPlano(data);
+                setPlanos(prev => [...prev, n]);
+            })
+            .catch(e => console.error('addPlano error', e));
+        return placeholder;
+    };
+    const updatePlano = async (id: string, p: Partial<PlanoManutencao>) => {
+        try {
+            await axios.put(`${API}/api/planos/${id}`, p);
+            setPlanos(prev => prev.map(x => x.id === id ? { ...x, ...p } : x));
+        } catch (e) { console.error('updatePlano error', e); throw e; }
+    };
+    const removePlano = async (id: string) => {
+        try {
+            await axios.delete(`${API}/api/planos/${id}`);
+            setPlanos(prev => prev.filter(x => x.id !== id));
+        } catch (e) { console.error('removePlano error', e); throw e; }
+    };
+
+    /* ── Work Orders ────────────────────────────────────────── */
+    const addOrdem = (o: Omit<OrdemTrabalho, 'id'>): OrdemTrabalho => {
+        const placeholder: OrdemTrabalho = { ...o, id: '' };
+        axios.post(`${API}/api/ordens`, o)
+            .then(({ data }) => {
+                const n = normOrdem(data);
+                setOrdens(p => [...p, n]);
+            })
+            .catch(e => console.error('addOrdem error', e));
+        return placeholder;
+    };
+    const updateOrdem = async (id: string, o: Partial<OrdemTrabalho>) => {
+        try {
+            await axios.put(`${API}/api/ordens/${id}`, o);
+            setOrdens(p => p.map(x => x.id === id ? { ...x, ...o } : x));
+        } catch (e) { console.error('updateOrdem error', e); throw e; }
+    };
+    const removeOrdem = async (id: string) => {
+        try {
+            await axios.delete(`${API}/api/ordens/${id}`);
+            setOrdens(p => p.filter(x => x.id !== id));
+        } catch (e) { console.error('removeOrdem error', e); throw e; }
+    };
+
+    const emitirOT = async (id: string, dataEmissao?: string, dataInicio?: string) => {
+        try {
+            await axios.put(`${API}/api/ordens/${id}/emitir`, { dataEmissao, dataInicio });
+            setOrdens(p => p.map(x => x.id === id ? { ...x, estado: 'Em curso', dataEmissao: dataEmissao ?? today(), dataInicio: dataInicio ?? today() } : x));
+        } catch (e) { console.error('emitirOT error', e); throw e; }
+    };
+
+    const terminarOT = async (id: string, dataFim?: string) => {
+        try {
+            await axios.put(`${API}/api/ordens/${id}/terminar`, { dataFim });
+            const { data: all } = await axios.get(`${API}/api/ordens`);
+            setOrdens(all.map(normOrdem));
+        } catch (e) { console.error('terminarOT error', e); throw e; }
+    };
+
+    const encerrarOT = async (id: string, dataEncerramento?: string) => {
+        try {
+            await axios.put(`${API}/api/ordens/${id}/encerrar`, { dataEncerramento });
+            setOrdens(p => p.map(x => x.id === id ? { ...x, estado: 'Encerrado', dataEncerramento: dataEncerramento ?? today() } : x));
+        } catch (e) { console.error('encerrarOT error', e); throw e; }
+    };
+
+    /* ── Warehouse ──────────────────────────────────────────── */
+    const addArmazem = (a: Omit<Armazem, 'id'>): Armazem => {
+        const placeholder: Armazem = { ...a, id: '' };
+        axios.post(`${API}/api/armazens`, a)
+            .then(({ data }) => {
+                const n = norm(data) as Armazem;
+                setArmazens(p => [...p, n]);
+            })
+            .catch(e => console.error('addArmazem error', e));
+        return placeholder;
+    };
+    const updateArmazem = async (id: string, a: Partial<Armazem>) => {
+        try {
+            await axios.put(`${API}/api/armazens/${id}`, a);
+            setArmazens(p => p.map(x => x.id === id ? { ...x, ...a } : x));
+        } catch (e) { console.error('updateArmazem error', e); throw e; }
+    };
+
+    /* ── Stock ──────────────────────────────────────────────── */
+    const addArtigo = (a: Omit<Artigo, 'id'>): Artigo => {
+        const placeholder: Artigo = { ...a, id: '' };
+        axios.post(`${API}/api/artigos`, a)
+            .then(({ data }) => {
+                const n = normArtigo(data);
+                setArtigos(p => [...p, n]);
+            })
+            .catch(e => console.error('addArtigo error', e));
+        return placeholder;
+    };
+    const updateArtigo = async (id: string, a: Partial<Artigo>) => {
+        try {
+            await axios.put(`${API}/api/artigos/${id}`, a);
+            setArtigos(p => p.map(x => x.id === id ? { ...x, ...a } : x));
+        } catch (e) { console.error('updateArtigo error', e); throw e; }
+    };
+    const adjustExistencia = async (id: string, delta: number) => {
+        try {
+            await axios.put(`${API}/api/artigos/${id}/ajuste`, { delta });
+            setArtigos(p => p.map(x => x.id === id ? { ...x, existencia: Math.max(0, x.existencia + delta) } : x));
+        } catch (e) { console.error('adjustExistencia error', e); throw e; }
+    };
+
+    const addMovimento = (m: Omit<MovimentoStock, 'id'>): MovimentoStock => {
+        const placeholder: MovimentoStock = { ...m, id: '' };
+        axios.post(`${API}/api/movimentos-stock`, m)
+            .then(({ data }) => {
+                const n = norm(data) as MovimentoStock;
+                setMovimentosStock(p => [...p, n]);
+            })
+            .catch(e => console.error('addMovimento error', e));
+        return placeholder;
+    };
+
+    /* ── Purchases ──────────────────────────────────────────── */
+    const addEncomenda = (e: Omit<Encomenda, 'id'>): Encomenda => {
+        const placeholder: Encomenda = { ...e, id: '' };
+        axios.post(`${API}/api/encomendas`, e)
+            .then(({ data }) => {
+                const n = normEncomenda(data);
+                setEncomendas(p => [...p, n]);
+            })
+            .catch(err => console.error('addEncomenda error', err));
+        return placeholder;
+    };
+    const updateEncomenda = async (id: string, e: Partial<Encomenda>) => {
+        try {
+            await axios.put(`${API}/api/encomendas/${id}`, e);
+            setEncomendas(p => p.map(x => x.id === id ? { ...x, ...e } : x));
+        } catch (e) { console.error('updateEncomenda error', e); throw e; }
+    };
+    const receberLinhas = async (encId: string, recebidas: { artigoId: string; qtd: number }[]) => {
+        try {
+            await axios.post(`${API}/api/encomendas/${encId}/receber`, { recebidas });
+            const [encRes, artRes] = await Promise.all([
+                axios.get(`${API}/api/encomendas`),
+                axios.get(`${API}/api/artigos`),
+            ]);
+            setEncomendas(encRes.data.map(normEncomenda));
+            setArtigos(artRes.data.map(normArtigo));
+        } catch (e) { console.error('receberLinhas error', e); throw e; }
+    };
+
+    /* ── Invoices ───────────────────────────────────────────── */
+    const addFatura = (f: Omit<Fatura, 'id'>): Fatura => {
+        const placeholder: Fatura = { ...f, id: '' };
+        axios.post(`${API}/api/faturas`, f)
+            .then(({ data }) => {
+                const n = normFatura(data);
+                setFaturas(p => [...p, n]);
+            })
+            .catch(e => console.error('addFatura error', e));
+        return placeholder;
+    };
+    const updateFatura = async (id: string, f: Partial<Fatura>) => {
+        try {
+            await axios.put(`${API}/api/faturas/${id}`, f);
+            setFaturas(p => p.map(x => x.id === id ? { ...x, ...f } : x));
+        } catch (e) { console.error('updateFatura error', e); throw e; }
+    };
 
     return (
         <GlobalContext.Provider value={{
@@ -568,7 +688,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             funcoesTecnico, addFuncaoTecnico, updateFuncaoTecnico, removeFuncaoTecnico,
             moedas, addMoeda, updateMoeda, removeMoeda,
             tiposDocumento, addTipoDocumento, updateTipoDocumento, removeTipoDocumento,
-            paises: INIT_PAISES, provincias: INIT_PROVINCIAS, municipios: INIT_MUNICIPIOS,
+            paises, provincias, municipios,
             clientes, addCliente, updateCliente,
             tecnicos, addTecnico, updateTecnico,
             fornecedores, addFornecedor, updateFornecedor,
@@ -576,7 +696,9 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             equipInstalados, addEquipInstalado, updateEquipInstalado,
             planos, addPlano, updatePlano, removePlano,
             ordens, addOrdem, updateOrdem, removeOrdem, emitirOT, terminarOT, encerrarOT,
+            armazens, addArmazem, updateArmazem,
             artigos, addArtigo, updateArtigo, adjustExistencia,
+            movimentosStock, addMovimento,
             encomendas, addEncomenda, updateEncomenda, receberLinhas,
             faturas, addFatura, updateFatura,
         }}>
@@ -596,3 +718,6 @@ function calcNextDate(fromDate: string, periodicidade: string): string {
     }
     return d.toISOString().split('T')[0];
 }
+
+// Suppress unused warning — kept for potential use
+void calcNextDate;

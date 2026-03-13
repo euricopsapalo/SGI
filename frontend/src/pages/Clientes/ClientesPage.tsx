@@ -1,8 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { Search, Plus, Pencil, Eye, Phone, Mail, MapPin, Building2, User, X, Check, AlertCircle, Trash2, Download } from 'lucide-react';
+import axios from 'axios';
+import { useGlobal } from '../../contexts/GlobalContext';
+
+const API = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
 /* ══════════════════════════════════════════
    Types
@@ -17,89 +21,17 @@ export interface Endereco {
 }
 
 export interface Cliente {
-    id: number; codigo: string; tipo: TipoCliente;
+    id: number; tipo: TipoCliente;
     nome: string; nif: string; email: string; telefone: string;
+    ativo: boolean;
     enderecos: Endereco[];
-    maquinas: number; osTotal: number; dataCriacao: string;
 }
 
+/* ── Helpers ── */
 const endPrincipal = (c: Cliente): Endereco =>
-    c.enderecos.find(e => e.principal) ?? c.enderecos[0];
+    (c.enderecos ?? []).find(e => e.principal) ?? c.enderecos?.[0] ?? { descricao: '', morada: '', cidade: '', principal: true };
 
-const INIT_CLIENTES: Cliente[] = [
-    {
-        id: 1, codigo: 'CLI-0001', tipo: 'empresa', nome: 'Empresa Alpha, LDA', nif: '5400112233',
-        email: 'geral@alpha.ao', telefone: '+244 222 300 100',
-        enderecos: [{ descricao: 'Sede', morada: 'Rua da Samba, 45', cidade: 'Luanda', principal: true }],
-        maquinas: 3, osTotal: 12, dataCriacao: '01/01/2024',
-    },
-    {
-        id: 2, codigo: 'CLI-0002', tipo: 'empresa', nome: 'Hotel Marina Palace', nif: '5400223344',
-        email: 'manut@marinapalace.ao', telefone: '+244 222 400 200',
-        enderecos: [
-            { descricao: 'Hotel Principal', morada: 'Av. Marginal, 12', cidade: 'Luanda', principal: true },
-            { descricao: 'Armazém', morada: 'Zona Industrial, Bloco A', cidade: 'Viana', principal: false },
-        ],
-        maquinas: 5, osTotal: 28, dataCriacao: '15/02/2024',
-    },
-    {
-        id: 3, codigo: 'CLI-0003', tipo: 'empresa', nome: 'Clínica São João', nif: '5400334455',
-        email: 'admin@csj.ao', telefone: '+244 222 500 300',
-        enderecos: [{ descricao: 'Sede', morada: 'Rua da Missão, 8', cidade: 'Luanda', principal: true }],
-        maquinas: 2, osTotal: 9, dataCriacao: '10/03/2024',
-    },
-    {
-        id: 4, codigo: 'CLI-0004', tipo: 'empresa', nome: 'GlobalTrade SA', nif: '5400445566',
-        email: 'op@globaltrade.ao', telefone: '+244 923 100 400',
-        enderecos: [{ descricao: 'Sede', morada: 'Zona Industrial 3, Bloco C', cidade: 'Viana', principal: true }],
-        maquinas: 4, osTotal: 17, dataCriacao: '22/04/2024',
-    },
-    {
-        id: 5, codigo: 'CLI-0005', tipo: 'empresa', nome: 'Escola da Nação', nif: '5400556677',
-        email: 'manut@enacao.ao', telefone: '+244 912 500 500',
-        enderecos: [{ descricao: 'Sede', morada: 'Av. Lenine, 200', cidade: 'Luanda', principal: true }],
-        maquinas: 1, osTotal: 4, dataCriacao: '05/06/2024',
-    },
-    {
-        id: 6, codigo: 'CLI-0006', tipo: 'empresa', nome: 'Farmácia Saúde +', nif: '5400667788',
-        email: 'saude@farmaciap.ao', telefone: '+244 935 600 600',
-        enderecos: [{ descricao: 'Sede', morada: 'Rua Amílcar Cabral, 77', cidade: 'Luanda', principal: true }],
-        maquinas: 2, osTotal: 8, dataCriacao: '18/07/2024',
-    },
-    {
-        id: 7, codigo: 'CLI-0007', tipo: 'empresa', nome: 'Residencial Vista Mar', nif: '5400778899',
-        email: 'maint@vistamar.ao', telefone: '+244 946 700 700',
-        enderecos: [{ descricao: 'Sede', morada: 'Ilha do Cabo, Lote 9', cidade: 'Luanda', principal: true }],
-        maquinas: 6, osTotal: 31, dataCriacao: '30/08/2024',
-    },
-    {
-        id: 8, codigo: 'CLI-0008', tipo: 'particular', nome: 'António Ferreira', nif: '004123456789LA',
-        email: 'tec@maxi.ao', telefone: '+244 921 800 800',
-        enderecos: [
-            { descricao: 'Casa', morada: 'Estrada de Catete, km 5', cidade: 'Cacuaco', principal: true },
-            { descricao: 'Escritório', morada: 'Av. 4 de Fevereiro, 22', cidade: 'Luanda', principal: false },
-        ],
-        maquinas: 3, osTotal: 11, dataCriacao: '12/09/2024',
-    },
-    {
-        id: 9, codigo: 'CLI-0009', tipo: 'empresa', nome: 'MINSA — Direcção Luanda', nif: '5400990011',
-        email: 'tec@minsa.gov.ao', telefone: '+244 222 900 900',
-        enderecos: [
-            { descricao: 'Direcção Provincial', morada: 'Av. Hoji Ya Henda, 1', cidade: 'Luanda', principal: true },
-            { descricao: 'Unidade Satélite', morada: 'Rua da Paz, 34', cidade: 'Luanda', principal: false },
-        ],
-        maquinas: 8, osTotal: 45, dataCriacao: '01/10/2024',
-    },
-    {
-        id: 10, codigo: 'CLI-0010', tipo: 'empresa', nome: 'Petro Servicing Angola', nif: '5401101122',
-        email: 'manut@petroservice.ao', telefone: '+244 923 010 010',
-        enderecos: [
-            { descricao: 'Escritório', morada: 'Zona Industrial Viana, Lote 12', cidade: 'Viana', principal: true },
-            { descricao: 'Armazém', morada: 'Estrada Lobito, km 3', cidade: 'Luanda', principal: false },
-        ],
-        maquinas: 7, osTotal: 33, dataCriacao: '15/11/2024',
-    },
-];
+const codigoCli = (id: number) => `CLI-${String(id).padStart(4, '0')}`;
 
 /* ══════════════════════════════════════════
    Form types
@@ -111,14 +43,15 @@ type EndErrors = Array<{ morada?: string; cidade?: string }>;
 type FormData = {
     tipo: TipoCliente;
     nome: string; nif: string; email: string; telefone: string;
+    ativo: boolean;
     enderecos: Endereco[];
 };
 
 const BLANK_END: Endereco = { descricao: '', morada: '', cidade: '', principal: true };
-const BLANK: FormData = { tipo: 'empresa', nome: '', nif: '', email: '', telefone: '', enderecos: [{ ...BLANK_END }] };
+const BLANK: FormData = { tipo: 'empresa', nome: '', nif: '', email: '', telefone: '', ativo: true, enderecos: [{ ...BLANK_END }] };
 
 /* ══════════════════════════════════════════
-   Field — módulo-level para evitar perda de foco
+   Field
 ══════════════════════════════════════════ */
 interface FieldProps {
     k: ScalarField; label: string; placeholder?: string; type?: string; required?: boolean;
@@ -154,9 +87,12 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
     useEffect(() => {
         if (initial) {
             setForm({
-                tipo: initial.tipo, nome: initial.nome, nif: initial.nif,
-                email: initial.email, telefone: initial.telefone,
-                enderecos: initial.enderecos.map(e => ({ ...e })),
+                tipo: initial.tipo, nome: initial.nome, nif: initial.nif ?? '',
+                email: initial.email ?? '', telefone: initial.telefone ?? '',
+                ativo: initial.ativo ?? true,
+                enderecos: (initial.enderecos ?? []).length > 0
+                    ? initial.enderecos.map(e => ({ ...e }))
+                    : [{ ...BLANK_END }],
             });
         } else {
             setForm({ ...BLANK, enderecos: [{ ...BLANK_END }] });
@@ -269,6 +205,21 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
                             placeholder={isEmpresa ? 'geral@empresa.ao' : 'contacto@email.ao'}
                             form={form} errors={errors} onChange={set} />
 
+                        {/* Ativo */}
+                        <div className="form-group">
+                            <label className="form-label">Estado</label>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                {[true, false].map(v => (
+                                    <button key={String(v)} type="button"
+                                        className={`abtn${form.ativo === v ? ' abtn-primary' : ' abtn-secondary'}`}
+                                        style={{ flex: 1, justifyContent: 'center' }}
+                                        onClick={() => setForm(p => ({ ...p, ativo: v }))}>
+                                        {v ? 'Ativo' : 'Inativo'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
                         {/* Endereços */}
                         <div style={{ marginTop: 16 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -285,7 +236,6 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
                                     borderRadius: 4, padding: '10px 12px', marginBottom: 8,
                                     background: en.principal ? 'var(--bg-secondary, #f8f9fa)' : 'transparent',
                                 }}>
-                                    {/* Cabeçalho do endereço */}
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                             <input type="text"
@@ -316,7 +266,6 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
                                         </div>
                                     </div>
 
-                                    {/* Morada + Cidade */}
                                     <div className="form-row" style={{ marginBottom: 0 }}>
                                         <div className="form-group" style={{ marginBottom: 0 }}>
                                             <input type="text"
@@ -358,21 +307,21 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
 /* ══════════════════════════════════════════
    MODAL — Detalhe do Cliente
 ══════════════════════════════════════════ */
-interface DetailProps { cliente: Cliente; onClose: () => void; onEdit: () => void; }
+interface DetailProps { cliente: Cliente; maquinas: number; osTotal: number; onClose: () => void; onEdit: () => void; }
 
 const TIPO_STYLE: Record<TipoCliente, React.CSSProperties> = {
     empresa: { background: 'var(--blue)', color: '#fff' },
     particular: { background: 'var(--green)', color: '#fff' },
 };
 
-const ClienteDetail: React.FC<DetailProps> = ({ cliente, onClose, onEdit }) => {
+const ClienteDetail: React.FC<DetailProps> = ({ cliente, maquinas, osTotal, onClose, onEdit }) => {
     const principal = endPrincipal(cliente);
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
             <div className="modal" style={{ maxWidth: 560 }}>
                 <div className="modal-header">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                        <h3 className="modal-title" style={{ margin: 0 }}>{cliente.codigo} — {cliente.nome}</h3>
+                        <h3 className="modal-title" style={{ margin: 0 }}>{codigoCli(cliente.id)} — {cliente.nome}</h3>
                         <span style={{ fontSize: '0.7rem', padding: '1px 7px', borderRadius: 3, fontWeight: 600, flexShrink: 0, ...TIPO_STYLE[cliente.tipo] }}>
                             {cliente.tipo === 'empresa' ? 'Empresa' : 'Particular'}
                         </span>
@@ -392,11 +341,10 @@ const ClienteDetail: React.FC<DetailProps> = ({ cliente, onClose, onEdit }) => {
                         </div>
                     </div>
 
-                    {/* Endereços */}
                     <div className="form-group">
-                        <label className="form-label">Endereços ({cliente.enderecos.length})</label>
+                        <label className="form-label">Endereços ({(cliente.enderecos ?? []).length})</label>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {cliente.enderecos.map((en, i) => (
+                            {(cliente.enderecos ?? []).map((en, i) => (
                                 <div key={i} style={{
                                     display: 'flex', gap: 8, alignItems: 'flex-start',
                                     padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 3,
@@ -436,9 +384,9 @@ const ClienteDetail: React.FC<DetailProps> = ({ cliente, onClose, onEdit }) => {
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 12, marginTop: 8 }}>
                         {[
-                            { label: 'Máquinas Instaladas', value: cliente.maquinas, color: 'var(--blue)' },
-                            { label: 'OS Realizadas', value: cliente.osTotal, color: 'var(--green)' },
-                            { label: 'Cliente desde', value: cliente.dataCriacao, color: 'var(--text-secondary)', sm: true },
+                            { label: 'Máquinas Instaladas', value: maquinas, color: 'var(--blue)' },
+                            { label: 'OT Realizadas', value: osTotal, color: 'var(--green)' },
+                            { label: 'Estado', value: cliente.ativo ? 'Ativo' : 'Inativo', color: cliente.ativo ? 'var(--green)' : 'var(--text-muted)', sm: true },
                         ].map(s => (
                             <div key={s.label} className="panel" style={{ padding: '10px 12px', textAlign: 'center' }}>
                                 <div className="stat-label">{s.label}</div>
@@ -461,7 +409,9 @@ const ClienteDetail: React.FC<DetailProps> = ({ cliente, onClose, onEdit }) => {
    MAIN PAGE
 ══════════════════════════════════════════ */
 const ClientesPage: React.FC = () => {
-    const [clientes, setClientes] = useState<Cliente[]>(INIT_CLIENTES);
+    const { equipInstalados, ordens } = useGlobal();
+    const [clientes, setClientes] = useState<Cliente[]>([]);
+    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [detail, setDetail] = useState<Cliente | null>(null);
     const [editTarget, setEditTarget] = useState<Cliente | null>(null);
@@ -471,44 +421,74 @@ const ClientesPage: React.FC = () => {
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
+    const loadClientes = useCallback(async () => {
+        try {
+            const { data } = await axios.get(`${API}/api/clientes`);
+            setClientes(data);
+        } catch (e) {
+            console.error('Erro ao carregar clientes', e);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { loadClientes(); }, [loadClientes]);
+
     const openNew = () => { setEditTarget(null); setModalOpen(true); };
     const openEdit = (c: Cliente) => { setDetail(null); setEditTarget(c); setModalOpen(true); };
     const closeModal = () => { setModalOpen(false); setEditTarget(null); };
 
-    const handleSave = (data: FormData) => {
-        if (editTarget) {
-            setClientes(prev => prev.map(c => c.id === editTarget.id ? { ...c, ...data } : c));
-            showToast('Cliente actualizado com sucesso.');
-        } else {
-            const nextId = Math.max(...clientes.map(c => c.id)) + 1;
-            const codigo = `CLI-${String(nextId).padStart(4, '0')}`;
-            const today = new Date().toLocaleDateString('pt-PT');
-            setClientes(prev => [{ ...data, id: nextId, codigo, maquinas: 0, osTotal: 0, dataCriacao: today }, ...prev]);
-            showToast('Cliente criado com sucesso.');
+    const handleSave = async (data: FormData) => {
+        try {
+            if (editTarget) {
+                await axios.put(`${API}/api/clientes/${editTarget.id}`, data);
+                showToast('Cliente actualizado com sucesso.');
+            } else {
+                await axios.post(`${API}/api/clientes`, data);
+                showToast('Cliente criado com sucesso.');
+            }
+            await loadClientes();
+        } catch (e) {
+            console.error('Erro ao guardar cliente', e);
+            showToast('Erro ao guardar cliente.');
         }
         closeModal();
     };
 
+    const getMaquinas = (id: number) => equipInstalados.filter(e => e.clienteId === String(id)).length;
+    const getOsTotal  = (id: number) => ordens.filter(o => o.clienteId === String(id)).length;
+
     const filtered = clientes.filter(c => {
         const q = search.toLowerCase();
-        return !q || c.nome.toLowerCase().includes(q) || c.codigo.toLowerCase().includes(q) || c.nif.includes(q);
+        return !q || c.nome.toLowerCase().includes(q)
+            || codigoCli(c.id).toLowerCase().includes(q)
+            || (c.nif ?? '').includes(q);
     });
 
     const exportData = filtered.map(c => ({
-        ...c,
+        codigo: codigoCli(c.id),
+        nome: c.nome,
         tipo: c.tipo === 'empresa' ? 'Empresa' : 'Particular',
+        nif: c.nif,
+        email: c.email,
+        telefone: c.telefone,
+        cidade: endPrincipal(c).cidade,
+        maquinas: getMaquinas(c.id),
+        otTotal: getOsTotal(c.id),
+        estado: c.ativo ? 'Ativo' : 'Inativo',
     }));
 
     const EXPORT_COLS: ExportCol[] = [
-        { key: 'codigo',       label: 'Código'    },
-        { key: 'nome',         label: 'Nome'      },
-        { key: 'tipo',         label: 'Tipo'      },
-        { key: 'nif',          label: 'NIF / BI'  },
-        { key: 'email',        label: 'Email'     },
-        { key: 'telefone',     label: 'Telefone'  },
-        { key: 'maquinas',     label: 'Máquinas'  },
-        { key: 'osTotal',      label: 'OT Total'  },
-        { key: 'dataCriacao',  label: 'Desde'     },
+        { key: 'codigo',    label: 'Código'   },
+        { key: 'nome',      label: 'Nome'     },
+        { key: 'tipo',      label: 'Tipo'     },
+        { key: 'nif',       label: 'NIF / BI' },
+        { key: 'email',     label: 'Email'    },
+        { key: 'telefone',  label: 'Telefone' },
+        { key: 'cidade',    label: 'Cidade'   },
+        { key: 'maquinas',  label: 'Máquinas' },
+        { key: 'otTotal',   label: 'OT Total' },
+        { key: 'estado',    label: 'Estado'   },
     ];
 
     return (
@@ -529,11 +509,11 @@ const ClientesPage: React.FC = () => {
                 {/* Stats */}
                 <div className="stats-row">
                     {[
-                        { label: 'Total Clientes', value: clientes.length },
-                        { label: 'Empresas', value: clientes.filter(c => c.tipo === 'empresa').length },
-                        { label: 'Particulares', value: clientes.filter(c => c.tipo === 'particular').length },
-                        { label: 'Máquinas Instaladas', value: clientes.reduce((s, c) => s + c.maquinas, 0) },
-                        { label: 'OS Realizadas (total)', value: clientes.reduce((s, c) => s + c.osTotal, 0) },
+                        { label: 'Total Clientes',  value: clientes.length },
+                        { label: 'Empresas',        value: clientes.filter(c => c.tipo === 'empresa').length },
+                        { label: 'Particulares',    value: clientes.filter(c => c.tipo === 'particular').length },
+                        { label: 'Ativos',          value: clientes.filter(c => c.ativo !== false).length },
+                        { label: 'Máquinas Instal.', value: equipInstalados.length },
                     ].map(s => (
                         <div key={s.label} className="stat-card">
                             <span className="stat-label">{s.label}</span>
@@ -569,20 +549,25 @@ const ClientesPage: React.FC = () => {
                                     <th>Telefone</th>
                                     <th style={{ textAlign: 'center' }}>Endereços</th>
                                     <th style={{ textAlign: 'center' }}>Máquinas</th>
-                                    <th style={{ textAlign: 'center' }}>OS</th>
-                                    <th>Desde</th>
+                                    <th style={{ textAlign: 'center' }}>OT</th>
+                                    <th style={{ textAlign: 'center' }}>Estado</th>
                                     <th style={{ width: 60 }} />
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.length === 0 && (
+                                {loading && (
+                                    <tr><td colSpan={11}><div className="empty-state">A carregar...</div></td></tr>
+                                )}
+                                {!loading && filtered.length === 0 && (
                                     <tr><td colSpan={11}><div className="empty-state">Nenhum cliente encontrado.</div></td></tr>
                                 )}
                                 {filtered.map(c => {
                                     const principal = endPrincipal(c);
+                                    const maquinas = getMaquinas(c.id);
+                                    const otTotal = getOsTotal(c.id);
                                     return (
-                                        <tr key={c.id}>
-                                            <td><span className="td-link" onClick={() => setDetail(c)}>{c.codigo}</span></td>
+                                        <tr key={c.id} style={{ opacity: c.ativo === false ? 0.6 : 1 }}>
+                                            <td><span className="td-link" onClick={() => setDetail(c)}>{codigoCli(c.id)}</span></td>
                                             <td>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                     {c.tipo === 'empresa'
@@ -605,11 +590,19 @@ const ClientesPage: React.FC = () => {
                                             <td style={{ fontSize: '0.78rem' }}>{principal.cidade}</td>
                                             <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{c.telefone}</td>
                                             <td style={{ textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                                                {c.enderecos.length}
+                                                {(c.enderecos ?? []).length}
                                             </td>
-                                            <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--blue)' }}>{c.maquinas}</td>
-                                            <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--green)' }}>{c.osTotal}</td>
-                                            <td style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{c.dataCriacao}</td>
+                                            <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--blue)' }}>{maquinas}</td>
+                                            <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--green)' }}>{otTotal}</td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                <span style={{
+                                                    fontSize: '0.68rem', padding: '2px 6px', borderRadius: 3, fontWeight: 600,
+                                                    background: c.ativo !== false ? 'var(--green)' : '#e0e0e0',
+                                                    color: c.ativo !== false ? '#fff' : '#666',
+                                                }}>
+                                                    {c.ativo !== false ? 'Ativo' : 'Inativo'}
+                                                </span>
+                                            </td>
                                             <td>
                                                 <div className="row-actions">
                                                     <button className="icon-btn" title="Ver detalhe" onClick={() => setDetail(c)}><Eye size={12} /></button>
@@ -630,6 +623,8 @@ const ClientesPage: React.FC = () => {
             {detail && (
                 <ClienteDetail
                     cliente={detail}
+                    maquinas={getMaquinas(detail.id)}
+                    osTotal={getOsTotal(detail.id)}
                     onClose={() => setDetail(null)}
                     onEdit={() => openEdit(detail)}
                 />

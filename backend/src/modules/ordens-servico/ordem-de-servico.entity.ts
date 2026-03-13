@@ -49,14 +49,14 @@ export class OrdemDeServico {
     @JoinColumn({ name: 'id_maquina_instalada' })
     maquinaInstalada: MaquinaInstalada;
 
-    @ManyToOne(() => Tecnico, (t) => t.ordensCampo, {
+    @ManyToOne(() => Tecnico, {
         nullable: true,
         onDelete: 'SET NULL',
     })
     @JoinColumn({ name: 'id_tecnico_campo' })
     tecnicoCampo: Tecnico;
 
-    @ManyToOne(() => Tecnico, (t) => t.ordensSuporte, {
+    @ManyToOne(() => Tecnico, {
         nullable: true,
         onDelete: 'SET NULL',
     })

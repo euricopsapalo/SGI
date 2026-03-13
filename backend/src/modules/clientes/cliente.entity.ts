@@ -35,6 +35,9 @@ export class Cliente {
     @Column({ nullable: true, length: 30 })
     telefone: string;
 
+    @Column({ default: true })
+    ativo: boolean;
+
     @CreateDateColumn({ name: 'data_criacao' })
     dataCriacao: Date;
 

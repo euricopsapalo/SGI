@@ -110,15 +110,15 @@ const FornecedoresPage: React.FC = () => {
     const ativos   = fornecedores.filter(f => f.ativo).length;
     const inativos = fornecedores.filter(f => !f.ativo).length;
 
-    const editTarget = typeof modal === 'string' ? fornecedores.find(f => f.id === modal) : undefined;
+    const editTarget = typeof modal === 'string' && modal !== 'new' ? fornecedores.find(f => f.id === modal) : undefined;
 
     const handleSave = (data: Omit<Fornecedor, 'id'>) => {
-        if (typeof modal === 'string') {
+        if (typeof modal === 'string' && modal !== 'new') {
             updateFornecedor(modal, data);
             showToast('Fornecedor actualizado.');
         } else {
-            const f = addFornecedor(data);
-            showToast(`Fornecedor ${f.id} registado.`);
+            addFornecedor(data);
+            showToast('Fornecedor registado.');
         }
         setModal(null);
     };

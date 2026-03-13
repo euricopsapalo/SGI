@@ -639,7 +639,7 @@ const OrdensPage: React.FC = () => {
         return { ...o, equipamento: equip, clienteNome: cliente, dataProgInicio: fmtDate(o.dataProgInicio) };
     });
 
-    const editOT = typeof modal === 'string' ? ordens.find(o => o.id === modal) : undefined;
+    const editOT = typeof modal === 'string' && modal !== 'new' ? ordens.find(o => o.id === modal) : undefined;
 
     const handleSave = (data: Omit<OrdemTrabalho, 'id'>) => {
         if (typeof modal === 'string' && modal !== 'new') {

@@ -8,7 +8,7 @@ interface Props {
     initial: Utilizador | null;
     tecnicos: Tecnico[];
     onClose: () => void;
-    onSave: (data: Omit<Utilizador, 'id' | 'ultimoAcesso' | 'iniciais'>) => void;
+    onSave: (data: Omit<Utilizador, 'id' | 'ultimoAcesso' | 'iniciais'> & { password?: string }) => void;
 }
 
 type FormData = {
@@ -109,6 +109,7 @@ const UtilizadorModal: React.FC<Props> = ({ initial, tecnicos, onClose, onSave }
             ativo: form.ativo,
             tecnicoId: form.tecnicoId || undefined,
             tecnicoNome: form.tecnicoNome || undefined,
+            password: form.password || undefined,
         });
     };
 

@@ -1,0 +1,22 @@
+import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import { TabelasSistemaService } from './tabelas-sistema.service';
+
+@Controller('funcoes-tecnico')
+export class FuncoesTecnicoController {
+    constructor(private readonly service: TabelasSistemaService) {}
+
+    @Get()
+    findAll() { return this.service.findAllFuncoesTecnico(); }
+
+    @Get(':id')
+    findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOneFuncaoTecnico(id); }
+
+    @Post()
+    create(@Body() body: any) { return this.service.createFuncaoTecnico(body); }
+
+    @Put(':id')
+    update(@Param('id', ParseIntPipe) id: number, @Body() body: any) { return this.service.updateFuncaoTecnico(id, body); }
+
+    @Delete(':id')
+    remove(@Param('id', ParseIntPipe) id: number) { return this.service.removeFuncaoTecnico(id); }
+}

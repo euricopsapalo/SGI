@@ -1,12 +1,29 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import UtilizadorModal from './UtilizadorModal';
 import { useGlobal } from '../../contexts/GlobalContext';
+import axios from 'axios';
 import {
     Search, Plus, Filter, Pencil, Trash2,
     ToggleLeft, ToggleRight, MoreVertical, Check,
 } from 'lucide-react';
+
+const API = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+
+/* ── Role mappings ── */
+const PERFIL_TO_ROLE: Record<string, string> = {
+    'Administrador':    'admin',
+    'Técnico Suporte':  'suporte',
+    'Técnico Campo':    'campo',
+    'Vendedor':         'vendedor',
+};
+const ROLE_TO_PERFIL: Record<string, Utilizador['perfil']> = {
+    'admin':    'Administrador',
+    'suporte':  'Técnico Suporte',
+    'campo':    'Técnico Campo',
+    'vendedor': 'Vendedor',
+};
 
 /* ── Types ── */
 export interface Utilizador {
@@ -22,25 +39,24 @@ export interface Utilizador {
     tecnicoNome?: string;
 }
 
-/* ── Mock data ── */
-const MOCK: Utilizador[] = [
-    { id: 1, nome: 'Ana Ferreira', email: 'ana.ferreira@aquatex.ao', telefone: '+244 923 111 111', perfil: 'Administrador', ativo: true, ultimoAcesso: '06/03/2026 08:12', iniciais: 'AF' },
-    { id: 2, nome: 'Bruno Cunha', email: 'bruno.cunha@aquatex.ao', telefone: '+244 912 222 222', perfil: 'Técnico Campo', ativo: true, ultimoAcesso: '06/03/2026 07:50', iniciais: 'BC', tecnicoId: 'TEC-002', tecnicoNome: 'Gabriel Teixeira' },
-    { id: 3, nome: 'Carla Mendes', email: 'carla.mendes@aquatex.ao', telefone: '+244 934 333 333', perfil: 'Técnico Suporte', ativo: true, ultimoAcesso: '05/03/2026 16:45', iniciais: 'CM' },
-    { id: 4, nome: 'Daniel Nkosi', email: 'daniel.nkosi@aquatex.ao', telefone: '+244 944 444 444', perfil: 'Vendedor', ativo: true, ultimoAcesso: '04/03/2026 11:30', iniciais: 'DN' },
-    { id: 5, nome: 'Eurico Sapalo', email: 'eurico.sapalo@aquatex.ao', telefone: '+244 926 555 555', perfil: 'Administrador', ativo: true, ultimoAcesso: '06/03/2026 09:01', iniciais: 'ES' },
-    { id: 6, nome: 'Fátima Rodrigues', email: 'fatima.rodrigues@aquatex.ao', telefone: '+244 915 666 666', perfil: 'Técnico Campo', ativo: true, ultimoAcesso: '05/03/2026 14:22', iniciais: 'FR', tecnicoId: 'TEC-005', tecnicoNome: 'Carla Mendes' },
-    { id: 7, nome: 'Gabriel Teixeira', email: 'gabriel.teixeira@aquatex.ao', telefone: '+244 932 777 777', perfil: 'Técnico Campo', ativo: false, ultimoAcesso: '01/03/2026 09:00', iniciais: 'GT', tecnicoId: 'TEC-003', tecnicoNome: 'Pedro Neto' },
-    { id: 8, nome: 'Helena Campos', email: 'helena.campos@aquatex.ao', telefone: '+244 942 888 888', perfil: 'Técnico Suporte', ativo: true, ultimoAcesso: '06/03/2026 08:55', iniciais: 'HC' },
-    { id: 9, nome: 'Ivan Lopes', email: 'ivan.lopes@aquatex.ao', telefone: '+244 927 999 999', perfil: 'Vendedor', ativo: false, ultimoAcesso: '28/02/2026 17:30', iniciais: 'IL' },
-    { id: 10, nome: 'Joana Tavares', email: 'joana.tavares@aquatex.ao', telefone: '+244 912 000 000', perfil: 'Técnico Campo', ativo: true, ultimoAcesso: '06/03/2026 07:15', iniciais: 'JT', tecnicoId: 'TEC-006', tecnicoNome: 'Sofia Gomes' },
-];
+const normUser = (u: any): Utilizador => ({
+    id: u.id,
+    nome: u.nome ?? '',
+    email: u.email ?? '',
+    telefone: u.telefone ?? '',
+    perfil: ROLE_TO_PERFIL[u.role] ?? 'Técnico Suporte',
+    ativo: u.ativo ?? true,
+    ultimoAcesso: '—',
+    iniciais: (u.nome ?? '?').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
+    tecnicoId: u.tecnicoId,
+    tecnicoNome: u.tecnicoNome,
+});
 
 const PERF_BADGE: Record<string, string> = {
-    'Administrador': 'tbadge tbadge-admin',
-    'Técnico Suporte': 'tbadge tbadge-suporte',
-    'Técnico Campo': 'tbadge tbadge-campo',
-    'Vendedor': 'tbadge tbadge-vendedor',
+    'Administrador':    'tbadge tbadge-admin',
+    'Técnico Suporte':  'tbadge tbadge-suporte',
+    'Técnico Campo':    'tbadge tbadge-campo',
+    'Vendedor':         'tbadge tbadge-vendedor',
 };
 
 /* ── Row dropdown ── */
@@ -89,7 +105,8 @@ const RowMenu: React.FC<RowMenuProps> = ({ user, onEdit, onToggle, onDelete }) =
 ════════════════════════════════════════════════ */
 const UtilizadoresPage: React.FC = () => {
     const { tecnicos } = useGlobal();
-    const [users, setUsers] = useState<Utilizador[]>(MOCK);
+    const [users, setUsers] = useState<Utilizador[]>([]);
+    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [filterPerfil, setFilterPerfil] = useState('');
     const [filterStatus, setFilterStatus] = useState('');
@@ -102,6 +119,19 @@ const UtilizadoresPage: React.FC = () => {
         setTimeout(() => setToast(''), 3000);
     };
 
+    const loadUsers = useCallback(async () => {
+        try {
+            const { data } = await axios.get(`${API}/api/users`);
+            setUsers(data.map(normUser));
+        } catch (e) {
+            console.error('Erro ao carregar utilizadores', e);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { loadUsers(); }, [loadUsers]);
+
     /* Filter */
     const filtered = users.filter(u => {
         const q = search.toLowerCase();
@@ -113,37 +143,58 @@ const UtilizadoresPage: React.FC = () => {
         return matchQ && matchP && matchS;
     });
 
-    const handleSave = (data: Omit<Utilizador, 'id' | 'ultimoAcesso' | 'iniciais'>) => {
-        const iniciais = (data.tecnicoNome ?? data.nome).split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
-        if (editUser) {
-            setUsers(prev => prev.map(u => u.id === editUser.id ? { ...u, ...data, iniciais } : u));
-            showToast('Utilizador atualizado com sucesso.');
-        } else {
-            const novo: Utilizador = {
-                ...data, iniciais,
-                id: Date.now(),
-                ultimoAcesso: 'Nunca',
-            };
-            setUsers(prev => [novo, ...prev]);
-            showToast('Utilizador criado com sucesso.');
+    const handleSave = async (data: Omit<Utilizador, 'id' | 'ultimoAcesso' | 'iniciais'> & { password?: string }) => {
+        const payload: any = {
+            nome: data.nome,
+            email: data.email,
+            role: PERFIL_TO_ROLE[data.perfil] ?? 'suporte',
+            ativo: data.ativo,
+        };
+        if (data.password) payload.password = data.password;
+
+        try {
+            if (editUser) {
+                await axios.put(`${API}/api/users/${editUser.id}`, payload);
+                showToast('Utilizador atualizado com sucesso.');
+            } else {
+                await axios.post(`${API}/api/users`, payload);
+                showToast('Utilizador criado com sucesso.');
+            }
+            await loadUsers();
+        } catch (e) {
+            console.error('Erro ao guardar utilizador', e);
+            showToast('Erro ao guardar utilizador.');
         }
         setModalOpen(false);
         setEditUser(null);
     };
 
-    const handleToggle = (id: number) => {
-        setUsers(prev => prev.map(u => u.id === id ? { ...u, ativo: !u.ativo } : u));
-        showToast('Estado do utilizador atualizado.');
+    const handleToggle = async (id: number) => {
+        const u = users.find(x => x.id === id);
+        if (!u) return;
+        try {
+            await axios.put(`${API}/api/users/${id}/${u.ativo ? 'deactivate' : 'activate'}`);
+            setUsers(prev => prev.map(x => x.id === id ? { ...x, ativo: !x.ativo } : x));
+            showToast('Estado do utilizador atualizado.');
+        } catch (e) {
+            console.error('Erro ao alterar estado', e);
+        }
     };
 
-    const handleDelete = (id: number) => {
+    const handleDelete = async (id: number) => {
         if (!window.confirm('Eliminar este utilizador?')) return;
-        setUsers(prev => prev.filter(u => u.id !== id));
-        showToast('Utilizador eliminado.');
+        try {
+            await axios.delete(`${API}/api/users/${id}`);
+            setUsers(prev => prev.filter(u => u.id !== id));
+            showToast('Utilizador eliminado.');
+        } catch (e) {
+            console.error('Erro ao eliminar utilizador', e);
+            showToast('Erro ao eliminar utilizador.');
+        }
     };
 
-    const ativos = users.filter(u => u.ativo).length;
-    const campo = users.filter(u => u.perfil === 'Técnico Campo').length;
+    const ativos   = users.filter(u => u.ativo).length;
+    const campo    = users.filter(u => u.perfil === 'Técnico Campo').length;
     const inativos = users.filter(u => !u.ativo).length;
 
     return (
@@ -238,16 +289,18 @@ const UtilizadoresPage: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.length === 0 && (
+                                {loading && (
+                                    <tr><td colSpan={9}><div className="empty-state">A carregar...</div></td></tr>
+                                )}
+                                {!loading && filtered.length === 0 && (
                                     <tr>
                                         <td colSpan={9}>
                                             <div className="empty-state">Nenhum utilizador encontrado.</div>
                                         </td>
                                     </tr>
                                 )}
-                                {filtered.map((u, idx) => (
+                                {filtered.map(u => (
                                     <tr key={u.id}>
-                                        {/* status dot col */}
                                         <td style={{ textAlign: 'center', paddingLeft: 8 }}>
                                             <span className={`dot ${u.ativo ? 'dot-green' : 'dot-gray'}`} title={u.ativo ? 'Ativo' : 'Inativo'} />
                                         </td>

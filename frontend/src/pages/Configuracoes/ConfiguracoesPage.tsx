@@ -135,6 +135,7 @@ const ConfiguracoesPage: React.FC = () => {
         tiposTrabalho, addTipoTrabalho, updateTipoTrabalho, removeTipoTrabalho,
         funcoesTecnico, addFuncaoTecnico, updateFuncaoTecnico, removeFuncaoTecnico,
         tiposDocumento, addTipoDocumento, updateTipoDocumento, removeTipoDocumento,
+        armazens, addArmazem, updateArmazem,
     } = useGlobal();
 
     const [tab, setTab] = useState<Tab>('empresa');
@@ -418,6 +419,18 @@ const ConfiguracoesPage: React.FC = () => {
                                 onAdd={r => addTipoDocumento({ codigo: r.codigo, descricao: r.descricao })}
                                 onUpdate={(id, field, val) => updateTipoDocumento(id, { [field]: val })}
                                 onRemove={id => removeTipoDocumento(id)}
+                            />
+                            <TabelaInlineEditor
+                                titulo="Armazéns"
+                                colunas={[
+                                    { key: 'codigo',    label: 'Código' },
+                                    { key: 'nome',      label: 'Nome' },
+                                    { key: 'descricao', label: 'Descrição' },
+                                ]}
+                                rows={armazens}
+                                onAdd={r => addArmazem({ codigo: r.codigo, nome: r.nome, descricao: r.descricao, ativo: true })}
+                                onUpdate={(id, field, val) => updateArmazem(id, { [field]: val })}
+                                onRemove={id => updateArmazem(id, { ativo: false })}
                             />
                         </>}
 

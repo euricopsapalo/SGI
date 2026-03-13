@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
-import { useGlobal, Artigo } from '../../contexts/GlobalContext';
+import { useGlobal, Artigo, Armazem } from '../../contexts/GlobalContext';
 import {
     Search, Plus, Edit2, X, AlertCircle, Check, Package, Download,
     BarChart2, ArrowDownCircle, ArrowUpCircle, RefreshCw,
@@ -13,11 +13,6 @@ import ExportModal, { ExportCol } from '../../components/ExportModal';
 /* ══ Helpers ════════════════════════════════════════════════ */
 const fmt      = (n: number) => n.toLocaleString('pt-PT');
 const fmtMoney = (n: number, m = 'AOA') => `${fmt(n)} ${m}`;
-const ARMAZENS = [
-    { value: 'ARM-01', label: 'ARM-01 — Armazém Principal' },
-    { value: 'ARM-02', label: 'ARM-02 — Armazém Secundário' },
-    { value: 'ARM-03', label: 'ARM-03 — Armazém Campo' },
-];
 
 const COLS_STOCK: ExportCol[] = [
     { key: 'codigo',         label: 'Código' },
@@ -46,6 +41,7 @@ const TABS_A = [
 type ATab = typeof TABS_A[number]['id'];
 
 const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) => {
+    const { armazens } = useGlobal();
     const [tab, setTab] = useState<ATab>('ident');
 
     // Identificação
@@ -247,7 +243,7 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
                                 <label className="form-label">Código Armazém</label>
                                 <select className="form-select" value={codigoArmazem}
                                     onChange={e => setArmazem(e.target.value)}>
-                                    {ARMAZENS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                                    {armazens.filter(a => a.ativo).map(a => <option key={a.id} value={a.id}>{a.codigo} — {a.nome}</option>)}
                                 </select>
                             </div>
                             <div style={{ display: 'flex', gap: 20, marginTop: 8 }}>
@@ -486,11 +482,12 @@ interface TransfLine { artigoId: string; qtd: string; }
 
 interface TransferenciaModalProps {
     artigos: Artigo[];
+    armazens: Armazem[];
     onClose: () => void;
     onConfirm: (de: string, para: string, lines: TransfLine[]) => void;
 }
 
-const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, onClose, onConfirm }) => {
+const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, armazens, onClose, onConfirm }) => {
     const [armazDe,   setArmazDe]   = useState('ARM-01');
     const [armazPara, setArmazPara] = useState('ARM-02');
     const [lines, setLines]         = useState<TransfLine[]>([]);
@@ -526,14 +523,14 @@ const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, onClos
                         <div className="form-group">
                             <label className="form-label req">Armazém de Origem</label>
                             <select className="form-select" value={armazDe} onChange={e => { setArmazDe(e.target.value); setLines([]); }}>
-                                {ARMAZENS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                                {armazens.filter(a => a.ativo).map(a => <option key={a.id} value={a.id}>{a.codigo} — {a.nome}</option>)}
                             </select>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', paddingTop: 20, fontSize: '1.2rem', color: 'var(--text-muted)' }}>→</div>
                         <div className="form-group">
                             <label className="form-label req">Armazém de Destino</label>
                             <select className="form-select" value={armazPara} onChange={e => setArmazPara(e.target.value)}>
-                                {ARMAZENS.filter(a => a.value !== armazDe).map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                                {armazens.filter(a => a.ativo && a.id !== armazDe).map(a => <option key={a.id} value={a.id}>{a.codigo} — {a.nome}</option>)}
                             </select>
                         </div>
                     </div>
@@ -718,7 +715,7 @@ const StatsModal: React.FC<{ artigos: Artigo[]; onClose: () => void }> = ({ arti
 type OpState = 'inventario' | 'transferencia' | 'reposicao' | 'devolucao' | 'guia' | 'stats' | null;
 
 const StockPage: React.FC = () => {
-    const { artigos, addArtigo, updateArtigo, adjustExistencia } = useGlobal();
+    const { artigos, addArtigo, updateArtigo, adjustExistencia, armazens, addMovimento, currentUser } = useGlobal();
 
     const [search,    setSearch]  = useState('');
     const [filterCls, setFCls]    = useState('');
@@ -756,29 +753,41 @@ const StockPage: React.FC = () => {
     };
 
     const handleInventario = (lines: InventLine[]) => {
+        const hoje = new Date().toISOString().split('T')[0];
         let count = 0;
         lines.forEach(l => {
             const a = artigos.find(x => x.id === l.artigoId);
-            if (a) { adjustExistencia(l.artigoId, Number(l.novaExist) - a.existencia); count++; }
+            if (a) {
+                const delta = Number(l.novaExist) - a.existencia;
+                adjustExistencia(l.artigoId, delta);
+                addMovimento({ artigoId: l.artigoId, tipo: 'ajuste', quantidade: delta, armazemId: a.codigoArmazem, usuario: currentUser?.email, observacao: 'Ajuste de inventário', data: hoje });
+                count++;
+            }
         });
         showToast(`Inventário actualizado — ${count} artigo(s) ajustado(s).`);
     };
 
     const handleTransferencia = (de: string, para: string, lines: TransfLine[]) => {
+        const hoje = new Date().toISOString().split('T')[0];
         lines.forEach(l => {
             const qtd = Number(l.qtd);
             adjustExistencia(l.artigoId, -qtd);
             updateArtigo(l.artigoId, { codigoArmazem: para });
+            addMovimento({ artigoId: l.artigoId, tipo: 'transferencia', quantidade: qtd, armazemId: de, armazemDestinoId: para, usuario: currentUser?.email, observacao: `Transferência ${de} → ${para}`, data: hoje });
         });
         showToast(`Transferência ${de} → ${para} registada (${lines.length} artigo(s)).`);
     };
 
     const handleSimpleOp = (tipo: SimpleOpType, artigoId: string, quantidade: number) => {
+        const hoje = new Date().toISOString().split('T')[0];
+        const a = artigos.find(x => x.id === artigoId);
         if (tipo === 'reposicao') {
             adjustExistencia(artigoId, quantidade);
+            addMovimento({ artigoId, tipo: 'entrada', quantidade, armazemId: a?.codigoArmazem, usuario: currentUser?.email, observacao: 'Reposição manual', data: hoje });
             showToast(`Reposição de ${fmt(quantidade)} un registada.`);
         } else if (tipo === 'devolucao') {
             adjustExistencia(artigoId, -quantidade);
+            addMovimento({ artigoId, tipo: 'devolucao', quantidade, armazemId: a?.codigoArmazem, usuario: currentUser?.email, observacao: 'Devolução', data: hoje });
             showToast(`Devolução de ${fmt(quantidade)} un registada.`);
         } else {
             showToast(`Guia de transporte emitida.`);
@@ -930,7 +939,7 @@ const StockPage: React.FC = () => {
                 <InventarioModal artigos={artigos} onClose={() => setOp(null)} onConfirm={handleInventario} />
             )}
             {op === 'transferencia' && (
-                <TransferenciaModal artigos={artigos} onClose={() => setOp(null)} onConfirm={handleTransferencia} />
+                <TransferenciaModal artigos={artigos} armazens={armazens} onClose={() => setOp(null)} onConfirm={handleTransferencia} />
             )}
             {(op === 'reposicao' || op === 'devolucao' || op === 'guia') && (
                 <SimpleOpModal tipo={op} artigos={artigos} onClose={() => setOp(null)}

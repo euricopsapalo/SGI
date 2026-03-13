@@ -27,24 +27,22 @@ const ESTADO_STYLE: Record<EncomendaEstado, { cls: string; label: string }> = {
 };
 
 /* ══ Receber Modal ══════════════════════════════════════════ */
-const ARMAZENS_ENC = [
-    { value: 'ARM-01', label: 'ARM-01 — Armazém Principal' },
-    { value: 'ARM-02', label: 'ARM-02 — Armazém Secundário' },
-    { value: 'ARM-03', label: 'ARM-03 — Armazém Campo' },
-];
-
 interface ReceberModalProps {
     encomenda: Encomenda;
     onClose: () => void;
     onConfirm: (recebidas: { artigoId: string; qtd: number }[], armazem: string) => void;
 }
 const ReceberModal: React.FC<ReceberModalProps> = ({ encomenda, onClose, onConfirm }) => {
+    const { armazens } = useGlobal();
+    const armazensOpts = armazens.map(a => ({ value: a.codigo, label: `${a.codigo} — ${a.nome}` }));
+    const defaultArmazem = armazens[0]?.codigo ?? '';
+
     const [qtds, setQtds]       = useState<Record<string, string>>(
         Object.fromEntries(
             encomenda.linhas.map(l => [l.artigoId, String(l.qtdEncomendada - l.qtdRecebida)])
         )
     );
-    const [armazem, setArmazem] = useState('ARM-01');
+    const [armazem, setArmazem] = useState(defaultArmazem);
 
     const handleConfirm = () => {
         const recebidas = encomenda.linhas
@@ -66,7 +64,7 @@ const ReceberModal: React.FC<ReceberModalProps> = ({ encomenda, onClose, onConfi
                     <div className="form-group" style={{ marginBottom: 14 }}>
                         <label className="form-label req">Armazém de Destino</label>
                         <select className="form-select" value={armazem} onChange={e => setArmazem(e.target.value)}>
-                            {ARMAZENS_ENC.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                            {armazensOpts.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
                         </select>
                         <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: 4 }}>
                             Os artigos recebidos serão registados neste armazém.
@@ -529,7 +527,7 @@ const COLS_ENC: ExportCol[] = [
 
 /* ══ Page ════════════════════════════════════════════════════ */
 const EncomendaPage: React.FC = () => {
-    const { encomendas, addEncomenda, updateEncomenda, receberLinhas, fornecedores, updateArtigo } = useGlobal();
+    const { encomendas, addEncomenda, updateEncomenda, receberLinhas, fornecedores, updateArtigo, addMovimento, currentUser } = useGlobal();
 
     const [search,    setSearch]    = useState('');
     const [filterEst, setFEst]      = useState('');
@@ -564,12 +562,12 @@ const EncomendaPage: React.FC = () => {
     const recebidas = encomendas.filter(e => e.estado === 'Recebida').length;
     const valorAberto = encomendas.filter(e => e.estado !== 'Cancelada' && e.estado !== 'Recebida').reduce((s, e) => s + encTotal(e), 0);
 
-    const editTarget  = typeof modal === 'string' ? encomendas.find(e => e.id === modal) : undefined;
+    const editTarget  = typeof modal === 'string' && modal !== 'new' ? encomendas.find(e => e.id === modal) : undefined;
     const receberEnc  = receber ? encomendas.find(e => e.id === receber) : null;
     const printEnc    = printId ? encomendas.find(e => e.id === printId) : null;
 
     const handleSave = (data: Omit<Encomenda, 'id' | 'numero'>) => {
-        if (typeof modal === 'string') {
+        if (typeof modal === 'string' && modal !== 'new') {
             updateEncomenda(modal, data);
             showToast('Encomenda actualizada.');
         } else {
@@ -582,7 +580,11 @@ const EncomendaPage: React.FC = () => {
 
     const handleReceber = (encId: string, recebidas: { artigoId: string; qtd: number }[], armazem: string) => {
         receberLinhas(encId, recebidas);
-        recebidas.forEach(r => updateArtigo(r.artigoId, { codigoArmazem: armazem }));
+        const hoje = new Date().toISOString().split('T')[0];
+        recebidas.forEach(r => {
+            updateArtigo(r.artigoId, { codigoArmazem: armazem });
+            addMovimento({ artigoId: r.artigoId, tipo: 'entrada', quantidade: r.qtd, armazemId: armazem, referencia: encId, usuario: currentUser?.email, observacao: `Recepção ${encId}`, data: hoje });
+        });
         showToast(`Recepção registada → ${armazem}. Stock actualizado.`);
     };
 

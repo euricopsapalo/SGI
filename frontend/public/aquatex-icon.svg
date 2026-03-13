@@ -1,0 +1,8 @@
+<svg viewBox="0 0 40 50" width="40" height="50" xmlns="http://www.w3.org/2000/svg" aria-label="SGI — AQUATEX">
+  <!-- Gota de água -->
+  <path d="M20 2 C20 2 5 19 5 31 C5 40.9 11.7 49 20 49 C28.3 49 35 40.9 35 31 C35 19 20 2 20 2Z" fill="#0D6EBF"/>
+  <!-- Onda na base da gota -->
+  <path d="M5 37 Q9.5 32.5 14.5 37 Q19.5 41.5 24.5 37 Q29.5 32.5 34 37 L34 49 L6 49Z" fill="rgba(255,255,255,0.16)"/>
+  <!-- Visto -->
+  <polyline points="12,32 17,38.5 29,24" fill="none" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
+</svg>

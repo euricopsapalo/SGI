@@ -129,7 +129,7 @@ const TecnicosPage: React.FC = () => {
     const ativos   = tecnicos.filter(t => t.ativo).length;
     const inativos = tecnicos.filter(t => !t.ativo).length;
 
-    const editTarget = typeof modal === 'string' ? tecnicos.find(t => t.id === modal) : undefined;
+    const editTarget = typeof modal === 'string' && modal !== 'new' ? tecnicos.find(t => t.id === modal) : undefined;
 
     const handleSave = (data: Omit<Tecnico, 'id'>) => {
         if (typeof modal === 'string' && modal !== 'new') {

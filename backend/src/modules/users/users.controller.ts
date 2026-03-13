@@ -1,0 +1,28 @@
+import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import { UsersService } from './users.service';
+
+@Controller('users')
+export class UsersController {
+    constructor(private readonly service: UsersService) {}
+
+    @Get()
+    findAll() { return this.service.findAll(); }
+
+    @Get(':id')
+    findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOne(id); }
+
+    @Post()
+    create(@Body() body: any) { return this.service.create(body); }
+
+    @Put(':id')
+    update(@Param('id', ParseIntPipe) id: number, @Body() body: any) { return this.service.update(id, body); }
+
+    @Delete(':id')
+    remove(@Param('id', ParseIntPipe) id: number) { return this.service.remove(id); }
+
+    @Put(':id/activate')
+    activate(@Param('id', ParseIntPipe) id: number) { return this.service.activate(id); }
+
+    @Put(':id/deactivate')
+    deactivate(@Param('id', ParseIntPipe) id: number) { return this.service.deactivate(id); }
+}

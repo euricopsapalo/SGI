@@ -3,6 +3,7 @@ import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { BarChart3, TrendingUp, Users, Download, Package, Search } from 'lucide-react';
+import { useGlobal } from '../../contexts/GlobalContext';
 
 type RelTab = 'faturacao' | 'comissoes' | 'produtividade' | 'movimentos';
 
@@ -13,148 +14,181 @@ const TABS: { id: RelTab; label: string; icon: React.FC<any> }[] = [
     { id: 'movimentos',    label: 'Movimentos de Stock',    icon: Package    },
 ];
 
-/* ── Static data ── */
-const MOVIMENTOS_STOCK = [
-    { data: '2026-03-11', tipo: 'Entrada',      artigo: 'Membrana Osmose Inversa 4040',    codigo: 'MEM-RO-4040', armazem: 'ARM-01',          quantidade: 10, origem: 'ENC-001',       utilizador: 'admin@aquatex.ao' },
-    { data: '2026-03-11', tipo: 'Inventário',   artigo: 'Filtro Sedimentos 10" 5 micron',  codigo: 'FLT-SED-10',  armazem: 'ARM-01',          quantidade: -5, origem: 'Inventário',    utilizador: 'admin@aquatex.ao' },
-    { data: '2026-03-10', tipo: 'Saída',        artigo: 'Membrana Osmose Inversa 4040',    codigo: 'MEM-RO-4040', armazem: 'ARM-01',          quantidade: -1, origem: 'OT-0001',       utilizador: 'admin@aquatex.ao' },
-    { data: '2026-03-10', tipo: 'Saída',        artigo: 'Filtro Carvão Activado 20"',      codigo: 'FLT-CAR-20',  armazem: 'ARM-01',          quantidade: -2, origem: 'OT-0001',       utilizador: 'admin@aquatex.ao' },
-    { data: '2026-03-09', tipo: 'Entrada',      artigo: 'Lâmpada UV 25W Germicida',        codigo: 'UV-LAMP-25',  armazem: 'ARM-01',          quantidade:  4, origem: 'ENC-003',       utilizador: 'admin@aquatex.ao' },
-    { data: '2026-03-09', tipo: 'Entrada',      artigo: 'Sal para Resina 25kg',            codigo: 'SAL-RES-25',  armazem: 'ARM-01',          quantidade: 20, origem: 'ENC-003',       utilizador: 'admin@aquatex.ao' },
-    { data: '2026-03-08', tipo: 'Transferência',artigo: 'O-Ring Kit 100 peças',            codigo: 'O-RING-K100', armazem: 'ARM-01→ARM-02',   quantidade:  5, origem: 'Transferência', utilizador: 'admin@aquatex.ao' },
-    { data: '2026-03-06', tipo: 'Saída',        artigo: 'Filtro Carvão Activado 20"',      codigo: 'FLT-CAR-20',  armazem: 'ARM-01',          quantidade: -1, origem: 'OT-0007',       utilizador: 'admin@aquatex.ao' },
-    { data: '2026-02-25', tipo: 'Entrada',      artigo: 'Filtro Sedimentos 10" 5 micron',  codigo: 'FLT-SED-10',  armazem: 'ARM-01',          quantidade: 20, origem: 'ENC-002',       utilizador: 'admin@aquatex.ao' },
-    { data: '2026-02-25', tipo: 'Entrada',      artigo: 'Filtro Carvão Activado 20"',      codigo: 'FLT-CAR-20',  armazem: 'ARM-01',          quantidade: 10, origem: 'ENC-002',       utilizador: 'admin@aquatex.ao' },
-];
+const MES_PT: Record<string, string> = {
+    '01': 'Jan', '02': 'Fev', '03': 'Mar', '04': 'Abr', '05': 'Mai', '06': 'Jun',
+    '07': 'Jul', '08': 'Ago', '09': 'Set', '10': 'Out', '11': 'Nov', '12': 'Dez',
+};
 
-const FATURACAO_MENSAL = [
-    { mes: 'Set 2025', mes_key: '2025-09', os: 28, montagem: 620000, preventiva: 300000, corretiva: 210000, total: 1130000 },
-    { mes: 'Out 2025', mes_key: '2025-10', os: 31, montagem: 450000, preventiva: 340000, corretiva: 180000, total:  970000 },
-    { mes: 'Nov 2025', mes_key: '2025-11', os: 35, montagem: 780000, preventiva: 280000, corretiva: 220000, total: 1280000 },
-    { mes: 'Dez 2025', mes_key: '2025-12', os: 29, montagem: 350000, preventiva: 320000, corretiva: 140000, total:  810000 },
-    { mes: 'Jan 2026', mes_key: '2026-01', os: 33, montagem: 560000, preventiva: 360000, corretiva: 190000, total: 1110000 },
-    { mes: 'Fev 2026', mes_key: '2026-02', os: 38, montagem: 890000, preventiva: 390000, corretiva: 260000, total: 1540000 },
-    { mes: 'Mar 2026', mes_key: '2026-03', os: 37, montagem: 950000, preventiva: 340000, corretiva: 195000, total: 1485000 },
-];
-
-const COMISSOES = [
-    { nome: 'Bruno Cunha',      tipo: 'Técnico Campo', os: 18, montagem: 3, preventiva: 10, corretiva: 5, total: 960000 },
-    { nome: 'Fátima Rodrigues', tipo: 'Técnico Campo', os: 14, montagem: 2, preventiva:  8, corretiva: 4, total: 720000 },
-    { nome: 'Joana Tavares',    tipo: 'Técnico Campo', os: 12, montagem: 5, preventiva:  5, corretiva: 2, total: 730000 },
-    { nome: 'Gabriel Teixeira', tipo: 'Técnico Campo', os:  6, montagem: 0, preventiva:  4, corretiva: 2, total: 280000 },
-    { nome: 'Daniel Nkosi',     tipo: 'Vendedor',      os:  8, montagem: 8, preventiva:  0, corretiva: 0, total: 385000 },
-];
-
-const PRODUTIVIDADE = [
-    { nome: 'Bruno Cunha',      osMes: 18, concluidas: 17, canceladas: 1, tempMedio: '2h 10min', satisfacao: 4.8 },
-    { nome: 'Fátima Rodrigues', osMes: 14, concluidas: 14, canceladas: 0, tempMedio: '2h 35min', satisfacao: 4.9 },
-    { nome: 'Joana Tavares',    osMes: 12, concluidas: 11, canceladas: 1, tempMedio: '3h 00min', satisfacao: 4.6 },
-    { nome: 'Gabriel Teixeira', osMes:  6, concluidas:  5, canceladas: 1, tempMedio: '2h 50min', satisfacao: 4.2 },
-];
+const TIPO_LABEL: Record<string, string> = {
+    entrada: 'Entrada', saida: 'Saída', ajuste: 'Ajuste',
+    transferencia: 'Transferência', devolucao: 'Devolução',
+};
 
 const TIPO_MOV_COLOR: Record<string, string> = {
-    'Entrada': 'var(--green)', 'Saída': 'var(--red)',
-    'Inventário': 'var(--blue)', 'Transferência': 'var(--orange)',
+    'Entrada': 'var(--green)', 'Saída': 'var(--red,#ef4444)',
+    'Ajuste': 'var(--blue)', 'Transferência': 'var(--orange)', 'Devolução': 'var(--text-muted)',
 };
 
-/* ── Export column definitions per tab ── */
 const COLS: Record<RelTab, ExportCol[]> = {
     faturacao: [
-        { key: 'mes',        label: 'Mês'           },
-        { key: 'os',         label: 'Nº OT'         },
-        { key: 'montagem',   label: 'Montagem (Kz)' },
-        { key: 'preventiva', label: 'Preventiva (Kz)'},
+        { key: 'mes',        label: 'Mês'            },
+        { key: 'os',         label: 'Nº OT'          },
+        { key: 'montagem',   label: 'Montagem (Kz)'  },
+        { key: 'preventiva', label: 'Preventiva (Kz)' },
         { key: 'corretiva',  label: 'Corretiva (Kz)' },
-        { key: 'total',      label: 'Total (Kz)'    },
-    ],
-    comissoes: [
-        { key: 'nome',       label: 'Nome'           },
-        { key: 'tipo',       label: 'Perfil'         },
-        { key: 'os',         label: 'Nº OS'          },
-        { key: 'montagem',   label: 'Montagem'       },
-        { key: 'preventiva', label: 'Preventiva'     },
-        { key: 'corretiva',  label: 'Corretiva'      },
         { key: 'total',      label: 'Total (Kz)'     },
     ],
+    comissoes: [
+        { key: 'nome',       label: 'Nome'       },
+        { key: 'tipo',       label: 'Perfil'     },
+        { key: 'os',         label: 'Nº OT'      },
+        { key: 'montagem',   label: 'Montagem'   },
+        { key: 'preventiva', label: 'Preventiva' },
+        { key: 'corretiva',  label: 'Corretiva'  },
+        { key: 'total',      label: 'Total (Kz)' },
+    ],
     produtividade: [
-        { key: 'nome',       label: 'Técnico'        },
-        { key: 'osMes',      label: 'OS no Mês'      },
-        { key: 'concluidas', label: 'Concluídas'     },
-        { key: 'canceladas', label: 'Canceladas'     },
-        { key: 'tempMedio',  label: 'Tempo Médio'    },
-        { key: 'satisfacao', label: 'Satisfação'     },
+        { key: 'nome',       label: 'Técnico'    },
+        { key: 'osMes',      label: 'Total OT'   },
+        { key: 'concluidas', label: 'Concluídas' },
+        { key: 'pendentes',  label: 'Pendentes'  },
     ],
     movimentos: [
-        { key: 'data',        label: 'Data'       },
-        { key: 'tipo',        label: 'Tipo'       },
-        { key: 'codigo',      label: 'Código'     },
-        { key: 'artigo',      label: 'Artigo'     },
-        { key: 'armazem',     label: 'Armazém'    },
-        { key: 'quantidade',  label: 'Quantidade' },
-        { key: 'origem',      label: 'Origem'     },
-        { key: 'utilizador',  label: 'Utilizador' },
+        { key: 'data',       label: 'Data'       },
+        { key: 'tipo',       label: 'Tipo'       },
+        { key: 'codigo',     label: 'Código'     },
+        { key: 'artigo',     label: 'Artigo'     },
+        { key: 'armazem',    label: 'Armazém'    },
+        { key: 'quantidade', label: 'Quantidade' },
+        { key: 'origem',     label: 'Origem'     },
+        { key: 'utilizador', label: 'Utilizador' },
     ],
 };
 
-const fmtKz = (v: number) => v.toLocaleString('pt-PT');
+const fmtKz  = (v: number) => v.toLocaleString('pt-PT');
 const fmtNum = (v: number) => v.toLocaleString('pt-PT');
 
 /* ══════════════════════════════════════════════════════════ */
 const RelatoriosPage: React.FC = () => {
-    const [tab,            setTab]            = useState<RelTab>('faturacao');
-    const [showExport,     setShowExport]     = useState(false);
+    const { faturas, ordens, movimentosStock, artigos, armazens } = useGlobal();
 
-    /* Faturação filters */
-    const mesKeys = FATURACAO_MENSAL.map(m => m.mes_key);
-    const [fatDe,  setFatDe]  = useState(mesKeys[0]);
-    const [fatAte, setFatAte] = useState(mesKeys[mesKeys.length - 1]);
+    const [tab,        setTab]        = useState<RelTab>('faturacao');
+    const [showExport, setShowExport] = useState(false);
 
-    /* Comissões filters */
-    const [comTipo,   setComTipo]   = useState('');
-    const [comSearch, setComSearch] = useState('');
+    /* ── Faturação mensal (computed from real faturas) ── */
+    const faturacaoMensal = useMemo(() => {
+        const byMonth: Record<string, { mes: string; mes_key: string; os: number; montagem: number; preventiva: number; corretiva: number; total: number }> = {};
+        faturas.forEach(f => {
+            const mes_key = (f.dataEmissao ?? '').substring(0, 7);
+            if (!mes_key || mes_key.length < 7) return;
+            const [y, m] = mes_key.split('-');
+            const mesLabel = `${MES_PT[m] ?? m} ${y}`;
+            if (!byMonth[mes_key]) byMonth[mes_key] = { mes: mesLabel, mes_key, os: 0, montagem: 0, preventiva: 0, corretiva: 0, total: 0 };
+            byMonth[mes_key].total += Number(f.valorTotal);
+            byMonth[mes_key].os += 1;
+            const ot = ordens.find(o => o.id === f.otId);
+            const tt = (ot?.tipoTrabalho ?? '').toUpperCase();
+            if (tt.includes('MONT'))      byMonth[mes_key].montagem   += Number(f.valorTotal);
+            else if (tt.includes('PREV')) byMonth[mes_key].preventiva += Number(f.valorTotal);
+            else                          byMonth[mes_key].corretiva  += Number(f.valorTotal);
+        });
+        return Object.values(byMonth).sort((a, b) => a.mes_key.localeCompare(b.mes_key));
+    }, [faturas, ordens]);
 
-    /* Produtividade filters */
+    const mesKeys = faturacaoMensal.map(m => m.mes_key);
+    const [fatDe,  setFatDe]  = useState('');
+    const [fatAte, setFatAte] = useState('');
+    const fatDeEff  = fatDe  || mesKeys[0]                  || '';
+    const fatAteEff = fatAte || mesKeys[mesKeys.length - 1] || '';
+
+    /* ── Comissões (real) — OTs concluídas por técnico ── */
+    const comissoesData = useMemo(() => {
+        const byTec: Record<string, { nome: string; tipo: string; os: number; montagem: number; preventiva: number; corretiva: number; total: number }> = {};
+        ordens.filter(o => o.estado === 'Terminado' || o.estado === 'Encerrado').forEach(o => {
+            if (!o.responsavel) return;
+            if (!byTec[o.responsavel]) byTec[o.responsavel] = { nome: o.responsavel, tipo: 'Técnico Campo', os: 0, montagem: 0, preventiva: 0, corretiva: 0, total: 0 };
+            byTec[o.responsavel].os++;
+            const tt = (o.tipoTrabalho ?? '').toUpperCase();
+            if (tt.includes('MONT'))      byTec[o.responsavel].montagem++;
+            else if (tt.includes('PREV')) byTec[o.responsavel].preventiva++;
+            else                          byTec[o.responsavel].corretiva++;
+            const fat = faturas.find(f => f.otId === o.id);
+            if (fat) byTec[o.responsavel].total += Number(fat.valorTotal);
+        });
+        return Object.values(byTec).sort((a, b) => b.os - a.os);
+    }, [ordens, faturas]);
+
+    /* ── Produtividade (real) — OTs por técnico ── */
+    const produtividadeData = useMemo(() => {
+        const byTec: Record<string, { nome: string; osMes: number; concluidas: number; pendentes: number }> = {};
+        ordens.forEach(o => {
+            if (!o.responsavel) return;
+            if (!byTec[o.responsavel]) byTec[o.responsavel] = { nome: o.responsavel, osMes: 0, concluidas: 0, pendentes: 0 };
+            byTec[o.responsavel].osMes++;
+            if (o.estado === 'Terminado' || o.estado === 'Encerrado') byTec[o.responsavel].concluidas++;
+            else byTec[o.responsavel].pendentes++;
+        });
+        return Object.values(byTec).sort((a, b) => b.osMes - a.osMes);
+    }, [ordens]);
+
+    const [comTipo,    setComTipo]    = useState('');
+    const [comSearch,  setComSearch]  = useState('');
     const [prodSearch, setProdSearch] = useState('');
+    const [movTipo,    setMovTipo]    = useState('');
+    const [movDe,      setMovDe]      = useState('');
+    const [movAte,     setMovAte]     = useState('');
+    const [movSearch,  setMovSearch]  = useState('');
 
-    /* Movimentos filters */
-    const [movTipo,  setMovTipo]  = useState('');
-    const [movDe,    setMovDe]    = useState('');
-    const [movAte,   setMovAte]   = useState('');
-    const [movSearch, setMovSearch] = useState('');
-
-    /* ── filtered datasets ── */
     const filtFaturacao = useMemo(() =>
-        FATURACAO_MENSAL.filter(m => m.mes_key >= fatDe && m.mes_key <= fatAte),
-        [fatDe, fatAte]
+        faturacaoMensal.filter(m => (!fatDeEff || m.mes_key >= fatDeEff) && (!fatAteEff || m.mes_key <= fatAteEff)),
+        [faturacaoMensal, fatDeEff, fatAteEff]
     );
 
     const filtComissoes = useMemo(() =>
-        COMISSOES.filter(c =>
+        comissoesData.filter(c =>
             (!comTipo   || c.tipo === comTipo) &&
             (!comSearch || c.nome.toLowerCase().includes(comSearch.toLowerCase()))
         ),
-        [comTipo, comSearch]
+        [comissoesData, comTipo, comSearch]
     );
 
     const filtProdutividade = useMemo(() =>
-        PRODUTIVIDADE.filter(t =>
+        produtividadeData.filter(t =>
             !prodSearch || t.nome.toLowerCase().includes(prodSearch.toLowerCase())
         ),
-        [prodSearch]
+        [produtividadeData, prodSearch]
+    );
+
+    const movimentosEnrich = useMemo(() =>
+        [...movimentosStock].sort((a, b) => b.data.localeCompare(a.data)).map(m => {
+            const art  = artigos.find(a => a.id === m.artigoId);
+            const arm  = armazens.find(a => a.id === m.armazemId);
+            const armD = armazens.find(a => a.id === m.armazemDestinoId);
+            const tipoLabel = TIPO_LABEL[m.tipo] ?? m.tipo;
+            const qtdDisplay = m.tipo === 'saida' || m.tipo === 'devolucao' ? -Math.abs(m.quantidade) : m.quantidade;
+            return {
+                id: m.id, data: m.data, tipo: tipoLabel,
+                artigo: art?.descricao ?? m.artigoId, codigo: art?.codigo ?? '',
+                armazem: armD ? `${arm?.codigo ?? m.armazemId} → ${armD.codigo}` : (arm?.codigo ?? m.armazemId ?? ''),
+                quantidade: qtdDisplay,
+                origem: m.referencia ?? m.observacao ?? '',
+                utilizador: m.usuario ?? '',
+            };
+        }),
+        [movimentosStock, artigos, armazens]
     );
 
     const filtMovimentos = useMemo(() =>
-        MOVIMENTOS_STOCK.filter(m =>
+        movimentosEnrich.filter(m =>
             (!movTipo   || m.tipo === movTipo) &&
             (!movDe     || m.data >= movDe) &&
             (!movAte    || m.data <= movAte) &&
             (!movSearch || m.artigo.toLowerCase().includes(movSearch.toLowerCase()) ||
                            m.codigo.toLowerCase().includes(movSearch.toLowerCase()))
         ),
-        [movTipo, movDe, movAte, movSearch]
+        [movimentosEnrich, movTipo, movDe, movAte, movSearch]
     );
 
-    /* current export payload */
     const exportData: Record<RelTab, Record<string, any>[]> = {
         faturacao:     filtFaturacao,
         comissoes:     filtComissoes,
@@ -179,19 +213,15 @@ const RelatoriosPage: React.FC = () => {
                 {/* Tab bar */}
                 <div style={{ display: 'flex', gap: 2, marginBottom: 16, background: 'var(--panel-header-bg)', border: '1px solid var(--panel-border)', borderRadius: 5, padding: 4, width: 'fit-content' }}>
                     {TABS.map(t => (
-                        <button
-                            key={t.id}
-                            onClick={() => setTab(t.id)}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: 6,
-                                padding: '5px 14px', borderRadius: 4, border: 'none',
-                                background: tab === t.id ? '#fff' : 'none',
-                                boxShadow: tab === t.id ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
-                                fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: tab === t.id ? 700 : 600,
-                                color: tab === t.id ? 'var(--blue)' : 'var(--text-secondary)',
-                                cursor: 'pointer', transition: 'all 150ms', whiteSpace: 'nowrap',
-                            }}
-                        >
+                        <button key={t.id} onClick={() => setTab(t.id)} style={{
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            padding: '5px 14px', borderRadius: 4, border: 'none',
+                            background: tab === t.id ? '#fff' : 'none',
+                            boxShadow: tab === t.id ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+                            fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: tab === t.id ? 700 : 600,
+                            color: tab === t.id ? 'var(--blue)' : 'var(--text-secondary)',
+                            cursor: 'pointer', transition: 'all 150ms', whiteSpace: 'nowrap',
+                        }}>
                             <t.icon size={13} /> {t.label}
                         </button>
                     ))}
@@ -200,28 +230,28 @@ const RelatoriosPage: React.FC = () => {
                 {/* ── FATURAÇÃO ── */}
                 {tab === 'faturacao' && (
                     <>
-                        {/* Filters */}
-                        <div className="filters-bar" style={{ marginBottom: 14 }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                De:
-                                <select className="filter-select" value={fatDe} onChange={e => setFatDe(e.target.value)}>
-                                    {mesKeys.map(k => <option key={k} value={k}>{FATURACAO_MENSAL.find(m => m.mes_key === k)?.mes}</option>)}
-                                </select>
-                            </label>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                Até:
-                                <select className="filter-select" value={fatAte} onChange={e => setFatAte(e.target.value)}>
-                                    {mesKeys.filter(k => k >= fatDe).map(k => <option key={k} value={k}>{FATURACAO_MENSAL.find(m => m.mes_key === k)?.mes}</option>)}
-                                </select>
-                            </label>
-                        </div>
+                        {mesKeys.length > 0 && (
+                            <div className="filters-bar" style={{ marginBottom: 14 }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                    De:
+                                    <select className="filter-select" value={fatDeEff} onChange={e => setFatDe(e.target.value)}>
+                                        {mesKeys.map(k => <option key={k} value={k}>{faturacaoMensal.find(m => m.mes_key === k)?.mes}</option>)}
+                                    </select>
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                    Até:
+                                    <select className="filter-select" value={fatAteEff} onChange={e => setFatAte(e.target.value)}>
+                                        {mesKeys.filter(k => k >= fatDeEff).map(k => <option key={k} value={k}>{faturacaoMensal.find(m => m.mes_key === k)?.mes}</option>)}
+                                    </select>
+                                </label>
+                            </div>
+                        )}
 
-                        {/* Stats */}
                         <div className="stats-row" style={{ marginBottom: 16 }}>
                             {[
                                 { label: 'Total período',  value: `Kz ${fmtKz(filtFaturacao.reduce((s, m) => s + m.total, 0))}` },
                                 { label: 'Média mensal',   value: `Kz ${fmtKz(Math.round(filtFaturacao.reduce((s, m) => s + m.total, 0) / (filtFaturacao.length || 1)))}` },
-                                { label: 'Melhor mês',     value: filtFaturacao.reduce((a, m) => m.total > a.total ? m : a, filtFaturacao[0] ?? { mes: '—', total: 0 }).mes },
+                                { label: 'Melhor mês',     value: filtFaturacao.length ? filtFaturacao.reduce((a, m) => m.total > a.total ? m : a).mes : '—' },
                                 { label: 'OT Faturadas',   value: fmtNum(filtFaturacao.reduce((s, m) => s + m.os, 0)) },
                             ].map(s => (
                                 <div key={s.label} className="stat-card">
@@ -231,12 +261,11 @@ const RelatoriosPage: React.FC = () => {
                             ))}
                         </div>
 
-                        {/* Bar chart */}
                         <div className="panel" style={{ marginBottom: 16 }}>
                             <div className="panel-header"><span className="panel-title">Faturação Mensal (Kz)</span></div>
                             <div className="panel-body">
                                 {filtFaturacao.length === 0
-                                    ? <div className="empty-state" style={{ height: 100 }}>Sem dados para o período seleccionado.</div>
+                                    ? <div className="empty-state" style={{ height: 100 }}>Sem dados de faturação registados.</div>
                                     : (
                                         <>
                                             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 160 }}>
@@ -304,9 +333,9 @@ const RelatoriosPage: React.FC = () => {
 
                         <div className="stats-row" style={{ marginBottom: 16 }}>
                             {[
-                                { label: 'Total Comissões',      value: `Kz ${fmtKz(filtComissoes.reduce((s, c) => s + c.total, 0))}`, cls: 'blue' },
-                                { label: 'Técnicos de Campo',    value: filtComissoes.filter(c => c.tipo === 'Técnico Campo').length },
-                                { label: 'Vendedores',           value: filtComissoes.filter(c => c.tipo === 'Vendedor').length },
+                                { label: 'Total Faturado',    value: `Kz ${fmtKz(filtComissoes.reduce((s, c) => s + c.total, 0))}`, cls: 'blue' },
+                                { label: 'Técnicos de Campo', value: filtComissoes.filter(c => c.tipo === 'Técnico Campo').length },
+                                { label: 'OT Concluídas',     value: filtComissoes.reduce((s, c) => s + c.os, 0) },
                             ].map(s => (
                                 <div key={s.label} className="stat-card">
                                     <span className="stat-label">{s.label}</span>
@@ -317,9 +346,9 @@ const RelatoriosPage: React.FC = () => {
 
                         <div className="table-container">
                             <table className="data-table">
-                                <thead><tr><th>Nome</th><th>Perfil</th><th style={{ textAlign: 'center' }}>OS</th><th style={{ textAlign: 'center' }}>Montagem</th><th style={{ textAlign: 'center' }}>Preventiva</th><th style={{ textAlign: 'center' }}>Corretiva</th><th style={{ textAlign: 'right', fontWeight: 800 }}>Total (Kz)</th></tr></thead>
+                                <thead><tr><th>Nome</th><th>Perfil</th><th style={{ textAlign: 'center' }}>Total OT</th><th style={{ textAlign: 'center' }}>Montagem</th><th style={{ textAlign: 'center' }}>Preventiva</th><th style={{ textAlign: 'center' }}>Corretiva</th><th style={{ textAlign: 'right', fontWeight: 800 }}>Faturado (Kz)</th></tr></thead>
                                 <tbody>
-                                    {filtComissoes.length === 0 && <tr><td colSpan={7}><div className="empty-state">Sem resultados.</div></td></tr>}
+                                    {filtComissoes.length === 0 && <tr><td colSpan={7}><div className="empty-state">Sem OT concluídas registadas.</div></td></tr>}
                                     {filtComissoes.map(c => (
                                         <tr key={c.nome}>
                                             <td style={{ fontWeight: 700 }}>{c.nome}</td>
@@ -350,10 +379,10 @@ const RelatoriosPage: React.FC = () => {
 
                         <div className="stats-row" style={{ marginBottom: 16 }}>
                             {[
-                                { label: 'Total OS (mês)',    value: filtProdutividade.reduce((s, t) => s + t.osMes, 0) },
-                                { label: 'Concluídas',        value: filtProdutividade.reduce((s, t) => s + t.concluidas, 0), cls: 'green' },
-                                { label: 'Canceladas',        value: filtProdutividade.reduce((s, t) => s + t.canceladas, 0), cls: 'muted' },
-                                { label: 'Satisfação Média',  value: filtProdutividade.length > 0 ? (filtProdutividade.reduce((s, t) => s + t.satisfacao, 0) / filtProdutividade.length).toFixed(1) + ' ★' : '—', cls: 'blue' },
+                                { label: 'Total OT',    value: filtProdutividade.reduce((s, t) => s + t.osMes, 0) },
+                                { label: 'Concluídas',  value: filtProdutividade.reduce((s, t) => s + t.concluidas, 0), cls: 'green' },
+                                { label: 'Em Curso',    value: filtProdutividade.reduce((s, t) => s + t.pendentes, 0), cls: 'blue' },
+                                { label: 'Técnicos',    value: filtProdutividade.length, cls: 'muted' },
                             ].map(s => (
                                 <div key={s.label} className="stat-card">
                                     <span className="stat-label">{s.label}</span>
@@ -364,9 +393,9 @@ const RelatoriosPage: React.FC = () => {
 
                         <div className="table-container">
                             <table className="data-table">
-                                <thead><tr><th>Técnico</th><th style={{ textAlign: 'center' }}>OS no Mês</th><th style={{ textAlign: 'center' }}>Concluídas</th><th style={{ textAlign: 'center' }}>Canceladas</th><th style={{ textAlign: 'center' }}>Tempo Médio</th><th style={{ textAlign: 'center' }}>Satisfação</th></tr></thead>
+                                <thead><tr><th>Técnico</th><th style={{ textAlign: 'center' }}>Total OT</th><th style={{ textAlign: 'center' }}>Concluídas</th><th style={{ textAlign: 'center' }}>Em Curso/Prog.</th></tr></thead>
                                 <tbody>
-                                    {filtProdutividade.length === 0 && <tr><td colSpan={6}><div className="empty-state">Sem resultados.</div></td></tr>}
+                                    {filtProdutividade.length === 0 && <tr><td colSpan={4}><div className="empty-state">Sem OT atribuídas a técnicos.</div></td></tr>}
                                     {filtProdutividade.map(t => (
                                         <tr key={t.nome}>
                                             <td>
@@ -377,11 +406,7 @@ const RelatoriosPage: React.FC = () => {
                                             </td>
                                             <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--blue)' }}>{t.osMes}</td>
                                             <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--green)' }}>{t.concluidas}</td>
-                                            <td style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{t.canceladas}</td>
-                                            <td style={{ textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{t.tempMedio}</td>
-                                            <td style={{ textAlign: 'center', fontWeight: 800, color: t.satisfacao >= 4.7 ? 'var(--green)' : t.satisfacao >= 4.4 ? 'var(--orange)' : 'var(--red)' }}>
-                                                {t.satisfacao} ★
-                                            </td>
+                                            <td style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{t.pendentes}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -403,8 +428,9 @@ const RelatoriosPage: React.FC = () => {
                                 <option value="">Todos os tipos</option>
                                 <option value="Entrada">Entrada</option>
                                 <option value="Saída">Saída</option>
-                                <option value="Inventário">Inventário</option>
+                                <option value="Ajuste">Ajuste</option>
                                 <option value="Transferência">Transferência</option>
+                                <option value="Devolução">Devolução</option>
                             </select>
                             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                                 De: <input type="date" className="filter-select" style={{ width: 130 }} value={movDe} onChange={e => setMovDe(e.target.value)} />
@@ -416,10 +442,10 @@ const RelatoriosPage: React.FC = () => {
 
                         <div className="stats-row" style={{ marginBottom: 16 }}>
                             {[
-                                { label: 'Total',          value: filtMovimentos.length },
-                                { label: 'Entradas',       value: filtMovimentos.filter(m => m.tipo === 'Entrada').length,  cls: 'green'  },
-                                { label: 'Saídas',         value: filtMovimentos.filter(m => m.tipo === 'Saída').length,    cls: 'muted'  },
-                                { label: 'Outros',         value: filtMovimentos.filter(m => m.tipo !== 'Entrada' && m.tipo !== 'Saída').length, cls: 'blue' },
+                                { label: 'Total',    value: filtMovimentos.length },
+                                { label: 'Entradas', value: filtMovimentos.filter(m => m.tipo === 'Entrada').length,                              cls: 'green' },
+                                { label: 'Saídas',   value: filtMovimentos.filter(m => m.tipo === 'Saída' || m.tipo === 'Devolução').length,  cls: 'muted' },
+                                { label: 'Outros',   value: filtMovimentos.filter(m => m.tipo === 'Ajuste' || m.tipo === 'Transferência').length, cls: 'blue' },
                             ].map(s => (
                                 <div key={s.label} className="stat-card">
                                     <span className="stat-label">{s.label}</span>
@@ -438,7 +464,7 @@ const RelatoriosPage: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filtMovimentos.length === 0 && <tr><td colSpan={8}><div className="empty-state">Sem resultados.</div></td></tr>}
+                                    {filtMovimentos.length === 0 && <tr><td colSpan={8}><div className="empty-state">Sem movimentos de stock registados.</div></td></tr>}
                                     {filtMovimentos.map((m, i) => (
                                         <tr key={i}>
                                             <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{m.data}</td>
@@ -461,7 +487,6 @@ const RelatoriosPage: React.FC = () => {
                 )}
             </div>
 
-            {/* Export modal */}
             {showExport && (
                 <ExportModal
                     title={tabLabel}

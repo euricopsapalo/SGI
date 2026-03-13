@@ -13,6 +13,18 @@ import { OrdensServicoModule } from './modules/ordens-servico/ordens-servico.mod
 import { FaturasModule } from './modules/faturas/faturas.module';
 import { ComissoesModule } from './modules/comissoes/comissoes.module';
 import { ConfiguracaoModule } from './modules/configuracao/configuracao.module';
+// New modules
+import { TabelasSistemaModule } from './modules/tabelas-sistema/tabelas-sistema.module';
+import { FornecedoresModule } from './modules/fornecedores/fornecedores.module';
+import { ParqueModule } from './modules/parque/parque.module';
+import { ArmazensModule } from './modules/armazens/armazens.module';
+import { ArtigosModule } from './modules/artigos/artigos.module';
+import { PlanosModule } from './modules/planos/planos.module';
+import { OrdensTrabalhoModule } from './modules/ordens-trabalho/ordens-trabalho.module';
+import { EncomendaModule } from './modules/encomendas/encomendas.module';
+import { SysLogsModule } from './modules/sys-logs/sys-logs.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { SeedModule } from './modules/seed/seed.module';
 
 @Module({
   imports: [
@@ -28,9 +40,7 @@ import { ConfiguracaoModule } from './modules/configuracao/configuracao.module';
       synchronize: true,
       logging: true,
     }),
-    // Placeholder / demo
     MessagesModule,
-    // AQUATEX domain modules
     UsersModule,
     ClientesModule,
     EquipamentosModule,
@@ -41,6 +51,18 @@ import { ConfiguracaoModule } from './modules/configuracao/configuracao.module';
     FaturasModule,
     ComissoesModule,
     ConfiguracaoModule,
+    // New modules
+    TabelasSistemaModule,
+    FornecedoresModule,
+    ParqueModule,
+    ArmazensModule,
+    ArtigosModule,
+    PlanosModule,
+    OrdensTrabalhoModule,
+    EncomendaModule,
+    SysLogsModule,
+    AuthModule,
+    SeedModule,
   ],
 })
-export class AppModule { }
+export class AppModule {}
