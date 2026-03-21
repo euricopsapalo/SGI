@@ -190,8 +190,8 @@ const FornecedoresPage: React.FC = () => {
 
     const countEncomendas = (id: string) => encomendas.filter(e => e.fornecedorId === id).length;
 
-    const getProvinciaNome = (id?: string) => provincias.find(p => p.id === id)?.nome ?? '';
-    const getMunicipioNome = (id?: string) => municipios.find(m => m.id === id)?.nome ?? '';
+    const getProvinciaNome = (id?: string) => provincias.find(p => String(p.id) === String(id))?.nome ?? '';
+    const getMunicipioNome = (id?: string) => municipios.find(m => String(m.id) === String(id))?.nome ?? '';
 
     const filtered = fornecedores.filter(f => {
         const q = search.toLowerCase();

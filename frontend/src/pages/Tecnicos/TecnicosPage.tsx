@@ -200,9 +200,9 @@ const TecnicosPage: React.FC = () => {
         }
     };
 
-    const getFuncaoLabel   = (id: string) => funcoesTecnico.find(f => f.id === id)?.descricao ?? id;
-    const getProvinciaNome = (id?: string) => provincias.find(p => p.id === id)?.nome ?? '';
-    const getMunicipioNome = (id?: string) => municipios.find(m => m.id === id)?.nome ?? '';
+    const getFuncaoLabel   = (id: string) => funcoesTecnico.find(f => String(f.id) === String(id))?.descricao ?? id;
+    const getProvinciaNome = (id?: string) => provincias.find(p => String(p.id) === String(id))?.nome ?? '';
+    const getMunicipioNome = (id?: string) => municipios.find(m => String(m.id) === String(id))?.nome ?? '';
 
     const filtered = tecnicos.filter(t => {
         const q = search.toLowerCase();
