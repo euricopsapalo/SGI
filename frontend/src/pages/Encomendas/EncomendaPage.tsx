@@ -156,6 +156,24 @@ const ReceberModal: React.FC<ReceberModalProps> = ({ encomenda, onClose, onConfi
 function printNotaEncomenda(encomenda: Encomenda, fornecedorNome: string, empresa?: EmpresaConfig) {
     const emp = empresa ?? { nome: EMPRESA_INFO.nome, nif: EMPRESA_INFO.nif, morada: EMPRESA_INFO.morada, telefone: EMPRESA_INFO.telefone, email: EMPRESA_INFO.email, iban: EMPRESA_INFO.iban, banco: EMPRESA_INFO.banco, moeda: EMPRESA_INFO.moeda, taxaIva: EMPRESA_INFO.ivaDefault };
     const total = encTotal(encomenda);
+
+    // Stamp config per estado
+    const stampMap: Record<string, { label: string; color: string; bg: string; border: string }> = {
+        Recebida:  { label: 'RECEBIDO',                 color: '#15803d', bg: 'rgba(21,128,61,0.08)',   border: '#15803d' },
+        Parcial:   { label: 'PARCIALMENTE\nRECEBIDO',   color: '#b45309', bg: 'rgba(180,83,9,0.08)',    border: '#b45309' },
+        Aberta:    { label: 'EM ABERTO',                color: '#0D6EBF', bg: 'rgba(13,110,191,0.08)',  border: '#0D6EBF' },
+        Cancelada: { label: 'CANCELADA',                color: '#dc2626', bg: 'rgba(220,38,38,0.08)',   border: '#dc2626' },
+    };
+    const stamp = stampMap[encomenda.estado] ?? stampMap['Aberta'];
+    const stampLines = stamp.label.split('\n');
+
+    // Dates
+    const dataGeracao = new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const rececaoAtiva = [...(encomenda.rececoes ?? [])].filter(r => r.estado === 'Ativa').sort((a, b) => b.dataHora.localeCompare(a.dataHora));
+    const dataUltimaRececao = rececaoAtiva.length > 0
+        ? new Date(rececaoAtiva[0].dataHora).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' } as any)
+        : null;
+
     const linhasHtml = encomenda.linhas.map(l => `
         <tr>
             <td style="font-family:monospace">${l.codigo}</td>
@@ -175,7 +193,7 @@ function printNotaEncomenda(encomenda: Encomenda, fornecedorNome: string, empres
 <style>
   @page { size: A4; margin: 18mm 15mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; font-size: 10pt; color: #1a1a1a; }
+  body { font-family: Arial, sans-serif; font-size: 10pt; color: #1a1a1a; position: relative; }
   .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
   .empresa-nome { font-size: 13pt; font-weight: 800; color: #1a1a1a; }
   .empresa-info { font-size: 8.5pt; color: #666; margin-top: 3px; line-height: 1.5; }
@@ -201,10 +219,33 @@ function printNotaEncomenda(encomenda: Encomenda, fornecedorNome: string, empres
   .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 40px; }
   .sig-box { border-top: 1px solid #1a1a1a; padding-top: 6px; font-size: 8.5pt; color: #666; text-align: center; }
   .footer { margin-top: 24px; font-size: 7.5pt; color: #aaa; text-align: center; border-top: 1px solid #e0e0e0; padding-top: 8px; }
+  /* Watermark stamp */
+  .stamp-watermark {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(-35deg);
+    font-size: 52pt; font-weight: 900; letter-spacing: 0.12em;
+    color: ${stamp.color}; opacity: 0.08;
+    white-space: pre-line; text-align: center;
+    pointer-events: none; z-index: 0; line-height: 1.1;
+  }
+  /* Corner stamp badge */
+  .stamp-badge {
+    display: inline-block;
+    border: 2.5px solid ${stamp.border};
+    color: ${stamp.color};
+    background: ${stamp.bg};
+    padding: 3px 10px; border-radius: 4px;
+    font-size: 8.5pt; font-weight: 800; letter-spacing: 0.1em;
+    white-space: pre-line; text-align: center; line-height: 1.3;
+    margin-top: 5px;
+  }
   @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
 </style>
 </head>
 <body>
+  <!-- Watermark -->
+  <div class="stamp-watermark">${stampLines.join('\n')}</div>
+
   <!-- Header -->
   <div class="header">
     <div>
@@ -218,8 +259,10 @@ function printNotaEncomenda(encomenda: Encomenda, fornecedorNome: string, empres
     <div class="doc-title">
       <h1>NOTA DE ENCOMENDA</h1>
       <div class="doc-num">Nº ${encomenda.numero}</div>
-      <div class="doc-date">Data: ${fmtDate(encomenda.data)}</div>
-      <div class="doc-date">Estado: ${encomenda.estado}</div>
+      <div class="doc-date">Data da encomenda: ${fmtDate(encomenda.data)}</div>
+      <div class="doc-date">Data de geração: ${dataGeracao}</div>
+      ${dataUltimaRececao ? `<div class="doc-date">Data de receção: ${dataUltimaRececao}</div>` : ''}
+      <div><span class="stamp-badge">${stampLines.join('\n')}</span></div>
     </div>
   </div>
   <hr class="divider">
