@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
@@ -154,7 +154,7 @@ interface OTFormProps {
 }
 
 const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTerminar, onEncerrar, readOnly }) => {
-    const { equipInstalados, clientes, modelosEquipamento, planos, tiposTrabalho, funcoesTecnico, artigos: catalog, tecnicos, currentUser } = useGlobal();
+    const { equipInstalados, clientes, modelosEquipamento, planos, tiposTrabalho, tiposOT, funcoesTecnico, artigos: catalog, tecnicos, currentUser, taxaIvaGlobal } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
     const [tab, setTab] = useState<'origem' | 'maos' | 'artigos' | 'diagnostico' | 'gestao'>('origem');
 
@@ -167,6 +167,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
     const [periodo, setPeriodo]     = useState(ot?.periodicidade ?? 'Mensal');
     const [planoId, setPlanoId]     = useState(ot?.planoId ?? '');
     const [tipoTrab, setTipoTrab]   = useState(ot?.tipoTrabalho ?? '');
+    const [tipoOT, setTipoOT]       = useState(ot?.tipoOT ?? '');
     const [responsavel, setResp]    = useState(ot?.responsavel ?? (!ot && isTecnicoCampo ? (currentUser?.tecnicoNome ?? currentUser?.nome ?? '') : ''));
 
     // Mão de obra
@@ -174,6 +175,24 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
 
     // Artigos
     const [arts, setArts] = useState<OTArtigo[]>(ot?.artigos ?? []);
+
+    // Auto-load from plano when OT is Programado with planoId but has no mão de obra/artigos
+    useEffect(() => {
+        if (!ot || ot.estado !== 'Programado') return;
+        if (!ot.planoId) return;
+        if ((ot.maosDeObra?.length ?? 0) > 0 || (ot.artigos?.length ?? 0) > 0) return;
+        const plano = planos.find(p => p.id === ot.planoId);
+        if (!plano) return;
+        setMaos(plano.maosDeObra.map(m => {
+            const f = funcoesTecnico.find(x => x.id === m.funcaoId);
+            return { funcao: f?.descricao ?? m.funcaoId, custo: m.custo, hora: '08:00' };
+        }));
+        setArts(plano.artigos.map(a => {
+            const art = catalog.find(x => x.id === a.artigoId);
+            return { artigoId: a.artigoId, descricao: art?.descricao ?? '—', quantidade: a.quantidade, preco: a.preco };
+        }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Diagnóstico
     const [orgao, setOrgao]   = useState(ot?.orgao   ?? '');
@@ -203,7 +222,14 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
     });
     const tecCampoOpts = tecnicos.filter(t => t.ativo).map(t => ({ value: t.nome, label: t.nome, sub: funcoesTecnico.find(f => f.id === t.funcaoId)?.descricao }));
     const planoOpts = planos.filter(p => p.equipInstaladoId === equipId).map(p => ({ value: p.id, label: p.descricao, sub: `${p.periodicidade} · ${p.previsaoTempo}h` }));
-    const catalogOpts = catalog.filter(a => !a.inativo).map(a => ({ value: a.id, label: a.descricao, sub: `${a.codigo} · Stk: ${a.existencia} · ${a.precoUnitario.toLocaleString('pt-PT')} Kz` }));
+    const catalogOpts = catalog.filter(a => !a.inativo).map(a => {
+        const disponivel = a.existencia - a.stockReservado;
+        return {
+            value: a.id,
+            label: a.descricao,
+            sub: `${a.codigo} · ${disponivel <= 0 ? `⚠ Disp: ${disponivel}` : `Disp: ${disponivel}`}${a.stockReservado > 0 ? ` (Res: ${a.stockReservado})` : ''} · ${a.precoUnitario.toLocaleString('pt-PT')} Kz`,
+        };
+    });
 
     const onEquipChange = (id: string) => {
         setEquipId(id);
@@ -231,6 +257,16 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
         }));
     };
 
+    // Auto-fill mão de obra when responsável is selected (new OT only)
+    const handleRespChange = (nome: string) => {
+        setResp(nome);
+        if (ot) return; // editing — don't override
+        const tec = tecnicos.find(t => t.nome === nome);
+        if (!tec) return;
+        const funcao = funcoesTecnico.find(f => f.id === String(tec.funcaoId));
+        if (funcao) setMaos([{ funcao: funcao.descricao, custo: funcao.custo, hora: '08:00' }]);
+    };
+
     // Mão de obra ops
     const addMao = () => setMaos(p => [...p, { funcao: '', custo: 0, hora: '08:00' }]);
     const removeMao = (i: number) => setMaos(p => p.filter((_, idx) => idx !== i));
@@ -251,6 +287,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
 
     const validate = () => {
         const e: Record<string, string> = {};
+        if (!tipoOT)           e.tipoOT = 'Obrigatório';
         if (!equipId)          e.equip  = 'Obrigatório';
         if (!descricao.trim()) e.desc   = 'Obrigatório';
         if (!tipoTrab)         e.tipo   = 'Obrigatório';
@@ -262,13 +299,14 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
     const buildOT = (): Omit<OrdemTrabalho, 'id'> => ({
         tipo, equipInstaladoId: equipId, clienteId,
         descricao, previsaoTempo: Number(previsao) || 0, periodicidade: tipo === 'programada' ? periodo : undefined,
-        planoId: planoId || undefined, tipoTrabalho: tipoTrab, responsavel,
+        planoId: planoId || undefined, tipoTrabalho: tipoTrab, tipoOT: tipoOT || undefined, responsavel,
         maosDeObra: maos, artigos: arts,
         orgao: orgao || undefined, sintoma: sintoma || undefined, causa: causa || undefined,
         dataProgInicio: dpI || undefined, dataProgFim: dpF || undefined,
         dataEmissao: dEm || undefined, dataInicio: dIn || undefined,
         dataFim: dFi || undefined, dataEncerramento: dEn || undefined,
         estado: ot?.estado ?? 'Programado',
+        reprogramacoes: [],
     });
 
     const handleOk = (ev: React.FormEvent) => {
@@ -330,10 +368,11 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label className="form-label req">Tipo de OT</label>
-                                        <select className="form-select" value={tipo} onChange={e => setTipo(e.target.value as OTTipo)}>
-                                            <option value="programada">Programada</option>
-                                            <option value="pontual">Pontual</option>
+                                        <select className={`form-select${errors.tipoOT ? ' err' : ''}`} value={tipoOT} onChange={e => { const v = e.target.value; setTipoOT(v); setTipo(v.toLowerCase().includes('pontual') ? 'pontual' : 'programada'); }}>
+                                            <option value="">Seleccionar...</option>
+                                            {tiposOT.map(t => <option key={t.id} value={t.descricao}>{t.descricao}</option>)}
                                         </select>
+                                        {errors.tipoOT && <span className="form-error"><AlertCircle size={11} /> {errors.tipoOT}</span>}
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label req">Equipamento</label>
@@ -368,9 +407,11 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
                                         </select>
                                         {errors.tipo && <span className="form-error"><AlertCircle size={11} /> {errors.tipo}</span>}
                                     </div>
+                                </div>
+                                <div className="form-row">
                                     <div className="form-group">
                                         <label className="form-label req">Responsável</label>
-                                        <SearchableSelect options={tecCampoOpts} value={responsavel} onChange={setResp} placeholder="Técnico de campo..." />
+                                        <SearchableSelect options={tecCampoOpts} value={responsavel} onChange={handleRespChange} placeholder="Técnico de campo..." />
                                         {errors.resp && <span className="form-error"><AlertCircle size={11} /> {errors.resp}</span>}
                                     </div>
                                 </div>
@@ -425,21 +466,49 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
                                 </div>
                                 {arts.length === 0 ? (
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sem artigos definidos.</div>
-                                ) : arts.map((a, i) => (
-                                    <div key={i} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) 70px 110px 28px', gap: 6, marginBottom: 6, alignItems: 'start', minWidth: 320, overflowX: 'auto' }}>
-                                        <SearchableSelect options={catalogOpts} value={a.artigoId} onChange={v => updateArtId(i, v)} placeholder="Seleccionar artigo..." />
-                                        <input type="number" min={1} className="form-input" value={a.quantidade} onChange={e => updateArtQtd(i, e.target.value)} placeholder="Qtd" />
-                                        <div className="form-input" style={{ color: 'var(--text-muted)', background: 'var(--bg-secondary)', fontSize: '0.78rem' }}>
-                                            {a.preco.toLocaleString('pt-PT')} Kz
+                                ) : arts.map((a, i) => {
+                                    const catItem = catalog.find(x => x.id === a.artigoId);
+                                    const semStock = catItem && catItem.existencia <= 0;
+                                    return (
+                                        <div key={i} style={{ marginBottom: 6 }}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) 70px 110px 28px', gap: 6, alignItems: 'start', minWidth: 320, overflowX: 'auto' }}>
+                                                <SearchableSelect options={catalogOpts} value={a.artigoId} onChange={v => updateArtId(i, v)} placeholder="Seleccionar artigo..." />
+                                                <input type="number" min={1} className="form-input" value={a.quantidade} onChange={e => updateArtQtd(i, e.target.value)} placeholder="Qtd" />
+                                                <div className="form-input" style={{ color: 'var(--text-muted)', background: 'var(--bg-secondary)', fontSize: '0.78rem' }}>
+                                                    {a.preco.toLocaleString('pt-PT')} Kz
+                                                </div>
+                                                <button type="button" className="icon-btn" style={{ color: 'var(--red)', marginTop: 3 }} onClick={() => removeArt(i)}><Trash2 size={12} /></button>
+                                            </div>
+                                            {semStock && (
+                                                <div style={{ fontSize: '0.72rem', color: 'var(--orange,#f97316)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                    <AlertCircle size={10} /> Sem stock disponível — será registado stock negativo
+                                                </div>
+                                            )}
                                         </div>
-                                        <button type="button" className="icon-btn" style={{ color: 'var(--red)', marginTop: 3 }} onClick={() => removeArt(i)}><Trash2 size={12} /></button>
-                                    </div>
-                                ))}
-                                {arts.length > 0 && (
-                                    <div style={{ marginTop: 8, padding: '6px 10px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 3, fontSize: '0.8rem', textAlign: 'right' }}>
-                                        Total artigos: <strong>{arts.reduce((s, a) => s + a.quantidade * a.preco, 0).toLocaleString('pt-PT')} Kz</strong>
-                                    </div>
-                                )}
+                                    );
+                                })}
+                                {arts.length > 0 && (() => {
+                                    const subtotal = arts.reduce((s, a) => s + a.quantidade * a.preco, 0);
+                                    const iva = subtotal * (taxaIvaGlobal / 100);
+                                    const total = subtotal + iva;
+                                    const fmt = (v: number) => v.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                    return (
+                                        <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 3, fontSize: '0.8rem' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 3 }}>
+                                                <span>Subtotal</span>
+                                                <span>{fmt(subtotal)} Kz</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 6 }}>
+                                                <span>IVA ({taxaIvaGlobal}%)</span>
+                                                <span>{fmt(iva)} Kz</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '0.85rem', borderTop: '1px solid var(--border)', paddingTop: 5 }}>
+                                                <span>Total</span>
+                                                <strong>{fmt(total)} Kz</strong>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </>
                         )}
 
@@ -468,7 +537,22 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
                                     <div className="form-row">
                                         <div className="form-group">
                                             <label className="form-label">Data Prog. Início</label>
-                                            <input type="date" className="form-input" value={dpI} onChange={e => setDpI(e.target.value)} />
+                                            <input type="date" className="form-input" value={dpI} onChange={e => {
+                                                const inicio = e.target.value;
+                                                setDpI(inicio);
+                                                if (inicio) {
+                                                    const d = new Date(inicio);
+                                                    switch (periodo) {
+                                                        case 'Mensal':     d.setMonth(d.getMonth() + 1);       break;
+                                                        case 'Trimestral': d.setMonth(d.getMonth() + 3);       break;
+                                                        case 'Semestral':  d.setMonth(d.getMonth() + 6);       break;
+                                                        case 'Anual':      d.setFullYear(d.getFullYear() + 1); break;
+                                                        default:           d.setMonth(d.getMonth() + 1);
+                                                    }
+                                                    d.setDate(d.getDate() - 7);
+                                                    setDpF(d.toISOString().split('T')[0]);
+                                                }
+                                            }} />
                                         </div>
                                         <div className="form-group">
                                             <label className="form-label">Data Prog. Fim</label>
@@ -574,6 +658,24 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
                                         </div>
                                     </div>
                                 )}
+
+                                {/* Reprogramações History */}
+                                {ot && ot.reprogramacoes && ot.reprogramacoes.length > 0 && (
+                                    <div style={{ marginTop: 16 }}>
+                                        <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                                            Histórico de Reprogramações ({ot.reprogramacoes.length})
+                                        </div>
+                                        <div style={{ border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                                            {ot.reprogramacoes.map((r, i) => (
+                                                <div key={r.id ?? i} style={{ display: 'flex', gap: 10, padding: '6px 10px', fontSize: '0.77rem', borderBottom: i < ot.reprogramacoes.length - 1 ? '1px solid var(--border)' : 'none', background: i % 2 === 0 ? 'var(--bg-secondary)' : 'var(--bg)' }}>
+                                                    <span style={{ color: 'var(--text-muted)', minWidth: 85 }}>{r.dataAnterior || '—'} → {r.novaData || '—'}</span>
+                                                    <span style={{ flex: 1, color: 'var(--text-primary)' }}>{r.motivo}</span>
+                                                    <span style={{ color: 'var(--text-muted)' }}>{r.usuario}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </>
                         )}
                     </div>
@@ -593,7 +695,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
 
 /* ══ Main Page ═══════════════════════════════════════════ */
 const OrdensPage: React.FC = () => {
-    const { ordens, addOrdem, updateOrdem, emitirOT, terminarOT, encerrarOT, equipInstalados, clientes, modelosEquipamento, currentUser } = useGlobal();
+    const { ordens, addOrdem, updateOrdem, emitirOT, terminarOT, encerrarOT, equipInstalados, clientes, modelosEquipamento, currentUser, tiposOT } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
 
     const [search, setSearch]         = useState('');
@@ -618,7 +720,7 @@ const OrdensPage: React.FC = () => {
         const { equip, cliente } = getLabel(o);
         return (!q || o.id.toLowerCase().includes(q) || equip.toLowerCase().includes(q) || cliente.toLowerCase().includes(q) || o.descricao.toLowerCase().includes(q))
             && (!filterEstado || o.estado === filterEstado)
-            && (!filterTipo   || o.tipo   === filterTipo)
+            && (!filterTipo   || o.tipoOT === filterTipo)
             && (!isTecnicoCampo || o.responsavel === (currentUser?.tecnicoNome ?? currentUser?.nome));
     }), [ordens, search, filterEstado, filterTipo, isTecnicoCampo, currentUser]);
 
@@ -714,8 +816,7 @@ const OrdensPage: React.FC = () => {
                     </select>
                     <select className="filter-select" value={filterTipo} onChange={e => setFiltTipo(e.target.value)}>
                         <option value="">Todos os tipos</option>
-                        <option value="programada">Programada</option>
-                        <option value="pontual">Pontual</option>
+                        {tiposOT.map(t => <option key={t.id} value={t.descricao}>{t.descricao}</option>)}
                     </select>
                     {(search || filterEstado || filterTipo) && (
                         <button className="abtn abtn-secondary" type="button" onClick={() => { setSearch(''); setFiltEst(''); setFiltTipo(''); }}>
@@ -735,14 +836,19 @@ const OrdensPage: React.FC = () => {
                                     <th>Equipamento</th>
                                     <th>Cliente</th>
                                     <th>Responsável</th>
-                                    <th>Data Prog.</th>
+                                    <th>D.Prog.Início</th>
+                                    <th>D.Prog.Fim</th>
+                                    <th>Emitida</th>
+                                    <th>Início</th>
+                                    <th>Fim</th>
+                                    <th>Encerramento</th>
                                     <th>Estado</th>
                                     <th style={{ width: 50 }} />
                                 </tr>
                             </thead>
                             <tbody>
                                 {filtered.length === 0 && (
-                                    <tr><td colSpan={9}><div className="empty-state">Nenhuma OT encontrada.</div></td></tr>
+                                    <tr><td colSpan={14}><div className="empty-state">Nenhuma OT encontrada.</div></td></tr>
                                 )}
                                 {filtered.map(o => {
                                     const { equip, cliente } = getLabel(o);
@@ -752,12 +858,26 @@ const OrdensPage: React.FC = () => {
                                             <td style={{ paddingLeft: 8, textAlign: 'center' }}>
                                                 <span style={{ fontSize: '0.72rem' }}>{cfg.icon}</span>
                                             </td>
-                                            <td><span className="td-link" onClick={() => setModal(o.id)}>{o.id}</span></td>
-                                            <td><span className={o.tipo === 'programada' ? 'tbadge tbadge-suporte' : 'tbadge tbadge-campo'}>{o.tipo === 'programada' ? 'Programada' : 'Pontual'}</span></td>
+                                            <td>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                                    <span className="td-link" onClick={() => setModal(o.id)}>{o.id}</span>
+                                                    {o.reprogramacoes && o.reprogramacoes.length > 0 && (
+                                                        <span title={`Reprogramada ${o.reprogramacoes.length}x`} style={{ fontSize: '0.65rem', fontWeight: 700, background: '#FED7AA', color: '#92400E', borderRadius: 10, padding: '1px 5px' }}>
+                                                            R{o.reprogramacoes.length}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td>{o.tipoOT ? <span className="tbadge tbadge-suporte">{o.tipoOT}</span> : <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>—</span>}</td>
                                             <td style={{ fontSize: '0.78rem' }}>{equip}</td>
                                             <td style={{ fontSize: '0.8rem', fontWeight: 600 }}>{cliente}</td>
                                             <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{o.responsavel}</td>
-                                            <td style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataProgInicio)}</td>
+                                            <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataProgInicio) || '—'}</td>
+                                            <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataProgFim)    || '—'}</td>
+                                            <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataEmissao)    || '—'}</td>
+                                            <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataInicio)     || '—'}</td>
+                                            <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataFim)        || '—'}</td>
+                                            <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataEncerramento) || '—'}</td>
                                             <td>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.78rem' }}>
                                                     <span className={`dot ${cfg.dot}`} />

@@ -20,7 +20,9 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
 }) => {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
+    const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
     const ref = useRef<HTMLDivElement>(null);
+    const btnRef = useRef<HTMLButtonElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -38,6 +40,15 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         if (open) setTimeout(() => inputRef.current?.focus(), 30);
     }, [open]);
 
+    const handleToggle = () => {
+        if (disabled) return;
+        if (!open && btnRef.current) {
+            const r = btnRef.current.getBoundingClientRect();
+            setDropPos({ top: r.bottom + 2, left: r.left, width: r.width });
+        }
+        setOpen(o => !o);
+    };
+
     const filtered = options.filter(o =>
         o.label.toLowerCase().includes(search.toLowerCase()) ||
         (o.sub && o.sub.toLowerCase().includes(search.toLowerCase()))
@@ -48,9 +59,10 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     return (
         <div ref={ref} style={{ position: 'relative' }}>
             <button
+                ref={btnRef}
                 type="button"
                 disabled={disabled}
-                onClick={() => !disabled && setOpen(o => !o)}
+                onClick={handleToggle}
                 style={{
                     width: '100%', textAlign: 'left',
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -71,8 +83,8 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
             {open && (
                 <div style={{
-                    position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0,
-                    zIndex: 300, background: 'var(--panel-bg,#fff)',
+                    position: 'fixed', top: dropPos.top, left: dropPos.left, width: dropPos.width,
+                    zIndex: 1200, background: 'var(--panel-bg,#fff)',
                     border: '1px solid var(--border)', borderRadius: 4,
                     boxShadow: '0 4px 16px rgba(0,0,0,0.13)',
                 }}>

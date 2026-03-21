@@ -3,7 +3,7 @@ import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { useGlobal, Fornecedor } from '../../contexts/GlobalContext';
-import { Search, Plus, Edit2, X, AlertCircle, Check, Truck, Download } from 'lucide-react';
+import { Search, Plus, Edit2, X, AlertCircle, Check, Truck, Download, Trash2 } from 'lucide-react';
 
 /* ══ Modal ══════════════════════════════════════════════ */
 interface FornecedorModalProps {
@@ -89,14 +89,26 @@ const FornecedorModal: React.FC<FornecedorModalProps> = ({ fornecedor, onClose, 
 
 /* ══ Page ════════════════════════════════════════════════ */
 const FornecedoresPage: React.FC = () => {
-    const { fornecedores, addFornecedor, updateFornecedor, encomendas } = useGlobal();
+    const { fornecedores, addFornecedor, updateFornecedor, removeFornecedor, encomendas } = useGlobal();
 
-    const [search, setSearch]   = useState('');
-    const [modal, setModal]     = useState<'new' | string | null>(null);
-    const [toast, setToast]     = useState('');
+    const [search, setSearch]     = useState('');
+    const [modal, setModal]       = useState<'new' | string | null>(null);
+    const [toast, setToast]       = useState('');
+    const [toastErr, setToastErr] = useState('');
     const [showExport, setShowExport] = useState(false);
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+    const showErr   = (msg: string) => { setToastErr(msg); setTimeout(() => setToastErr(''), 5000); };
+
+    const handleRemove = async (id: string, nome: string) => {
+        if (!window.confirm(`Eliminar o fornecedor "${nome}"? Esta acção não pode ser desfeita.`)) return;
+        try {
+            await removeFornecedor(id);
+            showToast(`Fornecedor "${nome}" eliminado.`);
+        } catch (e: any) {
+            showErr(e?.response?.data?.message ?? 'Erro ao eliminar fornecedor.');
+        }
+    };
 
     const countEncomendas = (id: string) => encomendas.filter(e => e.fornecedorId === id).length;
 
@@ -205,6 +217,9 @@ const FornecedoresPage: React.FC = () => {
                                                 <button className="icon-btn" title="Editar" onClick={() => setModal(f.id)}>
                                                     <Edit2 size={12} />
                                                 </button>
+                                                <button className="icon-btn icon-btn-danger" title="Eliminar" onClick={() => handleRemove(f.id, f.nome)}>
+                                                    <Trash2 size={12} />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -228,6 +243,12 @@ const FornecedoresPage: React.FC = () => {
                 <div className="toast" role="status">
                     <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
                     <span>{toast}</span>
+                </div>
+            )}
+            {toastErr && (
+                <div className="toast" role="alert" style={{ background: 'var(--red,#ef4444)', color: '#fff' }}>
+                    <AlertCircle size={14} />
+                    <span>{toastErr}</span>
                 </div>
             )}
 

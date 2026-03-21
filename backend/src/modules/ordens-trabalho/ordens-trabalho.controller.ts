@@ -34,4 +34,9 @@ export class OrdensTrabalhoController {
     encerrar(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
         return this.service.encerrar(id, body?.dataEncerramento);
     }
+
+    @Post(':id/reprogramar')
+    reprogramar(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
+        return this.service.reprogramar(id, body.novaData, body.dataAnterior, body.motivo, body.usuario);
+    }
 }

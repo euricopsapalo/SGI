@@ -4,7 +4,7 @@ import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
 import {
     useGlobal, EMPRESA_INFO,
-    Fatura, FaturaEstado, FaturaLinha,
+    Fatura, FaturaEstado, FaturaLinha, EmpresaConfig,
 } from '../../contexts/GlobalContext';
 import {
     Search, Plus, X, Printer, Check, AlertCircle, FileText, Filter, Download,
@@ -30,15 +30,14 @@ const ESTADO_BADGE: Record<FaturaEstado, { bg: string; color: string }> = {
 interface EmitirModalProps { onClose: () => void; onSave: (f: Omit<Fatura, 'id'>) => void; }
 
 const EmitirDocumentoModal: React.FC<EmitirModalProps> = ({ onClose, onSave }) => {
-    const { ordens, clientes, artigos, equipInstalados, tiposDocumento } = useGlobal();
+    const { ordens, clientes, artigos, equipInstalados, tiposDocumento, taxaIvaGlobal, empresaConfig } = useGlobal();
 
     const [tipoDoc,       setTipoDoc]    = useState(tiposDocumento[0]?.codigo ?? 'FAT');
     const [otId,          setOtId]       = useState('');
-    const [precoServico,  setPreco]      = useState('');
     const [linhas,        setLinhas]     = useState<FaturaLinha[]>([]);
     const [clienteId,     setClienteId]  = useState('');
     const [fpLinhas,      setFpLinhas]   = useState<(FaturaLinha & { artigoId: string })[]>([]);
-    const [taxaIva,       setTaxa]       = useState(String(EMPRESA_INFO.ivaDefault));
+    const taxaIva = taxaIvaGlobal;
     const [observacoes,   setObs]        = useState('');
     const [errors,        setErrors]     = useState<Record<string, string>>({});
 
@@ -61,7 +60,7 @@ const EmitirDocumentoModal: React.FC<EmitirModalProps> = ({ onClose, onSave }) =
     const otClienteId = otSelected?.clienteId ?? '';
 
     const totalLinhasFAT = linhas.reduce((s, l) => s + l.quantidade * l.precoUnit, 0);
-    const subtotalFAT    = Number(precoServico || 0) + totalLinhasFAT;
+    const subtotalFAT    = totalLinhasFAT;
     const subtotalFP     = fpLinhas.reduce((s, l) => s + l.quantidade * l.precoUnit, 0);
     const subtotal       = isFAT ? subtotalFAT : subtotalFP;
     const ivaVal         = Math.round(subtotal * Number(taxaIva) / 100);
@@ -86,8 +85,7 @@ const EmitirDocumentoModal: React.FC<EmitirModalProps> = ({ onClose, onSave }) =
     const validate = () => {
         const e: Record<string, string> = {};
         if (isFAT) {
-            if (!otId)         e.ot    = 'Seleccione uma Ordem de Trabalho';
-            if (!precoServico) e.preco = 'Obrigatório';
+            if (!otId) e.ot = 'Seleccione uma Ordem de Trabalho';
         }
         if (isFP) {
             if (!clienteId)              e.cliente = 'Seleccione um cliente';
@@ -107,16 +105,13 @@ const EmitirDocumentoModal: React.FC<EmitirModalProps> = ({ onClose, onSave }) =
         if (!validate()) return;
 
         if (isFAT) {
-            const allLinhas: FaturaLinha[] = [
-                { descricao: `Serviço: ${otSelected?.tipoTrabalho ?? ''}`, quantidade: 1, precoUnit: Number(precoServico) },
-                ...linhas.filter(l => l.descricao.trim()),
-            ];
+            const allLinhas: FaturaLinha[] = linhas.filter(l => l.descricao.trim());
             onSave({
                 tipoDocumento: tipoDoc, otId, clienteId: otClienteId,
                 dataEmissao: hoje, linhas: allLinhas,
-                precoServico: Number(precoServico), taxaIva: Number(taxaIva),
+                precoServico: 0, taxaIva: taxaIva,
                 valorSubtotal: subtotal, valorIva: ivaVal, valorTotal: total,
-                moeda: EMPRESA_INFO.moeda, estado: 'Pendente',
+                moeda: empresaConfig.moeda, estado: 'Pendente',
                 observacoes, nrSerieEquip: getNrSerie(otSelected),
             });
         } else {
@@ -124,9 +119,9 @@ const EmitirDocumentoModal: React.FC<EmitirModalProps> = ({ onClose, onSave }) =
             onSave({
                 tipoDocumento: tipoDoc, otId: 'N/A', clienteId,
                 dataEmissao: hoje, linhas: allLinhas,
-                precoServico: 0, taxaIva: Number(taxaIva),
+                precoServico: 0, taxaIva: taxaIva,
                 valorSubtotal: subtotal, valorIva: ivaVal, valorTotal: total,
-                moeda: EMPRESA_INFO.moeda, estado: 'Emitido',
+                moeda: empresaConfig.moeda, estado: 'Emitido',
                 observacoes,
             });
         }
@@ -174,20 +169,6 @@ const EmitirDocumentoModal: React.FC<EmitirModalProps> = ({ onClose, onSave }) =
                                 </div>
                             )}
 
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label className="form-label req">Preço de Serviço ({EMPRESA_INFO.moeda})</label>
-                                    <input type="number" className={`form-input${errors.preco ? ' err' : ''}`}
-                                        min={0} value={precoServico} onChange={e => setPreco(e.target.value)} />
-                                    {errors.preco && <span className="form-error"><AlertCircle size={11} /> {errors.preco}</span>}
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label req">Taxa IVA (%)</label>
-                                    <input type="number" className="form-input" min={0} max={100}
-                                        value={taxaIva} onChange={e => setTaxa(e.target.value)} />
-                                </div>
-                            </div>
-
                             <div className="form-group">
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                                     <label className="form-label" style={{ margin: 0 }}>Artigos / Consumíveis</label>
@@ -217,12 +198,6 @@ const EmitirDocumentoModal: React.FC<EmitirModalProps> = ({ onClose, onSave }) =
                                 <label className="form-label req">Cliente</label>
                                 <SearchableSelect options={clienteOpts} value={clienteId} onChange={setClienteId} placeholder="Seleccionar cliente..." />
                                 {errors.cliente && <span className="form-error"><AlertCircle size={11} /> {errors.cliente}</span>}
-                            </div>
-
-                            <div className="form-group">
-                                <label className="form-label req">Taxa IVA (%)</label>
-                                <input type="number" className="form-input" min={0} max={100} style={{ maxWidth: 160 }}
-                                    value={taxaIva} onChange={e => setTaxa(e.target.value)} />
                             </div>
 
                             <div className="form-group">
@@ -296,6 +271,7 @@ interface FaturaDetalheProps {
 }
 
 const FaturaDetalhe: React.FC<FaturaDetalheProps> = ({ fatura, nomeCliente, otDesc, onClose, onPagar, onAnular }) => {
+    const { empresaConfig } = useGlobal();
     const [confirmAnular,  setConfirmAnular]  = useState(false);
     const [motivoAnular,   setMotivoAnular]   = useState('');
     const [confirmPagar,   setConfirmPagar]   = useState(false);
@@ -337,8 +313,8 @@ const FaturaDetalhe: React.FC<FaturaDetalheProps> = ({ fatura, nomeCliente, otDe
   </style></head><body>
   <div class="header">
     <div>
-      <div class="company">${EMPRESA_INFO.nome}</div>
-      <div class="company-info">NIF: ${EMPRESA_INFO.nif} · ${EMPRESA_INFO.telefone} · ${EMPRESA_INFO.email}</div>
+      <div class="company">${empresaConfig.nome}</div>
+      <div class="company-info">NIF: ${empresaConfig.nif} · ${empresaConfig.telefone} · ${empresaConfig.email}</div>
     </div>
     <div>
       <div class="fatura-title">${docTitle}</div>
@@ -360,11 +336,11 @@ const FaturaDetalhe: React.FC<FaturaDetalheProps> = ({ fatura, nomeCliente, otDe
     <tr><td>IVA (${fatura.taxaIva}%):</td><td>${fmtMoney(fatura.valorIva, fatura.moeda)}</td></tr>
     <tr class="grand"><td>TOTAL:</td><td>${fmtMoney(fatura.valorTotal, fatura.moeda)}</td></tr>
   </table>
-  ${!isFP ? `<div class="pagamento"><div style="font-weight:700;margin-bottom:4px">Coordenadas de Pagamento</div><div>${EMPRESA_INFO.banco} · IBAN: ${EMPRESA_INFO.iban}</div></div>` : ''}
+  ${!isFP ? `<div class="pagamento"><div style="font-weight:700;margin-bottom:4px">Coordenadas de Pagamento</div><div>${empresaConfig.banco} · IBAN: ${empresaConfig.iban}</div></div>` : ''}
   ${fatura.observacoes ? `<div class="pagamento" style="margin-top:8px"><div style="font-weight:700;margin-bottom:4px">Observações</div><div>${fatura.observacoes}</div></div>` : ''}
   ${fpNote}
   ${anuladaNote}
-  <div style="margin-top:32px;font-size:0.72rem;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:12px">${EMPRESA_INFO.nome} · NIF ${EMPRESA_INFO.nif} · SGI · ${fmtDate(fatura.dataEmissao)}</div>
+  <div style="margin-top:32px;font-size:0.72rem;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:12px">${empresaConfig.nome} · NIF ${empresaConfig.nif} · SGI · ${fmtDate(fatura.dataEmissao)}</div>
   <script>window.onload = () => window.print();</script>
 </body></html>`);
         w.document.close();
@@ -392,8 +368,8 @@ const FaturaDetalhe: React.FC<FaturaDetalheProps> = ({ fatura, nomeCliente, otDe
                 </div>
                 <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
                     <div style={{ padding: '10px 14px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 4, marginBottom: 12 }}>
-                        <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--blue)' }}>{EMPRESA_INFO.nome}</div>
-                        <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>NIF: {EMPRESA_INFO.nif} · {EMPRESA_INFO.telefone}</div>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--blue)' }}>{empresaConfig.nome}</div>
+                        <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>NIF: {empresaConfig.nif} · {empresaConfig.telefone}</div>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 12 }}>
@@ -448,7 +424,7 @@ const FaturaDetalhe: React.FC<FaturaDetalheProps> = ({ fatura, nomeCliente, otDe
                     {isFAT && (
                         <div style={{ padding: '8px 12px', background: '#f8f9fa', border: '1px solid var(--border)', borderRadius: 4, fontSize: '0.8rem' }}>
                             <div style={{ fontWeight: 700, marginBottom: 2 }}>Coordenadas de Pagamento</div>
-                            <div style={{ color: 'var(--text-secondary)' }}>{EMPRESA_INFO.banco} · IBAN: {EMPRESA_INFO.iban}</div>
+                            <div style={{ color: 'var(--text-secondary)' }}>{empresaConfig.banco} · IBAN: {empresaConfig.iban}</div>
                         </div>
                     )}
 
@@ -560,7 +536,7 @@ const COLS_FATURA: ExportCol[] = [
 
 /* ══ Page ════════════════════════════════════════════════════ */
 const FaturacaoPage: React.FC = () => {
-    const { faturas, addFatura, updateFatura, clientes, ordens } = useGlobal();
+    const { faturas, addFatura, updateFatura, clientes, ordens, empresaConfig } = useGlobal();
 
     const [search,       setSearch]       = useState('');
     const [filterEstado, setFilterEstado] = useState('');
@@ -638,8 +614,8 @@ const FaturacaoPage: React.FC = () => {
                         { label: 'Pendentes',      value: pendentes,                                   cls: pendentes > 0 ? 'orange' : 'muted' },
                         { label: 'Pagas',          value: pagas,                                       cls: 'green' },
                         { label: 'Anuladas',       value: anuladas,                                    cls: 'muted' },
-                        { label: 'Total Recebido', value: fmtMoney(totalPago, EMPRESA_INFO.moeda),     cls: 'green' },
-                        { label: 'Total Pendente', value: fmtMoney(totalPendente, EMPRESA_INFO.moeda), cls: 'blue' },
+                        { label: 'Total Recebido', value: fmtMoney(totalPago, empresaConfig.moeda),     cls: 'green' },
+                        { label: 'Total Pendente', value: fmtMoney(totalPendente, empresaConfig.moeda), cls: 'blue' },
                     ].map(s => (
                         <div key={s.label} className="stat-card">
                             <span className="stat-label">{s.label}</span>

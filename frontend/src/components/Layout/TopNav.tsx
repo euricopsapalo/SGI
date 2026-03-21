@@ -4,7 +4,7 @@ import {
     LayoutDashboard, Users, Wrench, Package,
     CalendarDays, FileText, BarChart3, Settings, Bell,
     Truck, MapPin, ClipboardList, ShoppingCart, ChevronDown,
-    LogOut, ScrollText,
+    LogOut, ScrollText, RefreshCw,
     type LucideIcon,
 } from 'lucide-react';
 import AquatexLogo from '../AquatexLogo';
@@ -157,14 +157,22 @@ const DropdownGroup: React.FC<{ group: NavGroup }> = ({ group }) => {
 const TECNICO_CAMPO_GROUPS = new Set(['Início', 'Operações']);
 
 const TopNav: React.FC = () => {
-    const { currentUser, logout } = useGlobal();
+    const { currentUser, logout, addLog, reloadData } = useGlobal();
     const navigate = useNavigate();
+    const [reloading, setReloading] = useState(false);
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
+
+    const handleReload = async () => {
+        setReloading(true);
+        await reloadData();
+        setReloading(false);
+    };
     const visibleGroups = isTecnicoCampo
         ? NAV_GROUPS.filter(g => TECNICO_CAMPO_GROUPS.has(g.label))
         : NAV_GROUPS;
 
     const handleLogout = () => {
+        addLog({ usuario: currentUser?.email ?? 'sistema', modulo: 'Autenticação', acao: 'Logout', detalhes: `Utilizador: ${currentUser?.nome ?? ''}`, tipo: 'info' });
         logout();
         navigate('/login');
     };
@@ -206,6 +214,16 @@ const TopNav: React.FC = () => {
                         <span className="topnav-user-role">{currentUser.role}</span>
                     </div>
                 )}
+                <button
+                    className="topnav-icon-btn"
+                    aria-label="Recarregar dados"
+                    title="Recarregar dados"
+                    onClick={handleReload}
+                    disabled={reloading}
+                    style={{ opacity: reloading ? 0.5 : 1 }}
+                >
+                    <RefreshCw size={16} strokeWidth={1.75} style={{ animation: reloading ? 'spin 1s linear infinite' : 'none' }} />
+                </button>
                 <button className="topnav-icon-btn" aria-label="Notificações" title="Notificações">
                     <Bell size={16} strokeWidth={1.75} />
                 </button>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:3001';
@@ -10,6 +10,7 @@ const API = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 // ── System Tables ──────────────────────────────────────────
 export interface TipoTrabalho { id: string; codigo: string; descricao: string; }
 export interface TipoDocumento { id: string; codigo: string; descricao: string; }
+export interface TipoOT { id: string; codigo: string; descricao: string; }
 export interface FuncaoTecnico { id: string; codigo: string; descricao: string; custo: number; }
 export interface Moeda { id: string; codigo: string; descricao: string; simbolo: string; }
 export interface Pais { id: string; nome: string; codigo: string; }
@@ -62,10 +63,11 @@ export type OTEstado = 'Programado' | 'Em curso' | 'Terminado' | 'Encerrado';
 export type OTTipo = 'programada' | 'pontual';
 export interface OTMaoObra { funcao: string; custo: number; hora: string; }
 export interface OTArtigo { artigoId: string; descricao: string; quantidade: number; preco: number; }
+export interface OTReprogramacao { id: string; dataAnterior?: string; novaData?: string; motivo: string; criadoEm: string; usuario?: string; }
 export interface OrdemTrabalho {
     id: string; tipo: OTTipo; equipInstaladoId: string; clienteId: string;
     descricao: string; previsaoTempo: number; periodicidade?: string;
-    planoId?: string; tipoTrabalho: string; responsavel: string;
+    planoId?: string; tipoTrabalho: string; tipoOT?: string; responsavel: string;
     maosDeObra: OTMaoObra[];
     artigos: OTArtigo[];
     orgao?: string; sintoma?: string; causa?: string;
@@ -73,6 +75,7 @@ export interface OrdemTrabalho {
     dataEmissao?: string; dataInicio?: string;
     dataFim?: string; dataEncerramento?: string;
     estado: OTEstado;
+    reprogramacoes: OTReprogramacao[];
 }
 
 // ── Warehouse ──────────────────────────────────────────────
@@ -88,14 +91,24 @@ export interface MovimentoStock {
     referencia?: string; usuario?: string; observacao?: string; data: string;
 }
 
+// ── Stock per Warehouse ────────────────────────────────────
+export interface StockArmazem {
+    id: string;
+    artigoId: string;
+    armazem: { id: string; codigo: string; nome: string };
+    quantidade: number;
+    stockMinimo: number;
+}
+
 // ── Stock ──────────────────────────────────────────────────
 export interface Artigo {
     id: string; codigo: string; descricao: string;
     classe: string; familia: string; imagem?: string;
     precoUnitario: number; moeda: string;
-    existencia: number; nivelMaximo: number; stockSeguranca: number;
-    custoMedio: number; codigoArmazem: string; inativo: boolean; critico: boolean;
-    observacao?: string;
+    existencia: number; stockReservado: number; nivelMaximo: number; stockSeguranca: number;
+    custoMedio: number; precoCusto: number; codigoArmazem: string;
+    stockEncomendado: number; stockDisponivel?: number; emRuptura?: boolean;
+    inativo: boolean; critico: boolean; observacao?: string;
 }
 
 // ── Purchase Orders ────────────────────────────────────────
@@ -105,11 +118,22 @@ export interface EncomendaLinha {
     qtdEncomendada: number; qtdRecebida: number;
     unidade: string; custoUnit: number; desconto: number;
 }
+export interface RececaoItem {
+    id: string; artigoId: string; codigo: string; descricao: string; qtd: number; unidade: string;
+}
+export type RececaoEstado = 'Ativa' | 'Anulada';
+export interface Rececao {
+    id: string; encomendaId: string; dataHora: string;
+    operador: string; armazem: string; guiaRemessa: string;
+    estado: RececaoEstado; observacoes?: string;
+    itens: RececaoItem[];
+}
 export interface Encomenda {
     id: string; numero: string; fornecedorId: string;
     data: string; dataEntrega: string; condicoesPagamento: string;
     responsavel: string; moeda: string; descricao: string; observacoes?: string;
     estado: EncomendaEstado; linhas: EncomendaLinha[];
+    rececoes: Rececao[];
 }
 
 // ── Invoices ───────────────────────────────────────────────
@@ -124,8 +148,16 @@ export interface Fatura {
     dataPagamento?: string; motivoAnulacao?: string; comprovativo?: string; nrSerieEquip?: string;
 }
 
+// ── Empresa Config ─────────────────────────────────────────
+export interface EmpresaConfig {
+    id?: string; nome: string; nif: string; morada: string; telefone: string;
+    email: string; website?: string; logoUrl?: string; iban: string; banco: string;
+    moeda: string; taxaIva: number; latitude?: number; longitude?: number;
+    rodapeDocumentos?: string;
+}
+
 /* ══════════════════════════════════════════════════════════════
-   COMPANY INFO
+   COMPANY INFO (fallback — replaced by empresaConfig from API)
 ══════════════════════════════════════════════════════════════ */
 export const EMPRESA_INFO = {
     nome: 'AQUATEX, LDA', nif: '5000001234',
@@ -141,7 +173,16 @@ const norm = (item: any) => ({ ...item, id: item.id?.toString() });
 const normProvincia = (p: any): Provincia => ({ id: p.id?.toString(), nome: p.nome, paisId: p.pais?.id?.toString() ?? '' });
 const normMunicipio = (m: any): Municipio => ({ id: m.id?.toString(), nome: m.nome, provinciaId: m.provincia?.id?.toString() ?? '' });
 const normFuncaoTecnico = (f: any): FuncaoTecnico => ({ id: f.id?.toString(), codigo: f.codigo, descricao: f.descricao, custo: Number(f.custo) });
-const normArtigo = (a: any): Artigo => ({ ...a, id: a.id?.toString(), precoUnitario: Number(a.precoUnitario), existencia: Number(a.existencia), nivelMaximo: Number(a.nivelMaximo), stockSeguranca: Number(a.stockSeguranca), custoMedio: Number(a.custoMedio) });
+const normArtigo = (a: any): Artigo => ({ ...a, id: a.id?.toString(), precoUnitario: Number(a.precoUnitario), existencia: Number(a.existencia), stockReservado: Number(a.stockReservado ?? 0), nivelMaximo: Number(a.nivelMaximo), stockSeguranca: Number(a.stockSeguranca), custoMedio: Number(a.custoMedio), precoCusto: Number(a.precoCusto ?? 0), stockEncomendado: Number(a.stockEncomendado ?? 0) });
+const normMovimento = (m: any): MovimentoStock => ({
+    ...m,
+    id: m.id?.toString(),
+    artigoId: m.artigoId?.toString() ?? m.artigo?.id?.toString() ?? '',
+    armazemId: m.armazemId ?? '',
+    armazemDestinoId: m.armazemDestinoId ?? '',
+    quantidade: Number(m.quantidade),
+    data: m.data ? String(m.data).split('T')[0] : '',
+});
 
 const normCliente = (c: any): Cliente => ({
     id: c.id?.toString(), tipo: c.tipo, nome: c.nome, nif: c.nif ?? '',
@@ -171,13 +212,41 @@ const normOrdem = (o: any): OrdemTrabalho => ({
     id: o.id?.toString(), tipo: o.tipo, clienteId: o.cliente?.id?.toString() ?? o.clienteId?.toString() ?? '',
     equipInstaladoId: o.equipInstaladoId?.toString() ?? '', descricao: o.descricao,
     previsaoTempo: Number(o.previsaoTempo), periodicidade: o.periodicidade,
-    planoId: o.planoId?.toString(), tipoTrabalho: o.tipoTrabalho ?? '',
+    planoId: o.planoId?.toString(), tipoTrabalho: o.tipoTrabalho ?? '', tipoOT: o.tipoOT ?? '',
     responsavel: o.responsavel ?? '', maosDeObra: (o.maosObra ?? []).map((m: any) => ({ funcao: m.funcao, custo: Number(m.custo), hora: m.hora })),
     artigos: (o.artigos ?? []).map((a: any) => ({ artigoId: a.artigoId?.toString() ?? '', descricao: a.descricao, quantidade: Number(a.quantidade), preco: Number(a.preco) })),
     orgao: o.orgao, sintoma: o.sintoma, causa: o.causa,
     dataProgInicio: o.dataProgInicio, dataProgFim: o.dataProgFim,
     dataEmissao: o.dataEmissao, dataInicio: o.dataInicio, dataFim: o.dataFim, dataEncerramento: o.dataEncerramento,
     estado: o.estado,
+    reprogramacoes: (o.reprogramacoes ?? []).map((r: any) => ({
+        id: r.id?.toString(), dataAnterior: r.dataAnterior, novaData: r.novaData,
+        motivo: r.motivo ?? '', criadoEm: r.criadoEm ?? '', usuario: r.usuario,
+    })),
+});
+
+const normRececao = (r: any): Rececao => ({
+    id: r.id?.toString(),
+    encomendaId: r.encomenda?.id?.toString() ?? r.encomendaId?.toString() ?? '',
+    dataHora: r.dataHora,
+    operador: r.operador ?? '',
+    armazem: r.armazem ?? '',
+    guiaRemessa: r.guiaRemessa ?? '',
+    estado: r.estado ?? 'Ativa',
+    observacoes: r.observacoes,
+    itens: (r.itens ?? []).map((i: any): RececaoItem => ({
+        id: i.id?.toString(), artigoId: i.artigoId?.toString() ?? '',
+        codigo: i.codigo, descricao: i.descricao,
+        qtd: Number(i.qtd), unidade: i.unidade ?? 'UN',
+    })),
+});
+
+const normStockArmazem = (s: any): StockArmazem => ({
+    id: s.id?.toString(),
+    artigoId: s.artigo?.id?.toString() ?? '',
+    armazem: { id: s.armazem?.id?.toString() ?? '', codigo: s.armazem?.codigo ?? '', nome: s.armazem?.nome ?? '' },
+    quantidade: Number(s.quantidade),
+    stockMinimo: Number(s.stockMinimo),
 });
 
 const normEncomenda = (e: any): Encomenda => ({
@@ -186,6 +255,7 @@ const normEncomenda = (e: any): Encomenda => ({
     data: e.data, dataEntrega: e.dataEntrega, condicoesPagamento: e.condicoesPagamento ?? '',
     responsavel: e.responsavel ?? '', moeda: e.moeda ?? 'AOA', descricao: e.descricao ?? '',
     observacoes: e.observacoes, estado: e.estado,
+    rececoes: (e.rececoes ?? []).map(normRececao),
     linhas: (e.linhas ?? []).map((l: any) => ({
         artigoId: l.artigoId?.toString() ?? '', codigo: l.codigo, descricao: l.descricao,
         qtdEncomendada: Number(l.qtdEncomendada), qtdRecebida: Number(l.qtdRecebida),
@@ -212,18 +282,23 @@ const normFatura = (f: any): Fatura => ({
 interface GlobalContextType {
     // System tables
     tiposTrabalho: TipoTrabalho[]; addTipoTrabalho: (t: Omit<TipoTrabalho, 'id'>) => void; updateTipoTrabalho: (id: string, t: Partial<TipoTrabalho>) => void; removeTipoTrabalho: (id: string) => void;
+    tiposOT: TipoOT[]; addTipoOT: (t: Omit<TipoOT, 'id'>) => void; updateTipoOT: (id: string, t: Partial<TipoOT>) => void; removeTipoOT: (id: string) => void;
     funcoesTecnico: FuncaoTecnico[]; addFuncaoTecnico: (f: Omit<FuncaoTecnico, 'id'>) => void; updateFuncaoTecnico: (id: string, f: Partial<FuncaoTecnico>) => void; removeFuncaoTecnico: (id: string) => void;
     moedas: Moeda[]; addMoeda: (m: Omit<Moeda, 'id'>) => void; updateMoeda: (id: string, m: Partial<Moeda>) => void; removeMoeda: (id: string) => void;
     tiposDocumento: TipoDocumento[]; addTipoDocumento: (t: Omit<TipoDocumento, 'id'>) => void; updateTipoDocumento: (id: string, t: Partial<TipoDocumento>) => void; removeTipoDocumento: (id: string) => void;
     paises: Pais[]; provincias: Provincia[]; municipios: Municipio[];
+    // Finance config
+    taxaIvaGlobal: number; setTaxaIvaGlobal: (v: number) => void;
+    // Empresa config
+    empresaConfig: EmpresaConfig; updateEmpresaConfig: (c: Partial<EmpresaConfig>) => Promise<void>;
     // Auth
     currentUser: CurrentUser | null; setCurrentUser: (u: CurrentUser | null) => void; logout: () => void;
     // Logs
-    logs: SysLog[]; addLog: (l: Omit<SysLog, 'id'>) => void;
+    logs: SysLog[]; addLog: (l: Omit<SysLog, 'id' | 'timestamp'>) => void;
     // Entities
-    clientes: Cliente[]; addCliente: (c: Omit<Cliente, 'id'>) => Cliente; updateCliente: (id: string, c: Partial<Cliente>) => void;
-    tecnicos: Tecnico[]; addTecnico: (t: Omit<Tecnico, 'id'>) => Tecnico; updateTecnico: (id: string, t: Partial<Tecnico>) => void;
-    fornecedores: Fornecedor[]; addFornecedor: (f: Omit<Fornecedor, 'id'>) => Fornecedor; updateFornecedor: (id: string, f: Partial<Fornecedor>) => void;
+    clientes: Cliente[]; addCliente: (c: Omit<Cliente, 'id'>) => Cliente; updateCliente: (id: string, c: Partial<Cliente>) => void; removeCliente: (id: string) => Promise<void>;
+    tecnicos: Tecnico[]; addTecnico: (t: Omit<Tecnico, 'id'>) => Tecnico; updateTecnico: (id: string, t: Partial<Tecnico>) => void; removeTecnico: (id: string) => Promise<void>;
+    fornecedores: Fornecedor[]; addFornecedor: (f: Omit<Fornecedor, 'id'>) => Fornecedor; updateFornecedor: (id: string, f: Partial<Fornecedor>) => void; removeFornecedor: (id: string) => Promise<void>;
     // Equipment
     modelosEquipamento: ModeloEquipamento[]; addModelo: (m: Omit<ModeloEquipamento, 'id'>) => ModeloEquipamento; updateModelo: (id: string, m: Partial<ModeloEquipamento>) => void;
     equipInstalados: EquipInstalado[]; addEquipInstalado: (e: Omit<EquipInstalado, 'id'>) => EquipInstalado; updateEquipInstalado: (id: string, e: Partial<EquipInstalado>) => void;
@@ -234,16 +309,21 @@ interface GlobalContextType {
     emitirOT: (id: string, dataEmissao?: string, dataInicio?: string) => void;
     terminarOT: (id: string, dataFim?: string) => void;
     encerrarOT: (id: string, dataEncerramento?: string) => void;
+    reprogramarOT: (id: string, novaData: string, dataAnterior?: string, motivo?: string) => Promise<void>;
     // Warehouse
     armazens: Armazem[]; addArmazem: (a: Omit<Armazem, 'id'>) => Armazem; updateArmazem: (id: string, a: Partial<Armazem>) => void;
     // Stock
-    artigos: Artigo[]; addArtigo: (a: Omit<Artigo, 'id'>) => Artigo; updateArtigo: (id: string, a: Partial<Artigo>) => void; adjustExistencia: (id: string, delta: number) => void;
+    artigos: Artigo[]; addArtigo: (a: Omit<Artigo, 'id'>) => Artigo; updateArtigo: (id: string, a: Partial<Artigo>) => void; adjustExistencia: (id: string, delta: number) => void; adjustReservado: (id: string, delta: number) => void;
+    stockArmazem: StockArmazem[]; upsertStockArmazem: (artigoId: string, armazemId: string, quantidade: number, stockMinimo: number) => Promise<void>; removeStockArmazem: (saId: string) => Promise<void>;
     movimentosStock: MovimentoStock[]; addMovimento: (m: Omit<MovimentoStock, 'id'>) => MovimentoStock;
     // Purchases
     encomendas: Encomenda[]; addEncomenda: (e: Omit<Encomenda, 'id'>) => Encomenda; updateEncomenda: (id: string, e: Partial<Encomenda>) => void;
-    receberLinhas: (encId: string, recebidas: { artigoId: string; qtd: number }[]) => void;
+    criarRececao: (encId: string, recebidas: { artigoId: string; qtd: number }[], guiaRemessa: string, operador: string, armazem: string) => Promise<Encomenda>;
+    anularRececao: (rececaoId: string) => Promise<Encomenda>;
     // Invoices
     faturas: Fatura[]; addFatura: (f: Omit<Fatura, 'id'>) => Fatura; updateFatura: (id: string, f: Partial<Fatura>) => void;
+    // Reload
+    reloadData: () => Promise<void>;
 }
 
 const GlobalContext = createContext<GlobalContextType | null>(null);
@@ -260,8 +340,27 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const logout = () => setCurrentUserState(null);
 
     const [logs, setLogs] = useState<SysLog[]>([]);
+
+    /* ── Log helper — fire-and-forget ───────────────────────── */
+    const currentUserRef = React.useRef<CurrentUser | null>(null);
+    React.useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+    const log = (modulo: string, acao: string, detalhes = '', tipo: SysLog['tipo'] = 'info') => {
+        const usuario = currentUserRef.current?.email ?? 'sistema';
+        axios.post(`${API}/api/logs`, { timestamp: new Date().toISOString(), usuario, modulo, acao, detalhes, tipo })
+            .then(({ data }) => setLogs(p => [norm(data) as SysLog, ...p]))
+            .catch(() => {});
+    };
+
+    const [taxaIvaGlobal, setTaxaIvaGlobal] = useState<number>(EMPRESA_INFO.ivaDefault);
+    const [empresaConfig, setEmpresaConfig] = useState<EmpresaConfig>({
+        nome: EMPRESA_INFO.nome, nif: EMPRESA_INFO.nif, morada: EMPRESA_INFO.morada,
+        telefone: EMPRESA_INFO.telefone, email: EMPRESA_INFO.email,
+        iban: EMPRESA_INFO.iban, banco: EMPRESA_INFO.banco,
+        moeda: EMPRESA_INFO.moeda, taxaIva: EMPRESA_INFO.ivaDefault,
+    });
     const [tiposTrabalho, setTiposTrabalho] = useState<TipoTrabalho[]>([]);
     const [tiposDocumento, setTiposDocumento] = useState<TipoDocumento[]>([]);
+    const [tiposOT, setTiposOT] = useState<TipoOT[]>([]);
     const [funcoesTecnico, setFuncoesTecnico] = useState<FuncaoTecnico[]>([]);
     const [moedas, setMoedas] = useState<Moeda[]>([]);
     const [paises, setPaises] = useState<Pais[]>([]);
@@ -276,6 +375,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [ordens, setOrdens] = useState<OrdemTrabalho[]>([]);
     const [armazens, setArmazens] = useState<Armazem[]>([]);
     const [artigos, setArtigos] = useState<Artigo[]>([]);
+    const [stockArmazem, setStockArmazem] = useState<StockArmazem[]>([]);
     const [movimentosStock, setMovimentosStock] = useState<MovimentoStock[]>([]);
     const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
     const [faturas, setFaturas] = useState<Fatura[]>([]);
@@ -283,62 +383,85 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const today = () => new Date().toISOString().split('T')[0];
 
     /* ── Initial data load ──────────────────────────────────── */
-    useEffect(() => {
-        const load = async () => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const reloadData = React.useCallback(async () => {
+            const ok = (r: PromiseSettledResult<any>) =>
+                r.status === 'fulfilled' ? r.value.data : [];
+
+            const results = await Promise.allSettled([
+                axios.get(`${API}/api/tipos-trabalho`),       // 0
+                axios.get(`${API}/api/tipos-documento`),      // 1
+                axios.get(`${API}/api/tipos-ot`),             // 2
+                axios.get(`${API}/api/funcoes-tecnico`),      // 3
+                axios.get(`${API}/api/moedas`),               // 4
+                axios.get(`${API}/api/paises`),               // 5
+                axios.get(`${API}/api/provincias`),           // 6
+                axios.get(`${API}/api/municipios`),           // 7
+                axios.get(`${API}/api/clientes`),             // 8
+                axios.get(`${API}/api/tecnicos`),             // 9
+                axios.get(`${API}/api/fornecedores`),         // 10
+                axios.get(`${API}/api/modelos-equipamento`),  // 11
+                axios.get(`${API}/api/equip-instalados`),     // 12
+                axios.get(`${API}/api/planos`),               // 13
+                axios.get(`${API}/api/ordens`),               // 14
+                axios.get(`${API}/api/armazens`),             // 15
+                axios.get(`${API}/api/artigos`),              // 16
+                axios.get(`${API}/api/movimentos-stock`),      // 17
+                axios.get(`${API}/api/encomendas`),            // 18
+                axios.get(`${API}/api/faturas`),               // 19
+                axios.get(`${API}/api/logs`),                  // 20
+                axios.get(`${API}/api/configuracao`),          // 21
+                axios.get(`${API}/api/artigos/stock-armazem`), // 22
+            ]);
+
+            try { setTiposTrabalho(ok(results[0]).map(norm)); } catch {}
+            try { setTiposDocumento(ok(results[1]).map(norm)); } catch {}
+            try { setTiposOT(ok(results[2]).map(norm)); } catch {}
+            try { setFuncoesTecnico(ok(results[3]).map(normFuncaoTecnico)); } catch {}
+            try { setMoedas(ok(results[4]).map(norm)); } catch {}
+            try { setPaises(ok(results[5]).map(norm)); } catch {}
+            try { setProvincias(ok(results[6]).map(normProvincia)); } catch {}
+            try { setMunicipios(ok(results[7]).map(normMunicipio)); } catch {}
+            try { setClientes(ok(results[8]).map(normCliente)); } catch {}
+            try { setTecnicos(ok(results[9]).map(norm)); } catch {}
+            try { setFornecedores(ok(results[10]).map(norm)); } catch {}
+            try { setModelosEquipamento(ok(results[11]).map(norm)); } catch {}
+            try { setEquipInstalados(ok(results[12]).map(normEquip)); } catch {}
+            try { setPlanos(ok(results[13]).map(normPlano)); } catch {}
+            try { setOrdens(ok(results[14]).map(normOrdem)); } catch {}
+            try { setArmazens(ok(results[15]).map(norm)); } catch {}
+            try { setArtigos(ok(results[16]).map(normArtigo)); } catch {}
+            try { setMovimentosStock(ok(results[17]).map(normMovimento)); } catch {}
+            try { setEncomendas(ok(results[18]).map(normEncomenda)); } catch {}
+            try { setFaturas(ok(results[19]).map(normFatura)); } catch {}
+            try { setLogs(ok(results[20]).map(norm)); } catch {}
+            try { setStockArmazem(ok(results[22]).map(normStockArmazem)); } catch {}
             try {
-                const [tt, td, ft, mo, pa, pr, mu, cl, te, fo, me, ei, pl, or, ar, ar2, mv, en, fa, lg] = await Promise.all([
-                    axios.get(`${API}/api/tipos-trabalho`),
-                    axios.get(`${API}/api/tipos-documento`),
-                    axios.get(`${API}/api/funcoes-tecnico`),
-                    axios.get(`${API}/api/moedas`),
-                    axios.get(`${API}/api/paises`),
-                    axios.get(`${API}/api/provincias`),
-                    axios.get(`${API}/api/municipios`),
-                    axios.get(`${API}/api/clientes`),
-                    axios.get(`${API}/api/tecnicos`),
-                    axios.get(`${API}/api/fornecedores`),
-                    axios.get(`${API}/api/modelos-equipamento`),
-                    axios.get(`${API}/api/equip-instalados`),
-                    axios.get(`${API}/api/planos`),
-                    axios.get(`${API}/api/ordens`),
-                    axios.get(`${API}/api/armazens`),
-                    axios.get(`${API}/api/artigos`),
-                    axios.get(`${API}/api/movimentos-stock`),
-                    axios.get(`${API}/api/encomendas`),
-                    axios.get(`${API}/api/faturas`),
-                    axios.get(`${API}/api/logs`),
-                ]);
-                setTiposTrabalho(tt.data.map(norm));
-                setTiposDocumento(td.data.map(norm));
-                setFuncoesTecnico(ft.data.map(normFuncaoTecnico));
-                setMoedas(mo.data.map(norm));
-                setPaises(pa.data.map(norm));
-                setProvincias(pr.data.map(normProvincia));
-                setMunicipios(mu.data.map(normMunicipio));
-                setClientes(cl.data.map(normCliente));
-                setTecnicos(te.data.map(norm));
-                setFornecedores(fo.data.map(norm));
-                setModelosEquipamento(me.data.map(norm));
-                setEquipInstalados(ei.data.map(normEquip));
-                setPlanos(pl.data.map(normPlano));
-                setOrdens(or.data.map(normOrdem));
-                setArmazens(ar.data.map(norm));
-                setArtigos(ar2.data.map(normArtigo));
-                setMovimentosStock(mv.data.map(norm));
-                setEncomendas(en.data.map(normEncomenda));
-                setFaturas(fa.data.map(normFatura));
-                setLogs(lg.data.map(norm));
-            } catch (e) {
-                console.error('Error loading data', e);
-            }
-        };
-        load();
+                const cfgData = results[21].status === 'fulfilled' ? results[21].value.data : null;
+                if (cfgData) {
+                    const c = cfgData;
+                    const ec: EmpresaConfig = {
+                        id: c.id?.toString(), nome: c.nome, nif: c.nif ?? '', morada: c.morada ?? '',
+                        telefone: c.telefone ?? '', email: c.email ?? '', website: c.website,
+                        logoUrl: c.logoUrl, iban: c.iban ?? '', banco: c.banco ?? '',
+                        moeda: c.moeda ?? 'AOA', taxaIva: Number(c.taxaIva ?? 14),
+                        latitude: c.latitude ? Number(c.latitude) : undefined,
+                        longitude: c.longitude ? Number(c.longitude) : undefined,
+                        rodapeDocumentos: c.rodapeDocumentos,
+                    };
+                    setEmpresaConfig(ec);
+                    setTaxaIvaGlobal(Number(c.taxaIva ?? 14));
+                }
+            } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    useEffect(() => { reloadData(); }, [reloadData]);
+
     /* ── Logs ───────────────────────────────────────────────── */
-    const addLog = async (l: Omit<SysLog, 'id'>) => {
+    const addLog = async (l: Omit<SysLog, 'id' | 'timestamp'>) => {
         try {
-            const { data } = await axios.post(`${API}/api/logs`, l);
+            const { data } = await axios.post(`${API}/api/logs`, { ...l, timestamp: new Date().toISOString() });
             const n = norm(data) as SysLog;
             setLogs(p => [n, ...p]);
         } catch (e) {
@@ -364,6 +487,25 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             await axios.delete(`${API}/api/tipos-trabalho/${id}`);
             setTiposTrabalho(p => p.filter(x => x.id !== id));
         } catch (e) { console.error('removeTipoTrabalho error', e); throw e; }
+    };
+
+    const addTipoOT = async (t: Omit<TipoOT, 'id'>) => {
+        try {
+            const { data } = await axios.post(`${API}/api/tipos-ot`, t);
+            setTiposOT(p => [...p, norm(data)]);
+        } catch (e) { console.error('addTipoOT error', e); throw e; }
+    };
+    const updateTipoOT = async (id: string, t: Partial<TipoOT>) => {
+        try {
+            await axios.put(`${API}/api/tipos-ot/${id}`, t);
+            setTiposOT(p => p.map(x => x.id === id ? { ...x, ...t } : x));
+        } catch (e) { console.error('updateTipoOT error', e); throw e; }
+    };
+    const removeTipoOT = async (id: string) => {
+        try {
+            await axios.delete(`${API}/api/tipos-ot/${id}`);
+            setTiposOT(p => p.filter(x => x.id !== id));
+        } catch (e) { console.error('removeTipoOT error', e); throw e; }
     };
 
     const addFuncaoTecnico = async (f: Omit<FuncaoTecnico, 'id'>) => {
@@ -430,6 +572,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             .then(({ data }) => {
                 const n = normCliente(data);
                 setClientes(p => [...p, n]);
+                log('Clientes', 'Cliente criado', `Nome: ${c.nome}`);
             })
             .catch(e => console.error('addCliente error', e));
         return placeholder;
@@ -438,7 +581,14 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try {
             await axios.put(`${API}/api/clientes/${id}`, c);
             setClientes(p => p.map(x => x.id === id ? { ...x, ...c } : x));
+            log('Clientes', 'Cliente actualizado', `ID: ${id}`);
         } catch (e) { console.error('updateCliente error', e); throw e; }
+    };
+    const removeCliente = async (id: string) => {
+        const nome = clientes.find(x => x.id === id)?.nome ?? id;
+        await axios.delete(`${API}/api/clientes/${id}`);
+        setClientes(p => p.filter(x => x.id !== id));
+        log('Clientes', 'Cliente eliminado', `Nome: ${nome}`, 'warning');
     };
 
     const addTecnico = (t: Omit<Tecnico, 'id'>): Tecnico => {
@@ -447,6 +597,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             .then(({ data }) => {
                 const n = norm(data) as Tecnico;
                 setTecnicos(p => [...p, n]);
+                log('Técnicos', 'Técnico criado', `Nome: ${t.nome}`);
             })
             .catch(e => console.error('addTecnico error', e));
         return placeholder;
@@ -455,7 +606,14 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try {
             await axios.put(`${API}/api/tecnicos/${id}`, t);
             setTecnicos(p => p.map(x => x.id === id ? { ...x, ...t } : x));
+            log('Técnicos', 'Técnico actualizado', `ID: ${id}`);
         } catch (e) { console.error('updateTecnico error', e); throw e; }
+    };
+    const removeTecnico = async (id: string) => {
+        const nome = tecnicos.find(x => x.id === id)?.nome ?? id;
+        await axios.delete(`${API}/api/tecnicos/${id}`);
+        setTecnicos(p => p.filter(x => x.id !== id));
+        log('Técnicos', 'Técnico eliminado', `Nome: ${nome}`, 'warning');
     };
 
     const addFornecedor = (f: Omit<Fornecedor, 'id'>): Fornecedor => {
@@ -464,6 +622,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             .then(({ data }) => {
                 const n = norm(data) as Fornecedor;
                 setFornecedores(p => [...p, n]);
+                log('Fornecedores', 'Fornecedor criado', `Nome: ${f.nome}`);
             })
             .catch(e => console.error('addFornecedor error', e));
         return placeholder;
@@ -472,7 +631,14 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try {
             await axios.put(`${API}/api/fornecedores/${id}`, f);
             setFornecedores(p => p.map(x => x.id === id ? { ...x, ...f } : x));
+            log('Fornecedores', 'Fornecedor actualizado', `ID: ${id}`);
         } catch (e) { console.error('updateFornecedor error', e); throw e; }
+    };
+    const removeFornecedor = async (id: string) => {
+        const nome = fornecedores.find(x => x.id === id)?.nome ?? id;
+        await axios.delete(`${API}/api/fornecedores/${id}`);
+        setFornecedores(p => p.filter(x => x.id !== id));
+        log('Fornecedores', 'Fornecedor eliminado', `Nome: ${nome}`, 'warning');
     };
 
     /* ── Equipment ──────────────────────────────────────────── */
@@ -541,14 +707,18 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             .then(({ data }) => {
                 const n = normOrdem(data);
                 setOrdens(p => [...p, n]);
+                log('Ordens de Trabalho', 'OT criada', `Tipo: ${o.tipo} | ${o.descricao?.slice(0, 60)}`);
             })
             .catch(e => console.error('addOrdem error', e));
         return placeholder;
     };
     const updateOrdem = async (id: string, o: Partial<OrdemTrabalho>) => {
         try {
-            await axios.put(`${API}/api/ordens/${id}`, o);
-            setOrdens(p => p.map(x => x.id === id ? { ...x, ...o } : x));
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { reprogramacoes, ...payload } = o as any;
+            const { data: updated } = await axios.put(`${API}/api/ordens/${id}`, payload);
+            setOrdens(p => p.map(x => x.id === id ? normOrdem(updated) : x));
+            log('Ordens de Trabalho', 'OT actualizada', `ID: ${id}`);
         } catch (e) { console.error('updateOrdem error', e); throw e; }
     };
     const removeOrdem = async (id: string) => {
@@ -560,8 +730,33 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const emitirOT = async (id: string, dataEmissao?: string, dataInicio?: string) => {
         try {
-            await axios.put(`${API}/api/ordens/${id}/emitir`, { dataEmissao, dataInicio });
-            setOrdens(p => p.map(x => x.id === id ? { ...x, estado: 'Em curso', dataEmissao: dataEmissao ?? today(), dataInicio: dataInicio ?? today() } : x));
+            // Use fresh OT data from the backend response — works for both periodic and pontual OTs
+            const { data: emittedRaw } = await axios.put(`${API}/api/ordens/${id}/emitir`, { dataEmissao, dataInicio });
+            const emitted = normOrdem(emittedRaw);
+            setOrdens(p => p.map(x => x.id === id ? emitted : x));
+            log('Ordens de Trabalho', 'OT emitida', `ID: ${id}`);
+
+            // Deduct physical stock for every article on the OT
+            const hoje = today();
+            const artigosSnapshot = artigos;
+            for (const art of (emitted.artigos ?? [])) {
+                if (!art.artigoId || art.quantidade <= 0) continue;
+                await axios.put(`${API}/api/artigos/${art.artigoId}/ajuste`, { delta: -art.quantidade })
+                    .then(({ data: updated }) => setArtigos(p => p.map(x => x.id === art.artigoId ? normArtigo(updated) : x)))
+                    .catch(e => console.error('ajuste existencia error', e));
+                const artigoInfo = artigosSnapshot.find(a => a.id === art.artigoId);
+                axios.post(`${API}/api/movimentos-stock`, {
+                    artigoId: art.artigoId,
+                    tipo: 'saida',
+                    quantidade: art.quantidade,
+                    armazemId: artigoInfo?.codigoArmazem ?? '',
+                    referencia: `OT-${id}`,
+                    usuario: currentUserRef.current?.email ?? 'sistema',
+                    observacao: `Saída OT ${id}`,
+                    data: hoje,
+                }).then(({ data }) => setMovimentosStock(p => [...p, normMovimento(data)]))
+                  .catch(e => console.error('movimento OT error', e));
+            }
         } catch (e) { console.error('emitirOT error', e); throw e; }
     };
 
@@ -570,6 +765,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             await axios.put(`${API}/api/ordens/${id}/terminar`, { dataFim });
             const { data: all } = await axios.get(`${API}/api/ordens`);
             setOrdens(all.map(normOrdem));
+            log('Ordens de Trabalho', 'OT terminada', `ID: ${id}`);
         } catch (e) { console.error('terminarOT error', e); throw e; }
     };
 
@@ -577,7 +773,35 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try {
             await axios.put(`${API}/api/ordens/${id}/encerrar`, { dataEncerramento });
             setOrdens(p => p.map(x => x.id === id ? { ...x, estado: 'Encerrado', dataEncerramento: dataEncerramento ?? today() } : x));
+            log('Ordens de Trabalho', 'OT encerrada', `ID: ${id}`);
         } catch (e) { console.error('encerrarOT error', e); throw e; }
+    };
+
+    const updateEmpresaConfig = async (c: Partial<EmpresaConfig>) => {
+        try {
+            const { data } = await axios.put(`${API}/api/configuracao`, c);
+            const ec: EmpresaConfig = {
+                id: data.id?.toString(), nome: data.nome, nif: data.nif ?? '', morada: data.morada ?? '',
+                telefone: data.telefone ?? '', email: data.email ?? '', website: data.website,
+                logoUrl: data.logoUrl, iban: data.iban ?? '', banco: data.banco ?? '',
+                moeda: data.moeda ?? 'AOA', taxaIva: Number(data.taxaIva ?? 14),
+                latitude: data.latitude ? Number(data.latitude) : undefined,
+                longitude: data.longitude ? Number(data.longitude) : undefined,
+                rodapeDocumentos: data.rodapeDocumentos,
+            };
+            setEmpresaConfig(ec);
+            setTaxaIvaGlobal(Number(data.taxaIva ?? 14));
+        } catch (e) { console.error('updateEmpresaConfig error', e); throw e; }
+    };
+
+    const reprogramarOT = async (id: string, novaData: string, dataAnterior?: string, motivo?: string) => {
+        try {
+            const usuario = currentUserRef.current?.email ?? 'sistema';
+            const { data } = await axios.post(`${API}/api/ordens/${id}/reprogramar`, { novaData, dataAnterior, motivo, usuario });
+            const updated = normOrdem(data);
+            setOrdens(p => p.map(x => x.id === id ? updated : x));
+            log('Ordens de Trabalho', 'OT reprogramada', `ID: ${id} → ${novaData}; Motivo: ${motivo ?? ''}`, 'warning');
+        } catch (e) { console.error('reprogramarOT error', e); throw e; }
     };
 
     /* ── Warehouse ──────────────────────────────────────────── */
@@ -618,18 +842,50 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const adjustExistencia = async (id: string, delta: number) => {
         try {
             await axios.put(`${API}/api/artigos/${id}/ajuste`, { delta });
-            setArtigos(p => p.map(x => x.id === id ? { ...x, existencia: Math.max(0, x.existencia + delta) } : x));
+            setArtigos(p => p.map(x => x.id === id ? { ...x, existencia: x.existencia + delta } : x));
         } catch (e) { console.error('adjustExistencia error', e); throw e; }
+    };
+
+    const adjustReservado = async (id: string, delta: number) => {
+        try {
+            await axios.put(`${API}/api/artigos/${id}/reserva`, { delta });
+            setArtigos(p => p.map(x => x.id === id ? { ...x, stockReservado: Math.max(0, x.stockReservado + delta) } : x));
+        } catch (e) { console.error('adjustReservado error', e); }
+    };
+
+    const upsertStockArmazem = async (artigoId: string, armazemId: string, quantidade: number, stockMinimo: number) => {
+        const { data } = await axios.post(`${API}/api/artigos/${artigoId}/stock-armazem`, { armazemId: Number(armazemId), quantidade, stockMinimo });
+        const entry = normStockArmazem(data);
+        setStockArmazem(p => {
+            const idx = p.findIndex(x => x.id === entry.id);
+            return idx >= 0 ? p.map((x, i) => i === idx ? entry : x) : [...p, entry];
+        });
+    };
+
+    const removeStockArmazem = async (saId: string) => {
+        await axios.delete(`${API}/api/artigos/stock-armazem/${saId}`);
+        setStockArmazem(p => p.filter(x => x.id !== saId));
     };
 
     const addMovimento = (m: Omit<MovimentoStock, 'id'>): MovimentoStock => {
         const placeholder: MovimentoStock = { ...m, id: '' };
+        const tipoLabel: Record<string, string> = {
+            entrada: 'Entrada', saida: 'Saída', ajuste: 'Ajuste',
+            transferencia: 'Transferência', devolucao: 'Devolução',
+        };
         axios.post(`${API}/api/movimentos-stock`, m)
             .then(({ data }) => {
-                const n = norm(data) as MovimentoStock;
-                setMovimentosStock(p => [...p, n]);
+                setMovimentosStock(p => [...p, normMovimento(data)]);
             })
             .catch(e => console.error('addMovimento error', e));
+        const artCodigo = artigos.find(a => a.id === m.artigoId)?.codigo ?? m.artigoId;
+        const qtdStr = m.quantidade > 0 ? `+${m.quantidade}` : String(m.quantidade);
+        const armazemStr = m.armazemDestinoId
+            ? ` (${m.armazemId} → ${m.armazemDestinoId})`
+            : m.armazemId ? ` [${m.armazemId}]` : '';
+        const obs = m.observacao ? ` — ${m.observacao}` : '';
+        log('Stock', `${tipoLabel[m.tipo] ?? m.tipo}: ${artCodigo}`,
+            `Qtd: ${qtdStr}${armazemStr}${obs}`);
         return placeholder;
     };
 
@@ -640,6 +896,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             .then(({ data }) => {
                 const n = normEncomenda(data);
                 setEncomendas(p => [...p, n]);
+                // Refresh artigos so stockEncomendado reflects new PO
+                axios.get(`${API}/api/artigos`).then(r => setArtigos(r.data.map(normArtigo)));
             })
             .catch(err => console.error('addEncomenda error', err));
         return placeholder;
@@ -648,18 +906,38 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try {
             await axios.put(`${API}/api/encomendas/${id}`, e);
             setEncomendas(p => p.map(x => x.id === id ? { ...x, ...e } : x));
+            // When cancelling, backend releases stockEncomendado — refresh artigos
+            if (e.estado === 'Cancelada') {
+                axios.get(`${API}/api/artigos`).then(r => setArtigos(r.data.map(normArtigo)));
+            }
         } catch (e) { console.error('updateEncomenda error', e); throw e; }
     };
-    const receberLinhas = async (encId: string, recebidas: { artigoId: string; qtd: number }[]) => {
-        try {
-            await axios.post(`${API}/api/encomendas/${encId}/receber`, { recebidas });
-            const [encRes, artRes] = await Promise.all([
-                axios.get(`${API}/api/encomendas`),
-                axios.get(`${API}/api/artigos`),
-            ]);
-            setEncomendas(encRes.data.map(normEncomenda));
-            setArtigos(artRes.data.map(normArtigo));
-        } catch (e) { console.error('receberLinhas error', e); throw e; }
+    const criarRececao = async (
+        encId: string,
+        recebidas: { artigoId: string; qtd: number }[],
+        guiaRemessa: string,
+        operador: string,
+        armazem: string,
+    ): Promise<Encomenda> => {
+        const { data } = await axios.post(`${API}/api/encomendas/${encId}/receber`, {
+            recebidas, guiaRemessa, operador, armazem,
+        });
+        const enc = normEncomenda(data);
+        setEncomendas(p => p.map(x => x.id === encId ? enc : x));
+        const artRes = await axios.get(`${API}/api/artigos`);
+        setArtigos(artRes.data.map(normArtigo));
+        log('Encomendas', 'Receção registada', `Encomenda ${encId} · GR: ${guiaRemessa} · ${recebidas.length} linha(s)`);
+        return enc;
+    };
+
+    const anularRececao = async (rececaoId: string): Promise<Encomenda> => {
+        const { data } = await axios.post(`${API}/api/encomendas/rececoes/${rececaoId}/anular`);
+        const enc = normEncomenda(data);
+        setEncomendas(p => p.map(x => x.id === enc.id ? enc : x));
+        const artRes = await axios.get(`${API}/api/artigos`);
+        setArtigos(artRes.data.map(normArtigo));
+        log('Encomendas', 'Receção anulada', `Receção ID: ${rececaoId}`);
+        return enc;
     };
 
     /* ── Invoices ───────────────────────────────────────────── */
@@ -669,6 +947,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             .then(({ data }) => {
                 const n = normFatura(data);
                 setFaturas(p => [...p, n]);
+                log('Faturação', 'Documento emitido', `Tipo: ${f.tipoDocumento} | Total: ${f.valorTotal} ${f.moeda}`);
             })
             .catch(e => console.error('addFatura error', e));
         return placeholder;
@@ -680,27 +959,51 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } catch (e) { console.error('updateFatura error', e); throw e; }
     };
 
+    /* ── Compute stockReservado dynamically from Programado OTs ── */
+    const artigosComReserva = useMemo(() => {
+        const reservaMap: Record<string, number> = {};
+        ordens.filter(o => o.estado === 'Programado').forEach(o => {
+            (o.artigos ?? []).forEach(a => {
+                if (a.artigoId && a.quantidade > 0) {
+                    const k = String(a.artigoId);
+                    reservaMap[k] = (reservaMap[k] ?? 0) + a.quantidade;
+                }
+            });
+        });
+        return artigos.map(a => {
+            const stockReservado = reservaMap[a.id] ?? 0;
+            const stockDisponivel = Math.max(0, a.existencia - stockReservado);
+            const emRuptura = (stockDisponivel + a.stockEncomendado) < a.stockSeguranca;
+            return { ...a, stockReservado, stockDisponivel, emRuptura };
+        });
+    }, [artigos, ordens]);
+
     return (
         <GlobalContext.Provider value={{
             currentUser, setCurrentUser, logout,
             logs, addLog,
             tiposTrabalho, addTipoTrabalho, updateTipoTrabalho, removeTipoTrabalho,
+            tiposOT, addTipoOT, updateTipoOT, removeTipoOT,
             funcoesTecnico, addFuncaoTecnico, updateFuncaoTecnico, removeFuncaoTecnico,
+            taxaIvaGlobal, setTaxaIvaGlobal,
+            empresaConfig, updateEmpresaConfig,
             moedas, addMoeda, updateMoeda, removeMoeda,
             tiposDocumento, addTipoDocumento, updateTipoDocumento, removeTipoDocumento,
             paises, provincias, municipios,
-            clientes, addCliente, updateCliente,
-            tecnicos, addTecnico, updateTecnico,
-            fornecedores, addFornecedor, updateFornecedor,
+            clientes, addCliente, updateCliente, removeCliente,
+            tecnicos, addTecnico, updateTecnico, removeTecnico,
+            fornecedores, addFornecedor, updateFornecedor, removeFornecedor,
             modelosEquipamento, addModelo, updateModelo,
             equipInstalados, addEquipInstalado, updateEquipInstalado,
             planos, addPlano, updatePlano, removePlano,
-            ordens, addOrdem, updateOrdem, removeOrdem, emitirOT, terminarOT, encerrarOT,
+            ordens, addOrdem, updateOrdem, removeOrdem, emitirOT, terminarOT, encerrarOT, reprogramarOT,
             armazens, addArmazem, updateArmazem,
-            artigos, addArtigo, updateArtigo, adjustExistencia,
+            artigos: artigosComReserva, addArtigo, updateArtigo, adjustExistencia, adjustReservado,
+            stockArmazem, upsertStockArmazem, removeStockArmazem,
             movimentosStock, addMovimento,
-            encomendas, addEncomenda, updateEncomenda, receberLinhas,
+            encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao,
             faturas, addFatura, updateFatura,
+            reloadData,
         }}>
             {children}
         </GlobalContext.Provider>

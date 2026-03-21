@@ -3,7 +3,7 @@ import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { useGlobal, Tecnico, FuncaoTecnico } from '../../contexts/GlobalContext';
-import { Search, Plus, Edit2, X, AlertCircle, Check, Download } from 'lucide-react';
+import { Search, Plus, Edit2, X, AlertCircle, Check, Download, Trash2 } from 'lucide-react';
 
 /* ══ Modal ══════════════════════════════════════════════ */
 interface TecnicoModalProps {
@@ -101,14 +101,26 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
 
 /* ══ Page ════════════════════════════════════════════════ */
 const TecnicosPage: React.FC = () => {
-    const { tecnicos, addTecnico, updateTecnico, funcoesTecnico } = useGlobal();
+    const { tecnicos, addTecnico, updateTecnico, removeTecnico, funcoesTecnico } = useGlobal();
 
-    const [search, setSearch] = useState('');
-    const [modal, setModal]   = useState<'new' | string | null>(null);
-    const [toast, setToast]   = useState('');
+    const [search, setSearch]     = useState('');
+    const [modal, setModal]       = useState<'new' | string | null>(null);
+    const [toast, setToast]       = useState('');
+    const [toastErr, setToastErr] = useState('');
     const [showExport, setShowExport] = useState(false);
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+    const showErr   = (msg: string) => { setToastErr(msg); setTimeout(() => setToastErr(''), 5000); };
+
+    const handleRemove = async (id: string, nome: string) => {
+        if (!window.confirm(`Eliminar o técnico "${nome}"? Esta acção não pode ser desfeita.`)) return;
+        try {
+            await removeTecnico(id);
+            showToast(`Técnico "${nome}" eliminado.`);
+        } catch (e: any) {
+            showErr(e?.response?.data?.message ?? 'Erro ao eliminar técnico.');
+        }
+    };
 
     const getFuncaoLabel = (id: string) => funcoesTecnico.find(f => f.id === id)?.descricao ?? id;
 
@@ -224,6 +236,9 @@ const TecnicosPage: React.FC = () => {
                                                 <button className="icon-btn" title="Editar" onClick={() => setModal(t.id)}>
                                                     <Edit2 size={12} />
                                                 </button>
+                                                <button className="icon-btn icon-btn-danger" title="Eliminar" onClick={() => handleRemove(t.id, t.nome)}>
+                                                    <Trash2 size={12} />
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -248,6 +263,12 @@ const TecnicosPage: React.FC = () => {
                 <div className="toast" role="status">
                     <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
                     <span>{toast}</span>
+                </div>
+            )}
+            {toastErr && (
+                <div className="toast" role="alert" style={{ background: 'var(--red,#ef4444)', color: '#fff' }}>
+                    <AlertCircle size={14} />
+                    <span>{toastErr}</span>
                 </div>
             )}
 

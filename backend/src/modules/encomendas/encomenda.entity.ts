@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn } from 'typeorm';
 import { Fornecedor } from '../fornecedores/fornecedor.entity';
 import { EncomendaLinha } from './encomenda-linha.entity';
+import { Rececao } from './rececao.entity';
 
 export enum EstadoEncomenda {
     ABERTA = 'Aberta',
@@ -47,4 +48,7 @@ export class Encomenda {
 
     @OneToMany(() => EncomendaLinha, (l) => l.encomenda, { cascade: true })
     linhas: EncomendaLinha[];
+
+    @OneToMany(() => Rececao, (r) => r.encomenda)
+    rececoes: Rececao[];
 }

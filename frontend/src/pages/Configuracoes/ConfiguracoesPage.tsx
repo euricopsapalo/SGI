@@ -31,8 +31,8 @@ const TABS: { id: Tab; label: string; icon: React.FC<any> }[] = [
 
 /* ── Initial state ── */
 const initEmpresa = {
-    nome: 'AQUATEX, LDA', nif: '5417032885', morada: 'Av. 4 de Fevereiro, nº 12, Luanda, Angola',
-    telefone: '+244 222 337 150', email: 'geral@aquatex.ao', website: 'www.aquatex.ao',
+    nome: '', nif: '', morada: '', telefone: '', email: '', website: '',
+    iban: '', banco: '', latitude: '', longitude: '', rodapeDocumentos: '',
     logo: null as string | null,
 };
 
@@ -133,13 +133,25 @@ const TabelaInlineEditor: React.FC<{
 const ConfiguracoesPage: React.FC = () => {
     const {
         tiposTrabalho, addTipoTrabalho, updateTipoTrabalho, removeTipoTrabalho,
+        tiposOT, addTipoOT, updateTipoOT, removeTipoOT,
         funcoesTecnico, addFuncaoTecnico, updateFuncaoTecnico, removeFuncaoTecnico,
         tiposDocumento, addTipoDocumento, updateTipoDocumento, removeTipoDocumento,
         armazens, addArmazem, updateArmazem,
+        taxaIvaGlobal, setTaxaIvaGlobal,
+        empresaConfig, updateEmpresaConfig,
     } = useGlobal();
 
     const [tab, setTab] = useState<Tab>('empresa');
-    const [empresa, setEmpresa] = useState(initEmpresa);
+    const [empresa, setEmpresa] = useState(() => ({
+        ...initEmpresa,
+        nome: empresaConfig.nome, nif: empresaConfig.nif, morada: empresaConfig.morada,
+        telefone: empresaConfig.telefone, email: empresaConfig.email, website: empresaConfig.website ?? '',
+        iban: empresaConfig.iban, banco: empresaConfig.banco,
+        latitude: empresaConfig.latitude?.toString() ?? '',
+        longitude: empresaConfig.longitude?.toString() ?? '',
+        rodapeDocumentos: empresaConfig.rodapeDocumentos ?? '',
+        logo: empresaConfig.logoUrl ?? null,
+    }));
     const [moeda, setMoeda] = useState(initMoeda);
     const [comissoes, setComissoes] = useState(initComissoes);
     const [seguranca, setSeguranca] = useState(initSeguranca);
@@ -162,14 +174,35 @@ const ConfiguracoesPage: React.FC = () => {
         reader.readAsDataURL(f);
     };
 
-    const save = () => {
+    const save = async () => {
+        try {
+            await updateEmpresaConfig({
+                nome: empresa.nome, nif: empresa.nif, morada: empresa.morada,
+                telefone: empresa.telefone, email: empresa.email, website: empresa.website,
+                iban: empresa.iban, banco: empresa.banco,
+                latitude: empresa.latitude ? Number(empresa.latitude) : undefined,
+                longitude: empresa.longitude ? Number(empresa.longitude) : undefined,
+                rodapeDocumentos: empresa.rodapeDocumentos,
+                logoUrl: empresa.logo ?? undefined,
+            });
+        } catch (e) { console.error('save empresa error', e); }
         setDirty(false);
         setToast(true);
         setTimeout(() => setToast(false), 3000);
     };
 
     const discard = () => {
-        setEmpresa(initEmpresa); setMoeda(initMoeda);
+        setEmpresa({
+            ...initEmpresa,
+            nome: empresaConfig.nome, nif: empresaConfig.nif, morada: empresaConfig.morada,
+            telefone: empresaConfig.telefone, email: empresaConfig.email, website: empresaConfig.website ?? '',
+            iban: empresaConfig.iban, banco: empresaConfig.banco,
+            latitude: empresaConfig.latitude?.toString() ?? '',
+            longitude: empresaConfig.longitude?.toString() ?? '',
+            rodapeDocumentos: empresaConfig.rodapeDocumentos ?? '',
+            logo: empresaConfig.logoUrl ?? null,
+        });
+        setMoeda(initMoeda);
         setComissoes(initComissoes); setSeguranca(initSeguranca);
         setDirty(false);
     };
@@ -256,6 +289,53 @@ const ConfiguracoesPage: React.FC = () => {
                                     <Field label="Website" value={empresa.website} onChange={setE('website')} placeholder="www.empresa.ao" />
                                 </div>
                             </div>
+
+                            <div className="settings-section">
+                                <div className="settings-section-hdr">
+                                    <div className="settings-section-title">Dados Bancários</div>
+                                    <div className="settings-section-desc">Utilizados nas faturas e documentos financeiros</div>
+                                </div>
+                                <div className="settings-section-body">
+                                    <div className="form-row">
+                                        <Field label="Banco" value={empresa.banco} onChange={setE('banco')} placeholder="Banco BFA" />
+                                        <Field label="IBAN" value={empresa.iban} onChange={setE('iban')} placeholder="AO06 0006 0000..." />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="settings-section">
+                                <div className="settings-section-hdr">
+                                    <div className="settings-section-title">Coordenadas Geográficas</div>
+                                    <div className="settings-section-desc">Usadas em faturas e localização da empresa</div>
+                                </div>
+                                <div className="settings-section-body">
+                                    <div className="form-row">
+                                        <Field label="Latitude" value={empresa.latitude} onChange={setE('latitude')} placeholder="-8.8383" type="text" />
+                                        <Field label="Longitude" value={empresa.longitude} onChange={setE('longitude')} placeholder="13.2344" type="text" />
+                                    </div>
+                                    {empresa.latitude && empresa.longitude && (
+                                        <div className="preview-box">
+                                            Coordenadas: <strong>{empresa.latitude}, {empresa.longitude}</strong>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="settings-section">
+                                <div className="settings-section-hdr">
+                                    <div className="settings-section-title">Rodapé dos Documentos</div>
+                                    <div className="settings-section-desc">Texto personalizado que aparece no rodapé de faturas e OS</div>
+                                </div>
+                                <div className="settings-section-body">
+                                    <div className="form-group">
+                                        <label className="form-label">Texto do Rodapé</label>
+                                        <textarea className="form-input" rows={2} style={{ resize: 'vertical' }}
+                                            value={empresa.rodapeDocumentos}
+                                            onChange={e => { setEmpresa(p => ({ ...p, rodapeDocumentos: e.target.value })); markDirty(); }}
+                                            placeholder="Ex: AQUATEX, LDA — Válido como documento fiscal..." />
+                                    </div>
+                                </div>
+                            </div>
                         </>}
 
                         {/* ── MOEDA ── */}
@@ -332,6 +412,29 @@ const ConfiguracoesPage: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
+
+                            <div className="settings-section">
+                                <div className="settings-section-hdr">
+                                    <div className="settings-section-title">Fiscalidade</div>
+                                    <div className="settings-section-desc">Taxa de IVA aplicada automaticamente em todas as faturas</div>
+                                </div>
+                                <div className="settings-section-body">
+                                    <div className="form-group" style={{ maxWidth: 200 }}>
+                                        <label className="form-label req">Taxa de IVA (%)</label>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <input
+                                                type="number" min={0} max={100} className="form-input"
+                                                value={taxaIvaGlobal}
+                                                onChange={e => { setTaxaIvaGlobal(Number(e.target.value)); markDirty(); }}
+                                            />
+                                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>%</span>
+                                        </div>
+                                    </div>
+                                    <div className="preview-box">
+                                        Subtotal 100.000 Kz → IVA {taxaIvaGlobal}% = <strong>{(100000 * taxaIvaGlobal / 100).toLocaleString('pt-PT')} Kz</strong>
+                                    </div>
+                                </div>
+                            </div>
                         </>}
 
                         {/* ── COMISSÕES ── */}
@@ -396,6 +499,17 @@ const ConfiguracoesPage: React.FC = () => {
                                 onAdd={r => addTipoTrabalho({ codigo: r.codigo, descricao: r.descricao })}
                                 onUpdate={(id, field, val) => updateTipoTrabalho(id, { [field]: val })}
                                 onRemove={id => removeTipoTrabalho(id)}
+                            />
+                            <TabelaInlineEditor
+                                titulo="Tipos de OT"
+                                colunas={[
+                                    { key: 'codigo', label: 'Código' },
+                                    { key: 'descricao', label: 'Descrição' },
+                                ]}
+                                rows={tiposOT}
+                                onAdd={r => addTipoOT({ codigo: r.codigo, descricao: r.descricao })}
+                                onUpdate={(id, field, val) => updateTipoOT(id, { [field]: val })}
+                                onRemove={id => removeTipoOT(id)}
                             />
                             <TabelaInlineEditor
                                 titulo="Funções de Técnico"

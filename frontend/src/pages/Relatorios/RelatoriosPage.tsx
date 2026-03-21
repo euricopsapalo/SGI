@@ -5,6 +5,12 @@ import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { BarChart3, TrendingUp, Users, Download, Package, Search } from 'lucide-react';
 import { useGlobal } from '../../contexts/GlobalContext';
 
+const fmtDate = (d: string) => {
+    if (!d) return '—';
+    const [y, m, day] = d.split('T')[0].split('-');
+    return `${day}/${m}/${y}`;
+};
+
 type RelTab = 'faturacao' | 'comissoes' | 'produtividade' | 'movimentos';
 
 const TABS: { id: RelTab; label: string; icon: React.FC<any> }[] = [
@@ -162,14 +168,18 @@ const RelatoriosPage: React.FC = () => {
     const movimentosEnrich = useMemo(() =>
         [...movimentosStock].sort((a, b) => b.data.localeCompare(a.data)).map(m => {
             const art  = artigos.find(a => a.id === m.artigoId);
-            const arm  = armazens.find(a => a.id === m.armazemId);
-            const armD = armazens.find(a => a.id === m.armazemDestinoId);
+            const resolveArm = (val?: string) => val ? (armazens.find(a => a.codigo === val || a.id === val)?.codigo ?? val) : '';
+            const armLabel = m.armazemDestinoId
+                ? `${resolveArm(m.armazemId)} → ${resolveArm(m.armazemDestinoId)}`
+                : resolveArm(m.armazemId);
             const tipoLabel = TIPO_LABEL[m.tipo] ?? m.tipo;
             const qtdDisplay = m.tipo === 'saida' || m.tipo === 'devolucao' ? -Math.abs(m.quantidade) : m.quantidade;
+            const rawData = m.data.includes('/') ? m.data.split('/').reverse().join('-') : m.data.split('T')[0];
             return {
-                id: m.id, data: m.data, tipo: tipoLabel,
-                artigo: art?.descricao ?? m.artigoId, codigo: art?.codigo ?? '',
-                armazem: armD ? `${arm?.codigo ?? m.armazemId} → ${armD.codigo}` : (arm?.codigo ?? m.armazemId ?? ''),
+                id: m.id, data: fmtDate(rawData), rawData,
+                tipo: tipoLabel,
+                artigo: art?.descricao ?? (m.artigoId || '—'), codigo: art?.codigo ?? '',
+                armazem: armLabel,
                 quantidade: qtdDisplay,
                 origem: m.referencia ?? m.observacao ?? '',
                 utilizador: m.usuario ?? '',
@@ -181,8 +191,8 @@ const RelatoriosPage: React.FC = () => {
     const filtMovimentos = useMemo(() =>
         movimentosEnrich.filter(m =>
             (!movTipo   || m.tipo === movTipo) &&
-            (!movDe     || m.data >= movDe) &&
-            (!movAte    || m.data <= movAte) &&
+            (!movDe     || m.rawData >= movDe) &&
+            (!movAte    || m.rawData <= movAte) &&
             (!movSearch || m.artigo.toLowerCase().includes(movSearch.toLowerCase()) ||
                            m.codigo.toLowerCase().includes(movSearch.toLowerCase()))
         ),

@@ -20,24 +20,28 @@ export class SeedService implements OnApplicationBootstrap {
     ) {}
 
     async onApplicationBootstrap() {
-        for (const seed of DEFAULT_USERS) {
-            const existing = await this.userRepo.findOne({ where: { email: seed.email } });
+        try {
+            for (const seed of DEFAULT_USERS) {
+                const existing = await this.userRepo.findOne({ where: { email: seed.email } });
 
-            if (!existing) {
-                const hash = await bcrypt.hash(seed.password, 10);
-                await this.userRepo.save(
-                    this.userRepo.create({ nome: seed.nome, email: seed.email, passwordHash: hash, role: seed.role, ativo: true }),
-                );
-                this.logger.log(`Utilizador criado: ${seed.email}`);
-            } else {
-                // Verifica se a hash está válida; se não, corrige
-                const valid = await bcrypt.compare(seed.password, existing.passwordHash);
-                if (!valid) {
+                if (!existing) {
                     const hash = await bcrypt.hash(seed.password, 10);
-                    await this.userRepo.update(existing.id, { passwordHash: hash });
-                    this.logger.warn(`Hash corrigida: ${seed.email}`);
+                    await this.userRepo.save(
+                        this.userRepo.create({ nome: seed.nome, email: seed.email, passwordHash: hash, role: seed.role, ativo: true }),
+                    );
+                    this.logger.log(`Utilizador criado: ${seed.email}`);
+                } else {
+                    // Verifica se a hash está válida; se não, corrige
+                    const valid = await bcrypt.compare(seed.password, existing.passwordHash);
+                    if (!valid) {
+                        const hash = await bcrypt.hash(seed.password, 10);
+                        await this.userRepo.update(existing.id, { passwordHash: hash });
+                        this.logger.warn(`Hash corrigida: ${seed.email}`);
+                    }
                 }
             }
+        } catch (err) {
+            this.logger.error(`Erro ao executar seed de utilizadores: ${err.message}`);
         }
     }
 }

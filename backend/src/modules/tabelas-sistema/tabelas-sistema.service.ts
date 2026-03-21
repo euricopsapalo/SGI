@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TipoTrabalho } from './tipo-trabalho.entity';
 import { TipoDocumento } from './tipo-documento.entity';
+import { TipoOT } from './tipo-ot.entity';
 import { FuncaoTecnico } from './funcao-tecnico.entity';
 import { Moeda } from './moeda.entity';
 import { Pais } from './pais.entity';
@@ -17,6 +18,9 @@ export class TabelasSistemaService {
 
         @InjectRepository(TipoDocumento)
         private tiposDocumentoRepo: Repository<TipoDocumento>,
+
+        @InjectRepository(TipoOT)
+        private tiposOTRepo: Repository<TipoOT>,
 
         @InjectRepository(FuncaoTecnico)
         private funcoesTecnicoRepo: Repository<FuncaoTecnico>,
@@ -43,6 +47,16 @@ export class TabelasSistemaService {
         return this.findOneTipoTrabalho(id);
     }
     removeTipoTrabalho(id: number) { return this.tiposTrabalhoRepo.delete(id); }
+
+    // TipoOT
+    findAllTiposOT() { return this.tiposOTRepo.find(); }
+    findOneTipoOT(id: number) { return this.tiposOTRepo.findOne({ where: { id } }); }
+    createTipoOT(body: Partial<TipoOT>) { return this.tiposOTRepo.save(this.tiposOTRepo.create(body)); }
+    async updateTipoOT(id: number, body: Partial<TipoOT>) {
+        await this.tiposOTRepo.update(id, body);
+        return this.findOneTipoOT(id);
+    }
+    removeTipoOT(id: number) { return this.tiposOTRepo.delete(id); }
 
     // TipoDocumento
     findAllTiposDocumento() { return this.tiposDocumentoRepo.find(); }

@@ -167,7 +167,7 @@ const OTDetail: React.FC<{ ot: OrdemTrabalho; nomeCliente: string; nomeEquip: st
 type Vista = 'mes' | 'semana' | 'dia';
 
 const AgendaPage: React.FC = () => {
-    const { ordens, updateOrdem, clientes, equipInstalados, modelosEquipamento, tecnicos, currentUser } = useGlobal();
+    const { ordens, updateOrdem, reprogramarOT, clientes, equipInstalados, modelosEquipamento, tecnicos, currentUser } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
     const meuTecnicoNome = currentUser?.tecnicoNome ?? currentUser?.nome;
 
@@ -260,7 +260,7 @@ const AgendaPage: React.FC = () => {
         setDragOT(null);
     };
 
-    const handleReprogramar = (novaData: string, motivo: string) => {
+    const handleReprogramar = async (novaData: string, motivo: string) => {
         if (!dropTarget) return;
         const ot = dropTarget.ot;
         const oldStart = ot.dataProgInicio ?? '';
@@ -268,7 +268,12 @@ const AgendaPage: React.FC = () => {
         const newFim   = ot.dataProgFim && delta !== 0
             ? isoDate(addDays(new Date(ot.dataProgFim), delta))
             : ot.dataProgFim;
-        updateOrdem(ot.id, { ...ot, dataProgInicio: novaData, dataProgFim: newFim });
+        try {
+            await reprogramarOT(ot.id, novaData, oldStart || undefined, motivo);
+            if (newFim !== ot.dataProgFim) {
+                updateOrdem(ot.id, { dataProgFim: newFim });
+            }
+        } catch (e) { console.error(e); }
         showToast(`OT ${ot.id} reprogramada para ${new Date(novaData).toLocaleDateString('pt-PT')}. Motivo: ${motivo}`);
         setDropTarget(null);
     };

@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColum
 import { Cliente } from '../clientes/cliente.entity';
 import { OtMaoObra } from './ot-mao-obra.entity';
 import { OtArtigo } from './ot-artigo.entity';
+import { OtReprogramacao } from './ot-reprogramacao.entity';
 
 export enum OTEstado {
     PROGRAMADO = 'Programado',
@@ -35,6 +36,9 @@ export class OrdemTrabalho {
 
     @Column({ name: 'tipo_trabalho', nullable: true, length: 100 })
     tipoTrabalho: string;
+
+    @Column({ name: 'tipo_ot', nullable: true, length: 100 })
+    tipoOT: string;
 
     @Column({ type: 'text' })
     descricao: string;
@@ -83,4 +87,7 @@ export class OrdemTrabalho {
 
     @OneToMany(() => OtArtigo, (a) => a.ordemTrabalho, { cascade: true })
     artigos: OtArtigo[];
+
+    @OneToMany(() => OtReprogramacao, (r) => r.ordemTrabalho, { cascade: true })
+    reprogramacoes: OtReprogramacao[];
 }

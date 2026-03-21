@@ -23,8 +23,25 @@ export class EncomendaController {
     @Post(':id/receber')
     receberLinhas(
         @Param('id', ParseIntPipe) id: number,
-        @Body() body: { recebidas: Array<{ artigoId: string; qtd: number }> },
+        @Body() body: {
+            recebidas: Array<{ artigoId: string; qtd: number }>;
+            guiaRemessa: string;
+            operador: string;
+            armazem: string;
+        },
     ) {
-        return this.service.receberLinhas(id, body.recebidas ?? []);
+        return this.service.receberLinhas(
+            id,
+            body.recebidas ?? [],
+            body.guiaRemessa ?? '',
+            body.operador ?? 'Sistema',
+            body.armazem ?? '',
+        );
+    }
+
+    // Static prefix 'rececoes' — NestJS resolves before ':id'
+    @Post('rececoes/:rececaoId/anular')
+    anularRececao(@Param('rececaoId', ParseIntPipe) rececaoId: number) {
+        return this.service.anularRececao(rececaoId);
     }
 }

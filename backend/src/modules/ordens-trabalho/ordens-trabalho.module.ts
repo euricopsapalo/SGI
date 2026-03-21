@@ -3,11 +3,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrdemTrabalho } from './ordem-trabalho.entity';
 import { OtMaoObra } from './ot-mao-obra.entity';
 import { OtArtigo } from './ot-artigo.entity';
+import { OtReprogramacao } from './ot-reprogramacao.entity';
 import { OrdensTrabalhoService } from './ordens-trabalho.service';
 import { OrdensTrabalhoController } from './ordens-trabalho.controller';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([OrdemTrabalho, OtMaoObra, OtArtigo])],
+    imports: [TypeOrmModule.forFeature([OrdemTrabalho, OtMaoObra, OtArtigo, OtReprogramacao])],
     controllers: [OrdensTrabalhoController],
     providers: [OrdensTrabalhoService],
     exports: [TypeOrmModule, OrdensTrabalhoService],

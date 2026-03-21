@@ -42,6 +42,15 @@ export class Artigo {
     @Column({ name: 'codigo_armazem', length: 20, default: 'ARM-01' })
     codigoArmazem: string;
 
+    @Column({ name: 'stock_reservado', type: 'numeric', precision: 12, scale: 3, default: 0 })
+    stockReservado: number;
+
+    @Column({ name: 'preco_custo', type: 'numeric', precision: 12, scale: 2, default: 0 })
+    precoCusto: number;
+
+    @Column({ name: 'stock_encomendado', type: 'numeric', precision: 12, scale: 3, default: 0 })
+    stockEncomendado: number;
+
     @Column({ default: false })
     inativo: boolean;
 

@@ -409,17 +409,31 @@ const ClienteDetail: React.FC<DetailProps> = ({ cliente, maquinas, osTotal, onCl
    MAIN PAGE
 ══════════════════════════════════════════ */
 const ClientesPage: React.FC = () => {
-    const { equipInstalados, ordens } = useGlobal();
+    const { equipInstalados, ordens, addLog, currentUser } = useGlobal();
     const [clientes, setClientes] = useState<Cliente[]>([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
-    const [detail, setDetail] = useState<Cliente | null>(null);
+    const [search, setSearch]     = useState('');
+    const [detail, setDetail]     = useState<Cliente | null>(null);
     const [editTarget, setEditTarget] = useState<Cliente | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
-    const [toast, setToast] = useState('');
+    const [toast, setToast]         = useState('');
+    const [toastErr, setToastErr]   = useState('');
     const [showExport, setShowExport] = useState(false);
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+    const showErr   = (msg: string) => { setToastErr(msg); setTimeout(() => setToastErr(''), 5000); };
+
+    const handleRemove = async (id: number, nome: string) => {
+        if (!window.confirm(`Eliminar o cliente "${nome}"? Esta acção não pode ser desfeita.`)) return;
+        try {
+            await axios.delete(`${API}/api/clientes/${id}`);
+            showToast(`Cliente "${nome}" eliminado.`);
+            addLog({ usuario: currentUser?.email ?? 'sistema', modulo: 'Clientes', acao: 'Cliente eliminado', detalhes: `Nome: ${nome}`, tipo: 'warning' });
+            loadClientes();
+        } catch (e: any) {
+            showErr(e?.response?.data?.message ?? 'Erro ao eliminar cliente.');
+        }
+    };
 
     const loadClientes = useCallback(async () => {
         try {
@@ -607,6 +621,7 @@ const ClientesPage: React.FC = () => {
                                                 <div className="row-actions">
                                                     <button className="icon-btn" title="Ver detalhe" onClick={() => setDetail(c)}><Eye size={12} /></button>
                                                     <button className="icon-btn" title="Editar" onClick={() => openEdit(c)}><Pencil size={12} /></button>
+                                                    <button className="icon-btn icon-btn-danger" title="Eliminar" onClick={() => handleRemove(c.id, c.nome)}><Trash2 size={12} /></button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -644,6 +659,12 @@ const ClientesPage: React.FC = () => {
                 <div className="toast" role="status">
                     <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
                     <span>{toast}</span>
+                </div>
+            )}
+            {toastErr && (
+                <div className="toast" role="alert" style={{ background: 'var(--red,#ef4444)', color: '#fff' }}>
+                    <AlertCircle size={14} />
+                    <span>{toastErr}</span>
                 </div>
             )}
 

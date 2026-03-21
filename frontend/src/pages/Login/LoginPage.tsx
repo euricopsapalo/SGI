@@ -14,7 +14,7 @@ type View = 'login' | 'forgot' | 'reset';
 
 const LoginPage: React.FC = () => {
     const navigate = useNavigate();
-    const { setCurrentUser } = useGlobal();
+    const { setCurrentUser, addLog } = useGlobal();
     const [view, setView]               = useState<View>('login');
     const [email, setEmail]             = useState('');
     const [password, setPassword]       = useState('');
@@ -35,8 +35,10 @@ const LoginPage: React.FC = () => {
         setLoading(true);
         try {
             const { data } = await axios.post(`${API}/api/auth/login`, { email, password });
-            setCurrentUser({ nome: data.user.nome, email: data.user.email, role: ROLE_MAP[data.user.role] || data.user.role });
+            const user = { nome: data.user.nome, email: data.user.email, role: ROLE_MAP[data.user.role] || data.user.role };
+            setCurrentUser(user);
             localStorage.setItem('sgi_token', data.access_token);
+            addLog({ usuario: user.email, modulo: 'Autenticação', acao: 'Login', detalhes: `Utilizador: ${user.nome} (${user.role})`, tipo: 'info' });
             navigate('/dashboard');
         } catch (err: any) {
             setError(err?.response?.data?.message || 'Email ou password incorretos.');

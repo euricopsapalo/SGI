@@ -2,11 +2,12 @@ import React, { useState, useRef } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
-import { useGlobal, Artigo, Armazem } from '../../contexts/GlobalContext';
+import { useGlobal, Artigo, Armazem, StockArmazem } from '../../contexts/GlobalContext';
 import {
     Search, Plus, Edit2, X, AlertCircle, Check, Package, Download,
     BarChart2, ArrowDownCircle, ArrowUpCircle, RefreshCw,
     Truck, Archive, Star, FileText, Image as ImageIcon, Trash2,
+    ChevronRight, ChevronDown, Warehouse, Eye,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 
@@ -41,8 +42,22 @@ const TABS_A = [
 type ATab = typeof TABS_A[number]['id'];
 
 const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) => {
-    const { armazens } = useGlobal();
+    const { armazens, stockArmazem, upsertStockArmazem, removeStockArmazem } = useGlobal();
     const [tab, setTab] = useState<ATab>('ident');
+
+    // Warehouse breakdown state (only for existing articles)
+    const saEntries = stockArmazem.filter(sa => sa.artigoId === artigo?.id);
+    const [saNewArmazem, setSaNewArmazem] = useState('');
+    const [saNewQtd,     setSaNewQtd]     = useState('0');
+    const [saNewMin,     setSaNewMin]     = useState('0');
+
+    const handleAddSa = async () => {
+        if (!artigo?.id || !saNewArmazem) return;
+        await upsertStockArmazem(artigo.id, saNewArmazem, Number(saNewQtd), Number(saNewMin));
+        setSaNewArmazem('');
+        setSaNewQtd('0');
+        setSaNewMin('0');
+    };
 
     // Identificação
     const [codigo,    setCodigo]    = useState(artigo?.codigo    ?? '');
@@ -60,6 +75,7 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
     const [nivelMaximo,    setNMax]    = useState(String(artigo?.nivelMaximo    ?? ''));
     const [stockSeguranca, setSeg]     = useState(String(artigo?.stockSeguranca ?? ''));
     const [custoMedio,     setCusto]   = useState(String(artigo?.custoMedio     ?? ''));
+    const [precoCusto,     setPrecoCusto] = useState(String(artigo?.precoCusto  ?? ''));
     const [codigoArmazem,  setArmazem] = useState(artigo?.codigoArmazem ?? 'ARM-01');
     const [inativo,        setInativo] = useState(artigo?.inativo  ?? false);
     const [critico,        setCritico] = useState(artigo?.critico  ?? false);
@@ -95,7 +111,9 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
             precoUnitario: Number(precoUnitario), moeda,
             existencia: Number(existencia), nivelMaximo: Number(nivelMaximo),
             stockSeguranca: Number(stockSeguranca), custoMedio: Number(custoMedio),
+            precoCusto: Number(precoCusto), stockEncomendado: artigo?.stockEncomendado ?? 0,
             codigoArmazem, inativo, critico, observacao,
+            stockReservado: artigo?.stockReservado ?? 0,
         });
     };
 
@@ -207,10 +225,18 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
                                     </select>
                                 </div>
                             </div>
-                            <div className="form-group">
-                                <label className="form-label">Custo Médio</label>
-                                <input type="number" min={0} step="0.01" className="form-input"
-                                    value={custoMedio} onChange={e => setCusto(e.target.value)} />
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label className="form-label">Custo Médio</label>
+                                    <input type="number" min={0} step="0.01" className="form-input"
+                                        value={custoMedio} onChange={e => setCusto(e.target.value)} />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Preço de Compra</label>
+                                    <input type="number" min={0} step="0.01" className="form-input"
+                                        value={precoCusto} onChange={e => setPrecoCusto(e.target.value)}
+                                        placeholder="Preço do fornecedor" />
+                                </div>
                             </div>
                             <div style={{ background: 'var(--bg-subtle,#f8fafc)', borderRadius: 8, padding: '12px 14px', marginTop: 8 }}>
                                 <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Previsão valor em stock</div>
@@ -243,7 +269,7 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
                                 <label className="form-label">Código Armazém</label>
                                 <select className="form-select" value={codigoArmazem}
                                     onChange={e => setArmazem(e.target.value)}>
-                                    {armazens.filter(a => a.ativo).map(a => <option key={a.id} value={a.id}>{a.codigo} — {a.nome}</option>)}
+                                    {armazens.filter(a => a.ativo).map(a => <option key={a.id} value={a.codigo}>{a.codigo} — {a.nome}</option>)}
                                 </select>
                             </div>
                             <div style={{ display: 'flex', gap: 20, marginTop: 8 }}>
@@ -270,6 +296,76 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
                                     </div>
                                 </div>
                             )}
+
+                            {/* ── Multi-warehouse breakdown (existing articles only) ── */}
+                            {artigo && (
+                                <div style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 10 }}>
+                                        <Warehouse size={13} /> Distribuição por Armazém
+                                    </div>
+                                    {saEntries.length > 0 && (
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 12, fontSize: '0.8rem' }}>
+                                            <thead>
+                                                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                                    <th style={{ textAlign: 'left', padding: '4px 8px', fontWeight: 600, color: 'var(--text-muted)' }}>Armazém</th>
+                                                    <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 600, color: 'var(--text-muted)' }}>Qtd.</th>
+                                                    <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 600, color: 'var(--text-muted)' }}>Stk. Mín.</th>
+                                                    <th style={{ width: 30 }} />
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {saEntries.map(sa => (
+                                                    <tr key={sa.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                                        <td style={{ padding: '5px 8px' }}>
+                                                            <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: 6 }}>{sa.armazem.codigo}</span>
+                                                            {sa.armazem.nome}
+                                                        </td>
+                                                        <td style={{ textAlign: 'right', padding: '5px 8px', fontWeight: 600 }}>{fmt(sa.quantidade)}</td>
+                                                        <td style={{ textAlign: 'right', padding: '5px 8px', color: 'var(--text-muted)' }}>{fmt(sa.stockMinimo)}</td>
+                                                        <td style={{ textAlign: 'center', padding: '5px 4px' }}>
+                                                            <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red,#ef4444)', padding: 2 }}
+                                                                onClick={() => removeStockArmazem(sa.id)}>
+                                                                <Trash2 size={12} />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                    {saEntries.length === 0 && (
+                                        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: 10 }}>
+                                            Sem distribuição registada. Adicione entradas abaixo.
+                                        </p>
+                                    )}
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+                                        <div style={{ flex: 2 }}>
+                                            <label style={{ fontSize: '0.74rem', color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Armazém</label>
+                                            <select className="form-select" style={{ fontSize: '0.8rem' }}
+                                                value={saNewArmazem} onChange={e => setSaNewArmazem(e.target.value)}>
+                                                <option value="">Seleccionar...</option>
+                                                {armazens.filter(a => a.ativo).map(a => (
+                                                    <option key={a.id} value={a.id}>{a.codigo} — {a.nome}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '0.74rem', color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Qtd.</label>
+                                            <input type="number" min={0} className="form-input" style={{ fontSize: '0.8rem' }}
+                                                value={saNewQtd} onChange={e => setSaNewQtd(e.target.value)} />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <label style={{ fontSize: '0.74rem', color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Stk. Mín.</label>
+                                            <input type="number" min={0} className="form-input" style={{ fontSize: '0.8rem' }}
+                                                value={saNewMin} onChange={e => setSaNewMin(e.target.value)} />
+                                        </div>
+                                        <button type="button" className="abtn abtn-secondary" style={{ fontSize: '0.8rem', padding: '6px 12px', whiteSpace: 'nowrap' }}
+                                            onClick={handleAddSa} disabled={!saNewArmazem}>
+                                            <Plus size={12} /> Adicionar
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </>)}
 
                         {/* ── Observação ── */}
@@ -292,16 +388,179 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
     );
 };
 
+/* ══ Artigo View Modal (read-only) ══════════════════════════ */
+interface ArtigoViewModalProps {
+    artigo: Artigo;
+    onClose: () => void;
+    onEdit: () => void;
+}
+const TABS_V = TABS_A;
+type VTab = ATab;
+
+const ArtigoViewModal: React.FC<ArtigoViewModalProps> = ({ artigo, onClose, onEdit }) => {
+    const { armazens, stockArmazem } = useGlobal();
+    const [tab, setTab] = useState<VTab>('ident');
+    const saEntries = stockArmazem.filter(sa => sa.artigoId === artigo.id);
+    const resolveArm = (val: string) =>
+        armazens.find(a => a.id === val || a.codigo === val)?.nome ?? val;
+
+    const Field = ({ label, value }: { label: string; value: React.ReactNode }) => (
+        <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+            <div style={{ fontSize: '0.88rem', fontWeight: 500, color: 'var(--text-primary)' }}>{value || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>—</span>}</div>
+        </div>
+    );
+
+    return (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="modal" style={{ maxWidth: 620 }}>
+                <div className="modal-header">
+                    <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Eye size={15} style={{ color: 'var(--blue)' }} />
+                        {artigo.codigo} — {artigo.descricao}
+                    </h3>
+                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                </div>
+                <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 20px' }}>
+                    {TABS_V.map(t => (
+                        <button key={t.id} type="button" onClick={() => setTab(t.id)} style={{
+                            padding: '8px 14px', fontSize: '0.8rem', fontWeight: tab === t.id ? 600 : 400,
+                            border: 'none', borderBottom: tab === t.id ? '2px solid var(--blue)' : '2px solid transparent',
+                            background: 'none', cursor: 'pointer', marginBottom: -1,
+                            color: tab === t.id ? 'var(--blue)' : 'var(--text-secondary)',
+                        }}>
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
+                <div className="modal-body">
+                    {/* ── Identificação ── */}
+                    {tab === 'ident' && (
+                        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '0 16px' }}>
+                                    <Field label="Código" value={<span style={{ fontFamily: 'monospace' }}>{artigo.codigo}</span>} />
+                                    <Field label="Descrição" value={artigo.descricao} />
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                                    <Field label="Classe" value={artigo.classe} />
+                                    <Field label="Família" value={artigo.familia} />
+                                </div>
+                                <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                                    {artigo.critico && (
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', padding: '2px 8px', borderRadius: 4, background: '#fef3c7', color: '#b45309', fontWeight: 600 }}>
+                                            <Star size={11} /> Crítico
+                                        </span>
+                                    )}
+                                    {artigo.inativo && (
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', padding: '2px 8px', borderRadius: 4, background: 'var(--bg-secondary,#f1f5f9)', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                            <Archive size={11} /> Inactivo
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                            {artigo.imagem && (
+                                <div style={{ width: 110, height: 110, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', flexShrink: 0 }}>
+                                    <img src={artigo.imagem} alt="artigo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {/* ── Preço ── */}
+                    {tab === 'preco' && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                            <Field label="Preço Unitário" value={fmtMoney(artigo.precoUnitario, artigo.moeda)} />
+                            <Field label="Moeda" value={artigo.moeda} />
+                            <Field label="Custo Médio" value={artigo.custoMedio ? fmtMoney(artigo.custoMedio, artigo.moeda) : undefined} />
+                            <Field label="Preço de Compra" value={(artigo as any).precoCusto ? fmtMoney((artigo as any).precoCusto, artigo.moeda) : undefined} />
+                            <div style={{ gridColumn: '1 / -1', background: 'var(--bg-subtle,#f8fafc)', borderRadius: 8, padding: '12px 14px', marginTop: 4 }}>
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Valor total em stock</div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--blue)', marginTop: 4 }}>
+                                    {fmtMoney(artigo.precoUnitario * artigo.existencia, artigo.moeda)}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {/* ── Armazém ── */}
+                    {tab === 'arm' && (<>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
+                            <Field label="Existência" value={fmt(artigo.existencia)} />
+                            <Field label="Nível Máximo" value={artigo.nivelMaximo ? fmt(artigo.nivelMaximo) : undefined} />
+                            <Field label="Stock Segurança" value={artigo.stockSeguranca ? fmt(artigo.stockSeguranca) : undefined} />
+                        </div>
+                        <Field label="Armazém Principal" value={resolveArm(artigo.codigoArmazem)} />
+                        {artigo.nivelMaximo > 0 && (
+                            <div style={{ marginBottom: 16 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 4 }}>
+                                    <span>0</span><span>{fmt(artigo.existencia)}</span><span>{fmt(artigo.nivelMaximo)}</span>
+                                </div>
+                                <div style={{ height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                                    <div style={{
+                                        height: '100%', borderRadius: 4,
+                                        width: `${Math.min(100, (artigo.existencia / artigo.nivelMaximo) * 100)}%`,
+                                        background: artigo.existencia <= artigo.stockSeguranca ? 'var(--red,#ef4444)' : 'var(--green)',
+                                    }} />
+                                </div>
+                            </div>
+                        )}
+                        {saEntries.length > 0 && (
+                            <div style={{ marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 10 }}>
+                                    <Warehouse size={13} /> Distribuição por Armazém
+                                </div>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                            <th style={{ textAlign: 'left', padding: '4px 8px', fontWeight: 600, color: 'var(--text-muted)' }}>Armazém</th>
+                                            <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 600, color: 'var(--text-muted)' }}>Qtd.</th>
+                                            <th style={{ textAlign: 'right', padding: '4px 8px', fontWeight: 600, color: 'var(--text-muted)' }}>Stk. Mín.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {saEntries.map(sa => (
+                                            <tr key={sa.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                                <td style={{ padding: '5px 8px' }}>
+                                                    <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-muted)', marginRight: 6 }}>{sa.armazem.codigo}</span>
+                                                    {sa.armazem.nome}
+                                                </td>
+                                                <td style={{ textAlign: 'right', padding: '5px 8px', fontWeight: 600, color: sa.quantidade <= sa.stockMinimo ? 'var(--red,#ef4444)' : undefined }}>{fmt(sa.quantidade)}</td>
+                                                <td style={{ textAlign: 'right', padding: '5px 8px', color: 'var(--text-muted)' }}>{fmt(sa.stockMinimo)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </>)}
+                    {/* ── Observação ── */}
+                    {tab === 'obs' && (
+                        artigo.observacao
+                            ? <p style={{ fontSize: '0.88rem', lineHeight: 1.6, color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>{artigo.observacao}</p>
+                            : <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sem observações registadas.</p>
+                    )}
+                </div>
+                <div className="modal-footer">
+                    <button type="button" className="abtn abtn-secondary" onClick={onClose}>Fechar</button>
+                    <button type="button" className="abtn abtn-primary" onClick={onEdit}><Edit2 size={12} /> Editar</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 /* ══ Inventário Modal (multi-article) ═══════════════════════ */
 interface InventLine { artigoId: string; novaExist: string; }
 
 interface InventarioModalProps {
     artigos: Artigo[];
+    armazens: Armazem[];
     onClose: () => void;
     onConfirm: (lines: InventLine[]) => void;
 }
 
-const printInventSheet = (artigos: Artigo[], lines: InventLine[]) => {
+const printInventSheet = (artigos: Artigo[], lines: InventLine[], armazens: Armazem[] = []) => {
+    const resolveArm = (val: string) =>
+        armazens.find(a => a.id === val || a.codigo === val)?.codigo ?? val;
     const w = window.open('', '_blank');
     if (!w) return;
     const rows = lines.map(l => {
@@ -310,7 +569,7 @@ const printInventSheet = (artigos: Artigo[], lines: InventLine[]) => {
         return `<tr>
             <td>${a.codigo}</td>
             <td>${a.descricao}</td>
-            <td>${a.codigoArmazem}</td>
+            <td>${resolveArm(a.codigoArmazem)}</td>
             <td style="text-align:right">${a.existencia}</td>
             <td></td>
             <td></td>
@@ -353,7 +612,9 @@ const printInventSheet = (artigos: Artigo[], lines: InventLine[]) => {
     w.document.close();
 };
 
-const InventarioModal: React.FC<InventarioModalProps> = ({ artigos, onClose, onConfirm }) => {
+const InventarioModal: React.FC<InventarioModalProps> = ({ artigos, armazens, onClose, onConfirm }) => {
+    const resolveArmazem = (val: string) =>
+        armazens.find(a => a.id === val || a.codigo === val)?.codigo ?? val;
     const [search, setSearch] = useState('');
     const [lines, setLines]   = useState<InventLine[]>(
         artigos.filter(a => !a.inativo).map(a => ({ artigoId: a.id, novaExist: String(a.existencia) }))
@@ -401,7 +662,7 @@ const InventarioModal: React.FC<InventarioModalProps> = ({ artigos, onClose, onC
                                 value={search} onChange={e => setSearch(e.target.value)} />
                         </div>
                         <button type="button" className="abtn abtn-secondary"
-                            onClick={() => printInventSheet(artigos, selectedLines)}
+                            onClick={() => printInventSheet(artigos, selectedLines, armazens)}
                             title="Baixar ficha para contagem física">
                             <FileText size={12} /> Baixar Ficha PDF
                         </button>
@@ -443,7 +704,7 @@ const InventarioModal: React.FC<InventarioModalProps> = ({ artigos, onClose, onC
                                             </td>
                                             <td style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--text-muted)' }}>{a.codigo}</td>
                                             <td style={{ fontSize: '0.82rem' }}>{a.descricao}</td>
-                                            <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{a.codigoArmazem}</td>
+                                            <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{resolveArmazem(a.codigoArmazem)}</td>
                                             <td style={{ textAlign: 'right', fontSize: '0.82rem' }}>{fmt(a.existencia)}</td>
                                             <td>
                                                 <input type="number" min={0} className="form-input"
@@ -523,14 +784,14 @@ const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, armaze
                         <div className="form-group">
                             <label className="form-label req">Armazém de Origem</label>
                             <select className="form-select" value={armazDe} onChange={e => { setArmazDe(e.target.value); setLines([]); }}>
-                                {armazens.filter(a => a.ativo).map(a => <option key={a.id} value={a.id}>{a.codigo} — {a.nome}</option>)}
+                                {armazens.filter(a => a.ativo).map(a => <option key={a.id} value={a.codigo}>{a.codigo} — {a.nome}</option>)}
                             </select>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', paddingTop: 20, fontSize: '1.2rem', color: 'var(--text-muted)' }}>→</div>
                         <div className="form-group">
                             <label className="form-label req">Armazém de Destino</label>
                             <select className="form-select" value={armazPara} onChange={e => setArmazPara(e.target.value)}>
-                                {armazens.filter(a => a.ativo && a.id !== armazDe).map(a => <option key={a.id} value={a.id}>{a.codigo} — {a.nome}</option>)}
+                                {armazens.filter(a => a.ativo && a.codigo !== armazDe).map(a => <option key={a.id} value={a.codigo}>{a.codigo} — {a.nome}</option>)}
                             </select>
                         </div>
                     </div>
@@ -715,15 +976,21 @@ const StatsModal: React.FC<{ artigos: Artigo[]; onClose: () => void }> = ({ arti
 type OpState = 'inventario' | 'transferencia' | 'reposicao' | 'devolucao' | 'guia' | 'stats' | null;
 
 const StockPage: React.FC = () => {
-    const { artigos, addArtigo, updateArtigo, adjustExistencia, armazens, addMovimento, currentUser } = useGlobal();
+    const { artigos, addArtigo, updateArtigo, adjustExistencia, armazens, addMovimento, currentUser, stockArmazem } = useGlobal();
+
+    // Resolve warehouse code from either a code string or a numeric ID (legacy data)
+    const resolveArmazem = (val: string) =>
+        armazens.find(a => a.id === val || a.codigo === val)?.nome ?? armazens.find(a => a.id === val || a.codigo === val)?.codigo ?? val;
 
     const [search,    setSearch]  = useState('');
     const [filterCls, setFCls]    = useState('');
     const [filterFam, setFFam]    = useState('');
     const [modal,     setModal]   = useState<'new' | string | null>(null);
+    const [viewModal, setViewModal] = useState<string | null>(null);
     const [op,         setOp]       = useState<OpState>(null);
     const [toast,      setToast]   = useState('');
     const [showExport, setShowExport] = useState(false);
+    const [expanded,   setExpanded]  = useState<Set<string>>(new Set());
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
@@ -873,6 +1140,9 @@ const StockPage: React.FC = () => {
                                     <th>Descrição</th>
                                     <th>Classe / Família</th>
                                     <th style={{ textAlign: 'right' }}>Existência</th>
+                                    <th style={{ textAlign: 'right' }}>Reservado</th>
+                                    <th style={{ textAlign: 'right' }}>Disponível</th>
+                                    <th style={{ textAlign: 'right' }}>Enc.</th>
                                     <th style={{ textAlign: 'right' }}>Seg.</th>
                                     <th style={{ textAlign: 'right' }}>Preço Unit.</th>
                                     <th>Armazém</th>
@@ -881,14 +1151,29 @@ const StockPage: React.FC = () => {
                             </thead>
                             <tbody>
                                 {filtered.length === 0 && (
-                                    <tr><td colSpan={9}><div className="empty-state"><Package size={28} /><br />Nenhum artigo encontrado.</div></td></tr>
+                                    <tr><td colSpan={12}><div className="empty-state"><Package size={28} /><br />Nenhum artigo encontrado.</div></td></tr>
                                 )}
                                 {filtered.map(a => {
                                     const lvl = stockLevel(a);
+                                    const saRows = stockArmazem.filter(sa => sa.artigoId === a.id);
+                                    const isExpanded = expanded.has(a.id);
+                                    const toggleExpand = () => setExpanded(prev => {
+                                        const s = new Set(prev);
+                                        s.has(a.id) ? s.delete(a.id) : s.add(a.id);
+                                        return s;
+                                    });
                                     return (
-                                        <tr key={a.id} style={{ opacity: a.inativo ? 0.5 : 1 }}>
-                                            <td style={{ paddingLeft: 10 }}>
-                                                <span className={`dot ${lvl === 'ok' ? 'dot-green' : lvl === 'low' ? 'dot-orange' : 'dot-red'}`} />
+                                        <React.Fragment key={a.id}>
+                                        <tr style={{ opacity: a.inativo ? 0.5 : 1 }}>
+                                            <td style={{ paddingLeft: 6, width: 32 }}>
+                                                {saRows.length > 0 ? (
+                                                    <button onClick={toggleExpand} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                        {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                        <span className={`dot ${lvl === 'ok' ? 'dot-green' : lvl === 'low' ? 'dot-orange' : 'dot-red'}`} style={{ marginLeft: 2 }} />
+                                                    </button>
+                                                ) : (
+                                                    <span className={`dot ${lvl === 'ok' ? 'dot-green' : lvl === 'low' ? 'dot-orange' : 'dot-red'}`} style={{ marginLeft: 8 }} />
+                                                )}
                                             </td>
                                             <td>
                                                 {a.imagem && (
@@ -905,6 +1190,16 @@ const StockPage: React.FC = () => {
                                                 color: lvl === 'ok' ? 'var(--text-primary)' : lvl === 'low' ? 'var(--orange,#f97316)' : 'var(--red,#ef4444)' }}>
                                                 {fmt(a.existencia)}
                                             </td>
+                                            <td style={{ textAlign: 'right', fontSize: '0.78rem', color: a.stockReservado > 0 ? 'var(--orange,#f97316)' : 'var(--text-muted)' }}>
+                                                {fmt(a.stockReservado)}
+                                            </td>
+                                            <td style={{ textAlign: 'right', fontWeight: 600, fontSize: '0.83rem',
+                                                color: (a.existencia - a.stockReservado) <= 0 ? 'var(--red,#ef4444)' : 'var(--text-primary)' }}>
+                                                {fmt(a.existencia - a.stockReservado)}
+                                            </td>
+                                            <td style={{ textAlign: 'right', fontSize: '0.78rem', color: a.stockEncomendado > 0 ? 'var(--blue)' : 'var(--text-muted)' }}>
+                                                {fmt(a.stockEncomendado)}
+                                            </td>
                                             <td style={{ textAlign: 'right', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                                                 {fmt(a.stockSeguranca)}
                                             </td>
@@ -912,16 +1207,47 @@ const StockPage: React.FC = () => {
                                                 {fmtMoney(a.precoUnitario, a.moeda)}
                                             </td>
                                             <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                                                {a.codigoArmazem}
+                                                {saRows.length > 1
+                                                    ? <span style={{ color: 'var(--blue)', fontWeight: 600 }}>{saRows.length} armazéns</span>
+                                                    : resolveArmazem(a.codigoArmazem)
+                                                }
                                             </td>
                                             <td>
                                                 <div className="row-actions">
+                                                    <button className="icon-btn" title="Ver detalhes" onClick={() => setViewModal(a.id)}>
+                                                        <Eye size={12} />
+                                                    </button>
                                                     <button className="icon-btn" title="Editar" onClick={() => setModal(a.id)}>
                                                         <Edit2 size={12} />
                                                     </button>
                                                 </div>
                                             </td>
                                         </tr>
+                                        {isExpanded && saRows.map(sa => (
+                                            <tr key={`sa-${sa.id}`} style={{ background: 'var(--bg-secondary, #f8fafc)' }}>
+                                                <td style={{ paddingLeft: 28, borderLeft: '3px solid var(--blue)' }}>
+                                                    <Warehouse size={11} style={{ color: 'var(--blue)', verticalAlign: 'middle' }} />
+                                                </td>
+                                                <td colSpan={2} style={{ fontSize: '0.78rem', paddingLeft: 6 }}>
+                                                    <span style={{ fontFamily: 'monospace', fontSize: '0.74rem', color: 'var(--text-muted)', marginRight: 6 }}>{sa.armazem.codigo}</span>
+                                                    <span style={{ fontWeight: 600 }}>{sa.armazem.nome}</span>
+                                                </td>
+                                                <td />
+                                                <td style={{ textAlign: 'right', fontWeight: 600, fontSize: '0.82rem',
+                                                    color: sa.quantidade <= sa.stockMinimo ? 'var(--red,#ef4444)' : 'var(--text-primary)' }}>
+                                                    {fmt(sa.quantidade)}
+                                                </td>
+                                                <td colSpan={2} style={{ textAlign: 'right', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                                    Disp: {fmt(Math.max(0, sa.quantidade))}
+                                                </td>
+                                                <td />
+                                                <td style={{ textAlign: 'right', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                                    {fmt(sa.stockMinimo)}
+                                                </td>
+                                                <td colSpan={3} />
+                                            </tr>
+                                        ))}
+                                        </React.Fragment>
                                     );
                                 })}
                             </tbody>
@@ -932,11 +1258,21 @@ const StockPage: React.FC = () => {
             </div>
 
             {/* Modals */}
+            {viewModal !== null && (() => {
+                const va = artigos.find(a => a.id === viewModal);
+                return va ? (
+                    <ArtigoViewModal
+                        artigo={va}
+                        onClose={() => setViewModal(null)}
+                        onEdit={() => { setModal(va.id); setViewModal(null); }}
+                    />
+                ) : null;
+            })()}
             {modal !== null && (
                 <ArtigoModal artigo={editTarget} onClose={() => setModal(null)} onSave={handleSave} />
             )}
             {op === 'inventario' && (
-                <InventarioModal artigos={artigos} onClose={() => setOp(null)} onConfirm={handleInventario} />
+                <InventarioModal artigos={artigos} armazens={armazens} onClose={() => setOp(null)} onConfirm={handleInventario} />
             )}
             {op === 'transferencia' && (
                 <TransferenciaModal artigos={artigos} armazens={armazens} onClose={() => setOp(null)} onConfirm={handleTransferencia} />

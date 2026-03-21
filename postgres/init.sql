@@ -1,55 +1,15 @@
 -- ============================================================
 -- AQUATEX SGI — Schema Compatível com TypeORM
--- Versão: 3.0 — PKs SERIAL INTEGER (alinhado com @PrimaryGeneratedColumn())
+-- Versão: 4.0 — Sincronizado com todas as entities actuais
 --
--- Este ficheiro é executado uma única vez ao criar o container PostgreSQL.
--- As colunas enum usam VARCHAR para que o TypeORM (synchronize: true)
--- possa criar os seus próprios tipos enum sem conflito.
--- As PKs são SERIAL INTEGER para corresponder a @PrimaryGeneratedColumn().
+-- Executado UMA VEZ ao criar o container PostgreSQL (data dir vazio).
+-- Colunas enum usam VARCHAR para que o TypeORM (synchronize: true)
+-- possa criar os seus próprios tipos sem conflito.
+-- PKs são SERIAL INTEGER para corresponder a @PrimaryGeneratedColumn().
 -- ============================================================
 
 -- ============================================================
--- LIMPEZA (reset completo)
--- ============================================================
-DROP TABLE IF EXISTS sys_logs            CASCADE;
-DROP TABLE IF EXISTS comissoes           CASCADE;
-DROP TABLE IF EXISTS fatura_linhas       CASCADE;
-DROP TABLE IF EXISTS faturas_v2          CASCADE;
-DROP TABLE IF EXISTS faturas             CASCADE;
-DROP TABLE IF EXISTS encomenda_linhas    CASCADE;
-DROP TABLE IF EXISTS encomendas          CASCADE;
-DROP TABLE IF EXISTS ot_artigos          CASCADE;
-DROP TABLE IF EXISTS ot_maos_obra        CASCADE;
-DROP TABLE IF EXISTS ordens_trabalho     CASCADE;
-DROP TABLE IF EXISTS plano_artigos       CASCADE;
-DROP TABLE IF EXISTS plano_maos_obra     CASCADE;
-DROP TABLE IF EXISTS planos_manutencao   CASCADE;
-DROP TABLE IF EXISTS movimentos_stock    CASCADE;
-DROP TABLE IF EXISTS artigos             CASCADE;
-DROP TABLE IF EXISTS armazens            CASCADE;
-DROP TABLE IF EXISTS equip_historico     CASCADE;
-DROP TABLE IF EXISTS equip_instalados    CASCADE;
-DROP TABLE IF EXISTS modelos_equipamento CASCADE;
-DROP TABLE IF EXISTS maquinas_instaladas CASCADE;
-DROP TABLE IF EXISTS ordens_servico      CASCADE;
-DROP TABLE IF EXISTS fornecedores        CASCADE;
-DROP TABLE IF EXISTS vendedores          CASCADE;
-DROP TABLE IF EXISTS tecnicos            CASCADE;
-DROP TABLE IF EXISTS cliente_enderecos   CASCADE;
-DROP TABLE IF EXISTS clientes            CASCADE;
-DROP TABLE IF EXISTS users               CASCADE;
-DROP TABLE IF EXISTS configuracao_empresa CASCADE;
-DROP TABLE IF EXISTS municipios          CASCADE;
-DROP TABLE IF EXISTS provincias          CASCADE;
-DROP TABLE IF EXISTS paises              CASCADE;
-DROP TABLE IF EXISTS moedas              CASCADE;
-DROP TABLE IF EXISTS funcoes_tecnico     CASCADE;
-DROP TABLE IF EXISTS tipos_documento     CASCADE;
-DROP TABLE IF EXISTS tipos_trabalho      CASCADE;
-DROP TABLE IF EXISTS messages            CASCADE;
-
--- ============================================================
--- TABELAS DE SISTEMA — Lookups (SERIAL PK = @PrimaryGeneratedColumn)
+-- TABELAS DE SISTEMA — Lookups
 -- ============================================================
 
 CREATE TABLE tipos_trabalho (
@@ -73,6 +33,19 @@ INSERT INTO tipos_documento (id, codigo, descricao) VALUES
     (2, 'FP',  'Fatura Pro-Forma');
 SELECT setval('tipos_documento_id_seq', 2);
 
+-- Tipos de OT (geridos em Configurações → Tabelas do Sistema)
+CREATE TABLE tipos_ot (
+    id        SERIAL       PRIMARY KEY,
+    codigo    VARCHAR(20)  NOT NULL UNIQUE,
+    descricao VARCHAR(200) NOT NULL
+);
+INSERT INTO tipos_ot (id, codigo, descricao) VALUES
+    (1, 'PREV', 'Preventiva'),
+    (2, 'CORR', 'Corretiva'),
+    (3, 'MONT', 'Montagem'),
+    (4, 'INSP', 'Inspeção');
+SELECT setval('tipos_ot_id_seq', 4);
+
 CREATE TABLE funcoes_tecnico (
     id        SERIAL        PRIMARY KEY,
     codigo    VARCHAR(20)   NOT NULL UNIQUE,
@@ -86,10 +59,10 @@ INSERT INTO funcoes_tecnico (id, codigo, descricao, custo) VALUES
 SELECT setval('funcoes_tecnico_id_seq', 3);
 
 CREATE TABLE moedas (
-    id        SERIAL      PRIMARY KEY,
-    codigo    VARCHAR(10) NOT NULL UNIQUE,
+    id        SERIAL       PRIMARY KEY,
+    codigo    VARCHAR(10)  NOT NULL UNIQUE,
     descricao VARCHAR(100) NOT NULL,
-    simbolo   VARCHAR(10) NOT NULL
+    simbolo   VARCHAR(10)  NOT NULL
 );
 INSERT INTO moedas (id, codigo, descricao, simbolo) VALUES
     (1, 'AOA', 'Kwanza Angolano', 'Kz'),
@@ -102,7 +75,7 @@ SELECT setval('moedas_id_seq', 3);
 -- ============================================================
 
 CREATE TABLE paises (
-    id     SERIAL      PRIMARY KEY,
+    id     SERIAL       PRIMARY KEY,
     nome   VARCHAR(100) NOT NULL,
     codigo VARCHAR(5)   NOT NULL UNIQUE
 );
@@ -112,7 +85,7 @@ INSERT INTO paises (id, nome, codigo) VALUES
 SELECT setval('paises_id_seq', 2);
 
 CREATE TABLE provincias (
-    id      SERIAL      PRIMARY KEY,
+    id      SERIAL       PRIMARY KEY,
     nome    VARCHAR(100) NOT NULL,
     pais_id INTEGER      NOT NULL REFERENCES paises(id) ON DELETE RESTRICT
 );
@@ -124,7 +97,7 @@ INSERT INTO provincias (id, nome, pais_id) VALUES
 SELECT setval('provincias_id_seq', 4);
 
 CREATE TABLE municipios (
-    id           SERIAL      PRIMARY KEY,
+    id           SERIAL       PRIMARY KEY,
     nome         VARCHAR(100) NOT NULL,
     provincia_id INTEGER      NOT NULL REFERENCES provincias(id) ON DELETE RESTRICT
 );
@@ -140,72 +113,79 @@ SELECT setval('municipios_id_seq', 7);
 
 -- ============================================================
 -- CONFIGURAÇÃO DA EMPRESA (singleton)
+-- Colunas alinhadas com ConfiguracaoEmpresa entity do TypeORM
 -- ============================================================
 CREATE TABLE configuracao_empresa (
-    id                          SERIAL PRIMARY KEY,
-    nome                        VARCHAR(200) NOT NULL,
+    id                          SERIAL        PRIMARY KEY,
+    nome                        VARCHAR(200)  NOT NULL,
     nif                         VARCHAR(20),
     morada                      TEXT,
     telefone                    VARCHAR(30),
     email                       VARCHAR(200),
     website                     VARCHAR(300),
     logo_url                    TEXT,
+    rodape_documentos           TEXT,
     iban                        VARCHAR(100),
     banco                       VARCHAR(100),
-    moeda_padrao                VARCHAR(10)  NOT NULL DEFAULT 'AOA',
-    iva_padrao                  NUMERIC(5,2) NOT NULL DEFAULT 14,
-    updated_at                  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+    meses_manutencao_preventiva INTEGER       NOT NULL DEFAULT 6,
+    dias_alerta_manutencao      INTEGER       NOT NULL DEFAULT 15,
+    moeda                       VARCHAR(10)   NOT NULL DEFAULT 'AOA',
+    fuso_horario                VARCHAR(50)   NOT NULL DEFAULT 'Africa/Luanda',
+    taxa_iva                    NUMERIC(5,2)  NOT NULL DEFAULT 14,
+    latitude                    NUMERIC(10,6),
+    longitude                   NUMERIC(10,6),
+    updated_at                  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
 );
-INSERT INTO configuracao_empresa (nome, nif, telefone, email, morada, iban, banco, moeda_padrao, iva_padrao) VALUES
+INSERT INTO configuracao_empresa
+    (nome, nif, telefone, email, morada, iban, banco, moeda, taxa_iva, fuso_horario)
+VALUES
     ('AQUATEX, LDA', '5000001234', '+244 923 456 789', 'geral@aquatex.co.ao',
-     'Rua Comandante Gika, 45, Luanda', 'AO06 0006 0000 0000 1234 1012', 'Banco BFA', 'AOA', 14);
+     'Rua Comandante Gika, 45, Luanda',
+     'AO06 0006 0000 0000 1234 1012', 'Banco BFA', 'AOA', 14, 'Africa/Luanda');
 
 -- ============================================================
 -- UTILIZADORES  (Auth / RBAC)
 -- Password padrão de seed: aquatex2024
--- Hash gerado com: bcrypt.hashSync('aquatex2024', 10)
 -- ============================================================
 CREATE TABLE users (
-    id            SERIAL       PRIMARY KEY,
-    nome          VARCHAR(150) NOT NULL,
-    email         VARCHAR(200) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    role          VARCHAR(20)  NOT NULL DEFAULT 'campo',
-    ativo         BOOLEAN      NOT NULL DEFAULT TRUE,
-    telefone      VARCHAR(30),
-    reset_token   VARCHAR(100),
+    id                 SERIAL       PRIMARY KEY,
+    nome               VARCHAR(150) NOT NULL,
+    email              VARCHAR(200) NOT NULL UNIQUE,
+    password_hash      VARCHAR(255) NOT NULL,
+    role               VARCHAR(20)  NOT NULL DEFAULT 'campo',
+    ativo              BOOLEAN      NOT NULL DEFAULT TRUE,
+    telefone           VARCHAR(30),
+    reset_token        VARCHAR(100),
     reset_token_expiry TIMESTAMP,
-    created_at    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+    created_at         TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
 );
 INSERT INTO users (id, nome, email, password_hash, role, ativo) VALUES
-    (1, 'Eurico Sapalo',  'admin@aquatex.ao',   '$2b$10$OY6Skmi01TTBGyksi/u1XOGNLkWxIYGeD894IBnOaXgQnn9tnlExS', 'admin',   TRUE),
-    (2, 'Manuel Silva',   'tecnico@aquatex.ao', '$2b$10$OY6Skmi01TTBGyksi/u1XOGNLkWxIYGeD894IBnOaXgQnn9tnlExS', 'campo',   TRUE),
-    (3, 'Sofia Vendas',   'vendas@aquatex.ao',  '$2b$10$OY6Skmi01TTBGyksi/u1XOGNLkWxIYGeD894IBnOaXgQnn9tnlExS', 'vendedor',TRUE);
+    (1, 'Eurico Sapalo', 'admin@aquatex.ao',   '$2b$10$OY6Skmi01TTBGyksi/u1XOGNLkWxIYGeD894IBnOaXgQnn9tnlExS', 'admin',   TRUE),
+    (2, 'Manuel Silva',  'tecnico@aquatex.ao', '$2b$10$OY6Skmi01TTBGyksi/u1XOGNLkWxIYGeD894IBnOaXgQnn9tnlExS', 'campo',   TRUE),
+    (3, 'Sofia Vendas',  'vendas@aquatex.ao',  '$2b$10$OY6Skmi01TTBGyksi/u1XOGNLkWxIYGeD894IBnOaXgQnn9tnlExS', 'vendedor',TRUE);
 SELECT setval('users_id_seq', 3);
 
 -- ============================================================
 -- CLIENTES
 -- ============================================================
 CREATE TABLE clientes (
-    id         SERIAL      PRIMARY KEY,
-    tipo       VARCHAR(20) NOT NULL DEFAULT 'empresa',
+    id         SERIAL       PRIMARY KEY,
+    tipo       VARCHAR(20)  NOT NULL DEFAULT 'empresa',
     nome       VARCHAR(200) NOT NULL,
     nif        VARCHAR(20),
     email      VARCHAR(200),
     telefone   VARCHAR(30),
-    ativo      BOOLEAN     NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP   DEFAULT CURRENT_TIMESTAMP
+    ativo      BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
 );
 
-
--- Endereços dos clientes
 CREATE TABLE cliente_enderecos (
-    id         SERIAL      PRIMARY KEY,
-    cliente_id INTEGER     NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+    id         SERIAL       PRIMARY KEY,
+    cliente_id INTEGER      NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
     descricao  VARCHAR(100),
-    morada     TEXT        NOT NULL DEFAULT '',
+    morada     TEXT         NOT NULL DEFAULT '',
     cidade     VARCHAR(100) NOT NULL DEFAULT '',
-    principal  BOOLEAN     NOT NULL DEFAULT FALSE
+    principal  BOOLEAN      NOT NULL DEFAULT FALSE
 );
 
 -- ============================================================
@@ -223,7 +203,6 @@ CREATE TABLE tecnicos (
     id_user              INTEGER       REFERENCES users(id) ON DELETE SET NULL
 );
 
-
 -- ============================================================
 -- FORNECEDORES
 -- ============================================================
@@ -238,16 +217,15 @@ CREATE TABLE fornecedores (
     created_at TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
 );
 
-
 -- ============================================================
 -- VENDEDORES
 -- ============================================================
 CREATE TABLE vendedores (
-    id                   SERIAL      PRIMARY KEY,
+    id                   SERIAL       PRIMARY KEY,
     nome                 VARCHAR(150) NOT NULL,
     email                VARCHAR(200),
     comissao_percentagem NUMERIC(5,2) NOT NULL DEFAULT 0,
-    id_user              INTEGER     REFERENCES users(id) ON DELETE SET NULL
+    id_user              INTEGER      REFERENCES users(id) ON DELETE SET NULL
 );
 
 -- ============================================================
@@ -264,27 +242,25 @@ CREATE TABLE modelos_equipamento (
 -- PARQUE — EQUIPAMENTOS INSTALADOS
 -- ============================================================
 CREATE TABLE equip_instalados (
-    id                      SERIAL      PRIMARY KEY,
-    cliente_id              INTEGER     NOT NULL REFERENCES clientes(id) ON DELETE RESTRICT,
-    modelo_id               INTEGER     NOT NULL REFERENCES modelos_equipamento(id) ON DELETE RESTRICT,
+    id                      SERIAL       PRIMARY KEY,
+    cliente_id              INTEGER      NOT NULL REFERENCES clientes(id) ON DELETE RESTRICT,
+    modelo_id               INTEGER      NOT NULL REFERENCES modelos_equipamento(id) ON DELETE RESTRICT,
     nr_serie                VARCHAR(100) UNIQUE,
-    data_instalacao         DATE        NOT NULL,
-    estado                  VARCHAR(20) NOT NULL DEFAULT 'ativo',
+    data_instalacao         DATE         NOT NULL,
+    estado                  VARCHAR(20)  NOT NULL DEFAULT 'ativo',
     data_ultima_manutencao  DATE,
     data_proxima_manutencao DATE,
     localizacao             VARCHAR(200)
 );
 
-
--- Histórico de intervenções por equipamento
 CREATE TABLE equip_historico (
-    id                 SERIAL      PRIMARY KEY,
-    equip_instalado_id INTEGER     NOT NULL REFERENCES equip_instalados(id) ON DELETE CASCADE,
-    data               DATE        NOT NULL,
-    tipo               VARCHAR(50) NOT NULL,
-    descricao          TEXT        NOT NULL,
+    id                 SERIAL       PRIMARY KEY,
+    equip_instalado_id INTEGER      NOT NULL REFERENCES equip_instalados(id) ON DELETE CASCADE,
+    data               DATE         NOT NULL,
+    tipo               VARCHAR(50)  NOT NULL,
+    descricao          TEXT         NOT NULL,
     tecnico            VARCHAR(150),
-    estado             VARCHAR(50) NOT NULL DEFAULT 'concluida',
+    estado             VARCHAR(50)  NOT NULL DEFAULT 'concluida',
     observacoes        TEXT
 );
 
@@ -299,9 +275,9 @@ CREATE TABLE armazens (
     ativo     BOOLEAN      NOT NULL DEFAULT TRUE
 );
 INSERT INTO armazens (id, codigo, nome, descricao, ativo) VALUES
-    (1, 'ARM-01', 'Armazém Principal',  'Armazém central de consumíveis e peças',     TRUE),
-    (2, 'ARM-02', 'Armazém Secundário', 'Armazém de material eléctrico e UV',          TRUE),
-    (3, 'ARM-03', 'Armazém Campo',      'Stock de apoio às equipas de campo',          TRUE);
+    (1, 'ARM-01', 'Armazém Principal',  'Armazém central de consumíveis e peças',    TRUE),
+    (2, 'ARM-02', 'Armazém Secundário', 'Armazém de material eléctrico e UV',         TRUE),
+    (3, 'ARM-03', 'Armazém Campo',      'Stock de apoio às equipas de campo',         TRUE);
 SELECT setval('armazens_id_seq', 3);
 
 -- ============================================================
@@ -326,34 +302,31 @@ CREATE TABLE artigos (
     observacao      TEXT
 );
 
-
--- Movimentos de stock
 CREATE TABLE movimentos_stock (
-    id                SERIAL      PRIMARY KEY,
-    artigo_id         INTEGER     REFERENCES artigos(id) ON DELETE RESTRICT,
-    tipo              VARCHAR(20) NOT NULL,
-    quantidade        NUMERIC(12,3) NOT NULL,
-    armazem_id        VARCHAR(20),
+    id                 SERIAL        PRIMARY KEY,
+    artigo_id          INTEGER       REFERENCES artigos(id) ON DELETE RESTRICT,
+    tipo               VARCHAR(20)   NOT NULL,
+    quantidade         NUMERIC(12,3) NOT NULL,
+    armazem_id         VARCHAR(20),
     armazem_destino_id VARCHAR(20),
-    referencia        VARCHAR(100),
-    usuario           VARCHAR(200),
-    observacao        TEXT,
-    data              TIMESTAMP   DEFAULT CURRENT_TIMESTAMP
+    referencia         VARCHAR(100),
+    usuario            VARCHAR(200),
+    observacao         TEXT,
+    data               TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================================
 -- PLANOS DE MANUTENÇÃO
 -- ============================================================
 CREATE TABLE planos_manutencao (
-    id                 SERIAL        PRIMARY KEY,
-    equip_instalado_id INTEGER       NOT NULL REFERENCES equip_instalados(id) ON DELETE CASCADE,
-    descricao          TEXT          NOT NULL,
-    tipo_trabalho_id   INTEGER       REFERENCES tipos_trabalho(id) ON DELETE SET NULL,
-    periodicidade      VARCHAR(50)   NOT NULL,
-    previsao_tempo     NUMERIC(5,2)  NOT NULL DEFAULT 1,
-    ativo              BOOLEAN       NOT NULL DEFAULT TRUE
+    id                 SERIAL       PRIMARY KEY,
+    equip_instalado_id INTEGER      NOT NULL REFERENCES equip_instalados(id) ON DELETE CASCADE,
+    descricao          TEXT         NOT NULL,
+    tipo_trabalho_id   INTEGER      REFERENCES tipos_trabalho(id) ON DELETE SET NULL,
+    periodicidade      VARCHAR(50)  NOT NULL,
+    previsao_tempo     NUMERIC(5,2) NOT NULL DEFAULT 1,
+    ativo              BOOLEAN      NOT NULL DEFAULT TRUE
 );
-
 
 CREATE TABLE plano_maos_obra (
     id        SERIAL        PRIMARY KEY,
@@ -362,29 +335,29 @@ CREATE TABLE plano_maos_obra (
     custo     NUMERIC(12,2) NOT NULL DEFAULT 0
 );
 
-
 CREATE TABLE plano_artigos (
-    id        SERIAL        PRIMARY KEY,
-    plano_id  INTEGER       NOT NULL REFERENCES planos_manutencao(id) ON DELETE CASCADE,
-    artigo_id INTEGER       NOT NULL REFERENCES artigos(id) ON DELETE RESTRICT,
+    id         SERIAL        PRIMARY KEY,
+    plano_id   INTEGER       NOT NULL REFERENCES planos_manutencao(id) ON DELETE CASCADE,
+    artigo_id  INTEGER       NOT NULL REFERENCES artigos(id) ON DELETE RESTRICT,
     quantidade NUMERIC(12,3) NOT NULL DEFAULT 1,
-    preco     NUMERIC(12,2) NOT NULL DEFAULT 0
+    preco      NUMERIC(12,2) NOT NULL DEFAULT 0
 );
-
 
 -- ============================================================
 -- ORDENS DE TRABALHO
+-- Alinhado com OrdemTrabalho entity (inclui tipo_ot e reprogramacoes)
 -- ============================================================
 CREATE TABLE ordens_trabalho (
-    id                 SERIAL      PRIMARY KEY,
-    tipo               VARCHAR(20) NOT NULL DEFAULT 'pontual',
-    equip_instalado_id INTEGER     REFERENCES equip_instalados(id) ON DELETE SET NULL,
-    cliente_id         INTEGER     REFERENCES clientes(id) ON DELETE RESTRICT,
-    descricao          TEXT        NOT NULL DEFAULT '',
+    id                 SERIAL       PRIMARY KEY,
+    tipo               VARCHAR(20)  NOT NULL DEFAULT 'pontual',
+    cliente_id         INTEGER      REFERENCES clientes(id) ON DELETE RESTRICT,
+    equip_instalado_id INTEGER      REFERENCES equip_instalados(id) ON DELETE SET NULL,
+    plano_id           INTEGER      REFERENCES planos_manutencao(id) ON DELETE SET NULL,
+    tipo_trabalho      VARCHAR(100),
+    tipo_ot            VARCHAR(100),
+    descricao          TEXT         NOT NULL DEFAULT '',
     previsao_tempo     NUMERIC(5,2) NOT NULL DEFAULT 1,
     periodicidade      VARCHAR(50),
-    plano_id           INTEGER     REFERENCES planos_manutencao(id) ON DELETE SET NULL,
-    tipo_trabalho      VARCHAR(100),
     responsavel        VARCHAR(150),
     orgao              VARCHAR(150),
     sintoma            TEXT,
@@ -395,46 +368,53 @@ CREATE TABLE ordens_trabalho (
     data_inicio        DATE,
     data_fim           DATE,
     data_encerramento  DATE,
-    estado             VARCHAR(20) NOT NULL DEFAULT 'Programado'
+    estado             VARCHAR(20)  NOT NULL DEFAULT 'Programado'
 );
-
 
 CREATE TABLE ot_maos_obra (
-    id    SERIAL        PRIMARY KEY,
-    ot_id INTEGER       NOT NULL REFERENCES ordens_trabalho(id) ON DELETE CASCADE,
-    funcao VARCHAR(100) NOT NULL,
-    custo NUMERIC(12,2) NOT NULL DEFAULT 0,
-    hora  VARCHAR(10)
+    id     SERIAL        PRIMARY KEY,
+    ot_id  INTEGER       NOT NULL REFERENCES ordens_trabalho(id) ON DELETE CASCADE,
+    funcao VARCHAR(100)  NOT NULL,
+    custo  NUMERIC(12,2) NOT NULL DEFAULT 0,
+    hora   VARCHAR(10)
 );
-
 
 CREATE TABLE ot_artigos (
-    id        SERIAL        PRIMARY KEY,
-    ot_id     INTEGER       NOT NULL REFERENCES ordens_trabalho(id) ON DELETE CASCADE,
-    artigo_id INTEGER       REFERENCES artigos(id) ON DELETE SET NULL,
-    descricao VARCHAR(300)  NOT NULL,
+    id         SERIAL        PRIMARY KEY,
+    ot_id      INTEGER       NOT NULL REFERENCES ordens_trabalho(id) ON DELETE CASCADE,
+    artigo_id  INTEGER       REFERENCES artigos(id) ON DELETE SET NULL,
+    descricao  VARCHAR(300)  NOT NULL,
     quantidade NUMERIC(12,3) NOT NULL DEFAULT 1,
-    preco     NUMERIC(12,2) NOT NULL DEFAULT 0
+    preco      NUMERIC(12,2) NOT NULL DEFAULT 0
 );
 
+-- Histórico de reprogramações de OT
+CREATE TABLE ot_reprogramacoes (
+    id              SERIAL       PRIMARY KEY,
+    ordem_trabalho_id INTEGER    NOT NULL REFERENCES ordens_trabalho(id) ON DELETE CASCADE,
+    data_anterior   DATE,
+    nova_data       DATE,
+    motivo          TEXT         NOT NULL DEFAULT '',
+    usuario         VARCHAR(200) NOT NULL DEFAULT 'sistema',
+    criado_em       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
+);
 
 -- ============================================================
 -- ENCOMENDAS A FORNECEDORES
 -- ============================================================
 CREATE TABLE encomendas (
-    id                  SERIAL      PRIMARY KEY,
-    numero              VARCHAR(50) NOT NULL UNIQUE,
-    fornecedor_id       INTEGER     REFERENCES fornecedores(id) ON DELETE RESTRICT,
-    data                DATE        NOT NULL,
+    id                  SERIAL       PRIMARY KEY,
+    numero              VARCHAR(50)  NOT NULL UNIQUE,
+    fornecedor_id       INTEGER      REFERENCES fornecedores(id) ON DELETE RESTRICT,
+    data                DATE         NOT NULL,
     data_entrega        DATE,
     condicoes_pagamento VARCHAR(100),
     responsavel         VARCHAR(150),
-    moeda               VARCHAR(10) NOT NULL DEFAULT 'AOA',
+    moeda               VARCHAR(10)  NOT NULL DEFAULT 'AOA',
     descricao           TEXT,
     observacoes         TEXT,
-    estado              VARCHAR(20) NOT NULL DEFAULT 'Aberta'
+    estado              VARCHAR(20)  NOT NULL DEFAULT 'Aberta'
 );
-
 
 CREATE TABLE encomenda_linhas (
     id              SERIAL        PRIMARY KEY,
@@ -449,10 +429,8 @@ CREATE TABLE encomenda_linhas (
     desconto        NUMERIC(5,2)  NOT NULL DEFAULT 0
 );
 
-
 -- ============================================================
--- FATURAÇÃO (tabela nova — faturas_v2 — gerida pelo TypeORM FaturaNew entity)
--- O TypeORM cria esta tabela automaticamente. Inserimos seed aqui para ter dados.
+-- FATURAÇÃO
 -- ============================================================
 CREATE TABLE faturas_v2 (
     id              SERIAL        PRIMARY KEY,
@@ -482,7 +460,6 @@ CREATE TABLE fatura_linhas (
     preco_unit NUMERIC(12,2) NOT NULL DEFAULT 0
 );
 
-
 -- ============================================================
 -- COMISSÕES
 -- ============================================================
@@ -500,17 +477,17 @@ CREATE TABLE comissoes (
 -- LOGS DE SISTEMA
 -- ============================================================
 CREATE TABLE sys_logs (
-    id        SERIAL      PRIMARY KEY,
-    timestamp TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+    id        SERIAL       PRIMARY KEY,
+    timestamp TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     usuario   VARCHAR(200),
     modulo    VARCHAR(100),
     acao      VARCHAR(200),
     detalhes  TEXT,
-    tipo      VARCHAR(20) NOT NULL DEFAULT 'info'
+    tipo      VARCHAR(20)  NOT NULL DEFAULT 'info'
 );
 
 -- ============================================================
--- ÍNDICES  (performance em pesquisas frequentes)
+-- ÍNDICES
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_equip_instalados_cliente  ON equip_instalados(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_equip_instalados_estado   ON equip_instalados(estado);
@@ -520,6 +497,7 @@ CREATE INDEX IF NOT EXISTS idx_ordens_trabalho_equip     ON ordens_trabalho(equi
 CREATE INDEX IF NOT EXISTS idx_ordens_trabalho_prog      ON ordens_trabalho(data_prog_inicio);
 CREATE INDEX IF NOT EXISTS idx_ot_artigos_ot             ON ot_artigos(ot_id);
 CREATE INDEX IF NOT EXISTS idx_ot_maos_obra_ot           ON ot_maos_obra(ot_id);
+CREATE INDEX IF NOT EXISTS idx_ot_reprogramacoes_ot      ON ot_reprogramacoes(ordem_trabalho_id);
 CREATE INDEX IF NOT EXISTS idx_faturas_v2_cliente        ON faturas_v2(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_faturas_v2_estado         ON faturas_v2(estado);
 CREATE INDEX IF NOT EXISTS idx_encomenda_linhas_enc      ON encomenda_linhas(encomenda_id);
@@ -530,8 +508,6 @@ CREATE INDEX IF NOT EXISTS idx_sys_logs_timestamp        ON sys_logs(timestamp D
 CREATE INDEX IF NOT EXISTS idx_sys_logs_usuario          ON sys_logs(usuario);
 
 -- ============================================================
--- NOTA: TypeORM (synchronize: true) irá verificar este schema
--- e ajustar colunas se necessário (ex: adicionar colunas em falta,
--- alterar constraints). Os dados de seed acima ficam preservados.
--- Credenciais de seed: email admin@aquatex.ao / password aquatex2024
+-- FIM
+-- Credenciais: admin@aquatex.ao / aquatex2024
 -- ============================================================

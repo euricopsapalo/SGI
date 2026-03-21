@@ -74,6 +74,18 @@ export class ConfiguracaoEmpresa {
     @Column({ name: 'fuso_horario', length: 50, default: 'Europe/Lisbon' })
     fusoHorario: string;
 
+    /** Taxa de IVA padrão (%) usada em faturas */
+    @Column({ name: 'taxa_iva', type: 'numeric', precision: 5, scale: 2, default: 14 })
+    taxaIva: number;
+
+    /** Latitude da empresa (para faturas e documentos) */
+    @Column({ type: 'numeric', precision: 10, scale: 6, nullable: true })
+    latitude: number;
+
+    /** Longitude da empresa (para faturas e documentos) */
+    @Column({ type: 'numeric', precision: 10, scale: 6, nullable: true })
+    longitude: number;
+
     @UpdateDateColumn({ name: 'updated_at' })
     updatedAt: Date;
 }

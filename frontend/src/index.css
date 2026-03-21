@@ -182,6 +182,10 @@ a:hover {
   }
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 @keyframes scaleIn {
   from {
     opacity: 0;
@@ -816,7 +820,8 @@ a:hover {
   color: var(--blue);
 }
 
-.icon-btn.danger:hover {
+.icon-btn.danger:hover,
+.icon-btn-danger:hover {
   background: var(--red-bg);
   border-color: #FFCDD2;
   color: var(--red);
