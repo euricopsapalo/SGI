@@ -26,12 +26,14 @@ export interface Cliente {
 export interface Tecnico {
     id: string; nome: string; telefone: string; email: string;
     funcaoId: string; custoHora: number; ativo: boolean;
+    provinciaId?: string; municipioId?: string;
 }
 export interface CurrentUser { nome: string; email: string; role: string; tecnicoId?: string; tecnicoNome?: string; }
 export interface SysLog { id: string; timestamp: string; usuario: string; modulo: string; acao: string; detalhes: string; tipo: 'info' | 'warning' | 'error'; }
 export interface Fornecedor {
     id: string; nome: string; nif: string; telefone: string;
     email: string; morada: string; ativo: boolean;
+    provinciaId?: string; municipioId?: string;
 }
 
 // ── Equipment (Parque) ─────────────────────────────────────

@@ -32,6 +32,12 @@ export class Tecnico {
     @Column({ default: true })
     ativo: boolean;
 
+    @Column({ name: 'provincia_id', nullable: true })
+    provinciaId: number;
+
+    @Column({ name: 'municipio_id', nullable: true })
+    municipioId: number;
+
     @Column({
         name: 'comissao_por_servico',
         type: 'numeric',

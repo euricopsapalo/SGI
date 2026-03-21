@@ -18,6 +18,8 @@ export interface Endereco {
     morada: string;
     cidade: string;
     principal: boolean;
+    provinciaId?: string;
+    municipioId?: string;
 }
 
 export interface Cliente {
@@ -47,7 +49,7 @@ type FormData = {
     enderecos: Endereco[];
 };
 
-const BLANK_END: Endereco = { descricao: '', morada: '', cidade: '', principal: true };
+const BLANK_END: Endereco = { descricao: '', morada: '', cidade: '', principal: true, provinciaId: '', municipioId: '' };
 const BLANK: FormData = { tipo: 'empresa', nome: '', nif: '', email: '', telefone: '', ativo: true, enderecos: [{ ...BLANK_END }] };
 
 /* ══════════════════════════════════════════
@@ -80,6 +82,7 @@ interface ModalProps { initial: Cliente | null; onClose: () => void; onSave: (da
 
 const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
     const isEdit = Boolean(initial);
+    const { provincias, municipios } = useGlobal();
     const [form, setForm] = useState<FormData>(BLANK);
     const [errors, setErrors] = useState<FormErrors>({});
     const [endErrors, setEndErrors] = useState<EndErrors>([]);
@@ -91,7 +94,11 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
                 email: initial.email ?? '', telefone: initial.telefone ?? '',
                 ativo: initial.ativo ?? true,
                 enderecos: (initial.enderecos ?? []).length > 0
-                    ? initial.enderecos.map(e => ({ ...e }))
+                    ? initial.enderecos.map(e => ({
+                        ...e,
+                        provinciaId: e.provinciaId ? String(e.provinciaId) : '',
+                        municipioId: e.municipioId ? String(e.municipioId) : '',
+                    }))
                     : [{ ...BLANK_END }],
             });
         } else {
@@ -108,6 +115,18 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
         setForm(p => ({
             ...p,
             enderecos: p.enderecos.map((en, idx) => idx === i ? { ...en, [field]: e.target.value } : en),
+        }));
+
+    const setEndProv = (i: number, provId: string) =>
+        setForm(p => ({
+            ...p,
+            enderecos: p.enderecos.map((en, idx) => idx === i ? { ...en, provinciaId: provId, municipioId: '' } : en),
+        }));
+
+    const setEndMun = (i: number, munId: string) =>
+        setForm(p => ({
+            ...p,
+            enderecos: p.enderecos.map((en, idx) => idx === i ? { ...en, municipioId: munId } : en),
         }));
 
     const setPrincipal = (i: number) =>
@@ -284,6 +303,23 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
                                                 placeholder="Cidade"
                                             />
                                             {endErrors[i]?.cidade && <span className="form-error"><AlertCircle size={11} /> {endErrors[i]!.cidade}</span>}
+                                        </div>
+                                    </div>
+                                    <div className="form-row" style={{ marginBottom: 0, marginTop: 6 }}>
+                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                            <select className="form-select" value={en.provinciaId ?? ''}
+                                                onChange={e => setEndProv(i, e.target.value)}>
+                                                <option value="">Província...</option>
+                                                {provincias.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="form-group" style={{ marginBottom: 0 }}>
+                                            <select className="form-select" value={en.municipioId ?? ''}
+                                                onChange={e => setEndMun(i, e.target.value)}
+                                                disabled={!en.provinciaId}>
+                                                <option value="">Município...</option>
+                                                {municipios.filter(m => m.provinciaId === en.provinciaId).map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
+                                            </select>
                                         </div>
                                     </div>
                                 </div>

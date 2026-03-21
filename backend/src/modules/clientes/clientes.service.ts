@@ -35,20 +35,23 @@ export class ClientesService {
     }
 
     async update(id: number, body: any) {
-        const enderecos = body.enderecos;
-        // Only validate contact/address if they are being supplied in the update
-        if (enderecos !== undefined) {
-            this.validate(body);
-        } else if (body.telefone !== undefined || body.email !== undefined) {
-            const existing = await this.findOne(id);
-            const telefone = body.telefone ?? existing?.telefone;
-            const email = body.email ?? existing?.email;
-            if (!telefone?.trim() && !email?.trim()) {
-                throw new BadRequestException('O cliente deve ter pelo menos um contacto (telefone ou email).');
+        this.validate(body);
+        const { enderecos, ...scalar } = body;
+        await this.repo.update(id, scalar);
+        if (Array.isArray(enderecos)) {
+            await this.dataSource.query(
+                `DELETE FROM cliente_enderecos WHERE cliente_id = $1`, [id],
+            );
+            for (const e of enderecos) {
+                await this.dataSource.query(
+                    `INSERT INTO cliente_enderecos
+                        (cliente_id, descricao, morada, cidade, principal, provincia_id, municipio_id)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                    [id, e.descricao ?? null, e.morada, e.cidade, e.principal ?? false,
+                     e.provinciaId ?? null, e.municipioId ?? null],
+                );
             }
         }
-        const { enderecos: _, ...rest } = body;
-        await this.repo.update(id, rest);
         return this.findOne(id);
     }
 

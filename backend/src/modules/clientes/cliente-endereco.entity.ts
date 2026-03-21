@@ -24,6 +24,12 @@ export class ClienteEndereco {
     @Column({ default: false })
     principal: boolean;
 
+    @Column({ name: 'provincia_id', nullable: true })
+    provinciaId: number;
+
+    @Column({ name: 'municipio_id', nullable: true })
+    municipioId: number;
+
     @ManyToOne(() => Cliente, (c) => c.enderecos, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'cliente_id' })
     cliente: Cliente;

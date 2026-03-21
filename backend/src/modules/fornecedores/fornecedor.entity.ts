@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
 
 @Entity('fornecedores')
 export class Fornecedor {
@@ -22,6 +22,12 @@ export class Fornecedor {
 
     @Column({ default: true })
     ativo: boolean;
+
+    @Column({ name: 'provincia_id', nullable: true })
+    provinciaId: number;
+
+    @Column({ name: 'municipio_id', nullable: true })
+    municipioId: number;
 
     @CreateDateColumn({ name: 'created_at' })
     createdAt: Date;
