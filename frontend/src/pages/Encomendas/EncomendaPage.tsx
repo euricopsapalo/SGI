@@ -3,7 +3,7 @@ import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
 import {
-    useGlobal, Encomenda, EncomendaLinha, EncomendaEstado, EMPRESA_INFO, EmpresaConfig, Artigo,
+    useGlobal, Encomenda, EncomendaLinha, EncomendaEstado, EmpresaConfig, Artigo,
     Rececao, RececaoItem,
 } from '../../contexts/GlobalContext';
 import {
@@ -154,7 +154,7 @@ const ReceberModal: React.FC<ReceberModalProps> = ({ encomenda, onClose, onConfi
 
 /* ══ Print Nota de Encomenda — abre janela A4 ══════════════ */
 function printNotaEncomenda(encomenda: Encomenda, fornecedorNome: string, empresa?: EmpresaConfig) {
-    const emp = empresa ?? { nome: EMPRESA_INFO.nome, nif: EMPRESA_INFO.nif, morada: EMPRESA_INFO.morada, telefone: EMPRESA_INFO.telefone, email: EMPRESA_INFO.email, iban: EMPRESA_INFO.iban, banco: EMPRESA_INFO.banco, moeda: EMPRESA_INFO.moeda, taxaIva: EMPRESA_INFO.ivaDefault };
+    const emp = empresa ?? {} as EmpresaConfig;
     const total = encTotal(encomenda);
 
     // Stamp config per estado
@@ -333,7 +333,7 @@ function printNotaEntrada(
     encomenda: Encomenda,
     empresa?: EmpresaConfig,
 ) {
-    const emp = empresa ?? { nome: EMPRESA_INFO.nome, nif: EMPRESA_INFO.nif, morada: EMPRESA_INFO.morada, telefone: EMPRESA_INFO.telefone, email: EMPRESA_INFO.email };
+    const emp = empresa ?? {} as EmpresaConfig;
     const dataHora = new Date(rececao.dataHora).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
     const todasGuias = encomenda.rececoes
@@ -999,7 +999,7 @@ const ConverterModal: React.FC<ConverterModalProps> = ({ artigos, onClose, onCon
 
 /* ══ Print Sugestões ═════════════════════════════════════════ */
 function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig) {
-    const emp = empresa ?? { nome: EMPRESA_INFO.nome, nif: EMPRESA_INFO.nif, morada: EMPRESA_INFO.morada };
+    const emp = empresa ?? {} as EmpresaConfig;
     const today = new Date().toLocaleDateString('pt-PT');
     const rows = artigos.map(a => {
         const disp = a.stockDisponivel ?? Math.max(0, a.existencia - a.stockReservado);

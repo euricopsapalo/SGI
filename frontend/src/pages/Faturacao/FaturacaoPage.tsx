@@ -3,7 +3,7 @@ import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
 import {
-    useGlobal, EMPRESA_INFO,
+    useGlobal,
     Fatura, FaturaEstado, FaturaLinha, EmpresaConfig,
 } from '../../contexts/GlobalContext';
 import {

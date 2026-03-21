@@ -159,11 +159,10 @@ export interface EmpresaConfig {
 /* ══════════════════════════════════════════════════════════════
    COMPANY INFO (fallback — replaced by empresaConfig from API)
 ══════════════════════════════════════════════════════════════ */
-export const EMPRESA_INFO = {
-    nome: 'AQUATEX, LDA', nif: '5000001234',
-    telefone: '+244 923 456 789', email: 'geral@aquatex.co.ao',
-    morada: 'Rua Comandante Gika, 45, Luanda', iban: 'AO06 0006 0000 0000 1234 1012',
-    banco: 'Banco BFA', ivaDefault: 14, moeda: 'AOA',
+/** @deprecated Use empresaConfig from useGlobal() — all company data comes from the backend */
+const EMPRESA_INFO_EMPTY: EmpresaConfig = {
+    nome: '', nif: '', morada: '', telefone: '', email: '',
+    iban: '', banco: '', moeda: 'AOA', taxaIva: 0,
 };
 
 /* ══════════════════════════════════════════════════════════════
@@ -351,13 +350,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             .catch(() => {});
     };
 
-    const [taxaIvaGlobal, setTaxaIvaGlobal] = useState<number>(EMPRESA_INFO.ivaDefault);
-    const [empresaConfig, setEmpresaConfig] = useState<EmpresaConfig>({
-        nome: EMPRESA_INFO.nome, nif: EMPRESA_INFO.nif, morada: EMPRESA_INFO.morada,
-        telefone: EMPRESA_INFO.telefone, email: EMPRESA_INFO.email,
-        iban: EMPRESA_INFO.iban, banco: EMPRESA_INFO.banco,
-        moeda: EMPRESA_INFO.moeda, taxaIva: EMPRESA_INFO.ivaDefault,
-    });
+    const [taxaIvaGlobal, setTaxaIvaGlobal] = useState<number>(0);
+    const [empresaConfig, setEmpresaConfig] = useState<EmpresaConfig>(EMPRESA_INFO_EMPTY);
     const [tiposTrabalho, setTiposTrabalho] = useState<TipoTrabalho[]>([]);
     const [tiposDocumento, setTiposDocumento] = useState<TipoDocumento[]>([]);
     const [tiposOT, setTiposOT] = useState<TipoOT[]>([]);
@@ -444,13 +438,13 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         id: c.id?.toString(), nome: c.nome, nif: c.nif ?? '', morada: c.morada ?? '',
                         telefone: c.telefone ?? '', email: c.email ?? '', website: c.website,
                         logoUrl: c.logoUrl, iban: c.iban ?? '', banco: c.banco ?? '',
-                        moeda: c.moeda ?? 'AOA', taxaIva: Number(c.taxaIva ?? 14),
+                        moeda: c.moeda ?? 'AOA', taxaIva: Number(c.taxaIva ?? 0),
                         latitude: c.latitude ? Number(c.latitude) : undefined,
                         longitude: c.longitude ? Number(c.longitude) : undefined,
                         rodapeDocumentos: c.rodapeDocumentos,
                     };
                     setEmpresaConfig(ec);
-                    setTaxaIvaGlobal(Number(c.taxaIva ?? 14));
+                    setTaxaIvaGlobal(Number(c.taxaIva ?? 0));
                 }
             } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -784,13 +778,13 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 id: data.id?.toString(), nome: data.nome, nif: data.nif ?? '', morada: data.morada ?? '',
                 telefone: data.telefone ?? '', email: data.email ?? '', website: data.website,
                 logoUrl: data.logoUrl, iban: data.iban ?? '', banco: data.banco ?? '',
-                moeda: data.moeda ?? 'AOA', taxaIva: Number(data.taxaIva ?? 14),
+                moeda: data.moeda ?? 'AOA', taxaIva: Number(data.taxaIva ?? 0),
                 latitude: data.latitude ? Number(data.latitude) : undefined,
                 longitude: data.longitude ? Number(data.longitude) : undefined,
                 rodapeDocumentos: data.rodapeDocumentos,
             };
             setEmpresaConfig(ec);
-            setTaxaIvaGlobal(Number(data.taxaIva ?? 14));
+            setTaxaIvaGlobal(Number(data.taxaIva ?? 0));
         } catch (e) { console.error('updateEmpresaConfig error', e); throw e; }
     };
 
