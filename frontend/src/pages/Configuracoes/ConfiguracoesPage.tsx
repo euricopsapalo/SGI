@@ -152,7 +152,13 @@ const ConfiguracoesPage: React.FC = () => {
         rodapeDocumentos: empresaConfig.rodapeDocumentos ?? '',
         logo: empresaConfig.logoUrl ?? null,
     }));
-    const [moeda, setMoeda] = useState(initMoeda);
+    const [moeda, setMoeda] = useState(() => ({
+        ...initMoeda,
+        currency: empresaConfig.moeda || initMoeda.currency,
+        symbol: CURRENCIES.find(c => c.code === (empresaConfig.moeda || initMoeda.currency))?.symbol ?? initMoeda.symbol,
+        decimals: empresaConfig.casasDecimais !== undefined ? String(empresaConfig.casasDecimais) : initMoeda.decimals,
+        dateFormat: empresaConfig.formatoData || initMoeda.dateFormat,
+    }));
     const [comissoes, setComissoes] = useState(initComissoes);
     const [seguranca, setSeguranca] = useState(initSeguranca);
     const [dirty, setDirty] = useState(false);
@@ -184,6 +190,9 @@ const ConfiguracoesPage: React.FC = () => {
                 longitude: empresa.longitude ? Number(empresa.longitude) : undefined,
                 rodapeDocumentos: empresa.rodapeDocumentos,
                 logoUrl: empresa.logo ?? undefined,
+                moeda: moeda.currency,
+                casasDecimais: Number(moeda.decimals),
+                formatoData: moeda.dateFormat,
             });
         } catch (e) { console.error('save empresa error', e); }
         setDirty(false);
@@ -202,7 +211,13 @@ const ConfiguracoesPage: React.FC = () => {
             rodapeDocumentos: empresaConfig.rodapeDocumentos ?? '',
             logo: empresaConfig.logoUrl ?? null,
         });
-        setMoeda(initMoeda);
+        setMoeda({
+            ...initMoeda,
+            currency: empresaConfig.moeda || initMoeda.currency,
+            symbol: CURRENCIES.find(c => c.code === (empresaConfig.moeda || initMoeda.currency))?.symbol ?? initMoeda.symbol,
+            decimals: empresaConfig.casasDecimais !== undefined ? String(empresaConfig.casasDecimais) : initMoeda.decimals,
+            dateFormat: empresaConfig.formatoData || initMoeda.dateFormat,
+        });
         setComissoes(initComissoes); setSeguranca(initSeguranca);
         setDirty(false);
     };

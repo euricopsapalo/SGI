@@ -78,6 +78,14 @@ export class ConfiguracaoEmpresa {
     @Column({ name: 'taxa_iva', type: 'numeric', precision: 5, scale: 2, default: 14 })
     taxaIva: number;
 
+    /** Número de casas decimais para formatação de valores monetários (ex: 2) */
+    @Column({ name: 'casas_decimais', type: 'int', default: 2 })
+    casasDecimais: number;
+
+    /** Formato de apresentação de datas (ex: DD/MM/YYYY) */
+    @Column({ name: 'formato_data', length: 20, default: 'DD/MM/YYYY' })
+    formatoData: string;
+
     /** Latitude da empresa (para faturas e documentos) */
     @Column({ type: 'numeric', precision: 10, scale: 6, nullable: true })
     latitude: number;

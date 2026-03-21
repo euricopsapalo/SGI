@@ -153,7 +153,7 @@ export interface EmpresaConfig {
     id?: string; nome: string; nif: string; morada: string; telefone: string;
     email: string; website?: string; logoUrl?: string; iban: string; banco: string;
     moeda: string; taxaIva: number; latitude?: number; longitude?: number;
-    rodapeDocumentos?: string;
+    rodapeDocumentos?: string; casasDecimais?: number; formatoData?: string;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -442,6 +442,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         latitude: c.latitude ? Number(c.latitude) : undefined,
                         longitude: c.longitude ? Number(c.longitude) : undefined,
                         rodapeDocumentos: c.rodapeDocumentos,
+                        casasDecimais: c.casasDecimais !== undefined ? Number(c.casasDecimais) : 2,
+                        formatoData: c.formatoData ?? 'DD/MM/YYYY',
                     };
                     setEmpresaConfig(ec);
                     setTaxaIvaGlobal(Number(c.taxaIva ?? 0));
@@ -782,6 +784,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 latitude: data.latitude ? Number(data.latitude) : undefined,
                 longitude: data.longitude ? Number(data.longitude) : undefined,
                 rodapeDocumentos: data.rodapeDocumentos,
+                casasDecimais: data.casasDecimais !== undefined ? Number(data.casasDecimais) : 2,
+                formatoData: data.formatoData ?? 'DD/MM/YYYY',
             };
             setEmpresaConfig(ec);
             setTaxaIvaGlobal(Number(data.taxaIva ?? 0));
