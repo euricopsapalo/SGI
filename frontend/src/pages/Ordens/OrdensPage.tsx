@@ -22,7 +22,20 @@ const ESTADO_CONFIG: Record<OTEstado, { dot: string; label: string; icon: React.
 };
 const PERIOD_OPTIONS = ['Mensal', 'Trimestral', 'Semestral', 'Anual', 'Única'];
 
-const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('pt-PT') : '—';
+/** fmtDate para uso em printOT (fora do React) — recebe formatoData da empresa */
+function makePrintDate(formatoData?: string) {
+    return (d?: string): string => {
+        if (!d) return '—';
+        const dt = new Date(d);
+        if (isNaN(dt.getTime())) return '—';
+        const dd = String(dt.getDate()).padStart(2, '0');
+        const mm = String(dt.getMonth() + 1).padStart(2, '0');
+        const yyyy = String(dt.getFullYear());
+        if (formatoData === 'YYYY-MM-DD') return `${yyyy}-${mm}-${dd}`;
+        if (formatoData === 'MM/DD/YYYY') return `${mm}/${dd}/${yyyy}`;
+        return `${dd}/${mm}/${yyyy}`;
+    };
+}
 const today = () => new Date().toISOString().split('T')[0];
 
 const COLS_OT: ExportCol[] = [
@@ -42,7 +55,10 @@ function printOT(
     equipInstalados: EquipInstalado[],
     modelosEquipamento: ModeloEquipamento[],
     clientes: Cliente[],
+    empresa?: import('../../contexts/GlobalContext').EmpresaConfig,
+    simbolo?: string,
 ) {
+    const fmtDate = makePrintDate(empresa?.formatoData);
     const equip = equipInstalados.find(e => e.id === ot.equipInstaladoId);
     const mod   = modelosEquipamento.find(m => m.id === equip?.modeloId)?.nome ?? '—';
     const cli   = clientes.find(c => c.id === ot.clienteId)?.nome ?? '—';
@@ -154,7 +170,7 @@ interface OTFormProps {
 }
 
 const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTerminar, onEncerrar, readOnly }) => {
-    const { equipInstalados, clientes, modelosEquipamento, planos, tiposTrabalho, tiposOT, funcoesTecnico, artigos: catalog, tecnicos, currentUser, taxaIvaGlobal } = useGlobal();
+    const { equipInstalados, clientes, modelosEquipamento, planos, tiposTrabalho, tiposOT, funcoesTecnico, artigos: catalog, tecnicos, currentUser, taxaIvaGlobal, fmtMoney, fmtDate, fmt, simboloMoeda, empresaConfig } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
     const [tab, setTab] = useState<'origem' | 'maos' | 'artigos' | 'diagnostico' | 'gestao'>('origem');
 
@@ -329,7 +345,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
     const canEncerrar = estado === 'Terminado';
 
     const handlePrint = () => {
-        if (ot) printOT(ot, equipInstalados, modelosEquipamento, clientes);
+        if (ot) printOT(ot, equipInstalados, modelosEquipamento, clientes, empresaConfig, simboloMoeda);
     };
 
     return (
@@ -491,20 +507,19 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
                                     const subtotal = arts.reduce((s, a) => s + a.quantidade * a.preco, 0);
                                     const iva = subtotal * (taxaIvaGlobal / 100);
                                     const total = subtotal + iva;
-                                    const fmt = (v: number) => v.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                                     return (
                                         <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 3, fontSize: '0.8rem' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 3 }}>
                                                 <span>Subtotal</span>
-                                                <span>{fmt(subtotal)} Kz</span>
+                                                <span>{fmtMoney(subtotal)}</span>
                                             </div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 6 }}>
                                                 <span>IVA ({taxaIvaGlobal}%)</span>
-                                                <span>{fmt(iva)} Kz</span>
+                                                <span>{fmtMoney(iva)}</span>
                                             </div>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '0.85rem', borderTop: '1px solid var(--border)', paddingTop: 5 }}>
                                                 <span>Total</span>
-                                                <strong>{fmt(total)} Kz</strong>
+                                                <strong>{fmtMoney(total)}</strong>
                                             </div>
                                         </div>
                                     );
@@ -695,7 +710,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
 
 /* ══ Main Page ═══════════════════════════════════════════ */
 const OrdensPage: React.FC = () => {
-    const { ordens, addOrdem, updateOrdem, emitirOT, terminarOT, encerrarOT, equipInstalados, clientes, modelosEquipamento, currentUser, tiposOT } = useGlobal();
+    const { ordens, addOrdem, updateOrdem, emitirOT, terminarOT, encerrarOT, equipInstalados, clientes, modelosEquipamento, currentUser, tiposOT, fmtDate, empresaConfig, simboloMoeda } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
 
     const [search, setSearch]         = useState('');
@@ -907,7 +922,7 @@ const OrdensPage: React.FC = () => {
                         onClick={e => e.stopPropagation()}>
                         {[
                             { label: 'Abrir',    action: () => { setModal(ctx.id); setCtx(null); } },
-                            { label: '⎙ Imprimir', action: () => { printOT(ot, equipInstalados, modelosEquipamento, clientes); setCtx(null); } },
+                            { label: '⎙ Imprimir', action: () => { printOT(ot, equipInstalados, modelosEquipamento, clientes, empresaConfig, simboloMoeda); setCtx(null); } },
                             ...(ot.estado !== 'Encerrado' ? [{ label: `→ ${PROX_ESTADO[ot.estado]}`, action: () => handleProxEstado(ot) }] : []),
                             ...(!isTecnicoCampo && PREV_ESTADO[ot.estado] ? [{ label: `↩ Reverter → ${PREV_ESTADO[ot.estado]}`, action: () => handleReverter(ot) }] : []),
                         ].map(item => (

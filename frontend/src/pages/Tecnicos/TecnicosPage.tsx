@@ -13,6 +13,7 @@ interface TecnicoModalProps {
     onSave: (t: Omit<Tecnico, 'id'>) => void;
 }
 const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, onSave }) => {
+    const { simboloMoeda } = useGlobal();
     const [nome, setNome]         = useState(tecnico?.nome ?? '');
     const [telefone, setTelefone] = useState(tecnico?.telefone ?? '');
     const [email, setEmail]       = useState(tecnico?.email ?? '');
@@ -78,7 +79,7 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
                         </div>
                         <div className="form-row">
                             <div className="form-group">
-                                <label className="form-label req">Custo/Hora (Kz)</label>
+                                <label className="form-label req">Custo/Hora ({simboloMoeda})</label>
                                 <input type="number" min={0} className={`form-input${errors.custo ? ' err' : ''}`}
                                     value={custoHora} onChange={e => setCustoHora(e.target.value)} />
                                 {errors.custo && <span className="form-error"><AlertCircle size={11} /> {errors.custo}</span>}
@@ -101,7 +102,7 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
 
 /* ══ Page ════════════════════════════════════════════════ */
 const TecnicosPage: React.FC = () => {
-    const { tecnicos, addTecnico, updateTecnico, removeTecnico, funcoesTecnico } = useGlobal();
+    const { tecnicos, addTecnico, updateTecnico, removeTecnico, funcoesTecnico, simboloMoeda } = useGlobal();
 
     const [search, setSearch]     = useState('');
     const [modal, setModal]       = useState<'new' | string | null>(null);
@@ -159,7 +160,7 @@ const TecnicosPage: React.FC = () => {
         { key: 'funcao',    label: 'Função'        },
         { key: 'telefone',  label: 'Telefone'      },
         { key: 'email',     label: 'Email'         },
-        { key: 'custoHora', label: 'Custo/h (Kz)' },
+        { key: 'custoHora', label: 'Custo/h ({simboloMoeda})' },
         { key: 'estado',    label: 'Estado'        },
     ];
 

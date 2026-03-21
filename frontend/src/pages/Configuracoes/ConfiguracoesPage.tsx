@@ -10,17 +10,6 @@ import {
 /* ── Types ── */
 type Tab = 'empresa' | 'moeda' | 'comissoes' | 'seguranca' | 'tabelas';
 
-interface Currency { code: string; name: string; symbol: string; }
-
-const CURRENCIES: Currency[] = [
-    { code: 'AOA', name: 'Kwanza Angolano', symbol: 'Kz' },
-    { code: 'EUR', name: 'Euro', symbol: '€' },
-    { code: 'USD', name: 'Dólar Americano', symbol: '$' },
-    { code: 'BRL', name: 'Real Brasileiro', symbol: 'R$' },
-    { code: 'GBP', name: 'Libra Esterlina', symbol: '£' },
-    { code: 'CHF', name: 'Franco Suíço', symbol: 'Fr' },
-];
-
 const TABS: { id: Tab; label: string; icon: React.FC<any> }[] = [
     { id: 'empresa',  label: 'Empresa',          icon: Building2 },
     { id: 'moeda',    label: 'Moeda & Financeiro', icon: DollarSign },
@@ -137,6 +126,7 @@ const ConfiguracoesPage: React.FC = () => {
         funcoesTecnico, addFuncaoTecnico, updateFuncaoTecnico, removeFuncaoTecnico,
         tiposDocumento, addTipoDocumento, updateTipoDocumento, removeTipoDocumento,
         armazens, addArmazem, updateArmazem,
+        moedas,
         taxaIvaGlobal, setTaxaIvaGlobal,
         empresaConfig, updateEmpresaConfig,
     } = useGlobal();
@@ -155,7 +145,7 @@ const ConfiguracoesPage: React.FC = () => {
     const [moeda, setMoeda] = useState(() => ({
         ...initMoeda,
         currency: empresaConfig.moeda || initMoeda.currency,
-        symbol: CURRENCIES.find(c => c.code === (empresaConfig.moeda || initMoeda.currency))?.symbol ?? initMoeda.symbol,
+        symbol: moedas.find(m => m.codigo === (empresaConfig.moeda || initMoeda.currency))?.simbolo ?? initMoeda.symbol,
         decimals: empresaConfig.casasDecimais !== undefined ? String(empresaConfig.casasDecimais) : initMoeda.decimals,
         dateFormat: empresaConfig.formatoData || initMoeda.dateFormat,
     }));
@@ -214,7 +204,7 @@ const ConfiguracoesPage: React.FC = () => {
         setMoeda({
             ...initMoeda,
             currency: empresaConfig.moeda || initMoeda.currency,
-            symbol: CURRENCIES.find(c => c.code === (empresaConfig.moeda || initMoeda.currency))?.symbol ?? initMoeda.symbol,
+            symbol: moedas.find(m => m.codigo === (empresaConfig.moeda || initMoeda.currency))?.simbolo ?? initMoeda.symbol,
             decimals: empresaConfig.casasDecimais !== undefined ? String(empresaConfig.casasDecimais) : initMoeda.decimals,
             dateFormat: empresaConfig.formatoData || initMoeda.dateFormat,
         });
@@ -222,7 +212,7 @@ const ConfiguracoesPage: React.FC = () => {
         setDirty(false);
     };
 
-    const selectedCurrency = CURRENCIES.find(c => c.code === moeda.currency) || CURRENCIES[0];
+    const selectedCurrency = moedas.find(m => m.codigo === moeda.currency) ?? moedas[0];
 
     /* Helpers */
     const Field = ({ label, value, onChange, placeholder, type = 'text' }: { label: string; value: string; onChange: any; placeholder?: string; type?: string }) => (
@@ -362,17 +352,17 @@ const ConfiguracoesPage: React.FC = () => {
                                 </div>
                                 <div className="settings-section-body">
                                     <div className="currency-grid">
-                                        {CURRENCIES.map(c => (
+                                        {moedas.map(m => (
                                             <button
-                                                key={c.code}
-                                                className={`currency-chip${moeda.currency === c.code ? ' active' : ''}`}
-                                                onClick={() => { setMoeda(p => ({ ...p, currency: c.code, symbol: c.symbol })); markDirty(); }}
+                                                key={m.codigo}
+                                                className={`currency-chip${moeda.currency === m.codigo ? ' active' : ''}`}
+                                                onClick={() => { setMoeda(p => ({ ...p, currency: m.codigo, symbol: m.simbolo })); markDirty(); }}
                                                 type="button"
                                             >
-                                                <div className="currency-symbol">{c.symbol}</div>
+                                                <div className="currency-symbol">{m.simbolo}</div>
                                                 <div>
-                                                    <div className="currency-code">{c.code}</div>
-                                                    <div className="currency-name">{c.name}</div>
+                                                    <div className="currency-code">{m.codigo}</div>
+                                                    <div className="currency-name">{m.descricao}</div>
                                                 </div>
                                             </button>
                                         ))}
@@ -423,7 +413,15 @@ const ConfiguracoesPage: React.FC = () => {
                                     </div>
                                     <div className="preview-box">
                                         <span>Hoje: </span>
-                                        <strong>06/03/2026</strong>
+                                        <strong>{(() => {
+                                            const d = new Date();
+                                            const dd = String(d.getDate()).padStart(2, '0');
+                                            const mm = String(d.getMonth() + 1).padStart(2, '0');
+                                            const yyyy = String(d.getFullYear());
+                                            if (moeda.dateFormat === 'YYYY-MM-DD') return `${yyyy}-${mm}-${dd}`;
+                                            if (moeda.dateFormat === 'MM/DD/YYYY') return `${mm}/${dd}/${yyyy}`;
+                                            return `${dd}/${mm}/${yyyy}`;
+                                        })()}</strong>
                                     </div>
                                 </div>
                             </div>
@@ -446,7 +444,7 @@ const ConfiguracoesPage: React.FC = () => {
                                         </div>
                                     </div>
                                     <div className="preview-box">
-                                        Subtotal 100.000 Kz → IVA {taxaIvaGlobal}% = <strong>{(100000 * taxaIvaGlobal / 100).toLocaleString('pt-PT')} Kz</strong>
+                                        Subtotal 100.000 {moeda.symbol} → IVA {taxaIvaGlobal}% = <strong>{(100000 * taxaIvaGlobal / 100).toLocaleString('pt-PT')} {moeda.symbol}</strong>
                                     </div>
                                 </div>
                             </div>
@@ -457,7 +455,7 @@ const ConfiguracoesPage: React.FC = () => {
                             <div className="settings-section">
                                 <div className="settings-section-hdr">
                                     <div className="settings-section-title">Valor por Tipo de OS — Técnicos Campo</div>
-                                    <div className="settings-section-desc">Comissão fixa ({selectedCurrency.symbol}) por ordem de serviço concluída</div>
+                                    <div className="settings-section-desc">Comissão fixa ({selectedCurrency?.simbolo}) por ordem de serviço concluída</div>
                                 </div>
                                 <div className="settings-section-body">
                                     <div className="form-row">
@@ -470,7 +468,7 @@ const ConfiguracoesPage: React.FC = () => {
                                             <div className="form-group" key={key}>
                                                 <label className="form-label req">{label}</label>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', minWidth: 20 }}>{selectedCurrency.symbol}</span>
+                                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', minWidth: 20 }}>{selectedCurrency?.simbolo}</span>
                                                     <input type="number" min={0} className="form-input" value={(comissoes as any)[key]} onChange={setC(key)} />
                                                 </div>
                                             </div>
@@ -495,8 +493,8 @@ const ConfiguracoesPage: React.FC = () => {
                                         </div>
                                     </div>
                                     <div className="preview-box">
-                                        Exemplo: venda de {selectedCurrency.symbol} 50.000 → comissão de{' '}
-                                        <strong>{selectedCurrency.symbol} {(50000 * Number(comissoes.vendaPercent) / 100).toLocaleString('pt-PT')}</strong>
+                                        Exemplo: venda de {selectedCurrency?.simbolo} 50.000 → comissão de{' '}
+                                        <strong>{selectedCurrency?.simbolo} {(50000 * Number(comissoes.vendaPercent) / 100).toLocaleString('pt-PT')}</strong>
                                     </div>
                                 </div>
                             </div>

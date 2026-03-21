@@ -5,11 +5,7 @@ import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { BarChart3, TrendingUp, Users, Download, Package, Search } from 'lucide-react';
 import { useGlobal } from '../../contexts/GlobalContext';
 
-const fmtDate = (d: string) => {
-    if (!d) return '—';
-    const [y, m, day] = d.split('T')[0].split('-');
-    return `${day}/${m}/${y}`;
-};
+/* fmtDate, fmtMoney, fmt vêm do GlobalContext */
 
 type RelTab = 'faturacao' | 'comissoes' | 'produtividade' | 'movimentos';
 
@@ -71,12 +67,10 @@ const COLS: Record<RelTab, ExportCol[]> = {
     ],
 };
 
-const fmtKz  = (v: number) => v.toLocaleString('pt-PT');
-const fmtNum = (v: number) => v.toLocaleString('pt-PT');
-
 /* ══════════════════════════════════════════════════════════ */
 const RelatoriosPage: React.FC = () => {
-    const { faturas, ordens, movimentosStock, artigos, armazens } = useGlobal();
+    const { faturas, ordens, movimentosStock, artigos, armazens, fmtMoney, fmtDate, fmt: fmtNum } = useGlobal();
+    const fmtKz = fmtMoney;
 
     const [tab,        setTab]        = useState<RelTab>('faturacao');
     const [showExport, setShowExport] = useState(false);

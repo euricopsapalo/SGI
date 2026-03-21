@@ -11,13 +11,12 @@ const TIPO_CFG: Record<SysLog['tipo'], { icon: React.ReactNode; color: string; l
     error:   { icon: <AlertCircle size={12} />,   color: 'var(--red)',    label: 'Erro'    },
 };
 
-const fmtTs = (ts: string) => {
-    const d = new Date(ts);
-    return d.toLocaleDateString('pt-PT') + ' ' + d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-};
-
 const LogsPage: React.FC = () => {
-    const { logs, currentUser } = useGlobal();
+    const { logs, currentUser, fmtDate } = useGlobal();
+    const fmtTs = (ts: string) => {
+        const d = new Date(ts);
+        return fmtDate(ts) + ' ' + d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    };
     const [search, setSearch]       = useState('');
     const [filterTipo, setFilterTipo] = useState('');
     const [filterModulo, setFilterModulo] = useState('');

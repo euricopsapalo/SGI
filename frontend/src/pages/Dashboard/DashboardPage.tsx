@@ -7,10 +7,10 @@ import {
     TrendingUp, Users, Package,
 } from 'lucide-react';
 
-const fmtMoney = (v: number) => v.toLocaleString('pt-PT') + ' AOA';
+/* fmtMoney vem do GlobalContext */
 
 const DashboardPage: React.FC = () => {
-    const { ordens, clientes, tecnicos, artigos, faturas, equipInstalados, encomendas, currentUser } = useGlobal();
+    const { ordens, clientes, tecnicos, artigos, faturas, equipInstalados, encomendas, currentUser, fmtMoney } = useGlobal();
 
     const today = new Date().toISOString().split('T')[0];
     const thisMonth = today.slice(0, 7);

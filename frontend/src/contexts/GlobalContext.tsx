@@ -290,6 +290,11 @@ interface GlobalContextType {
     taxaIvaGlobal: number; setTaxaIvaGlobal: (v: number) => void;
     // Empresa config
     empresaConfig: EmpresaConfig; updateEmpresaConfig: (c: Partial<EmpresaConfig>) => Promise<void>;
+    // Formatadores globais (derivados de empresaConfig + moedas)
+    simboloMoeda: string;
+    fmt: (n: number) => string;
+    fmtMoney: (v: number, moedaCodigo?: string) => string;
+    fmtDate: (iso?: string) => string;
     // Auth
     currentUser: CurrentUser | null; setCurrentUser: (u: CurrentUser | null) => void; logout: () => void;
     // Logs
@@ -976,6 +981,46 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         });
     }, [artigos, ordens]);
 
+    /* ── Global formatters (derived from empresaConfig + moedas) ── */
+    const casasDecimais = empresaConfig.casasDecimais ?? 2;
+    const formatoData   = empresaConfig.formatoData   ?? 'DD/MM/YYYY';
+    const moedaCodigo   = empresaConfig.moeda         ?? 'AOA';
+
+    const simboloMoeda = useMemo(
+        () => moedas.find(m => m.codigo === moedaCodigo)?.simbolo ?? moedaCodigo,
+        [moedas, moedaCodigo],
+    );
+
+    const fmt = useMemo(
+        () => (n: number) =>
+            n.toLocaleString('pt-PT', { minimumFractionDigits: casasDecimais, maximumFractionDigits: casasDecimais }),
+        [casasDecimais],
+    );
+
+    const fmtMoney = useMemo(
+        () => (v: number, codigo?: string) => {
+            const c = codigo ?? moedaCodigo;
+            const simb = moedas.find(m => m.codigo === c)?.simbolo ?? c;
+            return `${v.toLocaleString('pt-PT', { minimumFractionDigits: casasDecimais, maximumFractionDigits: casasDecimais })} ${simb}`;
+        },
+        [casasDecimais, moedas, moedaCodigo],
+    );
+
+    const fmtDate = useMemo(
+        () => (iso?: string): string => {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            if (isNaN(d.getTime())) return '—';
+            const dd   = String(d.getDate()).padStart(2, '0');
+            const mm   = String(d.getMonth() + 1).padStart(2, '0');
+            const yyyy = String(d.getFullYear());
+            if (formatoData === 'YYYY-MM-DD') return `${yyyy}-${mm}-${dd}`;
+            if (formatoData === 'MM/DD/YYYY') return `${mm}/${dd}/${yyyy}`;
+            return `${dd}/${mm}/${yyyy}`;
+        },
+        [formatoData],
+    );
+
     return (
         <GlobalContext.Provider value={{
             currentUser, setCurrentUser, logout,
@@ -985,6 +1030,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             funcoesTecnico, addFuncaoTecnico, updateFuncaoTecnico, removeFuncaoTecnico,
             taxaIvaGlobal, setTaxaIvaGlobal,
             empresaConfig, updateEmpresaConfig,
+            simboloMoeda, fmt, fmtMoney, fmtDate,
             moedas, addMoeda, updateMoeda, removeMoeda,
             tiposDocumento, addTipoDocumento, updateTipoDocumento, removeTipoDocumento,
             paises, provincias, municipios,

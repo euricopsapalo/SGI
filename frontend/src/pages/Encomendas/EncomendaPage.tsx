@@ -14,12 +14,30 @@ import {
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 
 /* ══ Helpers ════════════════════════════════════════════════ */
-const fmt = (n: number) => n.toLocaleString('pt-PT');
-const fmtMoney = (n: number, m = 'AOA') => `${fmt(n)} ${m}`;
-const fmtDate  = (s: string) => s ? new Date(s).toLocaleDateString('pt-PT') : '—';
 const linhaTotal = (l: EncomendaLinha) =>
     l.qtdEncomendada * l.custoUnit * (1 - l.desconto / 100);
 const encTotal = (e: Encomenda) => e.linhas.reduce((s, l) => s + linhaTotal(l), 0);
+
+/** Cria helpers de formatação derivados da configuração da empresa (para funções de impressão fora do React). */
+function makePrintFmt(empresa: EmpresaConfig, simbolo?: string) {
+    const casas = empresa.casasDecimais ?? 2;
+    const simb  = simbolo ?? empresa.moeda ?? '';
+    const fmt      = (n: number) => n.toLocaleString('pt-PT', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+    const fmtMoney = (n: number, moeda?: string) => `${fmt(n)} ${moeda ? moeda : simb}`;
+    const fmtDate  = (s?: string): string => {
+        if (!s) return '—';
+        const d = new Date(s);
+        if (isNaN(d.getTime())) return '—';
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const yyyy = String(d.getFullYear());
+        const f = empresa.formatoData ?? 'DD/MM/YYYY';
+        if (f === 'YYYY-MM-DD') return `${yyyy}-${mm}-${dd}`;
+        if (f === 'MM/DD/YYYY') return `${mm}/${dd}/${yyyy}`;
+        return `${dd}/${mm}/${yyyy}`;
+    };
+    return { fmt, fmtMoney, fmtDate };
+}
 
 const ESTADO_STYLE: Record<EncomendaEstado, { cls: string; label: string }> = {
     Aberta:    { cls: 'tbadge tbadge-campo',   label: 'Aberta' },
@@ -35,7 +53,7 @@ interface ReceberModalProps {
     onConfirm: (recebidas: { artigoId: string; qtd: number }[], armazem: string, guiaRemessa: string) => void;
 }
 const ReceberModal: React.FC<ReceberModalProps> = ({ encomenda, onClose, onConfirm }) => {
-    const { armazens } = useGlobal();
+    const { armazens, fmt } = useGlobal();
     const armazensOpts = armazens.map(a => ({ value: a.codigo, label: `${a.codigo} — ${a.nome}` }));
     const defaultArmazem = armazens[0]?.codigo ?? '';
 
@@ -153,8 +171,9 @@ const ReceberModal: React.FC<ReceberModalProps> = ({ encomenda, onClose, onConfi
 };
 
 /* ══ Print Nota de Encomenda — abre janela A4 ══════════════ */
-function printNotaEncomenda(encomenda: Encomenda, fornecedorNome: string, empresa?: EmpresaConfig) {
+function printNotaEncomenda(encomenda: Encomenda, fornecedorNome: string, empresa?: EmpresaConfig, simbolo?: string) {
     const emp = empresa ?? {} as EmpresaConfig;
+    const { fmt, fmtMoney, fmtDate } = makePrintFmt(emp, simbolo);
     const total = encTotal(encomenda);
 
     // Stamp config per estado
@@ -332,8 +351,10 @@ function printNotaEntrada(
     rececao: Rececao,
     encomenda: Encomenda,
     empresa?: EmpresaConfig,
+    simbolo?: string,
 ) {
     const emp = empresa ?? {} as EmpresaConfig;
+    const { fmt, fmtDate } = makePrintFmt(emp, simbolo);
     const dataHora = new Date(rececao.dataHora).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
     const todasGuias = encomenda.rececoes
@@ -476,7 +497,7 @@ interface EncomendaModalProps {
     onAnularRececao?: (rececaoId: string) => void;
 }
 const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onSave, onAnularRececao }) => {
-    const { fornecedores, artigos, currentUser, empresaConfig } = useGlobal();
+    const { fornecedores, artigos, currentUser, empresaConfig, fmt, fmtMoney } = useGlobal();
     const [tab, setTab] = useState<ETab>('cabecalho');
 
     // Cabeçalho
@@ -843,7 +864,7 @@ interface ConverterModalProps {
     onConfirm: (fornecedorId: string, dataEntrega: string, descricao: string, items: ConverterItem[]) => void;
 }
 const ConverterModal: React.FC<ConverterModalProps> = ({ artigos, onClose, onConfirm }) => {
-    const { fornecedores } = useGlobal();
+    const { fornecedores, fmt, fmtMoney } = useGlobal();
     const [fornId,      setFornId]  = useState('');
     const [dataEntrega, setDatEnt]  = useState('');
     const [descricao,   setDesc]    = useState(`Reposição de stock — ${new Date().toLocaleDateString('pt-PT')}`);
@@ -998,9 +1019,10 @@ const ConverterModal: React.FC<ConverterModalProps> = ({ artigos, onClose, onCon
 };
 
 /* ══ Print Sugestões ═════════════════════════════════════════ */
-function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig) {
+function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: string) {
     const emp = empresa ?? {} as EmpresaConfig;
-    const today = new Date().toLocaleDateString('pt-PT');
+    const { fmt, fmtMoney, fmtDate } = makePrintFmt(emp, simbolo);
+    const today = fmtDate(new Date().toISOString());
     const rows = artigos.map(a => {
         const disp = a.stockDisponivel ?? Math.max(0, a.existencia - a.stockReservado);
         const deficit = Math.max(0, a.stockSeguranca - (disp + a.stockEncomendado));
@@ -1057,7 +1079,7 @@ function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig) {
 
 /* ══ Page ════════════════════════════════════════════════════ */
 const EncomendaPage: React.FC = () => {
-    const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, updateArtigo, addMovimento, currentUser, empresaConfig } = useGlobal();
+    const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, updateArtigo, addMovimento, currentUser, empresaConfig, fmtMoney, fmtDate, fmt, simboloMoeda } = useGlobal();
 
     const [pageTab,   setPageTab]   = useState<'encomendas' | 'sugestoes'>('encomendas');
     const [search,    setSearch]    = useState('');
@@ -1153,7 +1175,7 @@ const EncomendaPage: React.FC = () => {
             const newRececao = [...updatedEnc.rececoes]
                 .filter(r => r.estado === 'Ativa')
                 .sort((a, b) => new Date(b.dataHora).getTime() - new Date(a.dataHora).getTime())[0];
-            if (newRececao) printNotaEntrada(newRececao, updatedEnc, empresaConfig);
+            if (newRececao) printNotaEntrada(newRececao, updatedEnc, empresaConfig, simboloMoeda);
             showToast(`Recepção registada → ${armazem}. Stock actualizado.`);
         } catch { showToast('Erro ao registar recepção.'); }
     };
@@ -1194,7 +1216,7 @@ const EncomendaPage: React.FC = () => {
                     </button>
                 )}
                 {pageTab === 'sugestoes' && artigosRupturaFiltrados.length > 0 && (<>
-                    <button className="abtn abtn-secondary" type="button" onClick={() => printSugestoes(artigosRupturaFiltrados, empresaConfig)}>
+                    <button className="abtn abtn-secondary" type="button" onClick={() => printSugestoes(artigosRupturaFiltrados, empresaConfig, simboloMoeda)}>
                         <Printer size={13} /> Imprimir Lista
                     </button>
                     <button className="abtn abtn-primary" type="button" onClick={() => setShowConverter(true)}>
@@ -1317,7 +1339,7 @@ const EncomendaPage: React.FC = () => {
                                                             <Archive size={11} /> Receber
                                                         </button>
                                                     )}
-                                                    <button className="icon-btn" title="Imprimir nota de encomenda" onClick={() => printNotaEncomenda(e, getFornNome(e.fornecedorId), empresaConfig)}>
+                                                    <button className="icon-btn" title="Imprimir nota de encomenda" onClick={() => printNotaEncomenda(e, getFornNome(e.fornecedorId), empresaConfig, simboloMoeda)}>
                                                         <Printer size={12} />
                                                     </button>
                                                     {e.rececoes?.filter(r => r.estado === 'Ativa').length > 0 && (() => {
@@ -1327,7 +1349,7 @@ const EncomendaPage: React.FC = () => {
                                                             return (
                                                                 <button className="icon-btn" title="Reimprimir nota de entrada"
                                                                     style={{ color: '#16a34a' }}
-                                                                    onClick={() => printNotaEntrada(ativas[0], e, empresaConfig)}>
+                                                                    onClick={() => printNotaEntrada(ativas[0], e, empresaConfig, simboloMoeda)}>
                                                                     <RotateCcw size={12} />
                                                                 </button>
                                                             );

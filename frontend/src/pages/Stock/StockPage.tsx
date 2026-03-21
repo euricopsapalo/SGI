@@ -11,9 +11,7 @@ import {
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 
-/* ══ Helpers ════════════════════════════════════════════════ */
-const fmt      = (n: number) => n.toLocaleString('pt-PT');
-const fmtMoney = (n: number, m = 'AOA') => `${fmt(n)} ${m}`;
+/* ══ Helpers (fmt e fmtMoney vêm do GlobalContext) ══════════ */
 
 const COLS_STOCK: ExportCol[] = [
     { key: 'codigo',         label: 'Código' },
@@ -42,7 +40,7 @@ const TABS_A = [
 type ATab = typeof TABS_A[number]['id'];
 
 const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) => {
-    const { armazens, stockArmazem, upsertStockArmazem, removeStockArmazem } = useGlobal();
+    const { armazens, stockArmazem, upsertStockArmazem, removeStockArmazem, fmt, fmtMoney } = useGlobal();
     const [tab, setTab] = useState<ATab>('ident');
 
     // Warehouse breakdown state (only for existing articles)
@@ -398,7 +396,7 @@ const TABS_V = TABS_A;
 type VTab = ATab;
 
 const ArtigoViewModal: React.FC<ArtigoViewModalProps> = ({ artigo, onClose, onEdit }) => {
-    const { armazens, stockArmazem } = useGlobal();
+    const { armazens, stockArmazem, fmt, fmtMoney } = useGlobal();
     const [tab, setTab] = useState<VTab>('ident');
     const saEntries = stockArmazem.filter(sa => sa.artigoId === artigo.id);
     const resolveArm = (val: string) =>
@@ -613,6 +611,7 @@ const printInventSheet = (artigos: Artigo[], lines: InventLine[], armazens: Arma
 };
 
 const InventarioModal: React.FC<InventarioModalProps> = ({ artigos, armazens, onClose, onConfirm }) => {
+    const { fmt } = useGlobal();
     const resolveArmazem = (val: string) =>
         armazens.find(a => a.id === val || a.codigo === val)?.codigo ?? val;
     const [search, setSearch] = useState('');
@@ -749,6 +748,7 @@ interface TransferenciaModalProps {
 }
 
 const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, armazens, onClose, onConfirm }) => {
+    const { fmt } = useGlobal();
     const [armazDe,   setArmazDe]   = useState('ARM-01');
     const [armazPara, setArmazPara] = useState('ARM-02');
     const [lines, setLines]         = useState<TransfLine[]>([]);
@@ -866,6 +866,7 @@ interface SimpleOpModalProps {
     onConfirm: (tipo: SimpleOpType, artigoId: string, quantidade: number, nota: string) => void;
 }
 const SimpleOpModal: React.FC<SimpleOpModalProps> = ({ tipo, artigos, onClose, onConfirm }) => {
+    const { fmt } = useGlobal();
     const [artigoId, setArtigoId] = useState('');
     const [quantidade, setQtd]   = useState('');
     const [nota, setNota]        = useState('');
@@ -920,6 +921,7 @@ const SimpleOpModal: React.FC<SimpleOpModalProps> = ({ tipo, artigos, onClose, o
 
 /* ══ Stats Modal ════════════════════════════════════════════ */
 const StatsModal: React.FC<{ artigos: Artigo[]; onClose: () => void }> = ({ artigos, onClose }) => {
+    const { fmt, fmtMoney } = useGlobal();
     const totalValor = artigos.reduce((s, a) => s + a.existencia * a.precoUnitario, 0);
     const criticos   = artigos.filter(a => a.critico && a.existencia <= a.stockSeguranca);
     const abaixoSeg  = artigos.filter(a => a.existencia <= a.stockSeguranca);
@@ -976,7 +978,7 @@ const StatsModal: React.FC<{ artigos: Artigo[]; onClose: () => void }> = ({ arti
 type OpState = 'inventario' | 'transferencia' | 'reposicao' | 'devolucao' | 'guia' | 'stats' | null;
 
 const StockPage: React.FC = () => {
-    const { artigos, addArtigo, updateArtigo, adjustExistencia, armazens, addMovimento, currentUser, stockArmazem } = useGlobal();
+    const { artigos, addArtigo, updateArtigo, adjustExistencia, armazens, addMovimento, currentUser, stockArmazem, fmt, fmtMoney } = useGlobal();
 
     // Resolve warehouse code from either a code string or a numeric ID (legacy data)
     const resolveArmazem = (val: string) =>

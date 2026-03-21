@@ -39,6 +39,7 @@ interface ReprogramarProps {
     onConfirm: (novaData: string, motivo: string) => void;
 }
 const ReprogramarModal: React.FC<ReprogramarProps> = ({ ot, novaData: initialData, onClose, onConfirm }) => {
+    const { fmtDate: fmtDt } = useGlobal();
     const [data, setData]     = useState(initialData);
     const [motivo, setMotivo] = useState('');
     const [err, setErr]       = useState('');
@@ -49,8 +50,6 @@ const ReprogramarModal: React.FC<ReprogramarProps> = ({ ot, novaData: initialDat
         onConfirm(data, motivo);
         onClose();
     };
-
-    const fmtDt = (iso?: string) => iso ? new Date(iso).toLocaleDateString('pt-PT') : '—';
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -120,8 +119,8 @@ const OTCard: React.FC<OTCardProps> = ({ ot, nomeCliente, onClick, onDragStart, 
 
 /* ── OT Detail Modal ── */
 const OTDetail: React.FC<{ ot: OrdemTrabalho; nomeCliente: string; nomeEquip: string; onClose: () => void }> = ({ ot, nomeCliente, nomeEquip, onClose }) => {
+    const { fmtDate: fmtDt } = useGlobal();
     const ec = ESTADO_COLOR[ot.estado];
-    const fmtDt = (iso?: string) => iso ? new Date(iso).toLocaleDateString('pt-PT') : '—';
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
             <div className="modal" style={{ maxWidth: 460 }}>

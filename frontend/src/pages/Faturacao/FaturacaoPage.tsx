@@ -12,9 +12,7 @@ import {
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 
-/* ── Helpers ── */
-const fmtDate  = (iso?: string) => iso ? new Date(iso).toLocaleDateString('pt-PT') : '—';
-const fmtMoney = (v: number, m = 'AOA') => `${v.toLocaleString('pt-PT')} ${m}`;
+/* ── Helpers (fmtDate e fmtMoney vêm do GlobalContext) ── */
 
 const ESTADO_DOT: Record<FaturaEstado, string> = {
     Pendente: 'dot-orange', Paga: 'dot-green', Anulada: 'dot-gray', Emitido: 'dot-blue',
@@ -30,7 +28,7 @@ const ESTADO_BADGE: Record<FaturaEstado, { bg: string; color: string }> = {
 interface EmitirModalProps { onClose: () => void; onSave: (f: Omit<Fatura, 'id'>) => void; }
 
 const EmitirDocumentoModal: React.FC<EmitirModalProps> = ({ onClose, onSave }) => {
-    const { ordens, clientes, artigos, equipInstalados, tiposDocumento, taxaIvaGlobal, empresaConfig } = useGlobal();
+    const { ordens, clientes, artigos, equipInstalados, tiposDocumento, taxaIvaGlobal, empresaConfig, fmtMoney, fmtDate, simboloMoeda } = useGlobal();
 
     const [tipoDoc,       setTipoDoc]    = useState(tiposDocumento[0]?.codigo ?? 'FAT');
     const [otId,          setOtId]       = useState('');
@@ -271,7 +269,7 @@ interface FaturaDetalheProps {
 }
 
 const FaturaDetalhe: React.FC<FaturaDetalheProps> = ({ fatura, nomeCliente, otDesc, onClose, onPagar, onAnular }) => {
-    const { empresaConfig } = useGlobal();
+    const { empresaConfig, fmtMoney, fmtDate, simboloMoeda } = useGlobal();
     const [confirmAnular,  setConfirmAnular]  = useState(false);
     const [motivoAnular,   setMotivoAnular]   = useState('');
     const [confirmPagar,   setConfirmPagar]   = useState(false);
@@ -536,7 +534,7 @@ const COLS_FATURA: ExportCol[] = [
 
 /* ══ Page ════════════════════════════════════════════════════ */
 const FaturacaoPage: React.FC = () => {
-    const { faturas, addFatura, updateFatura, clientes, ordens, empresaConfig } = useGlobal();
+    const { faturas, addFatura, updateFatura, clientes, ordens, empresaConfig, fmtMoney, fmtDate, simboloMoeda } = useGlobal();
 
     const [search,       setSearch]       = useState('');
     const [filterEstado, setFilterEstado] = useState('');
