@@ -4,7 +4,7 @@ import {
     LayoutDashboard, Users, Wrench, Package,
     CalendarDays, FileText, BarChart3, Settings, Bell,
     Truck, MapPin, ClipboardList, ShoppingCart, ChevronDown,
-    LogOut, ScrollText, RefreshCw,
+    LogOut, ScrollText, RefreshCw, UserCog,
     type LucideIcon,
 } from 'lucide-react';
 import AquatexLogo from '../AquatexLogo';
@@ -27,9 +27,8 @@ const NAV_GROUPS: NavGroup[] = [
     {
         label: 'Entidades', icon: Users,
         items: [
-            { to: '/clientes',     icon: Users,  label: 'Clientes'     },
-            { to: '/tecnicos',     icon: Wrench, label: 'Técnicos'     },
-            { to: '/fornecedores', icon: Truck,  label: 'Fornecedores' },
+            { to: '/clientes',     icon: Users, label: 'Clientes'     },
+            { to: '/fornecedores', icon: Truck, label: 'Fornecedores' },
         ],
     },
     {
@@ -42,8 +41,9 @@ const NAV_GROUPS: NavGroup[] = [
     {
         label: 'Operações', icon: ClipboardList,
         items: [
-            { to: '/ordens', icon: Wrench,       label: 'Ordens de Trabalho' },
-            { to: '/agenda', icon: CalendarDays, label: 'Agenda'             },
+            { to: '/ordens',    icon: Wrench,       label: 'Ordens de Trabalho' },
+            { to: '/agenda',    icon: CalendarDays, label: 'Agenda'             },
+            { to: '/tecnicos',  icon: UserCog,      label: 'Técnicos'           },
         ],
     },
     {
