@@ -191,14 +191,14 @@ function printHistoricoGeral(
 
     // Group by equipment
     const grupos = new Map<string, OrdemTrabalho[]>();
-    for (const o of filtrado) {
+    for (const o of filtrado as OrdemTrabalho[]) {
         const key = String(o.equipInstaladoId);
         if (!grupos.has(key)) grupos.set(key, []);
         grupos.get(key)!.push(o);
     }
 
     let body = '';
-    for (const [eqId, eqOts] of grupos) {
+    for (const [eqId, eqOts] of Array.from(grupos.entries())) {
         const eq = equipInstalados.find(e => String(e.id) === eqId);
         const cli = clientes.find(c => String(c.id) === String(eq?.clienteId));
         const mod = modelosEquipamento.find(m => String(m.id) === String(eq?.modeloId));
