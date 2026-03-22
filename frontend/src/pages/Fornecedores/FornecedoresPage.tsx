@@ -2,8 +2,255 @@ import React, { useState } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
-import { useGlobal, Fornecedor } from '../../contexts/GlobalContext';
-import { Search, Plus, Edit2, Eye, X, AlertCircle, Check, Truck, Download, Trash2, MapPin } from 'lucide-react';
+import { useGlobal, Fornecedor, Encomenda, Artigo, EmpresaConfig, Provincia, Municipio } from '../../contexts/GlobalContext';
+import { Search, Plus, Edit2, Eye, X, AlertCircle, Check, Truck, Download, Trash2, MapPin, Printer } from 'lucide-react';
+
+/* ══ Print helpers ═══════════════════════════════════════════ */
+const RF_CSS = `
+  body{font-family:Arial,sans-serif;font-size:11px;color:#111;margin:0;padding:16px}
+  h1{font-size:15px;margin:0 0 2px}h2{font-size:12px;margin:10px 0 4px;border-bottom:1px solid #ccc;padding-bottom:2px}
+  table{width:100%;border-collapse:collapse;margin-bottom:12px}
+  th{background:#f3f4f6;font-size:10px;text-transform:uppercase;padding:4px 6px;text-align:left;border:1px solid #d1d5db}
+  td{padding:4px 6px;border:1px solid #e5e7eb;font-size:10px;vertical-align:top}
+  .hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;border-bottom:2px solid #1d4ed8;padding-bottom:8px}
+  .hdr-left h1{color:#1d4ed8}.sub{font-size:9px;color:#666;margin-top:1px}
+  .badge{display:inline-block;padding:1px 7px;border-radius:8px;font-size:9px;font-weight:700}
+  .badge-green{background:#d1fae5;color:#065f46}.badge-red{background:#fee2e2;color:#991b1b}
+  .badge-blue{background:#dbeafe;color:#1e40af}.badge-gray{background:#f3f4f6;color:#6b7280}
+  .kv{margin-bottom:3px}.kv span:first-child{font-weight:600;min-width:110px;display:inline-block;color:#374151}
+  @media print{body{padding:0}button{display:none}}
+`;
+
+const fRF = (d?: string) => {
+    if (!d) return '—';
+    try { return new Date(d).toLocaleDateString('pt-AO'); } catch { return d; }
+};
+
+const openPrintF = (html: string, title: string) => {
+    const w = window.open('', '_blank', 'width=900,height=700');
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>${RF_CSS}</style></head><body>${html}<script>window.onload=()=>window.print();<\/script></body></html>`);
+    w.document.close();
+};
+
+const totalEnc = (e: Encomenda) => e.linhas.reduce((s, l) => s + l.custoUnit * l.qtdEncomendada * (1 - (l.desconto || 0) / 100), 0);
+
+function printFichaFornecedor(f: Fornecedor, encs: Encomenda[], provinciaNome: string, municipioNome: string, empresa?: EmpresaConfig | null) {
+    const fEncs = encs.filter(e => String(e.fornecedorId) === String(f.id));
+    const total = fEncs.reduce((s, e) => s + totalEnc(e), 0);
+    const encRows = fEncs.map(e => `
+        <tr>
+            <td>${e.numero}</td><td>${fRF(e.data)}</td><td>${fRF(e.dataEntrega)}</td>
+            <td>${e.linhas.length} artigo(s)</td>
+            <td style="text-align:right">${totalEnc(e).toFixed(2)} ${e.moeda}</td>
+            <td><span class="badge badge-${e.estado==='Recebida'?'green':e.estado==='Cancelada'?'red':e.estado==='Parcial'?'blue':'gray'}">${e.estado}</span></td>
+        </tr>`).join('') || '<tr><td colspan="6" style="color:#999;text-align:center">Sem encomendas</td></tr>';
+
+    const html = `
+        <div class="hdr">
+            <div class="hdr-left"><h1>${empresa?.nome || 'SGI'}</h1><div class="sub">${empresa?.morada || ''} · NIF: ${empresa?.nif || ''}</div></div>
+            <div style="text-align:right"><h1>Ficha de Fornecedor</h1><div class="sub">Emitido em ${fRF(new Date().toISOString())}</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;margin-bottom:12px">
+            <div class="kv"><span>Nome / Razão Social</span>${f.nome}</div>
+            <div class="kv"><span>NIF</span>${f.nif || '—'}</div>
+            <div class="kv"><span>Telefone</span>${f.telefone || '—'}</div>
+            <div class="kv"><span>Email</span>${f.email || '—'}</div>
+            <div class="kv"><span>Morada</span>${f.morada || '—'}</div>
+            <div class="kv"><span>Província / Município</span>${provinciaNome || '—'} / ${municipioNome || '—'}</div>
+            <div class="kv"><span>Estado</span><span class="badge ${f.ativo?'badge-green':'badge-red'}">${f.ativo?'Activo':'Inactivo'}</span></div>
+            <div class="kv"><span>Total Encomendado</span>${total.toFixed(2)} AOA</div>
+        </div>
+        <h2>Histórico de Encomendas</h2>
+        <table><thead><tr><th>Nº</th><th>Data</th><th>Data Entrega</th><th>Artigos</th><th>Total</th><th>Estado</th></tr></thead>
+        <tbody>${encRows}</tbody></table>`;
+    openPrintF(html, `Ficha Fornecedor - ${f.nome}`);
+}
+
+function printFornecedoresPorCategoria(fors: Fornecedor[], encs: Encomenda[], artigos: Artigo[], provincias: Provincia[], municipios: Municipio[], empresa?: EmpresaConfig | null) {
+    // Group suppliers by the "classe" of articles they supply (from encomenda linhas)
+    const forMap = new Map<string, { f: Fornecedor; classes: Set<string>; totalEncs: number }>();
+    for (const f of fors) {
+        const fEncs = encs.filter(e => String(e.fornecedorId) === String(f.id));
+        const classes = new Set<string>();
+        for (const enc of fEncs) {
+            for (const l of enc.linhas) {
+                const art = artigos.find(a => String(a.id) === String(l.artigoId));
+                if (art?.classe) classes.add(art.classe);
+            }
+        }
+        if (classes.size === 0) classes.add('Sem categoria');
+        forMap.set(f.id, { f, classes, totalEncs: fEncs.length });
+    }
+
+    // Group by category
+    const catMap = new Map<string, typeof fors>();
+    for (const { f, classes } of Array.from(forMap.values())) {
+        for (const cls of Array.from(classes)) {
+            if (!catMap.has(cls)) catMap.set(cls, []);
+            catMap.get(cls)!.push(f);
+        }
+    }
+
+    const sections = Array.from(catMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([cat, fs]) => {
+        const rows = fs.map(f => {
+            const pNome = provincias.find(p => String(p.id) === String(f.provinciaId))?.nome ?? '—';
+            const { totalEncs } = forMap.get(f.id)!;
+            return `<tr>
+                <td>${f.nome}</td><td style="font-family:monospace">${f.nif||'—'}</td>
+                <td>${f.telefone||'—'}</td><td>${pNome}</td>
+                <td style="text-align:center">${totalEncs}</td>
+                <td><span class="badge ${f.ativo?'badge-green':'badge-gray'}">${f.ativo?'Activo':'Inactivo'}</span></td>
+            </tr>`;
+        }).join('');
+        return `<h2>${cat} (${fs.length})</h2>
+            <table><thead><tr><th>Nome</th><th>NIF</th><th>Telefone</th><th>Província</th><th>Encomendas</th><th>Estado</th></tr></thead>
+            <tbody>${rows}</tbody></table>`;
+    }).join('');
+
+    const html = `
+        <div class="hdr">
+            <div class="hdr-left"><h1>${empresa?.nome || 'SGI'}</h1><div class="sub">${empresa?.morada || ''}</div></div>
+            <div style="text-align:right"><h1>Fornecedores por Categoria</h1><div class="sub">Emitido em ${fRF(new Date().toISOString())}</div></div>
+        </div>
+        ${sections || '<p style="color:#999">Sem dados para apresentar.</p>'}`;
+    openPrintF(html, 'Fornecedores por Categoria');
+}
+
+function printHistoricoCompras(fors: Fornecedor[], encs: Encomenda[], dateFrom: string, dateTo: string, empresa?: EmpresaConfig | null) {
+    const from = dateFrom ? new Date(dateFrom) : null;
+    const to   = dateTo   ? new Date(dateTo + 'T23:59:59') : null;
+    const filtered = encs.filter(e => {
+        const d = new Date(e.data);
+        return (!from || d >= from) && (!to || d <= to);
+    });
+    const grandTotal = filtered.reduce((s, e) => s + totalEnc(e), 0);
+
+    const sections = fors.map(f => {
+        const fEncs = filtered.filter(e => String(e.fornecedorId) === String(f.id));
+        if (fEncs.length === 0) return '';
+        const forTotal = fEncs.reduce((s, e) => s + totalEnc(e), 0);
+        const rows = fEncs.map(e => {
+            const lineRows = e.linhas.map(l => `<tr>
+                <td style="padding-left:20px">${l.codigo}</td><td>${l.descricao}</td>
+                <td style="text-align:right">${l.qtdEncomendada} ${l.unidade}</td>
+                <td style="text-align:right">${l.custoUnit.toFixed(2)}</td>
+                <td style="text-align:right">${l.desconto||0}%</td>
+                <td style="text-align:right">${(l.custoUnit * l.qtdEncomendada * (1-(l.desconto||0)/100)).toFixed(2)}</td>
+            </tr>`).join('');
+            return `<tr style="background:#f9fafb">
+                <td colspan="2" style="font-weight:600">${e.numero} — ${fRF(e.data)} (Entrega: ${fRF(e.dataEntrega)})</td>
+                <td colspan="3"><span class="badge badge-${e.estado==='Recebida'?'green':e.estado==='Cancelada'?'red':e.estado==='Parcial'?'blue':'gray'}">${e.estado}</span></td>
+                <td style="text-align:right;font-weight:600">${totalEnc(e).toFixed(2)} ${e.moeda}</td>
+            </tr>${lineRows}`;
+        }).join('');
+        return `<h2>${f.nome} — ${fEncs.length} encomenda(s) · Total: ${forTotal.toFixed(2)} AOA</h2>
+            <table><thead><tr><th>Código</th><th>Descrição</th><th>Qtd</th><th>Custo Unit.</th><th>Desc.</th><th>Total</th></tr></thead>
+            <tbody>${rows}</tbody></table>`;
+    }).filter(Boolean).join('');
+
+    const periodStr = (from || to) ? `Período: ${from ? fRF(from.toISOString()) : '—'} a ${to ? fRF(to.toISOString()) : '—'}` : 'Todo o período';
+
+    const html = `
+        <div class="hdr">
+            <div class="hdr-left"><h1>${empresa?.nome || 'SGI'}</h1><div class="sub">${empresa?.morada || ''}</div></div>
+            <div style="text-align:right"><h1>Histórico de Compras por Fornecedor</h1><div class="sub">${periodStr} · Total Geral: ${grandTotal.toFixed(2)} AOA</div></div>
+        </div>
+        ${sections || '<p style="color:#999">Sem encomendas no período seleccionado.</p>'}`;
+    openPrintF(html, 'Histórico de Compras');
+}
+
+/* ══ Relatórios Modal ════════════════════════════════════════ */
+type RelFornTipo = 'ficha' | 'categoria' | 'historico';
+interface RelatoriosFornecedorModalProps {
+    fornecedores: Fornecedor[];
+    encomendas: Encomenda[];
+    artigos: Artigo[];
+    provincias: Provincia[];
+    municipios: Municipio[];
+    getProvinciaNome: (id?: string) => string;
+    getMunicipioNome: (id?: string) => string;
+    empresaConfig?: EmpresaConfig | null;
+    onClose: () => void;
+}
+const RelatoriosFornecedorModal: React.FC<RelatoriosFornecedorModalProps> = ({
+    fornecedores, encomendas, artigos, provincias, municipios, getProvinciaNome, getMunicipioNome, empresaConfig, onClose
+}) => {
+    const [tipo, setTipo] = useState<RelFornTipo>('ficha');
+    const [fornecedorId, setFornecedorId] = useState('');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
+
+    const handlePrint = () => {
+        if (tipo === 'ficha') {
+            const f = fornecedores.find(x => x.id === fornecedorId);
+            if (!f) return alert('Seleccione um fornecedor.');
+            printFichaFornecedor(f, encomendas, getProvinciaNome(f.provinciaId), getMunicipioNome(f.municipioId), empresaConfig);
+        } else if (tipo === 'categoria') {
+            printFornecedoresPorCategoria(fornecedores, encomendas, artigos, provincias, municipios, empresaConfig);
+        } else {
+            printHistoricoCompras(fornecedores, encomendas, dateFrom, dateTo, empresaConfig);
+        }
+    };
+
+    const tipos: { value: RelFornTipo; label: string; desc: string }[] = [
+        { value: 'ficha',     label: 'Ficha de Fornecedor',          desc: 'Dados, contactos e histórico de encomendas de um fornecedor' },
+        { value: 'categoria', label: 'Fornecedores por Categoria',   desc: 'Lista agrupada por categoria de artigos fornecidos'          },
+        { value: 'historico', label: 'Histórico de Compras',         desc: 'Encomendas detalhadas por fornecedor num período'            },
+    ];
+
+    return (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="modal" style={{ maxWidth: 480 }}>
+                <div className="modal-header">
+                    <h3 className="modal-title">Relatórios de Fornecedores</h3>
+                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                </div>
+                <div className="modal-body">
+                    <div className="form-group">
+                        <label className="form-label">Tipo de Relatório</label>
+                        {tipos.map(t => (
+                            <label key={t.value} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8, cursor: 'pointer' }}>
+                                <input type="radio" name="rel-forn" value={t.value} checked={tipo === t.value} onChange={() => setTipo(t.value)} style={{ marginTop: 3 }} />
+                                <div>
+                                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>{t.label}</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t.desc}</div>
+                                </div>
+                            </label>
+                        ))}
+                    </div>
+
+                    {tipo === 'ficha' && (
+                        <div className="form-group">
+                            <label className="form-label req">Fornecedor</label>
+                            <select className="form-select" value={fornecedorId} onChange={e => setFornecedorId(e.target.value)}>
+                                <option value="">Seleccionar...</option>
+                                {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                            </select>
+                        </div>
+                    )}
+
+                    {tipo === 'historico' && (
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label className="form-label">Data Início</label>
+                                <input type="date" className="form-input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Data Fim</label>
+                                <input type="date" className="form-input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                            </div>
+                        </div>
+                    )}
+                </div>
+                <div className="modal-footer">
+                    <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
+                    <button type="button" className="abtn abtn-primary" onClick={handlePrint}><Printer size={13} /> Imprimir</button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 /* ══ View Modal ══════════════════════════════════════════════ */
 interface FornecedorViewModalProps {
@@ -166,14 +413,15 @@ const FornecedorModal: React.FC<FornecedorModalProps> = ({ fornecedor, onClose, 
 
 /* ══ Page ════════════════════════════════════════════════ */
 const FornecedoresPage: React.FC = () => {
-    const { fornecedores, addFornecedor, updateFornecedor, removeFornecedor, encomendas, provincias, municipios } = useGlobal();
+    const { fornecedores, addFornecedor, updateFornecedor, removeFornecedor, encomendas, artigos, provincias, municipios, empresaConfig } = useGlobal();
 
-    const [search, setSearch]     = useState('');
-    const [modal, setModal]       = useState<'new' | string | null>(null);
-    const [viewId, setViewId]     = useState<string | null>(null);
-    const [toast, setToast]       = useState('');
-    const [toastErr, setToastErr] = useState('');
+    const [search, setSearch]         = useState('');
+    const [modal, setModal]           = useState<'new' | string | null>(null);
+    const [viewId, setViewId]         = useState<string | null>(null);
+    const [toast, setToast]           = useState('');
+    const [toastErr, setToastErr]     = useState('');
     const [showExport, setShowExport] = useState(false);
+    const [showRelatorios, setShowRelatorios] = useState(false);
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
     const showErr   = (msg: string) => { setToastErr(msg); setTimeout(() => setToastErr(''), 5000); };
@@ -237,6 +485,9 @@ const FornecedoresPage: React.FC = () => {
         <AppLayout>
             <ActionBar title="Fornecedores" breadcrumb="AQUATEX SGI · Fornecedores">
                 <div className="actionbar-spacer" />
+                <button className="abtn abtn-secondary" type="button" onClick={() => setShowRelatorios(true)}>
+                    <Printer size={13} /> Relatórios
+                </button>
                 <button className="abtn abtn-secondary" type="button" onClick={() => setShowExport(true)}>
                     <Download size={13} /> Exportar
                 </button>
@@ -357,6 +608,20 @@ const FornecedoresPage: React.FC = () => {
                     <AlertCircle size={14} />
                     <span>{toastErr}</span>
                 </div>
+            )}
+
+            {showRelatorios && (
+                <RelatoriosFornecedorModal
+                    fornecedores={fornecedores}
+                    encomendas={encomendas}
+                    artigos={artigos}
+                    provincias={provincias}
+                    municipios={municipios}
+                    getProvinciaNome={getProvinciaNome}
+                    getMunicipioNome={getMunicipioNome}
+                    empresaConfig={empresaConfig}
+                    onClose={() => setShowRelatorios(false)}
+                />
             )}
 
             {showExport && (
