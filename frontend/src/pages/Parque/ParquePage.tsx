@@ -242,6 +242,202 @@ ${body || '<p style="color:#999;text-align:center">Nenhuma intervenção encontr
     w.document.close(); w.focus(); setTimeout(() => w.print(), 350);
 }
 
+/* ── Estado do Parque print ── */
+interface EstadoSeccoes { ativos: boolean; manutencoes: boolean; problemas: boolean; }
+
+function printEstadoParque(
+    equipInstalados: EquipInstalado[],
+    ordens: OrdemTrabalho[],
+    clientes: Cliente[],
+    modelosEquipamento: ModeloEquipamento[],
+    empresa: string,
+    seccoes: EstadoSeccoes,
+) {
+    const now = Date.now();
+    const isCorr = (o: OrdemTrabalho) =>
+        o.tipo === 'pontual' && o.tipoTrabalho.toLowerCase().includes('corretiv');
+
+    const stats = equipInstalados.map(eq => {
+        const eqOts  = ordens.filter(o => String(o.equipInstaladoId) === String(eq.id));
+        const open   = eqOts.filter(o => o.estado === 'Programado' || o.estado === 'Em curso');
+        const closed = eqOts.filter(o => o.estado === 'Terminado'  || o.estado === 'Encerrado');
+        const finDates  = closed.map(o => o.dataFim || o.dataEncerramento || o.dataProgFim).filter(Boolean) as string[];
+        const openDates = open.map(o => o.dataProgFim || o.dataProgInicio).filter(Boolean) as string[];
+        const ultimaMt  = finDates.length  > 0 ? [...finDates].sort().at(-1)  : undefined;
+        const proximaMt = openDates.length > 0 ? [...openDates].sort()[0]     : undefined;
+        const hasCorr   = open.some(isCorr);
+        const effective: EstadoEquip = eq.estado === 'inativo' ? 'inativo' : hasCorr ? 'com_problema' : eq.estado;
+        const diasProx  = proximaMt ? Math.ceil((new Date(proximaMt).getTime() - now) / 86400000) : null;
+        const corretivas = open.filter(isCorr);
+        return { eq, ultimaMt, proximaMt, effective, diasProx, corretivas };
+    });
+
+    const getCli = (eq: EquipInstalado) => clientes.find(c => String(c.id) === String(eq.clienteId))?.nome ?? '—';
+    const getMod = (eq: EquipInstalado) => modelosEquipamento.find(m => String(m.id) === String(eq.modeloId))?.nome ?? '—';
+
+    const nAtivos    = stats.filter(s => s.effective === 'ativo').length;
+    const nProblema  = stats.filter(s => s.effective === 'com_problema').length;
+    const nInativos  = stats.filter(s => s.effective === 'inativo').length;
+    const nUrgentes  = stats.filter(s => s.diasProx !== null && s.diasProx! <= 7).length;
+    const nProximos  = stats.filter(s => s.diasProx !== null && s.diasProx! > 7 && s.diasProx! <= 30).length;
+
+    const comProblema = stats.filter(s => s.effective === 'com_problema');
+    const previstas   = stats
+        .filter(s => s.proximaMt && s.effective !== 'inativo')
+        .sort((a, b) => (a.proximaMt || '').localeCompare(b.proximaMt || ''));
+    const semManutencao = stats.filter(s => s.effective === 'ativo' && !s.proximaMt);
+
+    const trOT = (s: typeof stats[0]) =>
+        s.corretivas.map(o => `<span style="font-size:0.68rem;color:#f97316">OT ${o.id} — ${o.tipoTrabalho} (${o.estado})</span>`).join('<br>');
+
+    const diasCor = (d: number | null) =>
+        d === null ? '—' : d < 0 ? `<span style="color:#dc2626;font-weight:700">Atrasada ${Math.abs(d)}d</span>`
+        : d <= 7   ? `<span style="color:#dc2626;font-weight:700">+${d}d</span>`
+        : d <= 30  ? `<span style="color:#f97316;font-weight:700">+${d}d</span>`
+        :            `+${d}d`;
+
+    const w = window.open('', '_blank', 'width=1000,height=900');
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html>
+<html lang="pt"><head><meta charset="UTF-8"><title>Estado do Parque</title>
+<style>
+${PRINT_CSS}
+.kpi-row { display:flex; gap:14px; margin-bottom:14px; flex-wrap:wrap; }
+.kpi { flex:1; min-width:110px; border:1.5px solid #ddd; border-radius:4px; padding:8px 12px; text-align:center; }
+.kpi .val { font-size:1.6rem; font-weight:700; line-height:1.1; }
+.kpi .lbl { font-size:0.65rem; color:#888; margin-top:2px; }
+.green  { color:#16a34a; } .orange { color:#f97316; } .red { color:#dc2626; } .gray { color:#6b7280; }
+@page { size: A4; margin: 0; }
+</style></head><body>
+<div class="hrow">
+  <div>
+    <h1>${empresa} — Relatório de Estado do Parque</h1>
+    <div class="sub">Impresso em ${new Date().toLocaleString('pt-PT')} &nbsp;|&nbsp; Total: ${equipInstalados.length} equipamentos</div>
+  </div>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi"><div class="val green">${nAtivos}</div><div class="lbl">Activos</div></div>
+  <div class="kpi"><div class="val orange">${nProblema}</div><div class="lbl">Com Problema</div></div>
+  <div class="kpi"><div class="val gray">${nInativos}</div><div class="lbl">Inactivos</div></div>
+  <div class="kpi"><div class="val red">${nUrgentes}</div><div class="lbl">Manutenção Urgente (≤7d)</div></div>
+  <div class="kpi"><div class="val orange">${nProximos}</div><div class="lbl">Manutenção Próxima (≤30d)</div></div>
+</div>
+
+${seccoes.problemas && nProblema > 0 ? `
+<div class="sec">⚠ Equipamentos com Problema (${nProblema})</div>
+<table>
+  <thead><tr><th>ID</th><th>Modelo</th><th>Cliente</th><th>Série</th><th>Localização</th><th>OTs Corretivas em Aberto</th></tr></thead>
+  <tbody>${comProblema.map(s => `<tr>
+    <td style="font-family:monospace">${s.eq.id}</td>
+    <td>${getMod(s.eq)}</td>
+    <td>${getCli(s.eq)}</td>
+    <td style="font-family:monospace">${s.eq.nrSerie}</td>
+    <td>${s.eq.localizacao || '—'}</td>
+    <td>${trOT(s) || '—'}</td>
+  </tr>`).join('')}</tbody>
+</table>` : seccoes.problemas ? '<div class="sec">⚠ Equipamentos com Problema (0)</div><p style="color:#999;font-size:0.78rem">Nenhum equipamento com problema.</p>' : ''}
+
+${seccoes.manutencoes ? `
+<div class="sec">Manutenções Previstas (${previstas.length})</div>
+${previstas.length > 0 ? `<table>
+  <thead><tr><th>ID</th><th>Modelo</th><th>Cliente</th><th>Série</th><th>Localização</th><th>Última Manutenção</th><th>Próxima Manutenção</th><th>Prazo</th></tr></thead>
+  <tbody>${previstas.map(s => `<tr>
+    <td style="font-family:monospace">${s.eq.id}</td>
+    <td>${getMod(s.eq)}</td>
+    <td>${getCli(s.eq)}</td>
+    <td style="font-family:monospace">${s.eq.nrSerie}</td>
+    <td>${s.eq.localizacao || '—'}</td>
+    <td>${fD(s.ultimaMt)}</td>
+    <td>${fD(s.proximaMt)}</td>
+    <td>${diasCor(s.diasProx)}</td>
+  </tr>`).join('')}</tbody>
+</table>` : '<p style="color:#999;font-size:0.78rem">Nenhuma manutenção programada.</p>'}` : ''}
+
+${seccoes.ativos ? `
+<div class="sec">Equipamentos Activos — Todos (${stats.filter(s => s.effective !== 'inativo').length})</div>
+<table>
+  <thead><tr><th>ID</th><th>Modelo</th><th>Tipo</th><th>Cliente</th><th>Série</th><th>Localização</th><th>Instalação</th><th>Última Manut.</th><th>Próxima Manut.</th><th>Estado</th></tr></thead>
+  <tbody>${stats.filter(s => s.effective !== 'inativo').sort((a,b) => a.eq.id.toString().localeCompare(b.eq.id.toString(), undefined, {numeric:true})).map(s => {
+    const tipo = modelosEquipamento.find(m => String(m.id) === String(s.eq.modeloId))?.tipo ?? '';
+    return `<tr>
+    <td style="font-family:monospace">${s.eq.id}</td>
+    <td>${getMod(s.eq)}</td>
+    <td>${tipo === 'maquina' ? 'Máquina' : 'Filtro'}</td>
+    <td>${getCli(s.eq)}</td>
+    <td style="font-family:monospace">${s.eq.nrSerie}</td>
+    <td>${s.eq.localizacao || '—'}</td>
+    <td>${fD(s.eq.dataInstalacao)}</td>
+    <td>${fD(s.ultimaMt)}</td>
+    <td>${fD(s.proximaMt)}</td>
+    <td style="color:${s.effective === 'com_problema' ? '#f97316' : '#16a34a'};font-weight:600">${s.effective === 'com_problema' ? 'Com Problema' : 'Activo'}</td>
+  </tr>`;}).join('')}</tbody>
+</table>
+${semManutencao.length > 0 ? `<p style="font-size:0.72rem;color:#f97316;margin-top:6px">⚠ ${semManutencao.length} equipamento(s) activo(s) sem manutenção programada.</p>` : ''}` : ''}
+
+<div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
+</body></html>`);
+    w.document.close(); w.focus(); setTimeout(() => w.print(), 350);
+}
+
+/* ══ Relatório Estado Modal ══════════════════════════════ */
+const RelatorioEstadoModal: React.FC<{ onClose: () => void; onPrint: (s: EstadoSeccoes) => void }> = ({ onClose, onPrint }) => {
+    const [ativos,      setAtivos]      = useState(true);
+    const [manutencoes, setManutencoes] = useState(true);
+    const [problemas,   setProblemas]   = useState(true);
+    const nenhum = !ativos && !manutencoes && !problemas;
+
+    const ChkRow: React.FC<{ label: string; sub: string; checked: boolean; onChange: () => void }> = ({ label, sub, checked, onChange }) => (
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border)', background: checked ? 'rgba(37,99,235,0.04)' : undefined }}>
+            <input type="checkbox" checked={checked} onChange={onChange} style={{ accentColor: 'var(--blue)', marginTop: 2, flexShrink: 0 }} />
+            <div>
+                <div style={{ fontSize: '0.83rem', fontWeight: 600 }}>{label}</div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: 2 }}>{sub}</div>
+            </div>
+        </label>
+    );
+
+    return (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="modal" style={{ maxWidth: 440 }}>
+                <div className="modal-header">
+                    <h3 className="modal-title">Relatório de Estado do Parque</h3>
+                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                </div>
+                <div className="modal-body" style={{ padding: 0 }}>
+                    <div style={{ padding: '12px 16px 8px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        Seleccione as secções a incluir no relatório impresso:
+                    </div>
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 3, margin: '0 16px 16px' }}>
+                        <ChkRow
+                            label="Equipamentos Activos"
+                            sub="Lista completa dos equipamentos activos com datas de manutenção"
+                            checked={ativos} onChange={() => setAtivos(v => !v)}
+                        />
+                        <ChkRow
+                            label="Manutenções Previstas"
+                            sub="Equipamentos com OTs programadas, ordenados por proximidade da data"
+                            checked={manutencoes} onChange={() => setManutencoes(v => !v)}
+                        />
+                        <ChkRow
+                            label="Equipamentos com Problema"
+                            sub="Equipamentos com OTs corretivas pontualmente abertas"
+                            checked={problemas} onChange={() => setProblemas(v => !v)}
+                        />
+                    </div>
+                </div>
+                <div className="modal-footer">
+                    <button className="abtn abtn-secondary" type="button" onClick={onClose}>Cancelar</button>
+                    <button className="abtn abtn-primary" type="button" disabled={nenhum}
+                        onClick={() => { onPrint({ ativos, manutencoes, problemas }); onClose(); }}>
+                        <Printer size={12} /> Imprimir Relatório
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 /* ══ Modelo Modal ════════════════════════════════════════ */
 interface ModeloModalProps {
     modelo?: ModeloEquipamento;
@@ -617,7 +813,7 @@ const ParquePage: React.FC = () => {
     const {
         equipInstalados, addEquipInstalado, updateEquipInstalado,
         modelosEquipamento, addModelo, updateModelo,
-        clientes, addOrdem, ordens, fmtDate,
+        clientes, addOrdem, ordens, fmtDate, empresaConfig,
     } = useGlobal();
 
     // Computed stats per equipment from OTs
@@ -656,7 +852,8 @@ const ParquePage: React.FC = () => {
     const [mSearch, setMSearch]     = useState('');
     const [mModal, setMModal]       = useState<'new' | string | null>(null);
 
-    const [showExport, setShowExport] = useState(false);
+    const [showExport,    setShowExport]    = useState(false);
+    const [showRelatorio, setShowRelatorio] = useState(false);
     const [toast, setToast] = useState('');
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
@@ -770,6 +967,12 @@ const ParquePage: React.FC = () => {
         <AppLayout>
             <ActionBar title="Parque de Equipamentos" breadcrumb="AQUATEX SGI · Parque">
                 <div className="actionbar-spacer" />
+                {view === 'equipamentos' && (
+                    <button className="abtn abtn-secondary" type="button"
+                        onClick={() => setShowRelatorio(true)}>
+                        <Printer size={13} /> Relatório de Estado
+                    </button>
+                )}
                 <button className="abtn abtn-secondary" type="button" onClick={() => setShowExport(true)}>
                     <Download size={13} /> Exportar
                 </button>
@@ -950,6 +1153,13 @@ const ParquePage: React.FC = () => {
                     </>
                 )}
             </div>
+
+            {showRelatorio && (
+                <RelatorioEstadoModal
+                    onClose={() => setShowRelatorio(false)}
+                    onPrint={seccoes => printEstadoParque(equipInstalados, ordens, clientes, modelosEquipamento, empresaConfig?.nome || 'AQUATEX', seccoes)}
+                />
+            )}
 
             {/* Equip modals */}
             {(modal === 'new' || modal === 'edit') && (
