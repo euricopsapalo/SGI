@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
-import { Search, Plus, Pencil, Eye, Phone, Mail, MapPin, Building2, User, X, Check, AlertCircle, Trash2, Download } from 'lucide-react';
+import { Search, Plus, Pencil, Eye, Phone, Mail, MapPin, Building2, User, X, Check, AlertCircle, Trash2, Download, Printer } from 'lucide-react';
+import SearchableSelect from '../../components/SearchableSelect';
 import axios from 'axios';
-import { useGlobal } from '../../contexts/GlobalContext';
+import { useGlobal, EquipInstalado, OrdemTrabalho, ModeloEquipamento } from '../../contexts/GlobalContext';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
@@ -442,6 +443,515 @@ const ClienteDetail: React.FC<DetailProps> = ({ cliente, maquinas, osTotal, onCl
 };
 
 /* ══════════════════════════════════════════
+   RELATÓRIOS DE CLIENTES
+══════════════════════════════════════════ */
+
+const RC_CSS = `
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
+  body   { font-family: Arial, sans-serif; font-size: 11px; padding: 12mm 18mm; color: #1a1a1a; }
+  h1     { font-size: 1rem; margin: 0; }
+  .sub   { font-size: 0.68rem; color: #888; margin: 2px 0 14px; }
+  .hrow  { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.68rem; font-weight: 700; border: 1.5px solid #555; color: #333; background: #f5f5f5; }
+  .sec   { font-size: 0.8rem; font-weight: 700; color: #2B2B2B; border-bottom: 1.5px solid #2B2B2B; padding-bottom: 3px; margin: 14px 0 5px; }
+  table  { width: 100%; border-collapse: collapse; margin-bottom: 4px; page-break-inside: auto; }
+  thead  { display: table-header-group; }
+  th     { background: #2B2B2B; color: #fff; padding: 5px 8px; font-size: 0.7rem; font-weight: 700; border: 1px solid #444; text-align: left; }
+  td     { padding: 4px 8px; border: 1px solid #ddd; font-size: 0.75rem; vertical-align: top; }
+  tr:nth-child(even) td { background: #f9f9f9; }
+  tr:nth-child(odd)  td { background: #fff; }
+  .lbl   { background: #f5f5f5 !important; font-weight: 600; color: #444; white-space: nowrap; }
+  .cli-block { border: 1px solid #ddd; border-radius: 3px; padding: 10px 12px; margin-bottom: 14px; page-break-inside: avoid; }
+  .cli-name  { font-size: 0.88rem; font-weight: 700; margin-bottom: 4px; }
+  .footer { margin-top: 18px; font-size: 0.62rem; color: #bbb; text-align: center; border-top: 1px solid #eee; padding-top: 5px; }
+  .green { color: #16a34a; } .orange { color: #f97316; } .red { color: #dc2626; } .gray { color: #6b7280; }
+  @page { size: A4; margin: 0; }
+`;
+
+function fRC(d?: string) { return d ? new Date(d).toLocaleDateString('pt-PT') : '—'; }
+function otCorRC(estado: string) {
+    if (estado === 'Terminado') return '#16a34a';
+    if (estado === 'Em curso')  return '#f97316';
+    if (estado === 'Encerrado') return '#6b7280';
+    return '#2563eb';
+}
+function proxManutRC(equipId: string, ordens: OrdemTrabalho[]) {
+    const dates = ordens
+        .filter(o => String(o.equipInstaladoId) === String(equipId) && (o.estado === 'Programado' || o.estado === 'Em curso'))
+        .map(o => o.dataProgFim || o.dataProgInicio).filter(Boolean) as string[];
+    return dates.length > 0 ? [...dates].sort()[0] : undefined;
+}
+function ultimaIntRC(clienteId: string | number, ordens: OrdemTrabalho[]) {
+    const dates = ordens
+        .filter(o => String(o.clienteId) === String(clienteId))
+        .map(o => o.dataFim || o.dataEncerramento || o.dataProgInicio || o.dataEmissao || '').filter(Boolean).sort();
+    return dates.at(-1);
+}
+function openPrint(html: string) {
+    const w = window.open('', '_blank', 'width=1000,height=900');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 350);
+}
+
+/* 1. Ficha de Cliente */
+function printFichaCliente(
+    c: Cliente,
+    equips: EquipInstalado[],
+    ordens: OrdemTrabalho[],
+    modelosEquipamento: ModeloEquipamento[],
+    empresa: string,
+) {
+    const end = endPrincipal(c);
+    const cliEquips = equips.filter(e => String(e.clienteId) === String(c.id));
+    const cliOTs    = ordens.filter(o => String(o.clienteId) === String(c.id))
+        .sort((a, b) => (b.dataProgInicio || '').localeCompare(a.dataProgInicio || ''));
+
+    const equipRows = cliEquips.map(e => {
+        const mod   = modelosEquipamento.find(m => String(m.id) === String(e.modeloId));
+        const prox  = proxManutRC(e.id, ordens);
+        const dias  = prox ? Math.ceil((new Date(prox).getTime() - Date.now()) / 86400000) : null;
+        const dCor  = dias === null ? '' : dias < 0 ? 'color:#dc2626' : dias <= 7 ? 'color:#dc2626' : dias <= 30 ? 'color:#f97316' : '';
+        return `<tr>
+          <td style="font-family:monospace">${e.id}</td>
+          <td>${mod?.nome ?? '—'}</td>
+          <td>${mod?.tipo === 'maquina' ? 'Máquina' : 'Filtro'}</td>
+          <td style="font-family:monospace">${e.nrSerie}</td>
+          <td>${e.localizacao || '—'}</td>
+          <td style="color:${e.estado === 'ativo' ? '#16a34a' : e.estado === 'com_problema' ? '#f97316' : '#6b7280'};font-weight:600">${e.estado === 'ativo' ? 'Activo' : e.estado === 'com_problema' ? 'Com Problema' : 'Inactivo'}</td>
+          <td style="${dCor}">${fRC(prox)}${dias !== null ? ` (${dias >= 0 ? '+' : ''}${dias}d)` : ''}</td>
+        </tr>`;
+    }).join('');
+
+    const otRows = cliOTs.slice(0, 20).map(o => `<tr>
+      <td style="font-family:monospace">${o.id}</td>
+      <td>${o.tipo === 'pontual' ? 'Pontual' : 'Programada'}</td>
+      <td>${o.tipoTrabalho}</td>
+      <td style="color:${otCorRC(o.estado)};font-weight:600">${o.estado}</td>
+      <td>${fRC(o.dataProgInicio || o.dataProgFim)}</td>
+      <td>${fRC(o.dataFim || o.dataEncerramento)}</td>
+      <td>${o.responsavel || '—'}</td>
+    </tr>`).join('');
+
+    openPrint(`<!DOCTYPE html>
+<html lang="pt"><head><meta charset="UTF-8"><title>Ficha ${codigoCli(c.id)}</title>
+<style>${RC_CSS}</style></head><body>
+<div class="hrow">
+  <div><h1>${empresa} — Ficha de Cliente</h1>
+  <div class="sub">Código: <strong>${codigoCli(c.id)}</strong> &nbsp;|&nbsp; Impresso em ${new Date().toLocaleString('pt-PT')}</div></div>
+  <span class="badge">${c.ativo !== false ? 'Ativo' : 'Inativo'}</span>
+</div>
+<div class="sec">Dados do Cliente</div>
+<table><tbody>
+  <tr><td class="lbl">Nome</td><td>${c.nome}</td><td class="lbl">Tipo</td><td>${c.tipo === 'empresa' ? 'Empresa' : 'Particular'}</td></tr>
+  <tr><td class="lbl">NIF / BI</td><td>${c.nif || '—'}</td><td class="lbl">Email</td><td>${c.email || '—'}</td></tr>
+  <tr><td class="lbl">Telefone</td><td>${c.telefone || '—'}</td><td class="lbl">Morada</td><td>${end.morada || '—'}, ${end.cidade || '—'}</td></tr>
+</tbody></table>
+${cliEquips.length > 0 ? `
+<div class="sec">Equipamentos Instalados (${cliEquips.length})</div>
+<table><thead><tr><th>ID</th><th>Modelo</th><th>Tipo</th><th>Série</th><th>Localização</th><th>Estado</th><th>Próxima Manut.</th></tr></thead>
+<tbody>${equipRows}</tbody></table>` : '<div class="sec">Equipamentos Instalados</div><p style="color:#999;font-size:0.78rem">Nenhum equipamento instalado.</p>'}
+${cliOTs.length > 0 ? `
+<div class="sec">Histórico de OTs (${cliOTs.length}${cliOTs.length > 20 ? ' — últimas 20' : ''})</div>
+<table><thead><tr><th>ID</th><th>Tipo OT</th><th>Tipo Trabalho</th><th>Estado</th><th>Data Prog.</th><th>Data Fim</th><th>Responsável</th></tr></thead>
+<tbody>${otRows}</tbody></table>` : '<div class="sec">Histórico de OTs</div><p style="color:#999;font-size:0.78rem">Sem ordens de trabalho.</p>'}
+<div class="footer">${empresa} &nbsp;&bull;&nbsp; ${codigoCli(c.id)} — ${c.nome}</div>
+</body></html>`);
+}
+
+/* 2. Clientes por Estado */
+function printClientesPorEstado(
+    clientes: Cliente[],
+    ordens: OrdemTrabalho[],
+    equips: EquipInstalado[],
+    empresa: string,
+) {
+    const mkRow = (c: Cliente) => {
+        const ultima = ultimaIntRC(c.id, ordens);
+        const nEquips = equips.filter(e => String(e.clienteId) === String(c.id)).length;
+        const nOTs    = ordens.filter(o => String(o.clienteId) === String(c.id)).length;
+        return `<tr>
+          <td style="font-family:monospace">${codigoCli(c.id)}</td>
+          <td style="font-weight:600">${c.nome}</td>
+          <td>${c.tipo === 'empresa' ? 'Empresa' : 'Particular'}</td>
+          <td>${c.nif || '—'}</td>
+          <td>${c.telefone || '—'}</td>
+          <td style="text-align:center">${nEquips}</td>
+          <td style="text-align:center">${nOTs}</td>
+          <td>${fRC(ultima)}</td>
+        </tr>`;
+    };
+    const ativos   = clientes.filter(c => c.ativo !== false);
+    const inativos = clientes.filter(c => c.ativo === false);
+
+    openPrint(`<!DOCTYPE html>
+<html lang="pt"><head><meta charset="UTF-8"><title>Clientes por Estado</title>
+<style>${RC_CSS}</style></head><body>
+<div class="hrow">
+  <div><h1>${empresa} — Clientes por Estado</h1>
+  <div class="sub">Total: ${clientes.length} clientes &nbsp;|&nbsp; Impresso em ${new Date().toLocaleString('pt-PT')}</div></div>
+</div>
+<div class="sec">Clientes Ativos (${ativos.length})</div>
+<table><thead><tr><th>Código</th><th>Nome</th><th>Tipo</th><th>NIF/BI</th><th>Telefone</th><th>Equip.</th><th>OTs</th><th>Última Interação</th></tr></thead>
+<tbody>${ativos.map(mkRow).join('')}</tbody></table>
+${inativos.length > 0 ? `
+<div class="sec">Clientes Inativos (${inativos.length})</div>
+<table><thead><tr><th>Código</th><th>Nome</th><th>Tipo</th><th>NIF/BI</th><th>Telefone</th><th>Equip.</th><th>OTs</th><th>Última Interação</th></tr></thead>
+<tbody>${inativos.map(mkRow).join('')}</tbody></table>` : ''}
+<div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
+</body></html>`);
+}
+
+/* 3. Clientes sem Atividade */
+function printClientesSemAtividade(
+    clientes: Cliente[],
+    ordens: OrdemTrabalho[],
+    dateFrom: string,
+    dateTo: string,
+    empresa: string,
+) {
+    const refDate = (o: OrdemTrabalho) => o.dataProgInicio || o.dataEmissao || '';
+    const semAtiv = clientes.filter(c => c.ativo !== false).filter(c => {
+        const cOTs = ordens.filter(o => String(o.clienteId) === String(c.id));
+        const inPeriod = cOTs.filter(o => {
+            const d = refDate(o);
+            return (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo);
+        });
+        return inPeriod.length === 0;
+    });
+
+    const rows = semAtiv.map(c => {
+        const ultima = ultimaIntRC(c.id, ordens);
+        const nOTs   = ordens.filter(o => String(o.clienteId) === String(c.id)).length;
+        return `<tr>
+          <td style="font-family:monospace">${codigoCli(c.id)}</td>
+          <td style="font-weight:600">${c.nome}</td>
+          <td>${c.tipo === 'empresa' ? 'Empresa' : 'Particular'}</td>
+          <td>${c.nif || '—'}</td>
+          <td>${c.telefone || '—'}</td>
+          <td>${c.email || '—'}</td>
+          <td style="text-align:center">${nOTs}</td>
+          <td style="color:${ultima ? '#f97316' : '#dc2626'}">${fRC(ultima)}</td>
+        </tr>`;
+    }).join('');
+
+    const periodo = dateFrom || dateTo
+        ? `${dateFrom ? fRC(dateFrom) : '—'} a ${dateTo ? fRC(dateTo) : '—'}`
+        : 'Período não definido';
+
+    openPrint(`<!DOCTYPE html>
+<html lang="pt"><head><meta charset="UTF-8"><title>Clientes sem Atividade</title>
+<style>${RC_CSS}</style></head><body>
+<div class="hrow">
+  <div><h1>${empresa} — Clientes sem Atividade</h1>
+  <div class="sub">Período: ${periodo} &nbsp;|&nbsp; ${semAtiv.length} cliente(s) sem OT &nbsp;|&nbsp; Impresso em ${new Date().toLocaleString('pt-PT')}</div></div>
+  <span class="badge">${semAtiv.length} / ${clientes.filter(c => c.ativo !== false).length} ativos</span>
+</div>
+${rows ? `<table><thead><tr><th>Código</th><th>Nome</th><th>Tipo</th><th>NIF/BI</th><th>Telefone</th><th>Email</th><th>Total OTs</th><th>Última Interação</th></tr></thead>
+<tbody>${rows}</tbody></table>` : '<p style="color:#999;text-align:center;padding:20px">Todos os clientes têm atividade no período seleccionado.</p>'}
+<div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
+</body></html>`);
+}
+
+/* 4. Equipamentos por Cliente */
+function printEquipamentosPorCliente(
+    clientes: Cliente[],
+    equips: EquipInstalado[],
+    ordens: OrdemTrabalho[],
+    modelosEquipamento: ModeloEquipamento[],
+    empresa: string,
+) {
+    const comEquips = clientes.filter(c => equips.some(e => String(e.clienteId) === String(c.id)));
+    let body = '';
+    for (const c of comEquips) {
+        const cEquips = equips.filter(e => String(e.clienteId) === String(c.id));
+        const rows = cEquips.map(e => {
+            const mod  = modelosEquipamento.find(m => String(m.id) === String(e.modeloId));
+            const prox = proxManutRC(e.id, ordens);
+            const dias = prox ? Math.ceil((new Date(prox).getTime() - Date.now()) / 86400000) : null;
+            const dCor = dias === null ? '' : dias < 0 ? 'color:#dc2626' : dias <= 7 ? 'color:#dc2626' : dias <= 30 ? 'color:#f97316' : '';
+            return `<tr>
+              <td style="font-family:monospace">${e.id}</td>
+              <td>${mod?.nome ?? '—'}</td>
+              <td>${mod?.tipo === 'maquina' ? 'Máquina' : 'Filtro'}</td>
+              <td style="font-family:monospace">${e.nrSerie}</td>
+              <td>${e.localizacao || '—'}</td>
+              <td>${fRC(e.dataInstalacao)}</td>
+              <td style="color:${e.estado === 'ativo' ? '#16a34a' : e.estado === 'com_problema' ? '#f97316' : '#6b7280'};font-weight:600">${e.estado === 'ativo' ? 'Activo' : e.estado === 'com_problema' ? 'Com Problema' : 'Inactivo'}</td>
+              <td style="${dCor}">${fRC(prox)}${dias !== null ? ` (${dias >= 0 ? '+' : ''}${dias}d)` : ''}</td>
+            </tr>`;
+        }).join('');
+        body += `<div style="margin-bottom:16px;page-break-inside:avoid">
+  <div class="sec">${codigoCli(c.id)} — ${c.nome} &nbsp;<span style="font-weight:400;font-size:0.72rem;color:#888">${c.telefone || ''}</span></div>
+  <table><thead><tr><th>ID</th><th>Modelo</th><th>Tipo</th><th>Série</th><th>Localização</th><th>Instalação</th><th>Estado</th><th>Próxima Manut.</th></tr></thead>
+  <tbody>${rows}</tbody></table>
+</div>`;
+    }
+
+    openPrint(`<!DOCTYPE html>
+<html lang="pt"><head><meta charset="UTF-8"><title>Equipamentos por Cliente</title>
+<style>${RC_CSS}</style></head><body>
+<div class="hrow">
+  <div><h1>${empresa} — Equipamentos por Cliente</h1>
+  <div class="sub">${equips.length} equipamento(s) em ${comEquips.length} cliente(s) &nbsp;|&nbsp; Impresso em ${new Date().toLocaleString('pt-PT')}</div></div>
+</div>
+${body || '<p style="color:#999;text-align:center">Nenhum equipamento instalado.</p>'}
+<div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
+</body></html>`);
+}
+
+/* 5. Histórico de Intervenções por Cliente */
+function printHistoricoIntervCliente(
+    clientes: Cliente[],
+    ordens: OrdemTrabalho[],
+    equips: EquipInstalado[],
+    modelosEquipamento: ModeloEquipamento[],
+    dateFrom: string,
+    dateTo: string,
+    empresa: string,
+) {
+    const refDate = (o: OrdemTrabalho) => o.dataProgInicio || o.dataProgFim || o.dataEmissao || '';
+    const filtOTs = ordens.filter(o => {
+        const d = refDate(o);
+        return (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo);
+    });
+    const comOTs = clientes.filter(c => filtOTs.some(o => String(o.clienteId) === String(c.id)));
+    let body = '';
+    for (const c of comOTs) {
+        const cOTs = filtOTs.filter(o => String(o.clienteId) === String(c.id))
+            .sort((a, b) => refDate(b).localeCompare(refDate(a)));
+        const rows = cOTs.map(o => {
+            const eq  = equips.find(e => String(e.id) === String(o.equipInstaladoId));
+            const mod = modelosEquipamento.find(m => String(m.id) === String(eq?.modeloId));
+            return `<tr>
+              <td style="font-family:monospace">${o.id}</td>
+              <td>${mod?.nome ?? '—'}</td>
+              <td>${o.tipo === 'pontual' ? 'Pontual' : 'Programada'}</td>
+              <td>${o.tipoTrabalho}</td>
+              <td style="color:${otCorRC(o.estado)};font-weight:600">${o.estado}</td>
+              <td>${fRC(refDate(o))}</td>
+              <td>${fRC(o.dataFim || o.dataEncerramento)}</td>
+              <td>${o.responsavel || '—'}</td>
+            </tr>`;
+        }).join('');
+        body += `<div style="margin-bottom:16px;page-break-inside:avoid">
+  <div class="sec">${codigoCli(c.id)} — ${c.nome} &nbsp;<span style="font-weight:400;font-size:0.72rem;color:#888">${cOTs.length} OT(s)</span></div>
+  <table><thead><tr><th>ID OT</th><th>Equipamento</th><th>Tipo OT</th><th>Tipo Trabalho</th><th>Estado</th><th>Data Prog.</th><th>Data Fim</th><th>Responsável</th></tr></thead>
+  <tbody>${rows}</tbody></table>
+</div>`;
+    }
+
+    const periodo = dateFrom || dateTo
+        ? `Período: ${dateFrom ? fRC(dateFrom) : '—'} a ${dateTo ? fRC(dateTo) : '—'}`
+        : 'Todos os períodos';
+
+    openPrint(`<!DOCTYPE html>
+<html lang="pt"><head><meta charset="UTF-8"><title>Histórico de Intervenções por Cliente</title>
+<style>${RC_CSS}</style></head><body>
+<div class="hrow">
+  <div><h1>${empresa} — Histórico de Intervenções por Cliente</h1>
+  <div class="sub">${periodo} &nbsp;|&nbsp; ${filtOTs.length} OT(s) &nbsp;|&nbsp; Impresso em ${new Date().toLocaleString('pt-PT')}</div></div>
+</div>
+${body || '<p style="color:#999;text-align:center">Nenhuma intervenção encontrada.</p>'}
+<div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
+</body></html>`);
+}
+
+/* 6. Manutenções Pendentes por Cliente */
+function printManutencoesPendentes(
+    clientes: Cliente[],
+    equips: EquipInstalado[],
+    ordens: OrdemTrabalho[],
+    modelosEquipamento: ModeloEquipamento[],
+    thresholdDays: number,
+    empresa: string,
+) {
+    const now = Date.now();
+    type EqStat = { eq: EquipInstalado; prox?: string; dias: number | null; mod?: ModeloEquipamento };
+    const pendentes: Array<{ c: Cliente; items: EqStat[] }> = [];
+
+    for (const c of clientes.filter(cl => cl.ativo !== false)) {
+        const cEquips = equips.filter(e => String(e.clienteId) === String(c.id) && e.estado !== 'inativo');
+        const items: EqStat[] = cEquips.map(e => {
+            const prox = proxManutRC(e.id, ordens);
+            const dias = prox ? Math.ceil((new Date(prox).getTime() - now) / 86400000) : null;
+            const mod  = modelosEquipamento.find(m => String(m.id) === String(e.modeloId));
+            return { eq: e, prox, dias, mod };
+        }).filter(s => {
+            if (s.dias === null) return false;
+            if (thresholdDays === 0) return s.dias < 0; // only overdue
+            return s.dias <= thresholdDays;
+        }).sort((a, b) => (a.dias ?? 0) - (b.dias ?? 0));
+        if (items.length > 0) pendentes.push({ c, items });
+    }
+
+    let body = '';
+    for (const { c, items } of pendentes) {
+        const rows = items.map(s => {
+            const dCor = s.dias !== null && s.dias < 0 ? 'color:#dc2626;font-weight:700'
+                       : s.dias !== null && s.dias <= 7 ? 'color:#dc2626;font-weight:700'
+                       : 'color:#f97316;font-weight:700';
+            const diasStr = s.dias === null ? '—'
+                : s.dias < 0 ? `Atrasada ${Math.abs(s.dias)}d` : `+${s.dias}d`;
+            return `<tr>
+              <td style="font-family:monospace">${s.eq.id}</td>
+              <td>${s.mod?.nome ?? '—'}</td>
+              <td style="font-family:monospace">${s.eq.nrSerie}</td>
+              <td>${s.eq.localizacao || '—'}</td>
+              <td style="color:${s.eq.estado === 'com_problema' ? '#f97316' : '#16a34a'};font-weight:600">${s.eq.estado === 'com_problema' ? 'Com Problema' : 'Activo'}</td>
+              <td>${fRC(s.prox)}</td>
+              <td style="${dCor}">${diasStr}</td>
+            </tr>`;
+        }).join('');
+        body += `<div style="margin-bottom:16px;page-break-inside:avoid">
+  <div class="sec">${codigoCli(c.id)} — ${c.nome}</div>
+  <table><thead><tr><th>ID Equip.</th><th>Modelo</th><th>Série</th><th>Localização</th><th>Estado</th><th>Próxima Manut.</th><th>Prazo</th></tr></thead>
+  <tbody>${rows}</tbody></table>
+</div>`;
+    }
+
+    const threshStr = thresholdDays === 0 ? 'Apenas em atraso' : thresholdDays === 9999 ? 'Todas as pendentes' : `Próximos ${thresholdDays} dias`;
+
+    openPrint(`<!DOCTYPE html>
+<html lang="pt"><head><meta charset="UTF-8"><title>Manutenções Pendentes por Cliente</title>
+<style>${RC_CSS}</style></head><body>
+<div class="hrow">
+  <div><h1>${empresa} — Manutenções Pendentes por Cliente</h1>
+  <div class="sub">${threshStr} &nbsp;|&nbsp; ${pendentes.length} cliente(s) com pendências &nbsp;|&nbsp; Impresso em ${new Date().toLocaleString('pt-PT')}</div></div>
+</div>
+${body || '<p style="color:#999;text-align:center;padding:20px">Nenhuma manutenção pendente no critério seleccionado.</p>'}
+<div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
+</body></html>`);
+}
+
+/* ── Modal de Seleção de Relatório ── */
+type RelatCliType = 'ficha' | 'estado' | 'sem_atividade' | 'equip_cliente' | 'historico' | 'manut_pendentes';
+
+const RELAT_CLI_OPTS: Array<{ id: RelatCliType; label: string; sub: string }> = [
+    { id: 'ficha',           label: 'Ficha de Cliente',                      sub: 'Resumo completo: dados, equipamentos instalados e histórico de OTs' },
+    { id: 'estado',          label: 'Clientes por Estado',                   sub: 'Ativos vs. inativos com data de última interação' },
+    { id: 'sem_atividade',   label: 'Clientes sem Atividade',                sub: 'Clientes sem OT num período definido (útil para retenção)' },
+    { id: 'equip_cliente',   label: 'Equipamentos por Cliente',              sub: 'Parque instalado por cliente com estado e próxima manutenção' },
+    { id: 'historico',       label: 'Histórico de Intervenções por Cliente', sub: 'Todas as OTs realizadas com datas, tipo e responsável' },
+    { id: 'manut_pendentes', label: 'Manutenções Pendentes por Cliente',     sub: 'Equipamentos com manutenção em atraso ou próxima' },
+];
+
+interface RelatoriosClienteModalProps {
+    clientes: Cliente[];
+    onClose: () => void;
+}
+const RelatoriosClienteModal: React.FC<RelatoriosClienteModalProps> = ({ clientes, onClose }) => {
+    const { equipInstalados, ordens, modelosEquipamento, empresaConfig } = useGlobal();
+    const empresa = empresaConfig?.nome || 'AQUATEX';
+
+    const [tipo,       setTipo]       = useState<RelatCliType>('ficha');
+    const [clienteId,  setClienteId]  = useState('');
+    const [dateFrom,   setDateFrom]   = useState('');
+    const [dateTo,     setDateTo]     = useState('');
+    const [threshold,  setThreshold]  = useState(30);
+
+    const clienteOpts = clientes.map(c => ({ value: String(c.id), label: c.nome, sub: codigoCli(c.id) }));
+
+    const canPrint = tipo !== 'ficha' || !!clienteId;
+
+    const handlePrint = () => {
+        const empresa2 = empresa;
+        if (tipo === 'ficha') {
+            const c = clientes.find(cl => String(cl.id) === clienteId);
+            if (!c) return;
+            printFichaCliente(c, equipInstalados, ordens, modelosEquipamento, empresa2);
+        } else if (tipo === 'estado') {
+            printClientesPorEstado(clientes, ordens, equipInstalados, empresa2);
+        } else if (tipo === 'sem_atividade') {
+            printClientesSemAtividade(clientes, ordens, dateFrom, dateTo, empresa2);
+        } else if (tipo === 'equip_cliente') {
+            printEquipamentosPorCliente(clientes, equipInstalados, ordens, modelosEquipamento, empresa2);
+        } else if (tipo === 'historico') {
+            printHistoricoIntervCliente(clientes, ordens, equipInstalados, modelosEquipamento, dateFrom, dateTo, empresa2);
+        } else if (tipo === 'manut_pendentes') {
+            printManutencoesPendentes(clientes, equipInstalados, ordens, modelosEquipamento, threshold, empresa2);
+        }
+        onClose();
+    };
+
+    return (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="modal" style={{ maxWidth: 540 }}>
+                <div className="modal-header">
+                    <h3 className="modal-title">Relatórios de Clientes</h3>
+                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                </div>
+                <div className="modal-body">
+                    {/* Report type selector */}
+                    <div className="form-group">
+                        <label className="form-label">Tipo de Relatório</label>
+                        <div style={{ border: '1px solid var(--border)', borderRadius: 3 }}>
+                            {RELAT_CLI_OPTS.map((opt, i) => (
+                                <label key={opt.id} style={{
+                                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                                    padding: '9px 12px', cursor: 'pointer',
+                                    borderBottom: i < RELAT_CLI_OPTS.length - 1 ? '1px solid var(--border)' : undefined,
+                                    background: tipo === opt.id ? 'rgba(37,99,235,0.05)' : undefined,
+                                }}>
+                                    <input type="radio" name="relat_tipo" value={opt.id} checked={tipo === opt.id}
+                                        onChange={() => setTipo(opt.id)}
+                                        style={{ accentColor: 'var(--blue)', marginTop: 3, flexShrink: 0 }} />
+                                    <div>
+                                        <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{opt.label}</div>
+                                        <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', marginTop: 1 }}>{opt.sub}</div>
+                                    </div>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Dynamic options */}
+                    {tipo === 'ficha' && (
+                        <div className="form-group">
+                            <label className="form-label req">Cliente</label>
+                            <SearchableSelect options={clienteOpts} value={clienteId} onChange={setClienteId} placeholder="Seleccionar cliente..." />
+                        </div>
+                    )}
+                    {(tipo === 'sem_atividade' || tipo === 'historico') && (
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label className="form-label">Data Início</label>
+                                <input type="date" className="form-input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Data Fim</label>
+                                <input type="date" className="form-input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                            </div>
+                        </div>
+                    )}
+                    {tipo === 'manut_pendentes' && (
+                        <div className="form-group">
+                            <label className="form-label">Horizonte de Manutenção</label>
+                            <select className="form-select" value={threshold} onChange={e => setThreshold(Number(e.target.value))}>
+                                <option value={0}>Apenas em atraso</option>
+                                <option value={7}>Próximos 7 dias</option>
+                                <option value={14}>Próximos 14 dias</option>
+                                <option value={30}>Próximos 30 dias</option>
+                                <option value={60}>Próximos 60 dias</option>
+                                <option value={9999}>Todas as previstas</option>
+                            </select>
+                        </div>
+                    )}
+                </div>
+                <div className="modal-footer">
+                    <button className="abtn abtn-secondary" type="button" onClick={onClose}>Cancelar</button>
+                    <button className="abtn abtn-primary" type="button" disabled={!canPrint} onClick={handlePrint}>
+                        <Printer size={12} /> Imprimir Relatório
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+/* ══════════════════════════════════════════
    MAIN PAGE
 ══════════════════════════════════════════ */
 const ClientesPage: React.FC = () => {
@@ -455,6 +965,7 @@ const ClientesPage: React.FC = () => {
     const [toast, setToast]         = useState('');
     const [toastErr, setToastErr]   = useState('');
     const [showExport, setShowExport] = useState(false);
+    const [showRelatorios, setShowRelatorios] = useState(false);
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
     const showErr   = (msg: string) => { setToastErr(msg); setTimeout(() => setToastErr(''), 5000); };
@@ -545,6 +1056,9 @@ const ClientesPage: React.FC = () => {
         <AppLayout>
             <ActionBar title="Gestão de Clientes" breadcrumb="AQUATEX SGI · Clientes">
                 <div className="actionbar-spacer" />
+                <button className="abtn abtn-secondary" type="button" onClick={() => setShowRelatorios(true)}>
+                    <Printer size={13} /> Relatórios
+                </button>
                 <button className="abtn abtn-secondary" type="button" onClick={() => setShowExport(true)}>
                     <Download size={13} /> Exportar
                 </button>
@@ -702,6 +1216,13 @@ const ClientesPage: React.FC = () => {
                     <AlertCircle size={14} />
                     <span>{toastErr}</span>
                 </div>
+            )}
+
+            {showRelatorios && (
+                <RelatoriosClienteModal
+                    clientes={clientes}
+                    onClose={() => setShowRelatorios(false)}
+                />
             )}
 
             {showExport && (
