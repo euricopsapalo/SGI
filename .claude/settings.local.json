@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(docker-compose logs:*)",
-      "Bash(/dev/null docker:*)"
+      "Bash(/dev/null docker:*)",
+      "Bash(docker compose:*)"
     ]
   }
 }

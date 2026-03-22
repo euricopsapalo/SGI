@@ -4,7 +4,7 @@ import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import {
-    useGlobal, EquipInstalado, EstadoEquip, ModeloEquipamento, Cliente,
+    useGlobal, EquipInstalado, EstadoEquip, ModeloEquipamento, Cliente, OrdemTrabalho,
 } from '../../contexts/GlobalContext';
 import {
     Search, Plus, Edit2, X, AlertCircle, Check, MapPin,
@@ -22,10 +22,18 @@ const ESTADO_LABEL: Record<EstadoEquip, string> = {
     inativo:      'Inactivo',
 };
 
-const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('pt-PT') : '—';
 const diffDays = (d?: string) => {
     if (!d) return null;
     return Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
+};
+const isCorretivo = (ot: OrdemTrabalho) =>
+    ot.tipo === 'pontual' && ot.tipoTrabalho.toLowerCase().includes('corretiv');
+
+const OT_ESTADO_COLOR: Record<string, string> = {
+    'Programado': 'var(--blue)',
+    'Em curso': '#f97316',
+    'Terminado': 'var(--green)',
+    'Encerrado': 'var(--text-secondary)',
 };
 
 /** Gera número de série único: AQ-{TYPE}-{YEAR}{HEX4} */
@@ -97,6 +105,200 @@ function printEquip(
     w.focus();
     setTimeout(() => w.print(), 350);
 }
+
+const PRINT_CSS = `
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
+  body   { font-family: Arial, sans-serif; font-size: 11px; padding: 12mm 18mm; color: #1a1a1a; }
+  h1     { font-size: 1rem; margin: 0; }
+  h2     { font-size: 0.88rem; margin: 0; }
+  .sub   { font-size: 0.68rem; color: #888; margin: 2px 0 14px; }
+  .hrow  { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.68rem; font-weight: 700; border: 1.5px solid #555; color: #333; background: #f5f5f5; }
+  .sec   { font-size: 0.8rem; font-weight: 700; color: #2B2B2B; border-bottom: 1.5px solid #2B2B2B; padding-bottom: 3px; margin: 14px 0 5px; }
+  table  { width: 100%; border-collapse: collapse; margin-bottom: 4px; page-break-inside: auto; }
+  thead  { display: table-header-group; }
+  thead tr { background: #2B2B2B; }
+  th     { background: #2B2B2B; color: #fff; padding: 5px 8px; font-size: 0.7rem; font-weight: 700; border: 1px solid #444; text-align: left; }
+  td     { padding: 4px 8px; border: 1px solid #ddd; font-size: 0.75rem; vertical-align: top; }
+  tr:nth-child(even) td { background: #f9f9f9; }
+  tr:nth-child(odd)  td { background: #fff; }
+  .lbl   { background: #f5f5f5 !important; font-weight: 600; color: #444; white-space: nowrap; }
+  .corr  { color: #f97316; font-weight: 700; }
+  .footer { margin-top: 18px; font-size: 0.62rem; color: #bbb; text-align: center; border-top: 1px solid #eee; padding-top: 5px; }
+  .eq-group { margin-bottom: 18px; page-break-inside: avoid; }
+  @page { size: A4 landscape; margin: 0; }
+`;
+
+function fD(d?: string) { return d ? new Date(d).toLocaleDateString('pt-PT') : '—'; }
+
+function printHistoricoEquip(
+    eq: EquipInstalado,
+    ots: OrdemTrabalho[],
+    cli: Cliente | undefined,
+    mod: ModeloEquipamento | undefined,
+    empresa: string,
+) {
+    const rows = [...ots].sort((a, b) => (b.dataProgInicio || b.dataProgFim || '').localeCompare(a.dataProgInicio || a.dataProgFim || ''))
+        .map(o => `<tr>
+            <td style="font-family:monospace">${o.id}</td>
+            <td>${o.tipo === 'pontual' ? 'Pontual' : 'Programada'}</td>
+            <td>${o.tipoTrabalho}${isCorretivo(o) ? ' <span class="corr">●</span>' : ''}</td>
+            <td style="color:${o.estado === 'Encerrado' ? '#6b7280' : o.estado === 'Terminado' ? '#16a34a' : o.estado === 'Em curso' ? '#f97316' : '#2563eb'};font-weight:600">${o.estado}</td>
+            <td>${fD(o.dataProgInicio || o.dataProgFim)}</td>
+            <td>${fD(o.dataFim || o.dataEncerramento)}</td>
+            <td>${o.descricao || '—'}</td>
+        </tr>`).join('');
+
+    const w = window.open('', '_blank', 'width=1100,height=900');
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html>
+<html lang="pt"><head><meta charset="UTF-8"><title>Histórico — Equip. ${eq.id}</title>
+<style>${PRINT_CSS}</style></head><body>
+<div class="hrow">
+  <div>
+    <h1>${empresa} — Histórico de Intervenções</h1>
+    <div class="sub">Equipamento: <strong>${eq.id}</strong> &nbsp;|&nbsp; ${mod?.nome ?? '—'} &nbsp;|&nbsp; Cliente: ${cli?.nome ?? '—'} &nbsp;|&nbsp; Série: ${eq.nrSerie} &nbsp;|&nbsp; Impresso em ${new Date().toLocaleString('pt-PT')}</div>
+  </div>
+  <span class="badge">Loc: ${eq.localizacao || '—'}</span>
+</div>
+<table>
+  <thead><tr><th>ID</th><th>Tipo OT</th><th>Tipo Trabalho</th><th>Estado</th><th>Data Prog.</th><th>Data Fim</th><th>Descrição</th></tr></thead>
+  <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:#999">Sem intervenções registadas</td></tr>'}</tbody>
+</table>
+<div class="footer">${empresa} &nbsp;&bull;&nbsp; Total: ${ots.length} intervenção(ões)</div>
+</body></html>`);
+    w.document.close(); w.focus(); setTimeout(() => w.print(), 350);
+}
+
+function printHistoricoGeral(
+    ots: OrdemTrabalho[],
+    equipInstalados: EquipInstalado[],
+    clientes: Cliente[],
+    modelosEquipamento: ModeloEquipamento[],
+    dateFrom: string,
+    dateTo: string,
+    equipId: string,
+    empresa: string,
+) {
+    const refDate = (o: OrdemTrabalho) => o.dataProgInicio || o.dataProgFim || o.dataEmissao || '';
+    const filtrado = ots
+        .filter(o => {
+            const d = refDate(o);
+            const equipMatch = !equipId || String(o.equipInstaladoId) === String(equipId);
+            return equipMatch && (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo);
+        })
+        .sort((a, b) => refDate(a).localeCompare(refDate(b)));
+
+    // Group by equipment
+    const grupos = new Map<string, OrdemTrabalho[]>();
+    for (const o of filtrado) {
+        const key = String(o.equipInstaladoId);
+        if (!grupos.has(key)) grupos.set(key, []);
+        grupos.get(key)!.push(o);
+    }
+
+    let body = '';
+    for (const [eqId, eqOts] of grupos) {
+        const eq = equipInstalados.find(e => String(e.id) === eqId);
+        const cli = clientes.find(c => String(c.id) === String(eq?.clienteId));
+        const mod = modelosEquipamento.find(m => String(m.id) === String(eq?.modeloId));
+        const rows = eqOts.map(o => `<tr>
+            <td style="font-family:monospace">${o.id}</td>
+            <td>${o.tipo === 'pontual' ? 'Pontual' : 'Programada'}</td>
+            <td>${o.tipoTrabalho}${isCorretivo(o) ? ' <span class="corr">●</span>' : ''}</td>
+            <td style="color:${o.estado === 'Encerrado' ? '#6b7280' : o.estado === 'Terminado' ? '#16a34a' : o.estado === 'Em curso' ? '#f97316' : '#2563eb'};font-weight:600">${o.estado}</td>
+            <td>${fD(refDate(o))}</td>
+            <td>${fD(o.dataFim || o.dataEncerramento)}</td>
+            <td>${o.descricao || '—'}</td>
+        </tr>`).join('');
+        body += `<div class="eq-group">
+  <div class="sec">Equip. ${eqId} — ${mod?.nome ?? '—'} &nbsp;|&nbsp; Cliente: ${cli?.nome ?? '—'} &nbsp;|&nbsp; Série: ${eq?.nrSerie ?? '—'}</div>
+  <table>
+    <thead><tr><th>ID OT</th><th>Tipo OT</th><th>Tipo Trabalho</th><th>Estado</th><th>Data Prog.</th><th>Data Fim</th><th>Descrição</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+</div>`;
+    }
+
+    const periodo = dateFrom || dateTo
+        ? `Período: ${dateFrom ? fD(dateFrom) : '—'} a ${dateTo ? fD(dateTo) : '—'}`
+        : 'Todos os períodos';
+
+    const w = window.open('', '_blank', 'width=1100,height=900');
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html>
+<html lang="pt"><head><meta charset="UTF-8"><title>Relatório de Intervenções</title>
+<style>${PRINT_CSS}</style></head><body>
+<div class="hrow">
+  <div>
+    <h1>${empresa} — Relatório de Intervenções</h1>
+    <div class="sub">${periodo} &nbsp;|&nbsp; Impresso em ${new Date().toLocaleString('pt-PT')}</div>
+  </div>
+  <span class="badge">${filtrado.length} intervenção(ões)</span>
+</div>
+${body || '<p style="color:#999;text-align:center">Nenhuma intervenção encontrada no período seleccionado.</p>'}
+<div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
+</body></html>`);
+    w.document.close(); w.focus(); setTimeout(() => w.print(), 350);
+}
+
+/* ══ Relatório Geral Modal ═══════════════════════════════ */
+interface RelatorioModalProps { onClose: () => void; }
+const RelatorioModal: React.FC<RelatorioModalProps> = ({ onClose }) => {
+    const { equipInstalados, clientes, modelosEquipamento, ordens, empresaConfig } = useGlobal();
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo]     = useState('');
+    const [equipId, setEquipId]   = useState('');
+
+    const equipOpts = [
+        { value: '', label: 'Todos os equipamentos' },
+        ...equipInstalados.map(e => {
+            const cli = clientes.find(c => String(c.id) === String(e.clienteId))?.nome ?? '—';
+            const mod = modelosEquipamento.find(m => String(m.id) === String(e.modeloId))?.nome ?? '—';
+            return { value: e.id, label: `${e.id} — ${mod}`, sub: cli };
+        }),
+    ];
+
+    const handlePrint = () => {
+        printHistoricoGeral(ordens, equipInstalados, clientes, modelosEquipamento, dateFrom, dateTo, equipId, empresaConfig?.nome || 'AQUATEX');
+    };
+
+    return (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="modal" style={{ maxWidth: 480 }}>
+                <div className="modal-header">
+                    <h3 className="modal-title">Relatório de Intervenções</h3>
+                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                </div>
+                <div className="modal-body">
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 14 }}>
+                        Seleccione o período e/ou equipamento para gerar o relatório impresso com o histórico de intervenções agrupado por equipamento.
+                    </div>
+                    <div className="form-row">
+                        <div className="form-group">
+                            <label className="form-label">Data Início</label>
+                            <input type="date" className="form-input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Data Fim</label>
+                            <input type="date" className="form-input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                        </div>
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Equipamento</label>
+                        <SearchableSelect options={equipOpts} value={equipId} onChange={setEquipId} placeholder="Todos os equipamentos" />
+                    </div>
+                </div>
+                <div className="modal-footer">
+                    <button className="abtn abtn-secondary" type="button" onClick={onClose}>Cancelar</button>
+                    <button className="abtn abtn-primary" type="button" onClick={handlePrint}>
+                        <Printer size={12} /> Imprimir Relatório
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 /* ══ Modelo Modal ════════════════════════════════════════ */
 interface ModeloModalProps {
@@ -279,13 +481,39 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ equip, onClose, onSave })
 /* ══ Detalhe Modal ═══════════════════════════════════════ */
 interface DetalheProps { equipId: string; onClose: () => void; onEdit: () => void; }
 const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
-    const { equipInstalados, clientes, modelosEquipamento, planos, ordens } = useGlobal();
+    const { equipInstalados, clientes, modelosEquipamento, planos, ordens, fmtDate, empresaConfig } = useGlobal();
+    const [tab, setTab] = useState<'info' | 'historico'>('info');
+
     const eq   = equipInstalados.find(e => e.id === equipId)!;
     const cli  = clientes.find(c => c.id === eq.clienteId);
     const mod  = modelosEquipamento.find(m => m.id === eq.modeloId);
-    const ots  = ordens.filter(o => o.equipInstaladoId === equipId);
-    const pls  = planos.filter(p => p.equipInstaladoId === equipId);
-    const dias = diffDays(eq.dataProximaManutencao);
+    const ots  = ordens.filter(o => String(o.equipInstaladoId) === String(equipId))
+        .sort((a, b) => {
+            const da = a.dataProgInicio || a.dataEmissao || '';
+            const db = b.dataProgInicio || b.dataEmissao || '';
+            return db.localeCompare(da);
+        });
+    const pls  = planos.filter(p => String(p.equipInstaladoId) === String(equipId));
+
+    // Computed maintenance dates from OTs
+    const finDates = ots
+        .filter(o => o.estado === 'Terminado' || o.estado === 'Encerrado')
+        .map(o => o.dataFim || o.dataEncerramento || o.dataProgFim)
+        .filter(Boolean) as string[];
+    const ultimaManutencao = finDates.length > 0 ? [...finDates].sort().at(-1) : undefined;
+
+    const openDates = ots
+        .filter(o => o.estado === 'Programado' || o.estado === 'Em curso')
+        .map(o => o.dataProgFim || o.dataProgInicio)
+        .filter(Boolean) as string[];
+    const proximaManutencao = openDates.length > 0 ? [...openDates].sort()[0] : undefined;
+
+    const openCorretivos = ots.filter(o => isCorretivo(o) && (o.estado === 'Programado' || o.estado === 'Em curso'));
+    const effectiveEstado: EstadoEquip = eq.estado === 'inativo' ? 'inativo'
+        : openCorretivos.length > 0 ? 'com_problema'
+        : eq.estado;
+
+    const dias = diffDays(proximaManutencao);
 
     const InfoRow: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
         <div className="form-group">
@@ -294,68 +522,145 @@ const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
         </div>
     );
 
+    const tabBtn = (t: 'info' | 'historico', label: string, count?: number) => (
+        <button onClick={() => setTab(t)} style={{
+            padding: '6px 14px', fontSize: '0.8rem', fontWeight: tab === t ? 700 : 400,
+            borderBottom: tab === t ? '2px solid var(--blue)' : '2px solid transparent',
+            color: tab === t ? 'var(--blue)' : 'var(--text-secondary)',
+            background: 'none', border: 'none', cursor: 'pointer',
+            borderBottomWidth: 2, borderBottomStyle: 'solid',
+            borderBottomColor: tab === t ? 'var(--blue)' : 'transparent',
+        }}>
+            {label}{count !== undefined ? ` (${count})` : ''}
+        </button>
+    );
+
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 600 }}>
+            <div className="modal" style={{ maxWidth: 680 }}>
                 <div className="modal-header">
                     <div>
                         <h3 className="modal-title">{eq.id} — {mod?.nome}</h3>
                         <div style={{ display: 'flex', gap: 6, marginTop: 4, alignItems: 'center' }}>
-                            <span className={`dot ${ESTADO_DOT[eq.estado]}`} />
-                            <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{ESTADO_LABEL[eq.estado]}</span>
+                            <span className={`dot ${ESTADO_DOT[effectiveEstado]}`} />
+                            <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{ESTADO_LABEL[effectiveEstado]}</span>
                             <span className="tbadge tbadge-admin" style={{ marginLeft: 4 }}>{mod?.tipo === 'maquina' ? 'Máquina' : 'Filtro'}</span>
+                            {openCorretivos.length > 0 && (
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: '0.72rem', color: '#f97316', fontWeight: 700 }}>
+                                    <AlertCircle size={11} /> {openCorretivos.length} OT corretiva em aberto
+                                </span>
+                            )}
                         </div>
                     </div>
                     <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
-                <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-                        <InfoRow label="Cliente" value={cli?.nome ?? '—'} />
-                        <InfoRow label="Nº de Série" value={<span style={{ fontFamily: 'monospace' }}>{eq.nrSerie}</span>} />
-                        <InfoRow label="Data de Instalação" value={fmtDate(eq.dataInstalacao)} />
-                        <InfoRow label="Localização" value={eq.localizacao || '—'} />
-                        <InfoRow label="Última Manutenção" value={fmtDate(eq.dataUltimaManutencao)} />
-                        <InfoRow label="Próxima Manutenção" value={
-                            <span style={{ color: dias !== null && dias <= 7 ? 'var(--red)' : dias !== null && dias <= 14 ? 'var(--orange)' : undefined }}>
-                                {fmtDate(eq.dataProximaManutencao)}
-                                {dias !== null && <span style={{ marginLeft: 6, fontSize: '0.74rem' }}>({dias >= 0 ? `em ${dias} dias` : `atrasada ${Math.abs(dias)} dias`})</span>}
-                            </span>
-                        } />
-                    </div>
 
-                    {pls.length > 0 && (
-                        <div style={{ marginTop: 12 }}>
-                            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                                Planos de Manutenção ({pls.length})
+                {/* Tabs */}
+                <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', paddingLeft: 16 }}>
+                    {tabBtn('info', 'Informação')}
+                    {tabBtn('historico', 'Histórico de Intervenções', ots.length)}
+                </div>
+
+                <div className="modal-body" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+                    {tab === 'info' && (
+                        <>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                                <InfoRow label="Cliente" value={cli?.nome ?? '—'} />
+                                <InfoRow label="Nº de Série" value={<span style={{ fontFamily: 'monospace' }}>{eq.nrSerie}</span>} />
+                                <InfoRow label="Data de Instalação" value={fmtDate(eq.dataInstalacao)} />
+                                <InfoRow label="Localização" value={eq.localizacao || '—'} />
+                                <InfoRow label="Última Manutenção" value={fmtDate(ultimaManutencao)} />
+                                <InfoRow label="Próxima Manutenção" value={
+                                    <span style={{ color: dias !== null && dias <= 7 ? 'var(--red)' : dias !== null && dias <= 14 ? 'var(--orange)' : undefined }}>
+                                        {fmtDate(proximaManutencao)}
+                                        {dias !== null && <span style={{ marginLeft: 6, fontSize: '0.74rem' }}>({dias >= 0 ? `em ${dias} dias` : `atrasada ${Math.abs(dias)} dias`})</span>}
+                                    </span>
+                                } />
                             </div>
-                            {pls.map(p => (
-                                <div key={p.id} style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 3, marginBottom: 4, fontSize: '0.79rem', display: 'flex', justifyContent: 'space-between' }}>
-                                    <span><strong>{p.id}</strong> — {p.descricao}</span>
-                                    <span style={{ color: 'var(--text-muted)' }}>{p.periodicidade}</span>
+
+                            {pls.length > 0 && (
+                                <div style={{ marginTop: 14 }}>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                                        Planos de Manutenção ({pls.length})
+                                    </div>
+                                    {pls.map(p => (
+                                        <div key={p.id} style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 3, marginBottom: 4, fontSize: '0.79rem', display: 'flex', justifyContent: 'space-between' }}>
+                                            <span><strong>{p.id}</strong> — {p.descricao}</span>
+                                            <span style={{ color: 'var(--text-muted)' }}>{p.periodicidade}</span>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
+                            )}
+                        </>
                     )}
 
-                    {ots.length > 0 && (
-                        <div style={{ marginTop: 12 }}>
-                            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                                Ordens de Trabalho ({ots.length})
-                            </div>
-                            {ots.slice(0, 5).map(o => (
-                                <div key={o.id} style={{ padding: '5px 10px', border: '1px solid var(--border)', borderRadius: 3, marginBottom: 4, fontSize: '0.79rem', display: 'flex', justifyContent: 'space-between' }}>
-                                    <span><strong>{o.id}</strong> — {o.tipoTrabalho}</span>
-                                    <span style={{ color: 'var(--text-muted)' }}>{o.estado}</span>
+                    {tab === 'historico' && (
+                        <div>
+                            {ots.length === 0 ? (
+                                <div className="empty-state" style={{ padding: '32px 0' }}>
+                                    <AlertCircle size={24} /><br />Nenhuma intervenção registada.
                                 </div>
-                            ))}
+                            ) : (
+                                <table className="data-table" style={{ marginTop: 4 }}>
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Tipo OT</th>
+                                            <th>Tipo Trabalho</th>
+                                            <th>Estado</th>
+                                            <th>Data Prog.</th>
+                                            <th>Data Fim</th>
+                                            <th>Descrição</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {ots.map(o => {
+                                            const corretivo = isCorretivo(o);
+                                            const aberta = o.estado === 'Programado' || o.estado === 'Em curso';
+                                            return (
+                                                <tr key={o.id} style={{ background: corretivo && aberta ? 'rgba(249,115,22,0.04)' : undefined }}>
+                                                    <td style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{o.id}</td>
+                                                    <td>
+                                                        <span className={o.tipo === 'pontual' ? 'tbadge tbadge-suporte' : 'tbadge tbadge-admin'} style={{ fontSize: '0.68rem' }}>
+                                                            {o.tipo === 'pontual' ? 'Pontual' : 'Programada'}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ fontSize: '0.78rem' }}>
+                                                        {o.tipoTrabalho}
+                                                        {corretivo && (
+                                                            <span style={{ marginLeft: 4, fontSize: '0.68rem', color: '#f97316', fontWeight: 700 }}>●</span>
+                                                        )}
+                                                    </td>
+                                                    <td>
+                                                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: OT_ESTADO_COLOR[o.estado] ?? 'var(--text-secondary)' }}>
+                                                            {o.estado}
+                                                        </span>
+                                                    </td>
+                                                    <td style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataProgInicio || o.dataProgFim)}</td>
+                                                    <td style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataFim || o.dataEncerramento)}</td>
+                                                    <td style={{ fontSize: '0.76rem', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={o.descricao}>{o.descricao}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
                         </div>
                     )}
                 </div>
+
                 <div className="modal-footer">
                     <button className="abtn abtn-secondary" type="button" onClick={onClose}>Fechar</button>
-                    <button className="abtn abtn-secondary" type="button" onClick={() => printEquip(eq, clientes, modelosEquipamento)}>
-                        <Printer size={12} /> Imprimir
-                    </button>
+                    {tab === 'historico' ? (
+                        <button className="abtn abtn-secondary" type="button"
+                            onClick={() => printHistoricoEquip(eq, ots, cli, mod, empresaConfig?.nome || 'AQUATEX')}>
+                            <Printer size={12} /> Imprimir Histórico
+                        </button>
+                    ) : (
+                        <button className="abtn abtn-secondary" type="button" onClick={() => printEquip(eq, clientes, modelosEquipamento)}>
+                            <Printer size={12} /> Imprimir Ficha
+                        </button>
+                    )}
                     <button className="abtn abtn-secondary" type="button" onClick={onEdit}><Edit2 size={12} /> Editar</button>
                 </div>
             </div>
@@ -370,8 +675,31 @@ const ParquePage: React.FC = () => {
     const {
         equipInstalados, addEquipInstalado, updateEquipInstalado,
         modelosEquipamento, addModelo, updateModelo,
-        clientes, addOrdem,
+        clientes, addOrdem, ordens, fmtDate,
     } = useGlobal();
+
+    // Computed stats per equipment from OTs
+    const equipStats = useMemo(() => {
+        const map = new Map<string, { ultimaManutencao?: string; proximaManutencao?: string; hasOpenCorretivo: boolean; effectiveEstado: EstadoEquip }>();
+        for (const eq of equipInstalados) {
+            const eqOts = ordens.filter(o => String(o.equipInstaladoId) === String(eq.id));
+            const finished = eqOts.filter(o => o.estado === 'Terminado' || o.estado === 'Encerrado');
+            const open = eqOts.filter(o => o.estado === 'Programado' || o.estado === 'Em curso');
+            const finDates = finished.map(o => o.dataFim || o.dataEncerramento || o.dataProgFim).filter(Boolean) as string[];
+            const openDates = open.map(o => o.dataProgFim || o.dataProgInicio).filter(Boolean) as string[];
+            const hasOpenCorretivo = open.some(isCorretivo);
+            const effectiveEstado: EstadoEquip = eq.estado === 'inativo' ? 'inativo'
+                : hasOpenCorretivo ? 'com_problema'
+                : eq.estado;
+            map.set(eq.id, {
+                ultimaManutencao: finDates.length > 0 ? [...finDates].sort().at(-1) : undefined,
+                proximaManutencao: openDates.length > 0 ? [...openDates].sort()[0] : undefined,
+                hasOpenCorretivo,
+                effectiveEstado,
+            });
+        }
+        return map;
+    }, [equipInstalados, ordens]);
 
     const [view, setView]         = useState<PageView>('equipamentos');
 
@@ -387,6 +715,7 @@ const ParquePage: React.FC = () => {
     const [mModal, setMModal]       = useState<'new' | string | null>(null);
 
     const [showExport, setShowExport] = useState(false);
+    const [showRelatorio, setShowRelatorio] = useState(false);
     const [toast, setToast] = useState('');
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
@@ -398,13 +727,14 @@ const ParquePage: React.FC = () => {
         const q  = search.toLowerCase();
         const cl = getCliente(e.clienteId).toLowerCase();
         const mo = getModelo(e.modeloId)?.nome.toLowerCase() ?? '';
+        const effective = equipStats.get(e.id)?.effectiveEstado ?? e.estado;
         return (!q || cl.includes(q) || mo.includes(q) || e.nrSerie.toLowerCase().includes(q))
-            && (!filterEstado || e.estado === filterEstado);
+            && (!filterEstado || effective === filterEstado);
     });
 
-    const ativos    = equipInstalados.filter(e => e.estado === 'ativo').length;
-    const problemas = equipInstalados.filter(e => e.estado === 'com_problema').length;
-    const urgentes  = equipInstalados.filter(e => { const d = diffDays(e.dataProximaManutencao); return d !== null && d <= 7; }).length;
+    const ativos    = equipInstalados.filter(e => equipStats.get(e.id)?.effectiveEstado === 'ativo').length;
+    const problemas = equipInstalados.filter(e => equipStats.get(e.id)?.effectiveEstado === 'com_problema').length;
+    const urgentes  = equipInstalados.filter(e => { const d = diffDays(equipStats.get(e.id)?.proximaManutencao); return d !== null && d <= 7; }).length;
 
     const handleSaveEquip = (data: Omit<EquipInstalado, 'id'>) => {
         if (modal === 'edit' && editId) {
@@ -499,6 +829,9 @@ const ParquePage: React.FC = () => {
         <AppLayout>
             <ActionBar title="Parque de Equipamentos" breadcrumb="AQUATEX SGI · Parque">
                 <div className="actionbar-spacer" />
+                <button className="abtn abtn-secondary" type="button" onClick={() => setShowRelatorio(true)}>
+                    <Printer size={13} /> Relatório de Intervenções
+                </button>
                 <button className="abtn abtn-secondary" type="button" onClick={() => setShowExport(true)}>
                     <Download size={13} /> Exportar
                 </button>
@@ -580,12 +913,15 @@ const ParquePage: React.FC = () => {
                                         )}
                                         {filtered.map(e => {
                                             const mod  = getModelo(e.modeloId);
-                                            const dias = diffDays(e.dataProximaManutencao);
+                                            const stats = equipStats.get(e.id);
+                                            const effective = stats?.effectiveEstado ?? e.estado;
+                                            const proxManut = stats?.proximaManutencao;
+                                            const dias = diffDays(proxManut);
                                             const urgente = dias !== null && dias <= 7;
                                             const proximo = dias !== null && dias > 7 && dias <= 14;
                                             return (
                                                 <tr key={e.id}>
-                                                    <td style={{ paddingLeft: 10 }}><span className={`dot ${ESTADO_DOT[e.estado]}`} /></td>
+                                                    <td style={{ paddingLeft: 10 }}><span className={`dot ${ESTADO_DOT[effective]}`} /></td>
                                                     <td><span className="td-link" onClick={() => setDetalheId(e.id)}>{e.id}</span></td>
                                                     <td style={{ fontWeight: 600, fontSize: '0.82rem' }}>{getCliente(e.clienteId)}</td>
                                                     <td style={{ fontSize: '0.8rem' }}>{mod?.nome ?? '—'}</td>
@@ -594,10 +930,10 @@ const ParquePage: React.FC = () => {
                                                     <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{e.localizacao || '—'}</td>
                                                     <td style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{fmtDate(e.dataInstalacao)}</td>
                                                     <td style={{ fontSize: '0.76rem' }}>
-                                                        {e.dataProximaManutencao ? (
+                                                        {proxManut ? (
                                                             <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: urgente ? 'var(--red)' : proximo ? 'var(--orange)' : undefined }}>
                                                                 {urgente && <AlertTriangle size={11} />}
-                                                                {fmtDate(e.dataProximaManutencao)}
+                                                                {fmtDate(proxManut)}
                                                                 {dias !== null && <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>({dias >= 0 ? `+${dias}d` : `${dias}d`})</span>}
                                                             </span>
                                                         ) : '—'}
@@ -701,6 +1037,8 @@ const ParquePage: React.FC = () => {
                     onSave={handleSaveModelo}
                 />
             )}
+
+            {showRelatorio && <RelatorioModal onClose={() => setShowRelatorio(false)} />}
 
             {showExport && (
                 <ExportModal
