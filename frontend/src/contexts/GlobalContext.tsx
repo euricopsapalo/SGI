@@ -22,6 +22,7 @@ export interface Cliente {
     id: string; tipo: 'empresa' | 'particular'; nome: string;
     nif: string; email: string; telefone: string; morada: string;
     municipio: string; provincia: string; ativo: boolean;
+    provinciaId?: string; municipioId?: string;
 }
 export interface Tecnico {
     id: string; nome: string; telefone: string; email: string;
@@ -185,12 +186,17 @@ const normMovimento = (m: any): MovimentoStock => ({
     data: m.data ? String(m.data).split('T')[0] : '',
 });
 
-const normCliente = (c: any): Cliente => ({
-    id: c.id?.toString(), tipo: c.tipo, nome: c.nome, nif: c.nif ?? '',
-    email: c.email ?? '', telefone: c.telefone ?? '',
-    morada: c.enderecos?.[0]?.morada ?? '', municipio: c.enderecos?.[0]?.cidade ?? '',
-    provincia: '', ativo: c.ativo ?? true,
-});
+const normCliente = (c: any): Cliente => {
+    const principal = (c.enderecos ?? []).find((e: any) => e.principal) ?? c.enderecos?.[0];
+    return {
+        id: c.id?.toString(), tipo: c.tipo, nome: c.nome, nif: c.nif ?? '',
+        email: c.email ?? '', telefone: c.telefone ?? '',
+        morada: principal?.morada ?? '', municipio: principal?.cidade ?? '',
+        provincia: '', ativo: c.ativo ?? true,
+        provinciaId: principal?.provinciaId != null ? String(principal.provinciaId) : undefined,
+        municipioId: principal?.municipioId != null ? String(principal.municipioId) : undefined,
+    };
+};
 
 const normEquip = (e: any): EquipInstalado => ({
     id: e.id?.toString(), clienteId: e.cliente?.id?.toString() ?? e.clienteId?.toString() ?? '',

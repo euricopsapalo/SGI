@@ -2,18 +2,21 @@ import React, { useState, useMemo } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
-import { BarChart3, TrendingUp, Users, Download, Package, Search } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Download, Package, Search, Briefcase, Trophy, MapPin } from 'lucide-react';
 import { useGlobal } from '../../contexts/GlobalContext';
 
 /* fmtDate, fmtMoney, fmt vêm do GlobalContext */
 
-type RelTab = 'faturacao' | 'comissoes' | 'produtividade' | 'movimentos';
+type RelTab = 'faturacao' | 'comissoes' | 'produtividade' | 'movimentos' | 'carteira' | 'ranking' | 'regioes';
 
 const TABS: { id: RelTab; label: string; icon: React.FC<any> }[] = [
     { id: 'faturacao',     label: 'Faturação Mensal',      icon: BarChart3  },
     { id: 'comissoes',     label: 'Comissões',              icon: TrendingUp },
     { id: 'produtividade', label: 'Produtividade Técnicos', icon: Users      },
     { id: 'movimentos',    label: 'Movimentos de Stock',    icon: Package    },
+    { id: 'carteira',      label: 'Carteira de Clientes',   icon: Briefcase  },
+    { id: 'ranking',       label: 'Ranking de Clientes',    icon: Trophy     },
+    { id: 'regioes',       label: 'Clientes por Região',    icon: MapPin     },
 ];
 
 const MES_PT: Record<string, string> = {
@@ -65,11 +68,34 @@ const COLS: Record<RelTab, ExportCol[]> = {
         { key: 'origem',     label: 'Origem'     },
         { key: 'utilizador', label: 'Utilizador' },
     ],
+    carteira: [
+        { key: 'nome',          label: 'Cliente'       },
+        { key: 'tipo',          label: 'Tipo'          },
+        { key: 'nEquipamentos', label: 'Equipamentos'  },
+        { key: 'nOT',           label: 'OT Total'      },
+        { key: 'otAtivas',      label: 'OT Em Curso'   },
+        { key: 'valorFaturado', label: 'Faturado (Kz)' },
+        { key: 'estado',        label: 'Estado'        },
+    ],
+    ranking: [
+        { key: 'posicao',       label: 'Posição'       },
+        { key: 'nome',          label: 'Cliente'       },
+        { key: 'nOT',           label: 'Nº OT'         },
+        { key: 'valorFaturado', label: 'Faturado (Kz)' },
+    ],
+    regioes: [
+        { key: 'regiao',    label: 'Região'     },
+        { key: 'clientes',  label: 'Clientes'   },
+        { key: 'ativos',    label: 'Activos'    },
+        { key: 'inativos',  label: 'Inactivos'  },
+        { key: 'nOT',       label: 'Total OT'   },
+        { key: 'faturado',  label: 'Faturado'   },
+    ],
 };
 
 /* ══════════════════════════════════════════════════════════ */
 const RelatoriosPage: React.FC = () => {
-    const { faturas, ordens, movimentosStock, artigos, armazens, fmtMoney, fmtDate, fmt: fmtNum } = useGlobal();
+    const { faturas, ordens, movimentosStock, artigos, armazens, clientes, equipInstalados, provincias, fmtMoney, fmtDate, fmt: fmtNum } = useGlobal();
     const fmtKz = fmtMoney;
 
     const [tab,        setTab]        = useState<RelTab>('faturacao');
@@ -130,6 +156,55 @@ const RelatoriosPage: React.FC = () => {
         });
         return Object.values(byTec).sort((a, b) => b.osMes - a.osMes);
     }, [ordens]);
+
+    /* ── Carteira de Clientes ── */
+    const carteiraData = useMemo(() => clientes.map(c => {
+        const equips  = equipInstalados.filter(e => String(e.clienteId) === String(c.id));
+        const cOrdens = ordens.filter(o => String(o.clienteId) === String(c.id));
+        const otAtivas = cOrdens.filter(o => o.estado === 'Programado' || o.estado === 'Em curso').length;
+        const valorFaturado = faturas.filter(f => String(f.clienteId) === String(c.id)).reduce((s, f) => s + Number(f.valorTotal), 0);
+        return {
+            id: c.id, nome: c.nome, tipo: c.tipo === 'empresa' ? 'Empresa' : 'Particular',
+            nEquipamentos: equips.length, nOT: cOrdens.length, otAtivas,
+            valorFaturado, estado: c.ativo ? 'Activo' : 'Inactivo',
+        };
+    }).sort((a, b) => b.nOT - a.nOT), [clientes, equipInstalados, ordens, faturas]);
+
+    /* ── Ranking de Clientes ── */
+    type RankSort = 'ot' | 'faturado';
+    const [rankSort, setRankSort] = useState<RankSort>('faturado');
+    const rankingData = useMemo(() => {
+        const sorted = [...carteiraData].sort((a, b) =>
+            rankSort === 'faturado' ? b.valorFaturado - a.valorFaturado : b.nOT - a.nOT
+        );
+        return sorted.map((c, i) => ({ posicao: i + 1, ...c }));
+    }, [carteiraData, rankSort]);
+    const rankMax = Math.max(...rankingData.map(r => rankSort === 'faturado' ? r.valorFaturado : r.nOT), 1);
+
+    /* ── Clientes por Região ── */
+    const regiaoData = useMemo(() => {
+        const byProv = new Map<string, { regiao: string; ids: string[] }>();
+        for (const c of clientes) {
+            // Prefer: resolve province name via provinciaId; fallback to direct provincia string
+            const provNome = (c.provinciaId
+                ? (provincias.find(p => String(p.id) === String(c.provinciaId))?.nome ?? c.provincia?.trim())
+                : c.provincia?.trim()) || 'Sem região';
+            if (!byProv.has(provNome)) byProv.set(provNome, { regiao: provNome, ids: [] });
+            byProv.get(provNome)!.ids.push(c.id);
+        }
+        return Array.from(byProv.values()).map(({ regiao, ids }) => {
+            const regionClientes = clientes.filter(c => ids.includes(c.id));
+            const nOT = ordens.filter(o => ids.some(id => String(o.clienteId) === id)).length;
+            const faturado = faturas.filter(f => ids.some(id => String(f.clienteId) === id)).reduce((s, f) => s + Number(f.valorTotal), 0);
+            return {
+                regiao, clientes: ids.length,
+                ativos:   regionClientes.filter(c => c.ativo).length,
+                inativos: regionClientes.filter(c => !c.ativo).length,
+                nOT, faturado,
+            };
+        }).sort((a, b) => b.clientes - a.clientes);
+    }, [clientes, ordens, faturas, provincias]);
+    const regiaoMaxClientes = Math.max(...regiaoData.map(r => r.clientes), 1);
 
     const [comTipo,    setComTipo]    = useState('');
     const [comSearch,  setComSearch]  = useState('');
@@ -193,11 +268,20 @@ const RelatoriosPage: React.FC = () => {
         [movimentosEnrich, movTipo, movDe, movAte, movSearch]
     );
 
+    const [carteiraSearch, setCarteiraSearch] = useState('');
+    const filtCarteira = useMemo(() =>
+        carteiraData.filter(c => !carteiraSearch || c.nome.toLowerCase().includes(carteiraSearch.toLowerCase())),
+        [carteiraData, carteiraSearch]
+    );
+
     const exportData: Record<RelTab, Record<string, any>[]> = {
         faturacao:     filtFaturacao,
         comissoes:     filtComissoes,
         produtividade: filtProdutividade,
         movimentos:    filtMovimentos,
+        carteira:      filtCarteira,
+        ranking:       rankingData,
+        regioes:       regiaoData,
     };
 
     const tabLabel = TABS.find(t => t.id === tab)?.label ?? '';
@@ -416,6 +500,219 @@ const RelatoriosPage: React.FC = () => {
                                 </tbody>
                             </table>
                             <div className="table-count">{filtProdutividade.length} técnicos</div>
+                        </div>
+                    </>
+                )}
+
+                {/* ── CARTEIRA DE CLIENTES ── */}
+                {tab === 'carteira' && (
+                    <>
+                        <div className="filters-bar" style={{ marginBottom: 14 }}>
+                            <div className="search-wrap">
+                                <Search className="search-icon" />
+                                <input className="search-input" placeholder="Pesquisar cliente…" value={carteiraSearch} onChange={e => setCarteiraSearch(e.target.value)} />
+                            </div>
+                        </div>
+
+                        <div className="stats-row" style={{ marginBottom: 16 }}>
+                            {[
+                                { label: 'Total Clientes',   value: filtCarteira.length },
+                                { label: 'Com Equipamentos', value: filtCarteira.filter(c => c.nEquipamentos > 0).length, cls: 'blue' },
+                                { label: 'OT em Curso',      value: filtCarteira.reduce((s, c) => s + c.otAtivas, 0), cls: 'orange' },
+                                { label: 'Total Faturado',   value: `Kz ${fmtKz(filtCarteira.reduce((s, c) => s + c.valorFaturado, 0))}`, cls: 'green' },
+                            ].map(s => (
+                                <div key={s.label} className="stat-card">
+                                    <span className="stat-label">{s.label}</span>
+                                    <span className={`stat-value ${(s as any).cls ?? ''}`}>{s.value}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="table-container">
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Cliente</th>
+                                        <th>Tipo</th>
+                                        <th style={{ textAlign: 'center' }}>Equipamentos</th>
+                                        <th style={{ textAlign: 'center' }}>OT Total</th>
+                                        <th style={{ textAlign: 'center' }}>OT Em Curso</th>
+                                        <th style={{ textAlign: 'right' }}>Faturado (Kz)</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filtCarteira.length === 0 && <tr><td colSpan={7}><div className="empty-state">Sem clientes.</div></td></tr>}
+                                    {filtCarteira.map(c => (
+                                        <tr key={c.id}>
+                                            <td style={{ fontWeight: 700, fontSize: '0.83rem' }}>{c.nome}</td>
+                                            <td><span style={{ fontSize: '0.74rem', padding: '1px 7px', borderRadius: 8, background: c.tipo === 'Empresa' ? 'var(--blue-light,#eff6ff)' : 'var(--bg-secondary)', color: c.tipo === 'Empresa' ? 'var(--blue)' : 'var(--text-secondary)', fontWeight: 600 }}>{c.tipo}</span></td>
+                                            <td style={{ textAlign: 'center', fontWeight: 700, color: c.nEquipamentos > 0 ? 'var(--blue)' : 'var(--text-muted)' }}>{c.nEquipamentos}</td>
+                                            <td style={{ textAlign: 'center', fontWeight: 700 }}>{c.nOT}</td>
+                                            <td style={{ textAlign: 'center', color: c.otAtivas > 0 ? 'var(--orange)' : 'var(--text-muted)' }}>{c.otAtivas}</td>
+                                            <td style={{ textAlign: 'right', fontWeight: 800, color: c.valorFaturado > 0 ? 'var(--green)' : 'var(--text-muted)' }}>{fmtKz(c.valorFaturado)}</td>
+                                            <td><span style={{ fontSize: '0.74rem', padding: '1px 7px', borderRadius: 8, background: c.estado === 'Activo' ? 'var(--green-light,#f0fdf4)' : 'var(--bg-secondary)', color: c.estado === 'Activo' ? 'var(--green)' : 'var(--text-muted)', fontWeight: 600 }}>{c.estado}</span></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            <div className="table-count">{filtCarteira.length} clientes</div>
+                        </div>
+                    </>
+                )}
+
+                {/* ── RANKING DE CLIENTES ── */}
+                {tab === 'ranking' && (
+                    <>
+                        <div className="filters-bar" style={{ marginBottom: 14 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                Ordenar por:
+                                <select className="filter-select" value={rankSort} onChange={e => setRankSort(e.target.value as RankSort)}>
+                                    <option value="faturado">Valor Faturado</option>
+                                    <option value="ot">Nº de OT</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div className="stats-row" style={{ marginBottom: 16 }}>
+                            {[
+                                { label: 'Top Cliente',  value: rankingData[0]?.nome ?? '—', cls: '' },
+                                { label: 'Total OT',     value: fmtNum(rankingData.reduce((s, r) => s + r.nOT, 0)), cls: 'blue' },
+                                { label: 'Total Faturado', value: `Kz ${fmtKz(rankingData.reduce((s, r) => s + r.valorFaturado, 0))}`, cls: 'green' },
+                            ].map(s => (
+                                <div key={s.label} className="stat-card">
+                                    <span className="stat-label">{s.label}</span>
+                                    <span className={`stat-value ${s.cls}`}>{s.value}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="panel" style={{ marginBottom: 16 }}>
+                            <div className="panel-header"><span className="panel-title">Ranking — {rankSort === 'faturado' ? 'Por Valor Faturado' : 'Por Nº de OT'} (Top 10)</span></div>
+                            <div className="panel-body">
+                                {rankingData.slice(0, 10).map((r, i) => {
+                                    const val = rankSort === 'faturado' ? r.valorFaturado : r.nOT;
+                                    const pct = Math.round((val / rankMax) * 100);
+                                    const medals = ['🥇', '🥈', '🥉'];
+                                    return (
+                                        <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                            <div style={{ width: 24, textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 700 }}>
+                                                {i < 3 ? medals[i] : `#${i + 1}`}
+                                            </div>
+                                            <div style={{ width: 160, fontSize: '0.78rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.nome}</div>
+                                            <div style={{ flex: 1, background: 'var(--bg-secondary)', borderRadius: 4, height: 14, overflow: 'hidden' }}>
+                                                <div style={{ width: `${pct}%`, height: '100%', background: i === 0 ? 'var(--blue)' : i === 1 ? 'var(--green)' : i === 2 ? 'var(--orange)' : 'var(--text-muted)', borderRadius: 4, transition: 'width 400ms' }} />
+                                            </div>
+                                            <div style={{ width: 120, textAlign: 'right', fontSize: '0.78rem', fontWeight: 700, color: 'var(--blue)' }}>
+                                                {rankSort === 'faturado' ? `Kz ${fmtKz(r.valorFaturado)}` : `${r.nOT} OT`}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                {rankingData.length === 0 && <div className="empty-state" style={{ height: 80 }}>Sem dados disponíveis.</div>}
+                            </div>
+                        </div>
+
+                        <div className="table-container">
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: 50, textAlign: 'center' }}>#</th>
+                                        <th>Cliente</th>
+                                        <th style={{ textAlign: 'center' }}>Nº OT</th>
+                                        <th style={{ textAlign: 'center' }}>Equipamentos</th>
+                                        <th style={{ textAlign: 'right' }}>Faturado (Kz)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rankingData.length === 0 && <tr><td colSpan={5}><div className="empty-state">Sem dados.</div></td></tr>}
+                                    {rankingData.map(r => (
+                                        <tr key={r.id}>
+                                            <td style={{ textAlign: 'center', fontWeight: 800, color: r.posicao <= 3 ? 'var(--blue)' : 'var(--text-muted)' }}>{r.posicao}</td>
+                                            <td style={{ fontWeight: 700 }}>{r.nome}</td>
+                                            <td style={{ textAlign: 'center', fontWeight: 700 }}>{r.nOT}</td>
+                                            <td style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{r.nEquipamentos}</td>
+                                            <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--green)' }}>{fmtKz(r.valorFaturado)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            <div className="table-count">{rankingData.length} clientes</div>
+                        </div>
+                    </>
+                )}
+
+                {/* ── CLIENTES POR REGIÃO ── */}
+                {tab === 'regioes' && (
+                    <>
+                        <div className="stats-row" style={{ marginBottom: 16 }}>
+                            {[
+                                { label: 'Regiões',        value: regiaoData.length },
+                                { label: 'Total Clientes', value: regiaoData.reduce((s, r) => s + r.clientes, 0) },
+                                { label: 'Total OT',       value: fmtNum(regiaoData.reduce((s, r) => s + r.nOT, 0)), cls: 'blue' },
+                                { label: 'Total Faturado', value: `Kz ${fmtKz(regiaoData.reduce((s, r) => s + r.faturado, 0))}`, cls: 'green' },
+                            ].map(s => (
+                                <div key={s.label} className="stat-card">
+                                    <span className="stat-label">{s.label}</span>
+                                    <span className={`stat-value ${(s as any).cls ?? ''}`}>{s.value}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="panel" style={{ marginBottom: 16 }}>
+                            <div className="panel-header"><span className="panel-title">Distribuição Geográfica</span></div>
+                            <div className="panel-body">
+                                {regiaoData.length === 0
+                                    ? <div className="empty-state" style={{ height: 80 }}>Sem dados geográficos.</div>
+                                    : regiaoData.map(r => {
+                                        const pct = Math.round((r.clientes / regiaoMaxClientes) * 100);
+                                        return (
+                                            <div key={r.regiao} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                                                <MapPin size={12} style={{ color: 'var(--blue)', flexShrink: 0 }} />
+                                                <div style={{ width: 150, fontSize: '0.78rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.regiao}</div>
+                                                <div style={{ flex: 1, background: 'var(--bg-secondary)', borderRadius: 4, height: 12, overflow: 'hidden' }}>
+                                                    <div style={{ width: `${pct}%`, height: '100%', background: 'var(--blue)', borderRadius: 4, transition: 'width 400ms' }} />
+                                                </div>
+                                                <div style={{ width: 100, textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{r.clientes} cliente{r.clientes !== 1 ? 's' : ''}</div>
+                                                <div style={{ width: 110, textAlign: 'right', fontSize: '0.75rem', color: 'var(--green)', fontWeight: 700 }}>Kz {fmtKz(r.faturado)}</div>
+                                            </div>
+                                        );
+                                    })}
+                            </div>
+                        </div>
+
+                        <div className="table-container">
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Região (Província)</th>
+                                        <th style={{ textAlign: 'center' }}>Total Clientes</th>
+                                        <th style={{ textAlign: 'center' }}>Activos</th>
+                                        <th style={{ textAlign: 'center' }}>Inactivos</th>
+                                        <th style={{ textAlign: 'center' }}>Total OT</th>
+                                        <th style={{ textAlign: 'right' }}>Faturado (Kz)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {regiaoData.length === 0 && <tr><td colSpan={6}><div className="empty-state">Sem dados geográficos registados.</div></td></tr>}
+                                    {regiaoData.map(r => (
+                                        <tr key={r.regiao}>
+                                            <td style={{ fontWeight: 700 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <MapPin size={12} style={{ color: 'var(--blue)' }} />
+                                                    {r.regiao}
+                                                </div>
+                                            </td>
+                                            <td style={{ textAlign: 'center', fontWeight: 800, color: 'var(--blue)' }}>{r.clientes}</td>
+                                            <td style={{ textAlign: 'center', color: 'var(--green)' }}>{r.ativos}</td>
+                                            <td style={{ textAlign: 'center', color: 'var(--text-muted)' }}>{r.inativos}</td>
+                                            <td style={{ textAlign: 'center' }}>{r.nOT}</td>
+                                            <td style={{ textAlign: 'right', fontWeight: 700, color: r.faturado > 0 ? 'var(--green)' : 'var(--text-muted)' }}>{fmtKz(r.faturado)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            <div className="table-count">{regiaoData.length} regiões</div>
                         </div>
                     </>
                 )}
