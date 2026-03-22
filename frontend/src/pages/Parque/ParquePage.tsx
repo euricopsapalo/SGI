@@ -242,64 +242,6 @@ ${body || '<p style="color:#999;text-align:center">Nenhuma intervenção encontr
     w.document.close(); w.focus(); setTimeout(() => w.print(), 350);
 }
 
-/* ══ Relatório Geral Modal ═══════════════════════════════ */
-interface RelatorioModalProps { onClose: () => void; }
-const RelatorioModal: React.FC<RelatorioModalProps> = ({ onClose }) => {
-    const { equipInstalados, clientes, modelosEquipamento, ordens, empresaConfig } = useGlobal();
-    const [dateFrom, setDateFrom] = useState('');
-    const [dateTo, setDateTo]     = useState('');
-    const [equipId, setEquipId]   = useState('');
-
-    const equipOpts = [
-        { value: '', label: 'Todos os equipamentos' },
-        ...equipInstalados.map(e => {
-            const cli = clientes.find(c => String(c.id) === String(e.clienteId))?.nome ?? '—';
-            const mod = modelosEquipamento.find(m => String(m.id) === String(e.modeloId))?.nome ?? '—';
-            return { value: e.id, label: `${e.id} — ${mod}`, sub: cli };
-        }),
-    ];
-
-    const handlePrint = () => {
-        printHistoricoGeral(ordens, equipInstalados, clientes, modelosEquipamento, dateFrom, dateTo, equipId, empresaConfig?.nome || 'AQUATEX');
-    };
-
-    return (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 480 }}>
-                <div className="modal-header">
-                    <h3 className="modal-title">Relatório de Intervenções</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
-                </div>
-                <div className="modal-body">
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 14 }}>
-                        Seleccione o período e/ou equipamento para gerar o relatório impresso com o histórico de intervenções agrupado por equipamento.
-                    </div>
-                    <div className="form-row">
-                        <div className="form-group">
-                            <label className="form-label">Data Início</label>
-                            <input type="date" className="form-input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Data Fim</label>
-                            <input type="date" className="form-input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-                        </div>
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Equipamento</label>
-                        <SearchableSelect options={equipOpts} value={equipId} onChange={setEquipId} placeholder="Todos os equipamentos" />
-                    </div>
-                </div>
-                <div className="modal-footer">
-                    <button className="abtn abtn-secondary" type="button" onClick={onClose}>Cancelar</button>
-                    <button className="abtn abtn-primary" type="button" onClick={handlePrint}>
-                        <Printer size={12} /> Imprimir Relatório
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 /* ══ Modelo Modal ════════════════════════════════════════ */
 interface ModeloModalProps {
     modelo?: ModeloEquipamento;
@@ -715,7 +657,6 @@ const ParquePage: React.FC = () => {
     const [mModal, setMModal]       = useState<'new' | string | null>(null);
 
     const [showExport, setShowExport] = useState(false);
-    const [showRelatorio, setShowRelatorio] = useState(false);
     const [toast, setToast] = useState('');
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
@@ -829,9 +770,6 @@ const ParquePage: React.FC = () => {
         <AppLayout>
             <ActionBar title="Parque de Equipamentos" breadcrumb="AQUATEX SGI · Parque">
                 <div className="actionbar-spacer" />
-                <button className="abtn abtn-secondary" type="button" onClick={() => setShowRelatorio(true)}>
-                    <Printer size={13} /> Relatório de Intervenções
-                </button>
                 <button className="abtn abtn-secondary" type="button" onClick={() => setShowExport(true)}>
                     <Download size={13} /> Exportar
                 </button>
@@ -1037,8 +975,6 @@ const ParquePage: React.FC = () => {
                     onSave={handleSaveModelo}
                 />
             )}
-
-            {showRelatorio && <RelatorioModal onClose={() => setShowRelatorio(false)} />}
 
             {showExport && (
                 <ExportModal

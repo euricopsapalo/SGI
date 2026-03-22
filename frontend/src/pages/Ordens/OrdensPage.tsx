@@ -49,6 +49,210 @@ const COLS_OT: ExportCol[] = [
     { key: 'tipoTrabalho',   label: 'Tipo Trabalho' },
 ];
 
+/* ── Intervenções print helpers ── */
+const isCorretivo = (ot: OrdemTrabalho) =>
+    ot.tipo === 'pontual' && ot.tipoTrabalho.toLowerCase().includes('corretiv');
+
+const INTERV_CSS = `
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
+  body   { font-family: Arial, sans-serif; font-size: 11px; padding: 12mm 18mm; color: #1a1a1a; }
+  h1     { font-size: 1rem; margin: 0; }
+  .sub   { font-size: 0.68rem; color: #888; margin: 2px 0 14px; }
+  .hrow  { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.68rem; font-weight: 700; border: 1.5px solid #555; color: #333; background: #f5f5f5; }
+  .sec   { font-size: 0.8rem; font-weight: 700; color: #2B2B2B; border-bottom: 1.5px solid #2B2B2B; padding-bottom: 3px; margin: 14px 0 5px; }
+  table  { width: 100%; border-collapse: collapse; margin-bottom: 4px; page-break-inside: auto; }
+  thead  { display: table-header-group; }
+  th     { background: #2B2B2B; color: #fff; padding: 5px 8px; font-size: 0.7rem; font-weight: 700; border: 1px solid #444; text-align: left; }
+  td     { padding: 4px 8px; border: 1px solid #ddd; font-size: 0.75rem; vertical-align: top; }
+  tr:nth-child(even) td { background: #f9f9f9; }
+  tr:nth-child(odd)  td { background: #fff; }
+  .corr  { color: #f97316; font-weight: 700; }
+  .eq-group { margin-bottom: 18px; page-break-inside: avoid; }
+  .footer { margin-top: 18px; font-size: 0.62rem; color: #bbb; text-align: center; border-top: 1px solid #eee; padding-top: 5px; }
+  @page { size: A4 landscape; margin: 0; }
+`;
+
+function fDInterv(d?: string) { return d ? new Date(d).toLocaleDateString('pt-PT') : '—'; }
+
+function otEstadoCor(estado: string) {
+    if (estado === 'Terminado') return '#16a34a';
+    if (estado === 'Em curso')  return '#f97316';
+    if (estado === 'Encerrado') return '#6b7280';
+    return '#2563eb';
+}
+
+function printHistoricoGeral(
+    ots: OrdemTrabalho[],
+    equipInstalados: EquipInstalado[],
+    clientes: Cliente[],
+    modelosEquipamento: ModeloEquipamento[],
+    dateFrom: string,
+    dateTo: string,
+    equipIds: string[],
+    empresa: string,
+) {
+    const refDate = (o: OrdemTrabalho) => o.dataProgInicio || o.dataProgFim || o.dataEmissao || '';
+    const filtrado = ots.filter(o => {
+        const d = refDate(o);
+        const equipMatch = equipIds.length === 0 || equipIds.includes(String(o.equipInstaladoId));
+        return equipMatch && (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo);
+    }).sort((a, b) => refDate(a).localeCompare(refDate(b)));
+
+    const grupos = new Map<string, OrdemTrabalho[]>();
+    for (const o of filtrado as OrdemTrabalho[]) {
+        const key = String(o.equipInstaladoId);
+        if (!grupos.has(key)) grupos.set(key, []);
+        grupos.get(key)!.push(o);
+    }
+
+    let body = '';
+    for (const [eqId, eqOts] of Array.from(grupos.entries())) {
+        const eq  = equipInstalados.find(e => String(e.id) === eqId);
+        const cli = clientes.find(c => String(c.id) === String(eq?.clienteId));
+        const mod = modelosEquipamento.find(m => String(m.id) === String(eq?.modeloId));
+        const rows = eqOts.map(o => `<tr>
+            <td style="font-family:monospace">${o.id}</td>
+            <td>${o.tipo === 'pontual' ? 'Pontual' : 'Programada'}</td>
+            <td>${o.tipoTrabalho}${isCorretivo(o) ? ' <span class="corr">●</span>' : ''}</td>
+            <td style="color:${otEstadoCor(o.estado)};font-weight:600">${o.estado}</td>
+            <td>${fDInterv(refDate(o))}</td>
+            <td>${fDInterv(o.dataFim || o.dataEncerramento)}</td>
+            <td>${o.descricao || '—'}</td>
+        </tr>`).join('');
+        body += `<div class="eq-group">
+  <div class="sec">Equip. ${eqId} — ${mod?.nome ?? '—'} &nbsp;|&nbsp; Cliente: ${cli?.nome ?? '—'} &nbsp;|&nbsp; Série: ${eq?.nrSerie ?? '—'}</div>
+  <table>
+    <thead><tr><th>ID OT</th><th>Tipo OT</th><th>Tipo Trabalho</th><th>Estado</th><th>Data Prog.</th><th>Data Fim</th><th>Descrição</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+</div>`;
+    }
+
+    const periodo = dateFrom || dateTo
+        ? `Período: ${dateFrom ? fDInterv(dateFrom) : '—'} a ${dateTo ? fDInterv(dateTo) : '—'}`
+        : 'Todos os períodos';
+
+    const w = window.open('', '_blank', 'width=1100,height=900');
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html>
+<html lang="pt"><head><meta charset="UTF-8"><title>Relatório de Intervenções</title>
+<style>${INTERV_CSS}</style></head><body>
+<div class="hrow">
+  <div><h1>${empresa} — Relatório de Intervenções</h1>
+  <div class="sub">${periodo} &nbsp;|&nbsp; Impresso em ${new Date().toLocaleString('pt-PT')}</div></div>
+  <span class="badge">${filtrado.length} intervenção(ões)</span>
+</div>
+${body || '<p style="color:#999;text-align:center">Nenhuma intervenção encontrada no período seleccionado.</p>'}
+<div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
+</body></html>`);
+    w.document.close(); w.focus(); setTimeout(() => w.print(), 350);
+}
+
+/* ── Relatório de Intervenções Modal ── */
+const RelatorioIntervModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const { equipInstalados, clientes, modelosEquipamento, ordens, empresaConfig } = useGlobal();
+    const [dateFrom,   setDateFrom]   = useState('');
+    const [dateTo,     setDateTo]     = useState('');
+    const [equipIds,   setEquipIds]   = useState<string[]>([]);
+    const [equipSearch, setEquipSearch] = useState('');
+
+    const allEquips = equipInstalados.map(e => {
+        const cli = clientes.find(c => String(c.id) === String(e.clienteId))?.nome ?? '—';
+        const mod = modelosEquipamento.find(m => String(m.id) === String(e.modeloId))?.nome ?? '—';
+        return { id: e.id, label: `${e.id} — ${mod}`, sub: cli };
+    });
+
+    const visibleEquips = equipSearch.trim()
+        ? allEquips.filter(e => `${e.label} ${e.sub}`.toLowerCase().includes(equipSearch.toLowerCase()))
+        : allEquips;
+
+    const toggle = (id: string) =>
+        setEquipIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+    const selectAll  = () => setEquipIds(allEquips.map(e => e.id));
+    const clearAll   = () => setEquipIds([]);
+
+    const selLabel = equipIds.length === 0
+        ? 'Todos os equipamentos'
+        : `${equipIds.length} equipamento(s) seleccionado(s)`;
+
+    return (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="modal" style={{ maxWidth: 520 }}>
+                <div className="modal-header">
+                    <h3 className="modal-title">Relatório de Intervenções</h3>
+                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                </div>
+                <div className="modal-body">
+                    <div className="form-row">
+                        <div className="form-group">
+                            <label className="form-label">Data Início</label>
+                            <input type="date" className="form-input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Data Fim</label>
+                            <input type="date" className="form-input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+                        </div>
+                    </div>
+
+                    <div className="form-group">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <label className="form-label" style={{ margin: 0 }}>
+                                Equipamentos &nbsp;<span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>({selLabel})</span>
+                            </label>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                                <button type="button" className="abtn abtn-secondary" style={{ padding: '2px 8px', fontSize: '0.72rem' }} onClick={selectAll}>Todos</button>
+                                <button type="button" className="abtn abtn-secondary" style={{ padding: '2px 8px', fontSize: '0.72rem' }} onClick={clearAll}>Nenhum</button>
+                            </div>
+                        </div>
+                        <div style={{ position: 'relative', marginBottom: 6 }}>
+                            <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                            <input
+                                className="form-input"
+                                style={{ paddingLeft: 26, fontSize: '0.8rem' }}
+                                placeholder="Pesquisar equipamento..."
+                                value={equipSearch}
+                                onChange={e => setEquipSearch(e.target.value)}
+                            />
+                        </div>
+                        <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 3 }}>
+                            {visibleEquips.length === 0 ? (
+                                <div style={{ padding: '10px 12px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>Nenhum equipamento encontrado.</div>
+                            ) : visibleEquips.map(e => (
+                                <label key={e.id} style={{
+                                    display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
+                                    cursor: 'pointer', borderBottom: '1px solid var(--border)',
+                                    background: equipIds.includes(e.id) ? 'rgba(37,99,235,0.05)' : undefined,
+                                    fontSize: '0.8rem',
+                                }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={equipIds.includes(e.id)}
+                                        onChange={() => toggle(e.id)}
+                                        style={{ accentColor: 'var(--blue)', flexShrink: 0 }}
+                                    />
+                                    <span style={{ flex: 1 }}>
+                                        <span style={{ fontWeight: 600 }}>{e.label}</span>
+                                        <span style={{ color: 'var(--text-muted)', marginLeft: 6, fontSize: '0.74rem' }}>{e.sub}</span>
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+                <div className="modal-footer">
+                    <button className="abtn abtn-secondary" type="button" onClick={onClose}>Cancelar</button>
+                    <button className="abtn abtn-primary" type="button"
+                        onClick={() => printHistoricoGeral(ordens, equipInstalados, clientes, modelosEquipamento, dateFrom, dateTo, equipIds, empresaConfig?.nome || 'AQUATEX')}>
+                        <Printer size={12} /> Imprimir Relatório
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 /* ── Standalone print helper (used by modal & context menu) ── */
 function printOT(
     ot: OrdemTrabalho,
@@ -718,7 +922,8 @@ const OrdensPage: React.FC = () => {
     const [filterTipo, setFiltTipo]   = useState('');
     const [modal, setModal]           = useState<'new' | string | null>(null);
     const [toast,      setToast]      = useState('');
-    const [showExport, setShowExport] = useState(false);
+    const [showExport, setShowExport]       = useState(false);
+    const [showRelatorio, setShowRelatorio] = useState(false);
     const [ctx, setCtx]               = useState<{ id: string; x: number; y: number } | null>(null);
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
@@ -791,6 +996,9 @@ const OrdensPage: React.FC = () => {
         <AppLayout>
             <ActionBar title="Ordens de Trabalho" breadcrumb="AQUATEX SGI · Ordens">
                 <div className="actionbar-spacer" />
+                <button className="abtn abtn-secondary" type="button" onClick={() => setShowRelatorio(true)}>
+                    <Printer size={13} /> Relatório de Intervenções
+                </button>
                 <button className="abtn abtn-secondary" type="button" onClick={() => setShowExport(true)}>
                     <Download size={13} /> Exportar
                 </button>
@@ -948,6 +1156,8 @@ const OrdensPage: React.FC = () => {
                     readOnly={isTecnicoCampo && !!editOT}
                 />
             )}
+
+            {showRelatorio && <RelatorioIntervModal onClose={() => setShowRelatorio(false)} />}
 
             {showExport && (
                 <ExportModal
