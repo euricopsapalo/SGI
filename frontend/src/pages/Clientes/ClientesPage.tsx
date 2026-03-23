@@ -497,13 +497,13 @@ function openPrint(html: string) {
 }
 
 /* 1. Ficha de Cliente */
-function printFichaCliente(
+function buildFichaClienteHtml(
     c: Cliente,
     equips: EquipInstalado[],
     ordens: OrdemTrabalho[],
     modelosEquipamento: ModeloEquipamento[],
     empresa: string,
-) {
+): string {
     const end = endPrincipal(c);
     const cliEquips = equips.filter(e => String(e.clienteId) === String(c.id));
     const cliOTs    = ordens.filter(o => String(o.clienteId) === String(c.id))
@@ -535,7 +535,7 @@ function printFichaCliente(
       <td>${o.responsavel || '—'}</td>
     </tr>`).join('');
 
-    openPrint(`<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="pt"><head><meta charset="UTF-8"><title>Ficha ${codigoCli(c.id)}</title>
 <style>${RC_CSS}</style></head><body>
 <div class="hrow">
@@ -558,16 +558,26 @@ ${cliOTs.length > 0 ? `
 <table><thead><tr><th>ID</th><th>Tipo OT</th><th>Tipo Trabalho</th><th>Estado</th><th>Data Prog.</th><th>Data Fim</th><th>Responsável</th></tr></thead>
 <tbody>${otRows}</tbody></table>` : '<div class="sec">Histórico de OTs</div><p style="color:#999;font-size:0.78rem">Sem ordens de trabalho.</p>'}
 <div class="footer">${empresa} &nbsp;&bull;&nbsp; ${codigoCli(c.id)} — ${c.nome}</div>
-</body></html>`);
+</body></html>`;
+}
+
+function printFichaCliente(
+    c: Cliente,
+    equips: EquipInstalado[],
+    ordens: OrdemTrabalho[],
+    modelosEquipamento: ModeloEquipamento[],
+    empresa: string,
+) {
+    openPrint(buildFichaClienteHtml(c, equips, ordens, modelosEquipamento, empresa));
 }
 
 /* 2. Clientes por Estado */
-function printClientesPorEstado(
+function buildClientesPorEstadoHtml(
     clientes: Cliente[],
     ordens: OrdemTrabalho[],
     equips: EquipInstalado[],
     empresa: string,
-) {
+): string {
     const mkRow = (c: Cliente) => {
         const ultima = ultimaIntRC(c.id, ordens);
         const nEquips = equips.filter(e => String(e.clienteId) === String(c.id)).length;
@@ -586,7 +596,7 @@ function printClientesPorEstado(
     const ativos   = clientes.filter(c => c.ativo !== false);
     const inativos = clientes.filter(c => c.ativo === false);
 
-    openPrint(`<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="pt"><head><meta charset="UTF-8"><title>Clientes por Estado</title>
 <style>${RC_CSS}</style></head><body>
 <div class="hrow">
@@ -601,17 +611,26 @@ ${inativos.length > 0 ? `
 <table><thead><tr><th>Código</th><th>Nome</th><th>Tipo</th><th>NIF/BI</th><th>Telefone</th><th>Equip.</th><th>OTs</th><th>Última Interação</th></tr></thead>
 <tbody>${inativos.map(mkRow).join('')}</tbody></table>` : ''}
 <div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
-</body></html>`);
+</body></html>`;
+}
+
+function printClientesPorEstado(
+    clientes: Cliente[],
+    ordens: OrdemTrabalho[],
+    equips: EquipInstalado[],
+    empresa: string,
+) {
+    openPrint(buildClientesPorEstadoHtml(clientes, ordens, equips, empresa));
 }
 
 /* 3. Clientes sem Atividade */
-function printClientesSemAtividade(
+function buildClientesSemAtividadeHtml(
     clientes: Cliente[],
     ordens: OrdemTrabalho[],
     dateFrom: string,
     dateTo: string,
     empresa: string,
-) {
+): string {
     const refDate = (o: OrdemTrabalho) => o.dataProgInicio || o.dataEmissao || '';
     const semAtiv = clientes.filter(c => c.ativo !== false).filter(c => {
         const cOTs = ordens.filter(o => String(o.clienteId) === String(c.id));
@@ -641,7 +660,7 @@ function printClientesSemAtividade(
         ? `${dateFrom ? fRC(dateFrom) : '—'} a ${dateTo ? fRC(dateTo) : '—'}`
         : 'Período não definido';
 
-    openPrint(`<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="pt"><head><meta charset="UTF-8"><title>Clientes sem Atividade</title>
 <style>${RC_CSS}</style></head><body>
 <div class="hrow">
@@ -652,17 +671,27 @@ function printClientesSemAtividade(
 ${rows ? `<table><thead><tr><th>Código</th><th>Nome</th><th>Tipo</th><th>NIF/BI</th><th>Telefone</th><th>Email</th><th>Total OTs</th><th>Última Interação</th></tr></thead>
 <tbody>${rows}</tbody></table>` : '<p style="color:#999;text-align:center;padding:20px">Todos os clientes têm atividade no período seleccionado.</p>'}
 <div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
-</body></html>`);
+</body></html>`;
+}
+
+function printClientesSemAtividade(
+    clientes: Cliente[],
+    ordens: OrdemTrabalho[],
+    dateFrom: string,
+    dateTo: string,
+    empresa: string,
+) {
+    openPrint(buildClientesSemAtividadeHtml(clientes, ordens, dateFrom, dateTo, empresa));
 }
 
 /* 4. Equipamentos por Cliente */
-function printEquipamentosPorCliente(
+function buildEquipamentosPorClienteHtml(
     clientes: Cliente[],
     equips: EquipInstalado[],
     ordens: OrdemTrabalho[],
     modelosEquipamento: ModeloEquipamento[],
     empresa: string,
-) {
+): string {
     const comEquips = clientes.filter(c => equips.some(e => String(e.clienteId) === String(c.id)));
     let body = '';
     for (const c of comEquips) {
@@ -690,7 +719,7 @@ function printEquipamentosPorCliente(
 </div>`;
     }
 
-    openPrint(`<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="pt"><head><meta charset="UTF-8"><title>Equipamentos por Cliente</title>
 <style>${RC_CSS}</style></head><body>
 <div class="hrow">
@@ -699,11 +728,21 @@ function printEquipamentosPorCliente(
 </div>
 ${body || '<p style="color:#999;text-align:center">Nenhum equipamento instalado.</p>'}
 <div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
-</body></html>`);
+</body></html>`;
+}
+
+function printEquipamentosPorCliente(
+    clientes: Cliente[],
+    equips: EquipInstalado[],
+    ordens: OrdemTrabalho[],
+    modelosEquipamento: ModeloEquipamento[],
+    empresa: string,
+) {
+    openPrint(buildEquipamentosPorClienteHtml(clientes, equips, ordens, modelosEquipamento, empresa));
 }
 
 /* 5. Histórico de Intervenções por Cliente */
-function printHistoricoIntervCliente(
+function buildHistoricoIntervClienteHtml(
     clientes: Cliente[],
     ordens: OrdemTrabalho[],
     equips: EquipInstalado[],
@@ -711,7 +750,7 @@ function printHistoricoIntervCliente(
     dateFrom: string,
     dateTo: string,
     empresa: string,
-) {
+): string {
     const refDate = (o: OrdemTrabalho) => o.dataProgInicio || o.dataProgFim || o.dataEmissao || '';
     const filtOTs = ordens.filter(o => {
         const d = refDate(o);
@@ -747,7 +786,7 @@ function printHistoricoIntervCliente(
         ? `Período: ${dateFrom ? fRC(dateFrom) : '—'} a ${dateTo ? fRC(dateTo) : '—'}`
         : 'Todos os períodos';
 
-    openPrint(`<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="pt"><head><meta charset="UTF-8"><title>Histórico de Intervenções por Cliente</title>
 <style>${RC_CSS}</style></head><body>
 <div class="hrow">
@@ -756,18 +795,30 @@ function printHistoricoIntervCliente(
 </div>
 ${body || '<p style="color:#999;text-align:center">Nenhuma intervenção encontrada.</p>'}
 <div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
-</body></html>`);
+</body></html>`;
+}
+
+function printHistoricoIntervCliente(
+    clientes: Cliente[],
+    ordens: OrdemTrabalho[],
+    equips: EquipInstalado[],
+    modelosEquipamento: ModeloEquipamento[],
+    dateFrom: string,
+    dateTo: string,
+    empresa: string,
+) {
+    openPrint(buildHistoricoIntervClienteHtml(clientes, ordens, equips, modelosEquipamento, dateFrom, dateTo, empresa));
 }
 
 /* 6. Manutenções Pendentes por Cliente */
-function printManutencoesPendentes(
+function buildManutencoesPendentesHtml(
     clientes: Cliente[],
     equips: EquipInstalado[],
     ordens: OrdemTrabalho[],
     modelosEquipamento: ModeloEquipamento[],
     thresholdDays: number,
     empresa: string,
-) {
+): string {
     const now = Date.now();
     type EqStat = { eq: EquipInstalado; prox?: string; dias: number | null; mod?: ModeloEquipamento };
     const pendentes: Array<{ c: Cliente; items: EqStat[] }> = [];
@@ -814,7 +865,7 @@ function printManutencoesPendentes(
 
     const threshStr = thresholdDays === 0 ? 'Apenas em atraso' : thresholdDays === 9999 ? 'Todas as pendentes' : `Próximos ${thresholdDays} dias`;
 
-    openPrint(`<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="pt"><head><meta charset="UTF-8"><title>Manutenções Pendentes por Cliente</title>
 <style>${RC_CSS}</style></head><body>
 <div class="hrow">
@@ -823,7 +874,18 @@ function printManutencoesPendentes(
 </div>
 ${body || '<p style="color:#999;text-align:center;padding:20px">Nenhuma manutenção pendente no critério seleccionado.</p>'}
 <div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
-</body></html>`);
+</body></html>`;
+}
+
+function printManutencoesPendentes(
+    clientes: Cliente[],
+    equips: EquipInstalado[],
+    ordens: OrdemTrabalho[],
+    modelosEquipamento: ModeloEquipamento[],
+    thresholdDays: number,
+    empresa: string,
+) {
+    openPrint(buildManutencoesPendentesHtml(clientes, equips, ordens, modelosEquipamento, thresholdDays, empresa));
 }
 
 /* ── Modal de Seleção de Relatório ── */
@@ -851,10 +913,31 @@ const RelatoriosClienteModal: React.FC<RelatoriosClienteModalProps> = ({ cliente
     const [dateFrom,   setDateFrom]   = useState('');
     const [dateTo,     setDateTo]     = useState('');
     const [threshold,  setThreshold]  = useState(30);
+    const [previewHtml, setPreviewHtml] = useState('');
 
     const clienteOpts = clientes.map(c => ({ value: String(c.id), label: c.nome, sub: codigoCli(c.id) }));
 
     const canPrint = tipo !== 'ficha' || !!clienteId;
+
+    const buildHtml = (): string => {
+        const empresa2 = empresa;
+        if (tipo === 'ficha') {
+            const c = clientes.find(cl => String(cl.id) === clienteId);
+            if (!c) return '';
+            return buildFichaClienteHtml(c, equipInstalados, ordens, modelosEquipamento, empresa2);
+        } else if (tipo === 'estado') {
+            return buildClientesPorEstadoHtml(clientes, ordens, equipInstalados, empresa2);
+        } else if (tipo === 'sem_atividade') {
+            return buildClientesSemAtividadeHtml(clientes, ordens, dateFrom, dateTo, empresa2);
+        } else if (tipo === 'equip_cliente') {
+            return buildEquipamentosPorClienteHtml(clientes, equipInstalados, ordens, modelosEquipamento, empresa2);
+        } else if (tipo === 'historico') {
+            return buildHistoricoIntervClienteHtml(clientes, ordens, equipInstalados, modelosEquipamento, dateFrom, dateTo, empresa2);
+        } else if (tipo === 'manut_pendentes') {
+            return buildManutencoesPendentesHtml(clientes, equipInstalados, ordens, modelosEquipamento, threshold, empresa2);
+        }
+        return '';
+    };
 
     const handlePrint = () => {
         const empresa2 = empresa;
@@ -874,6 +957,11 @@ const RelatoriosClienteModal: React.FC<RelatoriosClienteModalProps> = ({ cliente
             printManutencoesPendentes(clientes, equipInstalados, ordens, modelosEquipamento, threshold, empresa2);
         }
         onClose();
+    };
+
+    const handlePreview = () => {
+        const html = buildHtml();
+        if (html) setPreviewHtml(html);
     };
 
     return (
@@ -942,11 +1030,26 @@ const RelatoriosClienteModal: React.FC<RelatoriosClienteModalProps> = ({ cliente
                 </div>
                 <div className="modal-footer">
                     <button className="abtn abtn-secondary" type="button" onClick={onClose}>Cancelar</button>
+                    <button className="abtn abtn-secondary" type="button" disabled={!canPrint} onClick={handlePreview}><Eye size={12} /> Pré-visualizar</button>
                     <button className="abtn abtn-primary" type="button" disabled={!canPrint} onClick={handlePrint}>
                         <Printer size={12} /> Imprimir Relatório
                     </button>
                 </div>
             </div>
+            {previewHtml && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ background: 'var(--bg-primary)', borderBottom: '1px solid var(--border)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ flex: 1, fontWeight: 700, fontSize: '0.85rem' }}>Pré-visualização</span>
+                        <button type="button" className="abtn abtn-primary" onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Printer size={13} /> Imprimir
+                        </button>
+                        <button type="button" className="abtn abtn-secondary" onClick={() => setPreviewHtml('')}>
+                            <X size={13} /> Fechar
+                        </button>
+                    </div>
+                    <iframe srcDoc={previewHtml} title="Pré-visualização" style={{ flex: 1, border: 'none', background: '#fff' }} />
+                </div>
+            )}
         </div>
     );
 };

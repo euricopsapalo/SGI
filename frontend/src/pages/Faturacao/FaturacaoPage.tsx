@@ -8,7 +8,7 @@ import {
 } from '../../contexts/GlobalContext';
 import {
     Search, Plus, X, Printer, Check, AlertCircle, FileText, Filter, Download,
-    ChevronDown,
+    ChevronDown, Eye,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 
@@ -279,14 +279,14 @@ const FaturaDetalhe: React.FC<FaturaDetalheProps> = ({ fatura, nomeCliente, otDe
     const isFP  = fatura.tipoDocumento === 'FP';
     const isFAT = fatura.tipoDocumento === 'FAT';
 
-    const handlePrint = () => {
-        const w = window.open('', '_blank', 'width=860,height=700');
-        if (!w) return;
+    const [previewHtml, setPreviewHtml] = useState('');
+
+    const buildFaturaHtml = (): string => {
         const docTitle = isFP ? 'FATURA PRO-FORMA' : 'FATURA';
         const fpNote = isFP ? `<div style="margin-top:20px;padding:10px 14px;background:#FFF3E0;border:1px solid #FFCC80;border-radius:4px;font-size:0.85rem;font-weight:700;color:#E65100;text-align:center">Este documento não serve de fatura</div>` : '';
         const anuladaNote = fatura.estado === 'Anulada' && fatura.motivoAnulacao
             ? `<div style="margin-top:8px;padding:10px 14px;background:#ECEFF1;border:1px solid #CFD8DC;border-radius:4px;font-size:0.8rem"><div style="font-weight:700;margin-bottom:4px">Fatura Anulada</div><div>Motivo: ${fatura.motivoAnulacao}</div></div>` : '';
-        w.document.write(`<!DOCTYPE html><html lang="pt"><head>
+        return `<!DOCTYPE html><html lang="pt"><head>
   <meta charset="UTF-8"><title>${docTitle} ${fatura.id}</title>
   <style>
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
@@ -339,13 +339,35 @@ const FaturaDetalhe: React.FC<FaturaDetalheProps> = ({ fatura, nomeCliente, otDe
   ${fpNote}
   ${anuladaNote}
   <div style="margin-top:32px;font-size:0.72rem;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:12px">${empresaConfig.nome} · NIF ${empresaConfig.nif} · SGI · ${fmtDate(fatura.dataEmissao)}</div>
-  <script>window.onload = () => window.print();</script>
-</body></html>`);
-        w.document.close();
+</body></html>`;
     };
+
+    const handlePrint = () => {
+        const w = window.open('', '_blank', 'width=860,height=700');
+        if (!w) return;
+        w.document.write(buildFaturaHtml());
+        w.document.close();
+        setTimeout(() => w.print(), 350);
+    };
+
+    const handlePreview = () => setPreviewHtml(buildFaturaHtml());
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            {previewHtml && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ background: 'var(--bg-primary)', borderBottom: '1px solid var(--border)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ flex: 1, fontWeight: 700, fontSize: '0.85rem' }}>Pré-visualização</span>
+                        <button type="button" className="abtn abtn-primary" onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Printer size={13} /> Imprimir
+                        </button>
+                        <button type="button" className="abtn abtn-secondary" onClick={() => setPreviewHtml('')}>
+                            <X size={13} /> Fechar
+                        </button>
+                    </div>
+                    <iframe srcDoc={previewHtml} title="Pré-visualização" style={{ flex: 1, border: 'none', background: '#fff' }} />
+                </div>
+            )}
             <div className="modal" style={{ maxWidth: 620 }}>
                 <div className="modal-header">
                     <div>
@@ -508,6 +530,9 @@ const FaturaDetalhe: React.FC<FaturaDetalheProps> = ({ fatura, nomeCliente, otDe
                                 <Check size={12} /> Marcar como Paga
                             </button>
                         )}
+                        <button className="abtn abtn-secondary" type="button" onClick={handlePreview} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Eye size={12} /> Pré-visualizar
+                        </button>
                         <button className="abtn abtn-secondary" type="button" onClick={handlePrint}>
                             <Printer size={12} /> Imprimir
                         </button>

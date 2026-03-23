@@ -82,7 +82,15 @@ function otEstadoCor(estado: string) {
     return '#2563eb';
 }
 
-function printHistoricoGeral(
+function openPrintI(html: string, title: string) {
+    const w = window.open('', '_blank', 'width=1100,height=900');
+    if (!w) return;
+    w.document.write(html);
+    w.document.title = title;
+    w.document.close(); w.focus(); setTimeout(() => w.print(), 350);
+}
+
+function buildHistoricoGeralHtml(
     ots: OrdemTrabalho[],
     equipInstalados: EquipInstalado[],
     clientes: Cliente[],
@@ -91,7 +99,7 @@ function printHistoricoGeral(
     dateTo: string,
     equipIds: string[],
     empresa: string,
-) {
+): string {
     const refDate = (o: OrdemTrabalho) => o.dataProgInicio || o.dataProgFim || o.dataEmissao || '';
     const filtrado = ots.filter(o => {
         const d = refDate(o);
@@ -133,9 +141,7 @@ function printHistoricoGeral(
         ? `Período: ${dateFrom ? fDInterv(dateFrom) : '—'} a ${dateTo ? fDInterv(dateTo) : '—'}`
         : 'Todos os períodos';
 
-    const w = window.open('', '_blank', 'width=1100,height=900');
-    if (!w) return;
-    w.document.write(`<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="pt"><head><meta charset="UTF-8"><title>Relatório de Intervenções</title>
 <style>${INTERV_CSS}</style></head><body>
 <div class="hrow">
@@ -145,8 +151,20 @@ function printHistoricoGeral(
 </div>
 ${body || '<p style="color:#999;text-align:center">Nenhuma intervenção encontrada no período seleccionado.</p>'}
 <div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
-</body></html>`);
-    w.document.close(); w.focus(); setTimeout(() => w.print(), 350);
+</body></html>`;
+}
+
+function printHistoricoGeral(
+    ots: OrdemTrabalho[],
+    equipInstalados: EquipInstalado[],
+    clientes: Cliente[],
+    modelosEquipamento: ModeloEquipamento[],
+    dateFrom: string,
+    dateTo: string,
+    equipIds: string[],
+    empresa: string,
+) {
+    openPrintI(buildHistoricoGeralHtml(ots, equipInstalados, clientes, modelosEquipamento, dateFrom, dateTo, equipIds, empresa), 'Relatório de Intervenções');
 }
 
 /* ── Relatório de Intervenções Modal ── */
@@ -156,6 +174,7 @@ const RelatorioIntervModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     const [dateTo,     setDateTo]     = useState('');
     const [equipIds,   setEquipIds]   = useState<string[]>([]);
     const [equipSearch, setEquipSearch] = useState('');
+    const [previewHtml, setPreviewHtml] = useState('');
 
     const allEquips = equipInstalados.map(e => {
         const cli = clientes.find(c => String(c.id) === String(e.clienteId))?.nome ?? '—';
@@ -177,8 +196,26 @@ const RelatorioIntervModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         ? 'Todos os equipamentos'
         : `${equipIds.length} equipamento(s) seleccionado(s)`;
 
+    const buildHtml = () => buildHistoricoGeralHtml(ordens, equipInstalados, clientes, modelosEquipamento, dateFrom, dateTo, equipIds, empresaConfig?.nome || 'AQUATEX');
+    const handlePreview = () => setPreviewHtml(buildHtml());
+    const handlePrint   = () => printHistoricoGeral(ordens, equipInstalados, clientes, modelosEquipamento, dateFrom, dateTo, equipIds, empresaConfig?.nome || 'AQUATEX');
+
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            {previewHtml && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ background: 'var(--bg-primary)', borderBottom: '1px solid var(--border)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ flex: 1, fontWeight: 700, fontSize: '0.85rem' }}>Pré-visualização</span>
+                        <button type="button" className="abtn abtn-primary" onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Printer size={13} /> Imprimir
+                        </button>
+                        <button type="button" className="abtn abtn-secondary" onClick={() => setPreviewHtml('')}>
+                            <X size={13} /> Fechar
+                        </button>
+                    </div>
+                    <iframe srcDoc={previewHtml} title="Pré-visualização" style={{ flex: 1, border: 'none', background: '#fff' }} />
+                </div>
+            )}
             <div className="modal" style={{ maxWidth: 520 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Relatório de Intervenções</h3>
@@ -243,8 +280,10 @@ const RelatorioIntervModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 </div>
                 <div className="modal-footer">
                     <button className="abtn abtn-secondary" type="button" onClick={onClose}>Cancelar</button>
-                    <button className="abtn abtn-primary" type="button"
-                        onClick={() => printHistoricoGeral(ordens, equipInstalados, clientes, modelosEquipamento, dateFrom, dateTo, equipIds, empresaConfig?.nome || 'AQUATEX')}>
+                    <button className="abtn abtn-secondary" type="button" onClick={handlePreview} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <Eye size={12} /> Pré-visualizar
+                    </button>
+                    <button className="abtn abtn-primary" type="button" onClick={handlePrint}>
                         <Printer size={12} /> Imprimir Relatório
                     </button>
                 </div>
@@ -254,44 +293,7 @@ const RelatorioIntervModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 };
 
 /* ── Standalone print helper (used by modal & context menu) ── */
-function printOT(
-    ot: OrdemTrabalho,
-    equipInstalados: EquipInstalado[],
-    modelosEquipamento: ModeloEquipamento[],
-    clientes: Cliente[],
-    empresa?: import('../../contexts/GlobalContext').EmpresaConfig,
-    simbolo?: string,
-) {
-    const fmtDate = makePrintDate(empresa?.formatoData);
-    const equip = equipInstalados.find(e => e.id === ot.equipInstaladoId);
-    const mod   = modelosEquipamento.find(m => m.id === equip?.modeloId)?.nome ?? '—';
-    const cli   = clientes.find(c => c.id === ot.clienteId)?.nome ?? '—';
-
-    const maosHtml = (ot.maosDeObra?.length ?? 0) > 0
-        ? `<h3 class="sec-title">Mão de Obra</h3>
-<table><thead><tr><th>Função</th><th style="text-align:right">Custo/h (Kz)</th><th>Hora</th></tr></thead><tbody>
-${ot.maosDeObra.map(m => `<tr><td>${m.funcao}</td><td style="text-align:right">${m.custo.toLocaleString('pt-PT')}</td><td>${m.hora}</td></tr>`).join('')}
-</tbody></table>` : '';
-
-    const artsHtml = (ot.artigos?.length ?? 0) > 0
-        ? `<h3 class="sec-title">Artigos / Consumíveis</h3>
-<table><thead><tr><th>Descrição</th><th style="text-align:center">Qtd</th><th style="text-align:right">Preço Unit. (Kz)</th><th style="text-align:right">Total (Kz)</th></tr></thead><tbody>
-${ot.artigos.map(a => `<tr><td>${a.descricao}</td><td style="text-align:center">${a.quantidade}</td><td style="text-align:right">${a.preco.toLocaleString('pt-PT')}</td><td style="text-align:right">${(a.quantidade * a.preco).toLocaleString('pt-PT')}</td></tr>`).join('')}
-</tbody></table>` : '';
-
-    const diagHtml = ot.orgao
-        ? `<h3 class="sec-title">Diagnóstico</h3>
-<table class="info-table">
-<tr><td>Órgão</td><td>${ot.orgao}</td></tr>
-<tr><td>Sintoma</td><td>${ot.sintoma ?? '—'}</td></tr>
-<tr><td>Causa</td><td>${ot.causa ?? '—'}</td></tr>
-</table>` : '';
-
-    const w = window.open('', '_blank', 'width=840,height=960');
-    if (!w) return;
-    w.document.write(`<!DOCTYPE html>
-<html lang="pt"><head><meta charset="UTF-8"><title>OT ${ot.id}</title>
-<style>
+const OT_CSS = `
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
   body   { font-family: Arial, sans-serif; font-size: 12px; padding: 15mm 20mm; color: #1a1a1a; max-width: 760px; margin: 0 auto; }
   .header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
@@ -315,10 +317,48 @@ ${ot.artigos.map(a => `<tr><td>${a.descricao}</td><td style="text-align:center">
   .sign-line { border-top: 1px solid #555; margin-top: 46px; padding-top: 4px; font-size: 0.65rem; color: #888; }
   .footer    { margin-top: 20px; font-size: 0.65rem; color: #bbb; text-align: center; border-top: 1px solid #eee; padding-top: 6px; }
   @page { size: A4; margin: 0; }
-</style></head><body>
+`;
+
+function buildOTHtml(
+    ot: OrdemTrabalho,
+    equipInstalados: EquipInstalado[],
+    modelosEquipamento: ModeloEquipamento[],
+    clientes: Cliente[],
+    empresa?: import('../../contexts/GlobalContext').EmpresaConfig,
+    simbolo?: string,
+): string {
+    const fmtDate = makePrintDate(empresa?.formatoData);
+    const equip = equipInstalados.find(e => e.id === ot.equipInstaladoId);
+    const mod   = modelosEquipamento.find(m => m.id === equip?.modeloId)?.nome ?? '—';
+    const cli   = clientes.find(c => c.id === ot.clienteId)?.nome ?? '—';
+    const empresaNome = empresa?.nome || 'AQUATEX';
+
+    const maosHtml = (ot.maosDeObra?.length ?? 0) > 0
+        ? `<h3 class="sec-title">Mão de Obra</h3>
+<table><thead><tr><th>Função</th><th style="text-align:right">Custo/h (${simbolo ?? 'Kz'})</th><th>Hora</th></tr></thead><tbody>
+${ot.maosDeObra.map(m => `<tr><td>${m.funcao}</td><td style="text-align:right">${m.custo.toLocaleString('pt-PT')}</td><td>${m.hora}</td></tr>`).join('')}
+</tbody></table>` : '';
+
+    const artsHtml = (ot.artigos?.length ?? 0) > 0
+        ? `<h3 class="sec-title">Artigos / Consumíveis</h3>
+<table><thead><tr><th>Descrição</th><th style="text-align:center">Qtd</th><th style="text-align:right">Preço Unit. (${simbolo ?? 'Kz'})</th><th style="text-align:right">Total (${simbolo ?? 'Kz'})</th></tr></thead><tbody>
+${ot.artigos.map(a => `<tr><td>${a.descricao}</td><td style="text-align:center">${a.quantidade}</td><td style="text-align:right">${a.preco.toLocaleString('pt-PT')}</td><td style="text-align:right">${(a.quantidade * a.preco).toLocaleString('pt-PT')}</td></tr>`).join('')}
+</tbody></table>` : '';
+
+    const diagHtml = ot.orgao
+        ? `<h3 class="sec-title">Diagnóstico</h3>
+<table class="info-table">
+<tr><td>Órgão</td><td>${ot.orgao}</td></tr>
+<tr><td>Sintoma</td><td>${ot.sintoma ?? '—'}</td></tr>
+<tr><td>Causa</td><td>${ot.causa ?? '—'}</td></tr>
+</table>` : '';
+
+    return `<!DOCTYPE html>
+<html lang="pt"><head><meta charset="UTF-8"><title>OT ${ot.id}</title>
+<style>${OT_CSS}</style></head><body>
 <div class="header-row">
   <div>
-    <h1>AQUATEX — Ordem de Trabalho</h1>
+    <h1>${empresaNome} — Ordem de Trabalho</h1>
     <div class="sub">Nº: <strong>${ot.id}</strong> &nbsp;|&nbsp; Impresso em ${new Date().toLocaleString('pt-PT')}</div>
   </div>
   <span class="badge">${ot.estado}</span>
@@ -355,8 +395,21 @@ ${maosHtml}${artsHtml}${diagHtml}
     <div class="sign-line">Assinatura &amp; Data</div>
   </div>
 </div>
-<div class="footer">AQUATEX, LDA &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
-</body></html>`);
+<div class="footer">${empresaNome} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
+</body></html>`;
+}
+
+function printOT(
+    ot: OrdemTrabalho,
+    equipInstalados: EquipInstalado[],
+    modelosEquipamento: ModeloEquipamento[],
+    clientes: Cliente[],
+    empresa?: import('../../contexts/GlobalContext').EmpresaConfig,
+    simbolo?: string,
+) {
+    const w = window.open('', '_blank', 'width=840,height=960');
+    if (!w) return;
+    w.document.write(buildOTHtml(ot, equipInstalados, modelosEquipamento, clientes, empresa, simbolo));
     w.document.close();
     w.focus();
     setTimeout(() => w.print(), 350);
@@ -548,12 +601,31 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
     const canTerminar = estado === 'Em curso';
     const canEncerrar = estado === 'Terminado';
 
+    const [previewHtml, setPreviewHtml] = useState('');
+
     const handlePrint = () => {
         if (ot) printOT(ot, equipInstalados, modelosEquipamento, clientes, empresaConfig, simboloMoeda);
+    };
+    const handlePreview = () => {
+        if (ot) setPreviewHtml(buildOTHtml(ot, equipInstalados, modelosEquipamento, clientes, empresaConfig, simboloMoeda));
     };
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            {previewHtml && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ background: 'var(--bg-primary)', borderBottom: '1px solid var(--border)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ flex: 1, fontWeight: 700, fontSize: '0.85rem' }}>Pré-visualização</span>
+                        <button type="button" className="abtn abtn-primary" onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Printer size={13} /> Imprimir
+                        </button>
+                        <button type="button" className="abtn abtn-secondary" onClick={() => setPreviewHtml('')}>
+                            <X size={13} /> Fechar
+                        </button>
+                    </div>
+                    <iframe srcDoc={previewHtml} title="Pré-visualização" style={{ flex: 1, border: 'none', background: '#fff' }} />
+                </div>
+            )}
             <div className="modal" style={{ maxWidth: 700 }}>
                 <div className="modal-header">
                     <div>
@@ -901,6 +973,9 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
 
                     <div className="modal-footer">
                         <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
+                        {ot && (
+                            <button type="button" className="abtn abtn-secondary" onClick={handlePreview} style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Eye size={12} /> Pré-visualizar</button>
+                        )}
                         {ot && (
                             <button type="button" className="abtn abtn-secondary" onClick={handlePrint}><Printer size={12} /> Imprimir</button>
                         )}

@@ -44,20 +44,7 @@ const genSerialNumber = (modelo?: ModeloEquipamento): string => {
     return `AQ-${type}${year}-${hex}`;
 };
 
-/* ── Equipment print helper ── */
-function printEquip(
-    eq: EquipInstalado,
-    clientes: Cliente[],
-    modelosEquipamento: ModeloEquipamento[],
-) {
-    const cli = clientes.find(c => c.id === eq.clienteId);
-    const mod = modelosEquipamento.find(m => m.id === eq.modeloId);
-
-    const w = window.open('', '_blank', 'width=820,height=900');
-    if (!w) return;
-    w.document.write(`<!DOCTYPE html>
-<html lang="pt"><head><meta charset="UTF-8"><title>Ficha Equip. ${eq.id}</title>
-<style>
+const EQUIP_CSS = `
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
   body   { font-family: Arial, sans-serif; font-size: 12px; padding: 15mm 20mm; color: #1a1a1a; }
   h1     { font-size: 1rem; margin: 0; }
@@ -75,7 +62,20 @@ function printEquip(
   td.lbl { background: #f5f5f5 !important; }
   .footer { margin-top: 20px; font-size: 0.65rem; color: #bbb; text-align: center; border-top: 1px solid #eee; padding-top: 6px; }
   @page { size: A4; margin: 0; }
-</style></head><body>
+`;
+
+/* ── Equipment print helper ── */
+function buildEquipHtml(
+    eq: EquipInstalado,
+    clientes: Cliente[],
+    modelosEquipamento: ModeloEquipamento[],
+): string {
+    const cli = clientes.find(c => c.id === eq.clienteId);
+    const mod = modelosEquipamento.find(m => m.id === eq.modeloId);
+
+    return `<!DOCTYPE html>
+<html lang="pt"><head><meta charset="UTF-8"><title>Ficha Equip. ${eq.id}</title>
+<style>${EQUIP_CSS}</style></head><body>
 <div class="hrow">
   <div>
     <h1>AQUATEX — Ficha de Equipamento</h1>
@@ -100,10 +100,20 @@ function printEquip(
 </table>
 
 <div class="footer">AQUATEX, LDA &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
-</body></html>`);
+</body></html>`;
+}
+
+function printEquip(
+    eq: EquipInstalado,
+    clientes: Cliente[],
+    modelosEquipamento: ModeloEquipamento[],
+) {
+    const html = buildEquipHtml(eq, clientes, modelosEquipamento);
+    const w = window.open('', '_blank', 'width=820,height=900');
+    if (!w) return;
+    w.document.write(html.replace('</body></html>', '<script>window.onload=()=>window.print();<\/script></body></html>'));
     w.document.close();
     w.focus();
-    setTimeout(() => w.print(), 350);
 }
 
 const PRINT_CSS = `
@@ -131,13 +141,13 @@ const PRINT_CSS = `
 
 function fD(d?: string) { return d ? new Date(d).toLocaleDateString('pt-PT') : '—'; }
 
-function printHistoricoEquip(
+function buildHistoricoEquipHtml(
     eq: EquipInstalado,
     ots: OrdemTrabalho[],
     cli: Cliente | undefined,
     mod: ModeloEquipamento | undefined,
     empresa: string,
-) {
+): string {
     const rows = [...ots].sort((a, b) => (b.dataProgInicio || b.dataProgFim || '').localeCompare(a.dataProgInicio || a.dataProgFim || ''))
         .map(o => `<tr>
             <td style="font-family:monospace">${o.id}</td>
@@ -149,9 +159,7 @@ function printHistoricoEquip(
             <td>${o.descricao || '—'}</td>
         </tr>`).join('');
 
-    const w = window.open('', '_blank', 'width=1100,height=900');
-    if (!w) return;
-    w.document.write(`<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="pt"><head><meta charset="UTF-8"><title>Histórico — Equip. ${eq.id}</title>
 <style>${PRINT_CSS}</style></head><body>
 <div class="hrow">
@@ -166,11 +174,24 @@ function printHistoricoEquip(
   <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:#999">Sem intervenções registadas</td></tr>'}</tbody>
 </table>
 <div class="footer">${empresa} &nbsp;&bull;&nbsp; Total: ${ots.length} intervenção(ões)</div>
-</body></html>`);
-    w.document.close(); w.focus(); setTimeout(() => w.print(), 350);
+</body></html>`;
 }
 
-function printHistoricoGeral(
+function printHistoricoEquip(
+    eq: EquipInstalado,
+    ots: OrdemTrabalho[],
+    cli: Cliente | undefined,
+    mod: ModeloEquipamento | undefined,
+    empresa: string,
+) {
+    const html = buildHistoricoEquipHtml(eq, ots, cli, mod, empresa);
+    const w = window.open('', '_blank', 'width=1100,height=900');
+    if (!w) return;
+    w.document.write(html.replace('</body></html>', '<script>window.onload=()=>window.print();<\/script></body></html>'));
+    w.document.close(); w.focus();
+}
+
+function buildHistoricoGeralHtml(
     ots: OrdemTrabalho[],
     equipInstalados: EquipInstalado[],
     clientes: Cliente[],
@@ -179,7 +200,7 @@ function printHistoricoGeral(
     dateTo: string,
     equipId: string,
     empresa: string,
-) {
+): string {
     const refDate = (o: OrdemTrabalho) => o.dataProgInicio || o.dataProgFim || o.dataEmissao || '';
     const filtrado = ots
         .filter(o => {
@@ -224,9 +245,7 @@ function printHistoricoGeral(
         ? `Período: ${dateFrom ? fD(dateFrom) : '—'} a ${dateTo ? fD(dateTo) : '—'}`
         : 'Todos os períodos';
 
-    const w = window.open('', '_blank', 'width=1100,height=900');
-    if (!w) return;
-    w.document.write(`<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="pt"><head><meta charset="UTF-8"><title>Relatório de Intervenções</title>
 <style>${PRINT_CSS}</style></head><body>
 <div class="hrow">
@@ -238,21 +257,37 @@ function printHistoricoGeral(
 </div>
 ${body || '<p style="color:#999;text-align:center">Nenhuma intervenção encontrada no período seleccionado.</p>'}
 <div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
-</body></html>`);
-    w.document.close(); w.focus(); setTimeout(() => w.print(), 350);
+</body></html>`;
+}
+
+function printHistoricoGeral(
+    ots: OrdemTrabalho[],
+    equipInstalados: EquipInstalado[],
+    clientes: Cliente[],
+    modelosEquipamento: ModeloEquipamento[],
+    dateFrom: string,
+    dateTo: string,
+    equipId: string,
+    empresa: string,
+) {
+    const html = buildHistoricoGeralHtml(ots, equipInstalados, clientes, modelosEquipamento, dateFrom, dateTo, equipId, empresa);
+    const w = window.open('', '_blank', 'width=1100,height=900');
+    if (!w) return;
+    w.document.write(html.replace('</body></html>', '<script>window.onload=()=>window.print();<\/script></body></html>'));
+    w.document.close(); w.focus();
 }
 
 /* ── Estado do Parque print ── */
 interface EstadoSeccoes { ativos: boolean; manutencoes: boolean; problemas: boolean; }
 
-function printEstadoParque(
+function buildEstadoParqueHtml(
     equipInstalados: EquipInstalado[],
     ordens: OrdemTrabalho[],
     clientes: Cliente[],
     modelosEquipamento: ModeloEquipamento[],
     empresa: string,
     seccoes: EstadoSeccoes,
-) {
+): string {
     const now = Date.now();
     const isCorr = (o: OrdemTrabalho) =>
         o.tipo === 'pontual' && o.tipoTrabalho.toLowerCase().includes('corretiv');
@@ -296,9 +331,7 @@ function printEstadoParque(
         : d <= 30  ? `<span style="color:#f97316;font-weight:700">+${d}d</span>`
         :            `+${d}d`;
 
-    const w = window.open('', '_blank', 'width=1000,height=900');
-    if (!w) return;
-    w.document.write(`<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="pt"><head><meta charset="UTF-8"><title>Estado do Parque</title>
 <style>
 ${PRINT_CSS}
@@ -376,12 +409,26 @@ ${seccoes.ativos ? `
 ${semManutencao.length > 0 ? `<p style="font-size:0.72rem;color:#f97316;margin-top:6px">⚠ ${semManutencao.length} equipamento(s) activo(s) sem manutenção programada.</p>` : ''}` : ''}
 
 <div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
-</body></html>`);
-    w.document.close(); w.focus(); setTimeout(() => w.print(), 350);
+</body></html>`;
+}
+
+function printEstadoParque(
+    equipInstalados: EquipInstalado[],
+    ordens: OrdemTrabalho[],
+    clientes: Cliente[],
+    modelosEquipamento: ModeloEquipamento[],
+    empresa: string,
+    seccoes: EstadoSeccoes,
+) {
+    const html = buildEstadoParqueHtml(equipInstalados, ordens, clientes, modelosEquipamento, empresa, seccoes);
+    const w = window.open('', '_blank', 'width=1000,height=900');
+    if (!w) return;
+    w.document.write(html.replace('</body></html>', '<script>window.onload=()=>window.print();<\/script></body></html>'));
+    w.document.close(); w.focus();
 }
 
 /* ══ Relatório Estado Modal ══════════════════════════════ */
-const RelatorioEstadoModal: React.FC<{ onClose: () => void; onPrint: (s: EstadoSeccoes) => void }> = ({ onClose, onPrint }) => {
+const RelatorioEstadoModal: React.FC<{ onClose: () => void; onPrint: (s: EstadoSeccoes) => void; onPreview: (s: EstadoSeccoes) => void }> = ({ onClose, onPrint, onPreview }) => {
     const [ativos,      setAtivos]      = useState(true);
     const [manutencoes, setManutencoes] = useState(true);
     const [problemas,   setProblemas]   = useState(true);
@@ -428,6 +475,10 @@ const RelatorioEstadoModal: React.FC<{ onClose: () => void; onPrint: (s: EstadoS
                 </div>
                 <div className="modal-footer">
                     <button className="abtn abtn-secondary" type="button" onClick={onClose}>Cancelar</button>
+                    <button className="abtn abtn-secondary" type="button" disabled={nenhum}
+                        onClick={() => onPreview({ ativos, manutencoes, problemas })}>
+                        <Eye size={12} /> Pré-visualizar
+                    </button>
                     <button className="abtn abtn-primary" type="button" disabled={nenhum}
                         onClick={() => { onPrint({ ativos, manutencoes, problemas }); onClose(); }}>
                         <Printer size={12} /> Imprimir Relatório
@@ -621,6 +672,7 @@ interface DetalheProps { equipId: string; onClose: () => void; onEdit: () => voi
 const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
     const { equipInstalados, clientes, modelosEquipamento, planos, ordens, fmtDate, empresaConfig } = useGlobal();
     const [tab, setTab] = useState<'info' | 'historico'>('info');
+    const [previewHtml, setPreviewHtml] = useState('');
 
     const eq   = equipInstalados.find(e => e.id === equipId)!;
     const cli  = clientes.find(c => c.id === eq.clienteId);
@@ -789,19 +841,41 @@ const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
 
                 <div className="modal-footer">
                     <button className="abtn abtn-secondary" type="button" onClick={onClose}>Fechar</button>
-                    {tab === 'historico' ? (
+                    {tab === 'historico' ? (<>
+                        <button className="abtn abtn-secondary" type="button"
+                            onClick={() => setPreviewHtml(buildHistoricoEquipHtml(eq, ots, cli, mod, empresaConfig?.nome || 'AQUATEX'))}>
+                            <Eye size={12} /> Pré-visualizar
+                        </button>
                         <button className="abtn abtn-secondary" type="button"
                             onClick={() => printHistoricoEquip(eq, ots, cli, mod, empresaConfig?.nome || 'AQUATEX')}>
                             <Printer size={12} /> Imprimir Histórico
                         </button>
-                    ) : (
+                    </>) : (<>
+                        <button className="abtn abtn-secondary" type="button"
+                            onClick={() => setPreviewHtml(buildEquipHtml(eq, clientes, modelosEquipamento))}>
+                            <Eye size={12} /> Pré-visualizar
+                        </button>
                         <button className="abtn abtn-secondary" type="button" onClick={() => printEquip(eq, clientes, modelosEquipamento)}>
                             <Printer size={12} /> Imprimir Ficha
                         </button>
-                    )}
+                    </>)}
                     <button className="abtn abtn-secondary" type="button" onClick={onEdit}><Edit2 size={12} /> Editar</button>
                 </div>
             </div>
+            {previewHtml && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ background: 'var(--bg-primary)', borderBottom: '1px solid var(--border)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ flex: 1, fontWeight: 700, fontSize: '0.85rem' }}>Pré-visualização</span>
+                        <button type="button" className="abtn abtn-primary" onClick={() => { if (tab === 'historico') printHistoricoEquip(eq, ots, cli, mod, empresaConfig?.nome || 'AQUATEX'); else printEquip(eq, clientes, modelosEquipamento); }} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Printer size={13} /> Imprimir
+                        </button>
+                        <button type="button" className="abtn abtn-secondary" onClick={() => setPreviewHtml('')}>
+                            <X size={13} /> Fechar
+                        </button>
+                    </div>
+                    <iframe srcDoc={previewHtml} title="Pré-visualização" style={{ flex: 1, border: 'none', background: '#fff' }} />
+                </div>
+            )}
         </div>
     );
 };
@@ -854,6 +928,7 @@ const ParquePage: React.FC = () => {
 
     const [showExport,    setShowExport]    = useState(false);
     const [showRelatorio, setShowRelatorio] = useState(false);
+    const [previewHtml,   setPreviewHtml]   = useState('');
     const [toast, setToast] = useState('');
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
@@ -1158,6 +1233,7 @@ const ParquePage: React.FC = () => {
                 <RelatorioEstadoModal
                     onClose={() => setShowRelatorio(false)}
                     onPrint={seccoes => printEstadoParque(equipInstalados, ordens, clientes, modelosEquipamento, empresaConfig?.nome || 'AQUATEX', seccoes)}
+                    onPreview={seccoes => { setPreviewHtml(buildEstadoParqueHtml(equipInstalados, ordens, clientes, modelosEquipamento, empresaConfig?.nome || 'AQUATEX', seccoes)); setShowRelatorio(false); }}
                 />
             )}
 
@@ -1200,6 +1276,18 @@ const ParquePage: React.FC = () => {
                 <div className="toast" role="status">
                     <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
                     <span>{toast}</span>
+                </div>
+            )}
+
+            {previewHtml && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ background: 'var(--bg-primary)', borderBottom: '1px solid var(--border)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ flex: 1, fontWeight: 700, fontSize: '0.85rem' }}>Pré-visualização</span>
+                        <button type="button" className="abtn abtn-secondary" onClick={() => setPreviewHtml('')}>
+                            <X size={13} /> Fechar
+                        </button>
+                    </div>
+                    <iframe srcDoc={previewHtml} title="Pré-visualização" style={{ flex: 1, border: 'none', background: '#fff' }} />
                 </div>
             )}
         </AppLayout>

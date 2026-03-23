@@ -9,7 +9,7 @@ import {
 import {
     Search, Plus, X, AlertCircle, Check, ShoppingCart,
     Package, Printer, ChevronDown, Archive, Download, TrendingDown, ShoppingBag,
-    Ban, RotateCcw,
+    Ban, RotateCcw, Eye,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 
@@ -171,7 +171,7 @@ const ReceberModal: React.FC<ReceberModalProps> = ({ encomenda, onClose, onConfi
 };
 
 /* ══ Print Nota de Encomenda — abre janela A4 ══════════════ */
-function printNotaEncomenda(encomenda: Encomenda, fornecedorNome: string, empresa?: EmpresaConfig, simbolo?: string) {
+function buildNotaEncomendaHtml(encomenda: Encomenda, fornecedorNome: string, empresa?: EmpresaConfig, simbolo?: string): string {
     const emp = empresa ?? {} as EmpresaConfig;
     const { fmt, fmtMoney, fmtDate } = makePrintFmt(emp, simbolo);
     const total = encTotal(encomenda);
@@ -338,6 +338,11 @@ function printNotaEncomenda(encomenda: Encomenda, fornecedorNome: string, empres
 </body>
 </html>`;
 
+    return html;
+}
+
+function printNotaEncomenda(encomenda: Encomenda, fornecedorNome: string, empresa?: EmpresaConfig, simbolo?: string) {
+    const html = buildNotaEncomendaHtml(encomenda, fornecedorNome, empresa, simbolo);
     const w = window.open('', '_blank', 'width=794,height=1123');
     if (!w) return;
     w.document.write(html);
@@ -347,12 +352,12 @@ function printNotaEncomenda(encomenda: Encomenda, fornecedorNome: string, empres
 }
 
 /* ══ Print Nota de Entrada — guia de recebimento A4 ════════ */
-function printNotaEntrada(
+function buildNotaEntradaHtml(
     rececao: Rececao,
     encomenda: Encomenda,
     empresa?: EmpresaConfig,
     simbolo?: string,
-) {
+): string {
     const emp = empresa ?? {} as EmpresaConfig;
     const { fmt, fmtDate } = makePrintFmt(emp, simbolo);
     const dataHora = new Date(rececao.dataHora).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -474,6 +479,16 @@ function printNotaEntrada(
 </body>
 </html>`;
 
+    return html;
+}
+
+function printNotaEntrada(
+    rececao: Rececao,
+    encomenda: Encomenda,
+    empresa?: EmpresaConfig,
+    simbolo?: string,
+) {
+    const html = buildNotaEntradaHtml(rececao, encomenda, empresa, simbolo);
     const w = window.open('', '_blank', 'width=794,height=1123');
     if (!w) return;
     w.document.write(html);
@@ -1019,7 +1034,7 @@ const ConverterModal: React.FC<ConverterModalProps> = ({ artigos, onClose, onCon
 };
 
 /* ══ Print Sugestões ═════════════════════════════════════════ */
-function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: string) {
+function buildSugestoesHtml(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: string): string {
     const emp = empresa ?? {} as EmpresaConfig;
     const { fmt, fmtMoney, fmtDate } = makePrintFmt(emp, simbolo);
     const today = fmtDate(new Date().toISOString());
@@ -1069,6 +1084,11 @@ function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: st
 <div class="footer">${emp.nome} &nbsp;·&nbsp; ${emp.morada}</div>
 </body></html>`;
 
+    return html;
+}
+
+function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: string) {
+    const html = buildSugestoesHtml(artigos, empresa, simbolo);
     const w = window.open('', '_blank', 'width=794,height=1123');
     if (!w) return;
     w.document.write(html);
@@ -1089,6 +1109,7 @@ const EncomendaPage: React.FC = () => {
     const [printId,   setPrintId]   = useState<string | null>(null);
     const [rececDropdown, setRececDropdown] = useState<string | null>(null);
     const [toast,      setToast]     = useState('');
+    const [previewHtml, setPreviewHtml] = useState('');
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -1216,6 +1237,9 @@ const EncomendaPage: React.FC = () => {
                     </button>
                 )}
                 {pageTab === 'sugestoes' && artigosRupturaFiltrados.length > 0 && (<>
+                    <button className="abtn abtn-secondary" type="button" onClick={() => setPreviewHtml(buildSugestoesHtml(artigosRupturaFiltrados, empresaConfig, simboloMoeda))} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <Eye size={13} /> Pré-visualizar
+                    </button>
                     <button className="abtn abtn-secondary" type="button" onClick={() => printSugestoes(artigosRupturaFiltrados, empresaConfig, simboloMoeda)}>
                         <Printer size={13} /> Imprimir Lista
                     </button>
@@ -1339,6 +1363,9 @@ const EncomendaPage: React.FC = () => {
                                                             <Archive size={11} /> Receber
                                                         </button>
                                                     )}
+                                                    <button className="icon-btn" title="Pré-visualizar nota de encomenda" onClick={() => setPreviewHtml(buildNotaEncomendaHtml(e, getFornNome(e.fornecedorId), empresaConfig, simboloMoeda))}>
+                                                        <Eye size={12} />
+                                                    </button>
                                                     <button className="icon-btn" title="Imprimir nota de encomenda" onClick={() => printNotaEncomenda(e, getFornNome(e.fornecedorId), empresaConfig, simboloMoeda)}>
                                                         <Printer size={12} />
                                                     </button>
@@ -1545,6 +1572,18 @@ const EncomendaPage: React.FC = () => {
                 <div className="toast" role="status">
                     <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
                     <span>{toast}</span>
+                </div>
+            )}
+
+            {previewHtml && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ background: 'var(--bg-primary)', borderBottom: '1px solid var(--border)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ flex: 1, fontWeight: 700, fontSize: '0.85rem' }}>Pré-visualização</span>
+                        <button type="button" className="abtn abtn-secondary" onClick={() => setPreviewHtml('')}>
+                            <X size={13} /> Fechar
+                        </button>
+                    </div>
+                    <iframe srcDoc={previewHtml} title="Pré-visualização" style={{ flex: 1, border: 'none', background: '#fff' }} />
                 </div>
             )}
         </AppLayout>

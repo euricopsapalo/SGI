@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import { useGlobal, OrdemTrabalho, OTEstado } from '../../contexts/GlobalContext';
-import { ChevronLeft, ChevronRight, Calendar, X, Clock, PlayCircle, CheckCircle, Archive, AlertCircle, GripVertical, Printer } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, X, Clock, PlayCircle, CheckCircle, Archive, AlertCircle, GripVertical, Printer, Eye } from 'lucide-react';
 
 /* ── Helpers ── */
 const TODAY = new Date();
@@ -178,6 +178,7 @@ const AgendaPage: React.FC = () => {
     const [dropTarget,  setDropTarget]= useState<{ ot: OrdemTrabalho; date: string } | null>(null);
     const [dropOver,    setDropOver]  = useState<string | null>(null); // date being hovered
     const [toast,       setToast]     = useState('');
+    const [previewHtml, setPreviewHtml] = useState('');
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
@@ -278,7 +279,7 @@ const AgendaPage: React.FC = () => {
     };
 
     /* ── Print Agenda (all views) ── */
-    const printAgenda = () => {
+    const buildAgendaHtml = (): string | null => {
         // Determine OTs for the current period based on active view
         let periodOTs: OrdemTrabalho[];
         let periodTitle: string;
@@ -300,7 +301,7 @@ const AgendaPage: React.FC = () => {
             periodTitle = fmtMonth(cursor);
         }
 
-        if (periodOTs.length === 0) return;
+        if (periodOTs.length === 0) return null;
 
         const tecNames = filterTec
             ? [filterTec]
@@ -369,7 +370,7 @@ const AgendaPage: React.FC = () => {
             }
         }
 
-        if (!sectionsHTML) return;
+        if (!sectionsHTML) return null;
 
         const legend = `<div class="legend">
             <div class="legend-title">Legenda — Estados das Ordens de Trabalho</div>
@@ -383,9 +384,7 @@ const AgendaPage: React.FC = () => {
 
         const filterLabel = filterTec ? ` — ${filterTec}` : '';
         const pageSize = vista === 'dia' ? 'A4 portrait' : 'A4 landscape';
-        const w = window.open('', '_blank', 'width=1200,height=850');
-        if (!w) return;
-        w.document.write(`<!DOCTYPE html><html><head>
+        return `<!DOCTYPE html><html><head>
 <meta charset="utf-8"/>
 <title>Agenda — ${periodTitle}${filterLabel}</title>
 <style>
@@ -425,10 +424,23 @@ td { padding: 3px 4px; border: 1px solid #e5e7eb; vertical-align: top; min-width
 ${sectionsHTML}
 ${legend}
 <div class="footer">AQUATEX, LDA &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções &nbsp;&bull;&nbsp; Agenda</div>
-</body></html>`);
+</body></html>`;
+    };
+
+    const printAgenda = () => {
+        const html = buildAgendaHtml();
+        if (!html) return;
+        const w = window.open('', '_blank', 'width=1200,height=850');
+        if (!w) return;
+        w.document.write(html);
         w.document.close();
         w.focus();
         setTimeout(() => w.print(), 350);
+    };
+
+    const handlePreviewAgenda = () => {
+        const html = buildAgendaHtml();
+        if (html) setPreviewHtml(html);
     };
 
     /* Draggable only for Programado OTs and non-técnico-campo users */
@@ -656,6 +668,9 @@ ${legend}
                     </span>
                 )}
                 <div className="actionbar-spacer" />
+                <button className="abtn abtn-secondary" type="button" onClick={handlePreviewAgenda} title="Pré-visualizar agenda" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Eye size={13} /> Pré-visualizar
+                </button>
                 <button className="abtn abtn-secondary" type="button" onClick={printAgenda} title="Imprimir agenda semanal">
                     <Printer size={13} /> Imprimir
                 </button>
@@ -702,6 +717,21 @@ ${legend}
                 <div className="toast" role="status">
                     <CheckCircle size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
                     <span>{toast}</span>
+                </div>
+            )}
+
+            {previewHtml && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ background: 'var(--bg-primary)', borderBottom: '1px solid var(--border)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ flex: 1, fontWeight: 700, fontSize: '0.85rem' }}>Pré-visualização</span>
+                        <button type="button" className="abtn abtn-primary" onClick={printAgenda} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Printer size={13} /> Imprimir
+                        </button>
+                        <button type="button" className="abtn abtn-secondary" onClick={() => setPreviewHtml('')}>
+                            <X size={13} /> Fechar
+                        </button>
+                    </div>
+                    <iframe srcDoc={previewHtml} title="Pré-visualização" style={{ flex: 1, border: 'none', background: '#fff' }} />
                 </div>
             )}
         </AppLayout>

@@ -7,7 +7,7 @@ import {
     Search, Plus, Edit2, X, AlertCircle, Check, Package, Download,
     BarChart2, ArrowDownCircle, ArrowUpCircle, RefreshCw,
     Truck, Archive, Star, FileText, Image as ImageIcon, Trash2,
-    ChevronRight, ChevronDown, Warehouse, Eye,
+    ChevronRight, ChevronDown, Warehouse, Eye, Printer,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 
@@ -556,11 +556,9 @@ interface InventarioModalProps {
     onConfirm: (lines: InventLine[]) => void;
 }
 
-const printInventSheet = (artigos: Artigo[], lines: InventLine[], armazens: Armazem[] = []) => {
+const buildInventSheetHtml = (artigos: Artigo[], lines: InventLine[], armazens: Armazem[] = []): string => {
     const resolveArm = (val: string) =>
         armazens.find(a => a.id === val || a.codigo === val)?.codigo ?? val;
-    const w = window.open('', '_blank');
-    if (!w) return;
     const rows = lines.map(l => {
         const a = artigos.find(x => x.id === l.artigoId);
         if (!a) return '';
@@ -573,7 +571,7 @@ const printInventSheet = (artigos: Artigo[], lines: InventLine[], armazens: Arma
             <td></td>
         </tr>`;
     }).join('');
-    w.document.write(`<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
 <title>Ficha de Inventário — AQUATEX</title>
@@ -605,9 +603,16 @@ const printInventSheet = (artigos: Artigo[], lines: InventLine[], armazens: Arma
 <p style="margin-top:20px;font-size:10px;color:#666">
   Responsável: _______________________  &nbsp;&nbsp; Assinatura: _______________________  &nbsp;&nbsp; Data confirmação: ___________
 </p>
-<script>window.onload = () => { window.print(); }</script>
-</body></html>`);
+</body></html>`;
+};
+
+const printInventSheet = (artigos: Artigo[], lines: InventLine[], armazens: Armazem[] = []) => {
+    const html = buildInventSheetHtml(artigos, lines, armazens);
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(html);
     w.document.close();
+    setTimeout(() => w.print(), 350);
 };
 
 const InventarioModal: React.FC<InventarioModalProps> = ({ artigos, armazens, onClose, onConfirm }) => {
@@ -619,6 +624,7 @@ const InventarioModal: React.FC<InventarioModalProps> = ({ artigos, armazens, on
         artigos.filter(a => !a.inativo).map(a => ({ artigoId: a.id, novaExist: String(a.existencia) }))
     );
     const [selected, setSelected] = useState<Set<string>>(new Set(artigos.filter(a => !a.inativo).map(a => a.id)));
+    const [previewHtml, setPreviewHtml] = useState('');
 
     const filtered = artigos.filter(a => {
         const q = search.toLowerCase();
@@ -646,6 +652,20 @@ const InventarioModal: React.FC<InventarioModalProps> = ({ artigos, armazens, on
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            {previewHtml && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ background: 'var(--bg-primary)', borderBottom: '1px solid var(--border)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ flex: 1, fontWeight: 700, fontSize: '0.85rem' }}>Pré-visualização</span>
+                        <button type="button" className="abtn abtn-primary" onClick={() => printInventSheet(artigos, selectedLines, armazens)} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Printer size={13} /> Imprimir
+                        </button>
+                        <button type="button" className="abtn abtn-secondary" onClick={() => setPreviewHtml('')}>
+                            <X size={13} /> Fechar
+                        </button>
+                    </div>
+                    <iframe srcDoc={previewHtml} title="Pré-visualização" style={{ flex: 1, border: 'none', background: '#fff' }} />
+                </div>
+            )}
             <div className="modal" style={{ maxWidth: 720 }}>
                 <div className="modal-header">
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -660,6 +680,12 @@ const InventarioModal: React.FC<InventarioModalProps> = ({ artigos, armazens, on
                             <input className="search-input" placeholder="Pesquisar artigo..."
                                 value={search} onChange={e => setSearch(e.target.value)} />
                         </div>
+                        <button type="button" className="abtn abtn-secondary"
+                            onClick={() => setPreviewHtml(buildInventSheetHtml(artigos, selectedLines, armazens))}
+                            style={{ display: 'flex', alignItems: 'center', gap: 5 }}
+                            title="Pré-visualizar ficha de inventário">
+                            <Eye size={12} /> Pré-visualizar
+                        </button>
                         <button type="button" className="abtn abtn-secondary"
                             onClick={() => printInventSheet(artigos, selectedLines, armazens)}
                             title="Baixar ficha para contagem física">

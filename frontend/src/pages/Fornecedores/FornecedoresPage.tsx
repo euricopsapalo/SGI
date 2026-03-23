@@ -35,7 +35,7 @@ const openPrintF = (html: string, title: string) => {
 
 const totalEnc = (e: Encomenda) => e.linhas.reduce((s, l) => s + l.custoUnit * l.qtdEncomendada * (1 - (l.desconto || 0) / 100), 0);
 
-function printFichaFornecedor(f: Fornecedor, encs: Encomenda[], provinciaNome: string, municipioNome: string, empresa?: EmpresaConfig | null) {
+function buildFichaFornecedorHtml(f: Fornecedor, encs: Encomenda[], provinciaNome: string, municipioNome: string, empresa?: EmpresaConfig | null): string {
     const fEncs = encs.filter(e => String(e.fornecedorId) === String(f.id));
     const total = fEncs.reduce((s, e) => s + totalEnc(e), 0);
     const encRows = fEncs.map(e => `
@@ -46,7 +46,7 @@ function printFichaFornecedor(f: Fornecedor, encs: Encomenda[], provinciaNome: s
             <td><span class="badge badge-${e.estado==='Recebida'?'green':e.estado==='Cancelada'?'red':e.estado==='Parcial'?'blue':'gray'}">${e.estado}</span></td>
         </tr>`).join('') || '<tr><td colspan="6" style="color:#999;text-align:center">Sem encomendas</td></tr>';
 
-    const html = `
+    return `
         <div class="hdr">
             <div class="hdr-left"><h1>${empresa?.nome || 'SGI'}</h1><div class="sub">${empresa?.morada || ''} · NIF: ${empresa?.nif || ''}</div></div>
             <div style="text-align:right"><h1>Ficha de Fornecedor</h1><div class="sub">Emitido em ${fRF(new Date().toISOString())}</div></div>
@@ -64,10 +64,13 @@ function printFichaFornecedor(f: Fornecedor, encs: Encomenda[], provinciaNome: s
         <h2>Histórico de Encomendas</h2>
         <table><thead><tr><th>Nº</th><th>Data</th><th>Data Entrega</th><th>Artigos</th><th>Total</th><th>Estado</th></tr></thead>
         <tbody>${encRows}</tbody></table>`;
-    openPrintF(html, `Ficha Fornecedor - ${f.nome}`);
 }
 
-function printFornecedoresPorCategoria(fors: Fornecedor[], encs: Encomenda[], artigos: Artigo[], provincias: Provincia[], municipios: Municipio[], empresa?: EmpresaConfig | null) {
+function printFichaFornecedor(f: Fornecedor, encs: Encomenda[], provinciaNome: string, municipioNome: string, empresa?: EmpresaConfig | null) {
+    openPrintF(buildFichaFornecedorHtml(f, encs, provinciaNome, municipioNome, empresa), `Ficha Fornecedor - ${f.nome}`);
+}
+
+function buildFornecedoresPorCategoriaHtml(fors: Fornecedor[], encs: Encomenda[], artigos: Artigo[], provincias: Provincia[], municipios: Municipio[], empresa?: EmpresaConfig | null): string {
     // Group suppliers by the "classe" of articles they supply (from encomenda linhas)
     const forMap = new Map<string, { f: Fornecedor; classes: Set<string>; totalEncs: number }>();
     for (const f of fors) {
@@ -108,16 +111,19 @@ function printFornecedoresPorCategoria(fors: Fornecedor[], encs: Encomenda[], ar
             <tbody>${rows}</tbody></table>`;
     }).join('');
 
-    const html = `
+    return `
         <div class="hdr">
             <div class="hdr-left"><h1>${empresa?.nome || 'SGI'}</h1><div class="sub">${empresa?.morada || ''}</div></div>
             <div style="text-align:right"><h1>Fornecedores por Categoria</h1><div class="sub">Emitido em ${fRF(new Date().toISOString())}</div></div>
         </div>
         ${sections || '<p style="color:#999">Sem dados para apresentar.</p>'}`;
-    openPrintF(html, 'Fornecedores por Categoria');
 }
 
-function printHistoricoCompras(fors: Fornecedor[], encs: Encomenda[], dateFrom: string, dateTo: string, empresa?: EmpresaConfig | null) {
+function printFornecedoresPorCategoria(fors: Fornecedor[], encs: Encomenda[], artigos: Artigo[], provincias: Provincia[], municipios: Municipio[], empresa?: EmpresaConfig | null) {
+    openPrintF(buildFornecedoresPorCategoriaHtml(fors, encs, artigos, provincias, municipios, empresa), 'Fornecedores por Categoria');
+}
+
+function buildHistoricoComprasHtml(fors: Fornecedor[], encs: Encomenda[], dateFrom: string, dateTo: string, empresa?: EmpresaConfig | null): string {
     const from = dateFrom ? new Date(dateFrom) : null;
     const to   = dateTo   ? new Date(dateTo + 'T23:59:59') : null;
     const filtered = encs.filter(e => {
@@ -151,13 +157,16 @@ function printHistoricoCompras(fors: Fornecedor[], encs: Encomenda[], dateFrom: 
 
     const periodStr = (from || to) ? `Período: ${from ? fRF(from.toISOString()) : '—'} a ${to ? fRF(to.toISOString()) : '—'}` : 'Todo o período';
 
-    const html = `
+    return `
         <div class="hdr">
             <div class="hdr-left"><h1>${empresa?.nome || 'SGI'}</h1><div class="sub">${empresa?.morada || ''}</div></div>
             <div style="text-align:right"><h1>Histórico de Compras por Fornecedor</h1><div class="sub">${periodStr} · Total Geral: ${grandTotal.toFixed(2)} AOA</div></div>
         </div>
         ${sections || '<p style="color:#999">Sem encomendas no período seleccionado.</p>'}`;
-    openPrintF(html, 'Histórico de Compras');
+}
+
+function printHistoricoCompras(fors: Fornecedor[], encs: Encomenda[], dateFrom: string, dateTo: string, empresa?: EmpresaConfig | null) {
+    openPrintF(buildHistoricoComprasHtml(fors, encs, dateFrom, dateTo, empresa), 'Histórico de Compras');
 }
 
 /* ══ Relatórios Modal ════════════════════════════════════════ */
@@ -180,6 +189,19 @@ const RelatoriosFornecedorModal: React.FC<RelatoriosFornecedorModalProps> = ({
     const [fornecedorId, setFornecedorId] = useState('');
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
+    const [previewHtml, setPreviewHtml] = useState('');
+
+    const buildHtml = (): string => {
+        if (tipo === 'ficha') {
+            const f = fornecedores.find(x => x.id === fornecedorId);
+            if (!f) { alert('Seleccione um fornecedor.'); return ''; }
+            return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${RF_CSS}</style></head><body>${buildFichaFornecedorHtml(f, encomendas, getProvinciaNome(f.provinciaId), getMunicipioNome(f.municipioId), empresaConfig)}</body></html>`;
+        } else if (tipo === 'categoria') {
+            return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${RF_CSS}</style></head><body>${buildFornecedoresPorCategoriaHtml(fornecedores, encomendas, artigos, provincias, municipios, empresaConfig)}</body></html>`;
+        } else {
+            return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${RF_CSS}</style></head><body>${buildHistoricoComprasHtml(fornecedores, encomendas, dateFrom, dateTo, empresaConfig)}</body></html>`;
+        }
+    };
 
     const handlePrint = () => {
         if (tipo === 'ficha') {
@@ -191,6 +213,11 @@ const RelatoriosFornecedorModal: React.FC<RelatoriosFornecedorModalProps> = ({
         } else {
             printHistoricoCompras(fornecedores, encomendas, dateFrom, dateTo, empresaConfig);
         }
+    };
+
+    const handlePreview = () => {
+        const html = buildHtml();
+        if (html) setPreviewHtml(html);
     };
 
     const tipos: { value: RelFornTipo; label: string; desc: string }[] = [
@@ -245,9 +272,24 @@ const RelatoriosFornecedorModal: React.FC<RelatoriosFornecedorModalProps> = ({
                 </div>
                 <div className="modal-footer">
                     <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
+                    <button type="button" className="abtn abtn-secondary" onClick={handlePreview}><Eye size={13} /> Pré-visualizar</button>
                     <button type="button" className="abtn abtn-primary" onClick={handlePrint}><Printer size={13} /> Imprimir</button>
                 </div>
             </div>
+            {previewHtml && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ background: 'var(--bg-primary)', borderBottom: '1px solid var(--border)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ flex: 1, fontWeight: 700, fontSize: '0.85rem' }}>Pré-visualização</span>
+                        <button type="button" className="abtn abtn-primary" onClick={handlePrint} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Printer size={13} /> Imprimir
+                        </button>
+                        <button type="button" className="abtn abtn-secondary" onClick={() => setPreviewHtml('')}>
+                            <X size={13} /> Fechar
+                        </button>
+                    </div>
+                    <iframe srcDoc={previewHtml} title="Pré-visualização" style={{ flex: 1, border: 'none', background: '#fff' }} />
+                </div>
+            )}
         </div>
     );
 };
