@@ -60,6 +60,9 @@ export class Artigo {
     @Column({ nullable: true, type: 'text' })
     observacao: string;
 
+    @Column({ name: 'codigo_iva', length: 20, nullable: true, default: null })
+    codigoIva: string;
+
     @OneToMany(() => MovimentoStock, (m) => m.artigo)
     movimentos: MovimentoStock[];
 }

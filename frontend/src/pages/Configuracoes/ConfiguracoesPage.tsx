@@ -128,6 +128,7 @@ const ConfiguracoesPage: React.FC = () => {
         armazens, addArmazem, updateArmazem,
         moedas,
         taxaIvaGlobal, setTaxaIvaGlobal,
+        taxasIva, addTaxaIva, updateTaxaIva, removeTaxaIva,
         empresaConfig, updateEmpresaConfig,
     } = useGlobal();
 
@@ -429,21 +430,34 @@ const ConfiguracoesPage: React.FC = () => {
                             <div className="settings-section">
                                 <div className="settings-section-hdr">
                                     <div className="settings-section-title">Fiscalidade</div>
-                                    <div className="settings-section-desc">Taxa de IVA aplicada automaticamente em todas as faturas</div>
+                                    <div className="settings-section-desc">Tabela de taxas IVA — seleccionável por artigo</div>
                                 </div>
                                 <div className="settings-section-body">
-                                    <div className="form-group" style={{ maxWidth: 200 }}>
-                                        <label className="form-label req">Taxa de IVA (%)</label>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <input
-                                                type="number" min={0} max={100} className="form-input"
-                                                value={taxaIvaGlobal}
-                                                onChange={e => { setTaxaIvaGlobal(Number(e.target.value)); markDirty(); }}
-                                            />
-                                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>%</span>
-                                        </div>
+                                    <TabelaInlineEditor
+                                        titulo=""
+                                        colunas={[
+                                            { key: 'codigo',    label: 'Código' },
+                                            { key: 'descricao', label: 'Descrição' },
+                                            { key: 'taxa',      label: 'Taxa (%)', type: 'number' },
+                                        ]}
+                                        rows={taxasIva}
+                                        onAdd={r => addTaxaIva({ codigo: r.codigo, descricao: r.descricao, taxa: Number(r.taxa) })}
+                                        onUpdate={(id, field, val) => updateTaxaIva(id, { [field]: field === 'taxa' ? Number(val) : val })}
+                                        onRemove={id => removeTaxaIva(id)}
+                                    />
+                                    <div className="settings-section-hdr" style={{ marginTop: 16 }}>
+                                        <div className="settings-section-title" style={{ fontSize: '0.82rem' }}>Taxa IVA Global (para faturas sem artigo associado)</div>
                                     </div>
-                                    <div className="preview-box">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                                        <input
+                                            type="number" min={0} max={100} className="form-input"
+                                            style={{ maxWidth: 120 }}
+                                            value={taxaIvaGlobal}
+                                            onChange={e => { setTaxaIvaGlobal(Number(e.target.value)); markDirty(); }}
+                                        />
+                                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>%</span>
+                                    </div>
+                                    <div className="preview-box" style={{ marginTop: 8 }}>
                                         Subtotal 100.000 {moeda.symbol} → IVA {taxaIvaGlobal}% = <strong>{(100000 * taxaIvaGlobal / 100).toLocaleString('pt-PT')} {moeda.symbol}</strong>
                                     </div>
                                 </div>

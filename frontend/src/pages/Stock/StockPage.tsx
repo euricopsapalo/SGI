@@ -40,7 +40,7 @@ const TABS_A = [
 type ATab = typeof TABS_A[number]['id'];
 
 const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) => {
-    const { armazens, stockArmazem, upsertStockArmazem, removeStockArmazem, fmt, fmtMoney } = useGlobal();
+    const { armazens, stockArmazem, upsertStockArmazem, removeStockArmazem, fmt, fmtMoney, taxasIva } = useGlobal();
     const [tab, setTab] = useState<ATab>('ident');
 
     // Warehouse breakdown state (only for existing articles)
@@ -80,6 +80,7 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
 
     // Observação
     const [observacao, setObs] = useState(artigo?.observacao ?? '');
+    const [codigoIva,  setCodigoIva] = useState(artigo?.codigoIva ?? '');
 
     const [errors, setErrors] = useState<Record<string, string>>({});
     const fileRef = useRef<HTMLInputElement>(null);
@@ -112,6 +113,7 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
             precoCusto: Number(precoCusto), stockEncomendado: artigo?.stockEncomendado ?? 0,
             codigoArmazem, inativo, critico, observacao,
             stockReservado: artigo?.stockReservado ?? 0,
+            codigoIva: codigoIva || undefined,
         });
     };
 
@@ -169,6 +171,17 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
                                     <input className="form-input" value={familia}
                                         onChange={e => setFamilia(e.target.value)} placeholder="Ex: Filtros" />
                                 </div>
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Código IVA</label>
+                                <select className="form-select" value={codigoIva} onChange={e => setCodigoIva(e.target.value)}>
+                                    <option value="">— Sem IVA —</option>
+                                    {taxasIva.map(t => (
+                                        <option key={t.id} value={t.codigo}>
+                                            {t.codigo} — {t.descricao} ({t.taxa}%)
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                             {/* Image upload + preview */}
                             <div className="form-group">
@@ -396,11 +409,16 @@ const TABS_V = TABS_A;
 type VTab = ATab;
 
 const ArtigoViewModal: React.FC<ArtigoViewModalProps> = ({ artigo, onClose, onEdit }) => {
-    const { armazens, stockArmazem, fmt, fmtMoney } = useGlobal();
+    const { armazens, stockArmazem, fmt, fmtMoney, taxasIva } = useGlobal();
     const [tab, setTab] = useState<VTab>('ident');
     const saEntries = stockArmazem.filter(sa => sa.artigoId === artigo.id);
     const resolveArm = (val: string) =>
         armazens.find(a => a.id === val || a.codigo === val)?.nome ?? val;
+    const resolveIva = (cod?: string) => {
+        if (!cod) return '—';
+        const t = taxasIva.find(t => t.codigo === cod);
+        return t ? `${t.codigo} — ${t.descricao} (${t.taxa}%)` : cod;
+    };
 
     const Field = ({ label, value }: { label: string; value: React.ReactNode }) => (
         <div style={{ marginBottom: 12 }}>
@@ -444,6 +462,7 @@ const ArtigoViewModal: React.FC<ArtigoViewModalProps> = ({ artigo, onClose, onEd
                                     <Field label="Classe" value={artigo.classe} />
                                     <Field label="Família" value={artigo.familia} />
                                 </div>
+                                <Field label="Código IVA" value={resolveIva(artigo.codigoIva)} />
                                 <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
                                     {artigo.critico && (
                                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', padding: '2px 8px', borderRadius: 4, background: '#fef3c7', color: '#b45309', fontWeight: 600 }}>

@@ -427,7 +427,7 @@ interface OTFormProps {
 }
 
 const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTerminar, onEncerrar, readOnly }) => {
-    const { equipInstalados, clientes, modelosEquipamento, planos, tiposTrabalho, tiposOT, funcoesTecnico, artigos: catalog, tecnicos, currentUser, taxaIvaGlobal, fmtMoney, fmtDate, fmt, simboloMoeda, empresaConfig } = useGlobal();
+    const { equipInstalados, clientes, modelosEquipamento, planos, tiposTrabalho, tiposOT, funcoesTecnico, artigos: catalog, tecnicos, currentUser, taxasIva, fmtMoney, fmtDate, fmt, simboloMoeda, empresaConfig } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
     const [tab, setTab] = useState<'origem' | 'maos' | 'artigos' | 'diagnostico' | 'gestao'>('origem');
 
@@ -554,7 +554,8 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
     const removeArt = (i: number) => setArts(p => p.filter((_, idx) => idx !== i));
     const updateArtId = (i: number, id: string) => {
         const a = catalog.find(x => x.id === id);
-        setArts(p => p.map((x, idx) => idx !== i ? x : { artigoId: id, descricao: a?.descricao ?? '', quantidade: x.quantidade, preco: a?.precoUnitario ?? 0 }));
+        const taxaIva = a?.codigoIva ? (taxasIva.find(t => t.codigo === a.codigoIva)?.taxa ?? undefined) : undefined;
+        setArts(p => p.map((x, idx) => idx !== i ? x : { artigoId: id, descricao: a?.descricao ?? '', quantidade: x.quantidade, preco: a?.precoUnitario ?? 0, codigoIva: a?.codigoIva ?? undefined, taxaIva }));
     };
     const updateArtQtd = (i: number, v: string) => setArts(p => p.map((x, idx) => idx !== i ? x : { ...x, quantidade: Math.max(1, Number(v) || 1) }));
 
@@ -781,18 +782,30 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
                                 })}
                                 {arts.length > 0 && (() => {
                                     const subtotal = arts.reduce((s, a) => s + a.quantidade * a.preco, 0);
-                                    const iva = subtotal * (taxaIvaGlobal / 100);
-                                    const total = subtotal + iva;
+
+                                    // IVA breakdown: group by rate — only articles with a codigoIva contribute
+                                    const ivaMap: Record<string, { label: string; valor: number }> = {};
+                                    arts.forEach(a => {
+                                        if (!a.codigoIva || a.taxaIva == null) return;
+                                        const descIva = taxasIva.find(t => t.codigo === a.codigoIva)?.descricao ?? a.codigoIva;
+                                        const label = descIva;
+                                        if (!ivaMap[label]) ivaMap[label] = { label, valor: 0 };
+                                        ivaMap[label].valor += a.quantidade * a.preco * (a.taxaIva / 100);
+                                    });
+                                    const totalIva = Object.values(ivaMap).reduce((s, x) => s + x.valor, 0);
+                                    const total = subtotal + totalIva;
                                     return (
                                         <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 3, fontSize: '0.8rem' }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 3 }}>
                                                 <span>Subtotal</span>
                                                 <span>{fmtMoney(subtotal)}</span>
                                             </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 6 }}>
-                                                <span>IVA ({taxaIvaGlobal}%)</span>
-                                                <span>{fmtMoney(iva)}</span>
-                                            </div>
+                                            {Object.values(ivaMap).map(iv => (
+                                                <div key={iv.label} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 3 }}>
+                                                    <span>{iv.label}</span>
+                                                    <span>{fmtMoney(iv.valor)}</span>
+                                                </div>
+                                            ))}
                                             <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '0.85rem', borderTop: '1px solid var(--border)', paddingTop: 5 }}>
                                                 <span>Total</span>
                                                 <strong>{fmtMoney(total)}</strong>

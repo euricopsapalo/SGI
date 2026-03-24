@@ -9,6 +9,7 @@ import { Moeda } from './moeda.entity';
 import { Pais } from './pais.entity';
 import { Provincia } from './provincia.entity';
 import { Municipio } from './municipio.entity';
+import { TaxaIva } from './taxa-iva.entity';
 
 @Injectable()
 export class TabelasSistemaService {
@@ -36,6 +37,9 @@ export class TabelasSistemaService {
 
         @InjectRepository(Municipio)
         private municipiosRepo: Repository<Municipio>,
+
+        @InjectRepository(TaxaIva)
+        private taxasIvaRepo: Repository<TaxaIva>,
     ) {}
 
     // TipoTrabalho
@@ -119,4 +123,14 @@ export class TabelasSistemaService {
         return this.findOneMunicipio(id);
     }
     removeMunicipio(id: number) { return this.municipiosRepo.delete(id); }
+
+    // TaxaIva
+    findAllTaxasIva() { return this.taxasIvaRepo.find({ order: { codigo: 'ASC' } }); }
+    findOneTaxaIva(id: number) { return this.taxasIvaRepo.findOne({ where: { id } }); }
+    createTaxaIva(body: Partial<TaxaIva>) { return this.taxasIvaRepo.save(this.taxasIvaRepo.create(body)); }
+    async updateTaxaIva(id: number, body: Partial<TaxaIva>) {
+        await this.taxasIvaRepo.update(id, body);
+        return this.findOneTaxaIva(id);
+    }
+    removeTaxaIva(id: number) { return this.taxasIvaRepo.delete(id); }
 }

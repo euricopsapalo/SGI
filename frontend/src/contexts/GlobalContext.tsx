@@ -16,6 +16,7 @@ export interface Moeda { id: string; codigo: string; descricao: string; simbolo:
 export interface Pais { id: string; nome: string; codigo: string; }
 export interface Provincia { id: string; nome: string; paisId: string; }
 export interface Municipio { id: string; nome: string; provinciaId: string; }
+export interface TaxaIva { id: string; codigo: string; descricao: string; taxa: number; }
 
 // ── Entities ───────────────────────────────────────────────
 export interface Cliente {
@@ -65,7 +66,7 @@ export interface PlanoManutencao {
 export type OTEstado = 'Programado' | 'Em curso' | 'Terminado' | 'Encerrado';
 export type OTTipo = 'programada' | 'pontual';
 export interface OTMaoObra { funcao: string; custo: number; hora: string; }
-export interface OTArtigo { artigoId: string; descricao: string; quantidade: number; preco: number; }
+export interface OTArtigo { artigoId: string; descricao: string; quantidade: number; preco: number; codigoIva?: string; taxaIva?: number; }
 export interface OTReprogramacao { id: string; dataAnterior?: string; novaData?: string; motivo: string; criadoEm: string; usuario?: string; }
 export interface OrdemTrabalho {
     id: string; tipo: OTTipo; equipInstaladoId: string; clienteId: string;
@@ -112,6 +113,7 @@ export interface Artigo {
     custoMedio: number; precoCusto: number; codigoArmazem: string;
     stockEncomendado: number; stockDisponivel?: number; emRuptura?: boolean;
     inativo: boolean; critico: boolean; observacao?: string;
+    codigoIva?: string;
 }
 
 // ── Purchase Orders ────────────────────────────────────────
@@ -221,7 +223,7 @@ const normOrdem = (o: any): OrdemTrabalho => ({
     previsaoTempo: Number(o.previsaoTempo), periodicidade: o.periodicidade,
     planoId: o.planoId?.toString(), tipoTrabalho: o.tipoTrabalho ?? '', tipoOT: o.tipoOT ?? '',
     responsavel: o.responsavel ?? '', maosDeObra: (o.maosObra ?? []).map((m: any) => ({ funcao: m.funcao, custo: Number(m.custo), hora: m.hora })),
-    artigos: (o.artigos ?? []).map((a: any) => ({ artigoId: a.artigoId?.toString() ?? '', descricao: a.descricao, quantidade: Number(a.quantidade), preco: Number(a.preco) })),
+    artigos: (o.artigos ?? []).map((a: any) => ({ artigoId: a.artigoId?.toString() ?? '', descricao: a.descricao, quantidade: Number(a.quantidade), preco: Number(a.preco), codigoIva: a.codigoIva ?? undefined, taxaIva: a.taxaIva != null ? Number(a.taxaIva) : undefined })),
     orgao: o.orgao, sintoma: o.sintoma, causa: o.causa,
     dataProgInicio: o.dataProgInicio, dataProgFim: o.dataProgFim,
     dataEmissao: o.dataEmissao, dataInicio: o.dataInicio, dataFim: o.dataFim, dataEncerramento: o.dataEncerramento,
@@ -294,6 +296,7 @@ interface GlobalContextType {
     moedas: Moeda[]; addMoeda: (m: Omit<Moeda, 'id'>) => void; updateMoeda: (id: string, m: Partial<Moeda>) => void; removeMoeda: (id: string) => void;
     tiposDocumento: TipoDocumento[]; addTipoDocumento: (t: Omit<TipoDocumento, 'id'>) => void; updateTipoDocumento: (id: string, t: Partial<TipoDocumento>) => void; removeTipoDocumento: (id: string) => void;
     paises: Pais[]; provincias: Provincia[]; municipios: Municipio[];
+    taxasIva: TaxaIva[]; addTaxaIva: (t: Omit<TaxaIva, 'id'>) => void; updateTaxaIva: (id: string, t: Partial<TaxaIva>) => void; removeTaxaIva: (id: string) => void;
     // Finance config
     taxaIvaGlobal: number; setTaxaIvaGlobal: (v: number) => void;
     // Empresa config
@@ -382,6 +385,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [ordens, setOrdens] = useState<OrdemTrabalho[]>([]);
     const [armazens, setArmazens] = useState<Armazem[]>([]);
     const [artigos, setArtigos] = useState<Artigo[]>([]);
+    const [taxasIva, setTaxasIva] = useState<TaxaIva[]>([]);
     const [stockArmazem, setStockArmazem] = useState<StockArmazem[]>([]);
     const [movimentosStock, setMovimentosStock] = useState<MovimentoStock[]>([]);
     const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
@@ -419,6 +423,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 axios.get(`${API}/api/logs`),                  // 20
                 axios.get(`${API}/api/configuracao`),          // 21
                 axios.get(`${API}/api/artigos/stock-armazem`), // 22
+                axios.get(`${API}/api/taxas-iva`),              // 23
             ]);
 
             try { setTiposTrabalho(ok(results[0]).map(norm)); } catch {}
@@ -443,6 +448,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             try { setFaturas(ok(results[19]).map(normFatura)); } catch {}
             try { setLogs(ok(results[20]).map(norm)); } catch {}
             try { setStockArmazem(ok(results[22]).map(normStockArmazem)); } catch {}
+            try { setTaxasIva(ok(results[23]).map((r: any) => ({ ...norm(r), taxa: Number(r.taxa) }))); } catch {}
             try {
                 const cfgData = results[21].status === 'fulfilled' ? results[21].value.data : null;
                 if (cfgData) {
@@ -572,6 +578,25 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             await axios.delete(`${API}/api/tipos-documento/${id}`);
             setTiposDocumento(p => p.filter(x => x.id !== id));
         } catch (e) { console.error('removeTipoDocumento error', e); throw e; }
+    };
+
+    const addTaxaIva = async (t: Omit<TaxaIva, 'id'>) => {
+        try {
+            const { data } = await axios.post(`${API}/api/taxas-iva`, t);
+            setTaxasIva(p => [...p, { ...norm(data), taxa: Number(data.taxa) }]);
+        } catch (e) { console.error('addTaxaIva error', e); throw e; }
+    };
+    const updateTaxaIva = async (id: string, t: Partial<TaxaIva>) => {
+        try {
+            await axios.put(`${API}/api/taxas-iva/${id}`, t);
+            setTaxasIva(p => p.map(x => x.id === id ? { ...x, ...t } : x));
+        } catch (e) { console.error('updateTaxaIva error', e); throw e; }
+    };
+    const removeTaxaIva = async (id: string) => {
+        try {
+            await axios.delete(`${API}/api/taxas-iva/${id}`);
+            setTaxasIva(p => p.filter(x => x.id !== id));
+        } catch (e) { console.error('removeTaxaIva error', e); throw e; }
     };
 
     /* ── Entities ───────────────────────────────────────────── */
@@ -1042,6 +1067,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             moedas, addMoeda, updateMoeda, removeMoeda,
             tiposDocumento, addTipoDocumento, updateTipoDocumento, removeTipoDocumento,
             paises, provincias, municipios,
+            taxasIva, addTaxaIva, updateTaxaIva, removeTaxaIva,
             clientes, addCliente, updateCliente, removeCliente,
             tecnicos, addTecnico, updateTecnico, removeTecnico,
             fornecedores, addFornecedor, updateFornecedor, removeFornecedor,

@@ -8,6 +8,7 @@ import { Moeda } from './moeda.entity';
 import { Pais } from './pais.entity';
 import { Provincia } from './provincia.entity';
 import { Municipio } from './municipio.entity';
+import { TaxaIva } from './taxa-iva.entity';
 import { TabelasSistemaService } from './tabelas-sistema.service';
 import { TiposTrabalhoController } from './tipos-trabalho.controller';
 import { TiposDocumentoController } from './tipos-documento.controller';
@@ -17,9 +18,10 @@ import { MoedasController } from './moedas.controller';
 import { PaisesController } from './paises.controller';
 import { ProvinciasController } from './provincias.controller';
 import { MunicipiosController } from './municipios.controller';
+import { TaxasIvaController } from './taxas-iva.controller';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([TipoTrabalho, TipoDocumento, TipoOT, FuncaoTecnico, Moeda, Pais, Provincia, Municipio])],
+    imports: [TypeOrmModule.forFeature([TipoTrabalho, TipoDocumento, TipoOT, FuncaoTecnico, Moeda, Pais, Provincia, Municipio, TaxaIva])],
     controllers: [
         TiposTrabalhoController,
         TiposDocumentoController,
@@ -29,6 +31,7 @@ import { MunicipiosController } from './municipios.controller';
         PaisesController,
         ProvinciasController,
         MunicipiosController,
+        TaxasIvaController,
     ],
     providers: [TabelasSistemaService],
     exports: [TypeOrmModule, TabelasSistemaService],

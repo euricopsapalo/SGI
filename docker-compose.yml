@@ -12,7 +12,7 @@
       - postgres_data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app_user"]
+      test: [ "CMD-SHELL", "pg_isready -U app_user" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -38,8 +38,8 @@
     ports:
       - "3001:3001"
     volumes:
-      - ./backend:/app       # Sincroniza o seu código local com o container          
-      - /app/node_modules     # Protege as dependências instaladas dentro do container
+      - ./backend:/app # Sincroniza o seu código local com o container          
+      - /app/node_modules # Protege as dependências instaladas dentro do container
     depends_on:
       postgres:
         condition: service_healthy
