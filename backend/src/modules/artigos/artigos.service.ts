@@ -78,16 +78,34 @@ export class ArtigosService {
         if (existing) {
             existing.quantidade = quantidade;
             existing.stockMinimo = stockMinimo;
-            return this.stockArmazemRepo.save(existing);
+            await this.stockArmazemRepo.save(existing);
+        } else {
+            const entry = this.stockArmazemRepo.create({
+                artigo: { id: artigoId } as Artigo,
+                armazem: { id: armazemId } as any,
+                quantidade,
+                stockMinimo,
+            });
+            await this.stockArmazemRepo.save(entry);
         }
-        const entry = this.stockArmazemRepo.create({
-            artigo: { id: artigoId } as Artigo,
-            armazem: { id: armazemId } as any,
-            quantidade,
-            stockMinimo,
-        });
-        return this.stockArmazemRepo.save(entry);
+        // Resync artigo.existencia with the sum of all warehouse quantities
+        await this.resyncExistencia(artigoId);
+        return this.findAllStockArmazem(artigoId).then(r => r.find(s => s.artigo?.id === artigoId && (s.armazem as any)?.id === armazemId) ?? r[0]);
     }
 
-    removeStockArmazem(id: number) { return this.stockArmazemRepo.delete(id); }
+    async removeStockArmazem(id: number) {
+        const entry = await this.stockArmazemRepo.findOne({ where: { id }, relations: ['artigo'] });
+        await this.stockArmazemRepo.delete(id);
+        if (entry?.artigo?.id) {
+            await this.resyncExistencia(entry.artigo.id);
+        }
+    }
+
+    /** Recalculates artigo.existencia as the sum of all stock_armazem quantities */
+    private async resyncExistencia(artigoId: number) {
+        const all = await this.stockArmazemRepo.find({ where: { artigo: { id: artigoId } } });
+        const total = all.reduce((s, e) => s + Number(e.quantidade), 0);
+        await this.artigosRepo.update(artigoId, { existencia: total });
+    }
 }
+
