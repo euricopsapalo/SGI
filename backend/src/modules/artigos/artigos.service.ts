@@ -55,12 +55,20 @@ export class ArtigosService {
     // MovimentoStock
     findAllMovimentos() { return this.movimentosRepo.find({ relations: ['artigo'] }); }
     findOneMovimento(id: number) { return this.movimentosRepo.findOne({ where: { id }, relations: ['artigo'] }); }
-    createMovimento(body: any) {
+    async createMovimento(body: any) {
         const { artigoId, ...rest } = body;
-        return this.movimentosRepo.save(this.movimentosRepo.create({
+        const mov = await this.movimentosRepo.save(this.movimentosRepo.create({
             ...rest,
             artigo: artigoId ? { id: Number(artigoId) } : undefined,
         }));
+        if (artigoId) {
+            const tipo: string = rest.tipo ?? '';
+            const isEntrada = ['entrada', 'compra', 'ajuste_positivo', 'transferencia_entrada', 'inventario'].includes(tipo.toLowerCase());
+            const isSaida   = ['saida', 'consumo', 'ajuste_negativo', 'transferencia_saida'].includes(tipo.toLowerCase());
+            if (isEntrada) await this.artigosRepo.update(Number(artigoId), { dataUltimaEntrada: new Date() });
+            if (isSaida)   await this.artigosRepo.update(Number(artigoId), { dataUltimaSaida: new Date() });
+        }
+        return mov;
     }
     removeMovimento(id: number) { return this.movimentosRepo.delete(id); }
 

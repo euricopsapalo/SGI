@@ -17,6 +17,8 @@ export interface Pais { id: string; nome: string; codigo: string; }
 export interface Provincia { id: string; nome: string; paisId: string; }
 export interface Municipio { id: string; nome: string; provinciaId: string; }
 export interface TaxaIva { id: string; codigo: string; descricao: string; taxa: number; }
+export interface ClasseArtigo { id: string; descricao: string; }
+export interface FamiliaArtigo { id: string; descricao: string; }
 
 // ── Entities ───────────────────────────────────────────────
 export interface Cliente {
@@ -114,6 +116,8 @@ export interface Artigo {
     stockEncomendado: number; stockDisponivel?: number; emRuptura?: boolean;
     inativo: boolean; critico: boolean; observacao?: string;
     codigoIva?: string;
+    stockInicial: number; unidadeMedida: string;
+    refFornecedor?: string; dataUltimaEntrada?: string; dataUltimaSaida?: string;
 }
 
 // ── Purchase Orders ────────────────────────────────────────
@@ -122,6 +126,7 @@ export interface EncomendaLinha {
     artigoId: string; codigo: string; descricao: string;
     qtdEncomendada: number; qtdRecebida: number;
     unidade: string; custoUnit: number; desconto: number;
+    codigoIva?: string; taxaIva?: number;
 }
 export interface RececaoItem {
     id: string; artigoId: string; codigo: string; descricao: string; qtd: number; unidade: string;
@@ -177,7 +182,7 @@ const norm = (item: any) => ({ ...item, id: item.id?.toString() });
 const normProvincia = (p: any): Provincia => ({ id: p.id?.toString(), nome: p.nome, paisId: p.pais?.id?.toString() ?? '' });
 const normMunicipio = (m: any): Municipio => ({ id: m.id?.toString(), nome: m.nome, provinciaId: m.provincia?.id?.toString() ?? '' });
 const normFuncaoTecnico = (f: any): FuncaoTecnico => ({ id: f.id?.toString(), codigo: f.codigo, descricao: f.descricao, custo: Number(f.custo) });
-const normArtigo = (a: any): Artigo => ({ ...a, id: a.id?.toString(), precoUnitario: Number(a.precoUnitario), existencia: Number(a.existencia), stockReservado: Number(a.stockReservado ?? 0), nivelMaximo: Number(a.nivelMaximo), stockSeguranca: Number(a.stockSeguranca), custoMedio: Number(a.custoMedio), precoCusto: Number(a.precoCusto ?? 0), stockEncomendado: Number(a.stockEncomendado ?? 0) });
+const normArtigo = (a: any): Artigo => ({ ...a, id: a.id?.toString(), precoUnitario: Number(a.precoUnitario), existencia: Number(a.existencia), stockReservado: Number(a.stockReservado ?? 0), nivelMaximo: Number(a.nivelMaximo), stockSeguranca: Number(a.stockSeguranca), custoMedio: Number(a.custoMedio), precoCusto: Number(a.precoCusto ?? 0), stockEncomendado: Number(a.stockEncomendado ?? 0), stockInicial: Number(a.stockInicial ?? 0), unidadeMedida: a.unidadeMedida ?? 'UN', refFornecedor: a.refFornecedor ?? undefined, dataUltimaEntrada: a.dataUltimaEntrada ?? undefined, dataUltimaSaida: a.dataUltimaSaida ?? undefined });
 const normMovimento = (m: any): MovimentoStock => ({
     ...m,
     id: m.id?.toString(),
@@ -297,6 +302,8 @@ interface GlobalContextType {
     tiposDocumento: TipoDocumento[]; addTipoDocumento: (t: Omit<TipoDocumento, 'id'>) => void; updateTipoDocumento: (id: string, t: Partial<TipoDocumento>) => void; removeTipoDocumento: (id: string) => void;
     paises: Pais[]; provincias: Provincia[]; municipios: Municipio[];
     taxasIva: TaxaIva[]; addTaxaIva: (t: Omit<TaxaIva, 'id'>) => void; updateTaxaIva: (id: string, t: Partial<TaxaIva>) => void; removeTaxaIva: (id: string) => void;
+    classesArtigo: ClasseArtigo[]; addClasseArtigo: (c: Omit<ClasseArtigo, 'id'>) => void; updateClasseArtigo: (id: string, c: Partial<ClasseArtigo>) => void; removeClasseArtigo: (id: string) => void;
+    familiasArtigo: FamiliaArtigo[]; addFamiliaArtigo: (f: Omit<FamiliaArtigo, 'id'>) => void; updateFamiliaArtigo: (id: string, f: Partial<FamiliaArtigo>) => void; removeFamiliaArtigo: (id: string) => void;
     // Finance config
     taxaIvaGlobal: number; setTaxaIvaGlobal: (v: number) => void;
     // Empresa config
@@ -386,6 +393,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [armazens, setArmazens] = useState<Armazem[]>([]);
     const [artigos, setArtigos] = useState<Artigo[]>([]);
     const [taxasIva, setTaxasIva] = useState<TaxaIva[]>([]);
+    const [classesArtigo, setClassesArtigo] = useState<ClasseArtigo[]>([]);
+    const [familiasArtigo, setFamiliasArtigo] = useState<FamiliaArtigo[]>([]);
     const [stockArmazem, setStockArmazem] = useState<StockArmazem[]>([]);
     const [movimentosStock, setMovimentosStock] = useState<MovimentoStock[]>([]);
     const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
@@ -424,6 +433,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 axios.get(`${API}/api/configuracao`),          // 21
                 axios.get(`${API}/api/artigos/stock-armazem`), // 22
                 axios.get(`${API}/api/taxas-iva`),              // 23
+                axios.get(`${API}/api/classes-artigo`),         // 24
+                axios.get(`${API}/api/familias-artigo`),        // 25
             ]);
 
             try { setTiposTrabalho(ok(results[0]).map(norm)); } catch {}
@@ -449,6 +460,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             try { setLogs(ok(results[20]).map(norm)); } catch {}
             try { setStockArmazem(ok(results[22]).map(normStockArmazem)); } catch {}
             try { setTaxasIva(ok(results[23]).map((r: any) => ({ ...norm(r), taxa: Number(r.taxa) }))); } catch {}
+            try { setClassesArtigo(ok(results[24]).map(norm)); } catch {}
+            try { setFamiliasArtigo(ok(results[25]).map(norm)); } catch {}
             try {
                 const cfgData = results[21].status === 'fulfilled' ? results[21].value.data : null;
                 if (cfgData) {
@@ -597,6 +610,44 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             await axios.delete(`${API}/api/taxas-iva/${id}`);
             setTaxasIva(p => p.filter(x => x.id !== id));
         } catch (e) { console.error('removeTaxaIva error', e); throw e; }
+    };
+
+    const addClasseArtigo = async (c: Omit<ClasseArtigo, 'id'>) => {
+        try {
+            const { data } = await axios.post(`${API}/api/classes-artigo`, c);
+            setClassesArtigo(p => [...p, norm(data) as ClasseArtigo]);
+        } catch (e) { console.error('addClasseArtigo error', e); throw e; }
+    };
+    const updateClasseArtigo = async (id: string, c: Partial<ClasseArtigo>) => {
+        try {
+            await axios.put(`${API}/api/classes-artigo/${id}`, c);
+            setClassesArtigo(p => p.map(x => x.id === id ? { ...x, ...c } : x));
+        } catch (e) { console.error('updateClasseArtigo error', e); throw e; }
+    };
+    const removeClasseArtigo = async (id: string) => {
+        try {
+            await axios.delete(`${API}/api/classes-artigo/${id}`);
+            setClassesArtigo(p => p.filter(x => x.id !== id));
+        } catch (e) { console.error('removeClasseArtigo error', e); throw e; }
+    };
+
+    const addFamiliaArtigo = async (f: Omit<FamiliaArtigo, 'id'>) => {
+        try {
+            const { data } = await axios.post(`${API}/api/familias-artigo`, f);
+            setFamiliasArtigo(p => [...p, norm(data) as FamiliaArtigo]);
+        } catch (e) { console.error('addFamiliaArtigo error', e); throw e; }
+    };
+    const updateFamiliaArtigo = async (id: string, f: Partial<FamiliaArtigo>) => {
+        try {
+            await axios.put(`${API}/api/familias-artigo/${id}`, f);
+            setFamiliasArtigo(p => p.map(x => x.id === id ? { ...x, ...f } : x));
+        } catch (e) { console.error('updateFamiliaArtigo error', e); throw e; }
+    };
+    const removeFamiliaArtigo = async (id: string) => {
+        try {
+            await axios.delete(`${API}/api/familias-artigo/${id}`);
+            setFamiliasArtigo(p => p.filter(x => x.id !== id));
+        } catch (e) { console.error('removeFamiliaArtigo error', e); throw e; }
     };
 
     /* ── Entities ───────────────────────────────────────────── */
@@ -1068,6 +1119,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             tiposDocumento, addTipoDocumento, updateTipoDocumento, removeTipoDocumento,
             paises, provincias, municipios,
             taxasIva, addTaxaIva, updateTaxaIva, removeTaxaIva,
+            classesArtigo, addClasseArtigo, updateClasseArtigo, removeClasseArtigo,
+            familiasArtigo, addFamiliaArtigo, updateFamiliaArtigo, removeFamiliaArtigo,
             clientes, addCliente, updateCliente, removeCliente,
             tecnicos, addTecnico, updateTecnico, removeTecnico,
             fornecedores, addFornecedor, updateFornecedor, removeFornecedor,

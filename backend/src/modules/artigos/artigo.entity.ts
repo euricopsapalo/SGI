@@ -63,6 +63,21 @@ export class Artigo {
     @Column({ name: 'codigo_iva', length: 20, nullable: true, default: null })
     codigoIva: string;
 
+    @Column({ name: 'stock_inicial', type: 'numeric', precision: 12, scale: 3, default: 0 })
+    stockInicial: number;
+
+    @Column({ name: 'unidade_medida', length: 20, default: 'UN' })
+    unidadeMedida: string;
+
+    @Column({ name: 'ref_fornecedor', length: 100, nullable: true, default: null })
+    refFornecedor: string;
+
+    @Column({ name: 'data_ultima_entrada', type: 'timestamp', nullable: true, default: null })
+    dataUltimaEntrada: Date;
+
+    @Column({ name: 'data_ultima_saida', type: 'timestamp', nullable: true, default: null })
+    dataUltimaSaida: Date;
+
     @OneToMany(() => MovimentoStock, (m) => m.artigo)
     movimentos: MovimentoStock[];
 }

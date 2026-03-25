@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
@@ -9,7 +10,8 @@ import {
 import {
     Search, Plus, X, AlertCircle, Check, ShoppingCart,
     Package, Printer, ChevronDown, Archive, Download, TrendingDown, ShoppingBag,
-    Ban, RotateCcw, Eye,
+    Ban, RotateCcw, Eye, BarChart2, Clock, AlertTriangle, CheckCircle2,
+    CalendarDays, ListFilter,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 
@@ -512,7 +514,7 @@ interface EncomendaModalProps {
     onAnularRececao?: (rececaoId: string) => void;
 }
 const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onSave, onAnularRececao }) => {
-    const { fornecedores, artigos, currentUser, empresaConfig, fmt, fmtMoney } = useGlobal();
+    const { fornecedores, artigos, taxasIva, currentUser, empresaConfig, fmt, fmtMoney } = useGlobal();
     const [tab, setTab] = useState<ETab>('cabecalho');
 
     // Cabeçalho
@@ -532,10 +534,13 @@ const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onS
     const [lineArtId, setLineArtId] = useState<string[]>(encomenda?.linhas.map(l => l.artigoId) ?? []);
 
     const fornOpts = fornecedores.map(f => ({ value: f.id, label: f.nome, sub: f.nif }));
-    const artigoOpts = artigos.map(a => ({ value: a.id, label: a.descricao, sub: a.codigo }));
+    const artigosFornecedor = fornecedorId
+        ? artigos.filter(a => a.refFornecedor === fornecedorId)
+        : artigos;
+    const artigoOpts = artigosFornecedor.map(a => ({ value: a.id, label: a.descricao, sub: a.codigo }));
 
     const addLinha = () => {
-        setLinhas(p => [...p, { artigoId: '', codigo: '', descricao: '', qtdEncomendada: 1, qtdRecebida: 0, unidade: 'UN', custoUnit: 0, desconto: 0 }]);
+        setLinhas(p => [...p, { artigoId: '', codigo: '', descricao: '', qtdEncomendada: 1, qtdRecebida: 0, unidade: 'UN', custoUnit: 0, desconto: 0, taxaIva: 0 }]);
         setLineArtId(p => [...p, '']);
     };
     const removeLinha = (i: number) => {
@@ -548,7 +553,13 @@ const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onS
     const selectArtigo = (i: number, artigoId: string) => {
         const a = artigos.find(x => x.id === artigoId);
         if (a) {
-            setLinhas(p => p.map((l, j) => j === i ? { ...l, artigoId: a.id, codigo: a.codigo, descricao: a.descricao, custoUnit: a.precoCusto || a.custoMedio || a.precoUnitario, unidade: 'UN' } : l));
+            const taxaIva = a.codigoIva ? (taxasIva.find(t => t.codigo === a.codigoIva)?.taxa ?? 0) : 0;
+            setLinhas(p => p.map((l, j) => j === i ? {
+                ...l, artigoId: a.id, codigo: a.codigo, descricao: a.descricao,
+                custoUnit: a.precoCusto || a.custoMedio || a.precoUnitario,
+                unidade: a.unidadeMedida || 'UN',
+                codigoIva: a.codigoIva || undefined, taxaIva,
+            } : l));
         }
         setLineArtId(p => p.map((v, j) => j === i ? artigoId : v));
     };
@@ -571,7 +582,9 @@ const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onS
         onSave({ fornecedorId, data, dataEntrega, condicoesPagamento: condPagamento, responsavel, moeda, descricao, observacoes, estado, linhas, rececoes: encomenda?.rececoes ?? [] });
     };
 
-    const totalEnc  = linhas.reduce((s, l) => s + linhaTotal(l), 0);
+    const subtotalEnc = linhas.reduce((s, l) => s + linhaTotal(l), 0);
+    const totalIvaEnc = linhas.reduce((s, l) => s + linhaTotal(l) * ((l.taxaIva ?? 0) / 100), 0);
+    const totalEnc    = subtotalEnc + totalIvaEnc;
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -601,51 +614,64 @@ const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onS
                 <div className="modal-body">
                     {/* ── Cabeçalho ── */}
                     {tab === 'cabecalho' && (<>
-                        <div className="form-row">
-                            <div className="form-group" style={{ flex: 2 }}>
+                        {/* Grupo: Entidade */}
+                        <div style={{ background: 'var(--bg-subtle,#f8fafc)', borderRadius: 8, padding: '14px 14px 6px', marginBottom: 12 }}>
+                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Entidade</div>
+                            <div className="form-group" style={{ margin: 0 }}>
                                 <label className="form-label req">Fornecedor</label>
                                 <SearchableSelect
                                     options={fornOpts}
                                     value={fornecedorId}
-                                    onChange={v => setFornId(v)}
+                                    onChange={v => {
+                                        setFornId(v);
+                                        if (!encomenda) { setLinhas([]); setLineArtId([]); }
+                                    }}
                                     placeholder="Seleccionar fornecedor..."
                                 />
                                 {errors.fornecedor && <span className="form-error"><AlertCircle size={11} /> {errors.fornecedor}</span>}
                             </div>
-                            <div className="form-group">
-                                <label className="form-label req">Data</label>
-                                <input type="date" className="form-input" value={data} onChange={e => setData(e.target.value)} />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Data Entrega</label>
-                                <input type="date" className="form-input" value={dataEntrega} onChange={e => setDataEnt(e.target.value)} />
-                            </div>
-                        </div>
-                        <div className="form-row">
-                            <div className="form-group">
-                                <label className="form-label">Cond. Pagamento</label>
-                                <select className="form-select" value={condPagamento} onChange={e => setCondPag(e.target.value)}>
-                                    <option value="Pronto Pagamento">Pronto Pagamento</option>
-                                    <option value="15 Dias">15 Dias</option>
-                                    <option value="30 Dias">30 Dias</option>
-                                    <option value="30 - 30 Dias">30 - 30 Dias</option>
-                                    <option value="60 Dias">60 Dias</option>
-                                    <option value="90 Dias">90 Dias</option>
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Responsável</label>
-                                <input className="form-input" value={responsavel} readOnly style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)', cursor: 'default' }} />
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Moeda</label>
-                                <select className="form-select" value={moeda} onChange={e => setMoeda(e.target.value)}>
-                                    <option value="AOA">AOA — Kwanza</option>
-                                    <option value="USD">USD — Dólar</option>
-                                    <option value="EUR">EUR — Euro</option>
-                                </select>
+                            <div className="form-row" style={{ margin: '10px 0 0' }}>
+                                <div className="form-group">
+                                    <label className="form-label">Responsável</label>
+                                    <input className="form-input" value={responsavel} readOnly
+                                        style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)', cursor: 'default' }} />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Moeda</label>
+                                    <select className="form-select" value={moeda} onChange={e => setMoeda(e.target.value)}>
+                                        <option value="AOA">AOA — Kwanza</option>
+                                        <option value="USD">USD — Dólar</option>
+                                        <option value="EUR">EUR — Euro</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
+                        {/* Grupo: Datas e Condições */}
+                        <div style={{ background: 'var(--bg-subtle,#f8fafc)', borderRadius: 8, padding: '14px 14px 6px', marginBottom: 12 }}>
+                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Datas e Condições</div>
+                            <div className="form-row" style={{ margin: 0 }}>
+                                <div className="form-group">
+                                    <label className="form-label req">Data do Pedido</label>
+                                    <input type="date" className="form-input" value={data} onChange={e => setData(e.target.value)} />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Data de Entrega</label>
+                                    <input type="date" className="form-input" value={dataEntrega} onChange={e => setDataEnt(e.target.value)} />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Cond. Pagamento</label>
+                                    <select className="form-select" value={condPagamento} onChange={e => setCondPag(e.target.value)}>
+                                        <option value="Pronto Pagamento">Pronto Pagamento</option>
+                                        <option value="15 Dias">15 Dias</option>
+                                        <option value="30 Dias">30 Dias</option>
+                                        <option value="30 - 30 Dias">30 - 30 Dias</option>
+                                        <option value="60 Dias">60 Dias</option>
+                                        <option value="90 Dias">90 Dias</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        {/* Grupo: Descrição e Notas */}
                         <div className="form-group">
                             <label className="form-label req">Descrição</label>
                             <input className={`form-input${errors.descricao ? ' err' : ''}`} value={descricao}
@@ -654,197 +680,217 @@ const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onS
                         </div>
                         <div className="form-group">
                             <label className="form-label">Observações</label>
-                            <textarea className="form-input" rows={2} style={{ resize: 'vertical' }}
+                            <textarea className="form-input" rows={3} style={{ resize: 'vertical', lineHeight: 1.6 }}
                                 value={observacoes} onChange={e => setObs(e.target.value)}
-                                placeholder="Notas internas..." />
+                                placeholder="Notas internas sobre esta encomenda..." />
                         </div>
                     </>)}
 
                     {/* ── Artigos ── */}
                     {tab === 'artigos' && (<>
                         {errors.linhas && (
-                            <div style={{ color: 'var(--red,#ef4444)', fontSize: '0.8rem', marginBottom: 8 }}>
-                                <AlertCircle size={11} style={{ marginRight: 4 }} />{errors.linhas}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--red,#ef4444)', fontSize: '0.8rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: '8px 12px', marginBottom: 10 }}>
+                                <AlertCircle size={13} />{errors.linhas}
                             </div>
                         )}
-                        <table className="data-table" style={{ marginBottom: 8 }}>
-                            <thead>
-                                <tr>
-                                    <th>Artigo</th>
-                                    <th style={{ width: 50, textAlign: 'center' }}>UN</th>
-                                    <th style={{ width: 70, textAlign: 'right' }}>Qtd</th>
-                                    <th style={{ width: 110, textAlign: 'right' }}>Custo Unit.</th>
-                                    <th style={{ width: 60, textAlign: 'right' }}>Desc%</th>
-                                    <th style={{ width: 110, textAlign: 'right' }}>Total</th>
-                                    <th style={{ width: 30 }} />
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {linhas.length === 0 && (
-                                    <tr><td colSpan={7} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 16, fontSize: '0.8rem' }}>
-                                        Nenhuma linha. Clique em "Adicionar Linha".
-                                    </td></tr>
-                                )}
-                                {linhas.map((l, i) => (
-                                    <tr key={i}>
-                                        <td>
-                                            <SearchableSelect
-                                                options={artigoOpts}
-                                                value={lineArtId[i]}
-                                                onChange={v => selectArtigo(i, v)}
-                                                placeholder="Artigo..."
-                                            />
-                                            {l.codigo && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>{l.codigo}</div>}
-                                        </td>
-                                        <td>
-                                            <input className="form-input" style={{ textAlign: 'center', padding: '4px 6px', fontSize: '0.78rem' }}
-                                                value={l.unidade} onChange={e => updateLinha(i, 'unidade', e.target.value)} />
-                                        </td>
-                                        <td>
-                                            <input type="number" min={1} className="form-input"
-                                                style={{ textAlign: 'right', padding: '4px 6px', fontSize: '0.78rem' }}
-                                                value={l.qtdEncomendada}
-                                                onChange={e => updateLinha(i, 'qtdEncomendada', Number(e.target.value))} />
-                                        </td>
-                                        <td>
-                                            <input type="number" min={0} step="0.01" className="form-input"
-                                                style={{ textAlign: 'right', padding: '4px 6px', fontSize: '0.78rem' }}
-                                                value={l.custoUnit}
-                                                onChange={e => updateLinha(i, 'custoUnit', Number(e.target.value))} />
-                                        </td>
-                                        <td>
-                                            <input type="number" min={0} max={100} className="form-input"
-                                                style={{ textAlign: 'right', padding: '4px 6px', fontSize: '0.78rem' }}
-                                                value={l.desconto}
-                                                onChange={e => updateLinha(i, 'desconto', Number(e.target.value))} />
-                                        </td>
-                                        <td style={{ textAlign: 'right', fontSize: '0.78rem', fontWeight: 600 }}>
-                                            {fmt(Math.round(linhaTotal(l)))}
-                                        </td>
-                                        <td>
-                                            <button type="button" className="icon-btn" title="Remover" onClick={() => removeLinha(i)}>
-                                                <X size={11} />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                            {linhas.length > 0 && (
-                                <tfoot>
+                        {linhas.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '32px 0 24px', color: 'var(--text-muted)' }}>
+                                <Package size={32} style={{ marginBottom: 10, opacity: 0.35 }} />
+                                <div style={{ fontSize: '0.85rem', fontWeight: 500, marginBottom: 4 }}>Nenhum artigo adicionado</div>
+                                <div style={{ fontSize: '0.78rem', marginBottom: 16 }}>Clique no botão abaixo para adicionar artigos à encomenda.</div>
+                                <button type="button" className="abtn abtn-secondary" onClick={addLinha}>
+                                    <Plus size={12} /> Adicionar primeiro artigo
+                                </button>
+                            </div>
+                        ) : (<>
+                            <table className="data-table" style={{ marginBottom: 0 }}>
+                                <thead>
                                     <tr>
-                                        <td colSpan={5} style={{ textAlign: 'right', fontWeight: 700, fontSize: '0.82rem', paddingTop: 8 }}>Total Encomenda</td>
-                                        <td style={{ textAlign: 'right', fontWeight: 700, fontSize: '0.88rem', color: 'var(--blue)', paddingTop: 8 }}>
-                                            {fmtMoney(Math.round(totalEnc), moeda)}
-                                        </td>
-                                        <td />
+                                        <th>Artigo</th>
+                                        <th style={{ width: 44, textAlign: 'center' }}>UN</th>
+                                        <th style={{ width: 65, textAlign: 'right' }}>Qtd</th>
+                                        <th style={{ width: 105, textAlign: 'right' }}>Custo Unit.</th>
+                                        <th style={{ width: 52, textAlign: 'right' }}>Desc%</th>
+                                        <th style={{ width: 52, textAlign: 'right' }}>IVA%</th>
+                                        <th style={{ width: 105, textAlign: 'right' }}>Total c/ IVA</th>
+                                        <th style={{ width: 28 }} />
                                     </tr>
-                                </tfoot>
-                            )}
-                        </table>
-                        <button type="button" className="abtn abtn-ghost" onClick={addLinha} style={{ fontSize: '0.78rem' }}>
-                            <Plus size={12} /> Adicionar Linha
-                        </button>
+                                </thead>
+                                <tbody>
+                                    {linhas.map((l, i) => (
+                                        <tr key={i}>
+                                            <td>
+                                                <SearchableSelect
+                                                    options={artigoOpts}
+                                                    value={lineArtId[i]}
+                                                    onChange={v => selectArtigo(i, v)}
+                                                    placeholder="Seleccionar artigo..."
+                                                />
+                                                {l.codigo && <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>{l.codigo}</div>}
+                                            </td>
+                                            <td style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                                                {l.unidade || 'UN'}
+                                            </td>
+                                            <td>
+                                                <input type="number" min={1} className="form-input"
+                                                    style={{ textAlign: 'right', padding: '4px 6px', fontSize: '0.78rem' }}
+                                                    value={l.qtdEncomendada}
+                                                    onChange={e => updateLinha(i, 'qtdEncomendada', Number(e.target.value))} />
+                                            </td>
+                                            <td style={{ textAlign: 'right', fontSize: '0.8rem', color: 'var(--text-primary)', paddingRight: 8 }}>
+                                                {fmt(l.custoUnit)}
+                                            </td>
+                                            <td style={{ textAlign: 'right', fontSize: '0.8rem', color: l.desconto > 0 ? 'var(--orange,#f97316)' : 'var(--text-muted)', paddingRight: 8 }}>
+                                                {l.desconto > 0 ? `${l.desconto}%` : '—'}
+                                            </td>
+                                            <td style={{ textAlign: 'right', fontSize: '0.8rem', paddingRight: 8 }}>
+                                                {(l.taxaIva ?? 0) > 0
+                                                    ? <span style={{ color: 'var(--blue)', fontWeight: 600 }}>{l.taxaIva}%</span>
+                                                    : <span style={{ color: 'var(--text-muted)' }}>—</span>
+                                                }
+                                            </td>
+                                            <td style={{ textAlign: 'right', fontSize: '0.78rem', fontWeight: 600 }}>
+                                                <div>{fmt(Math.round(linhaTotal(l) * (1 + (l.taxaIva ?? 0) / 100)))}</div>
+                                                {(l.taxaIva ?? 0) > 0 && (
+                                                    <div style={{ fontSize: '0.67rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+                                                        IVA: {fmt(Math.round(linhaTotal(l) * (l.taxaIva! / 100)))}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <button type="button" className="icon-btn" title="Remover linha" onClick={() => removeLinha(i)}>
+                                                    <X size={11} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {/* Summary + Add */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 2 }}>
+                                <button type="button" className="abtn abtn-ghost" onClick={addLinha} style={{ fontSize: '0.78rem' }}>
+                                    <Plus size={12} /> Adicionar Linha
+                                </button>
+                                <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Subtotal s/ IVA</div>
+                                        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{fmtMoney(Math.round(subtotalEnc), moeda)}</div>
+                                    </div>
+                                    {totalIvaEnc > 0 && (
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>IVA</div>
+                                            <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--blue)' }}>{fmtMoney(Math.round(totalIvaEnc), moeda)}</div>
+                                        </div>
+                                    )}
+                                    <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border)', paddingLeft: 20 }}>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Total Encomenda</div>
+                                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--blue)' }}>{fmtMoney(Math.round(totalEnc), moeda)}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </>)}
                     </>)}
 
                     {/* ── Recebido ── */}
                     {tab === 'recebido' && (
                         encomenda ? (<>
-                            {/* ── Histórico de receções ── */}
-                            {encomenda.rececoes.length > 0 ? (
-                                <table className="data-table" style={{ marginBottom: 18 }}>
-                                    <thead>
-                                        <tr>
-                                            <th>Data / Hora</th>
-                                            <th>Guia Remessa</th>
-                                            <th>Operador</th>
-                                            <th>Armazém</th>
-                                            <th style={{ textAlign: 'right' }}>Artigos</th>
-                                            <th>Estado</th>
-                                            <th style={{ textAlign: 'center' }}>Ações</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {encomenda.rececoes.map(r => (
-                                            <tr key={r.id} style={{ opacity: r.estado === 'Anulada' ? 0.5 : 1 }}>
-                                                <td style={{ fontSize: '0.78rem' }}>
-                                                    {new Date(r.dataHora).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                                </td>
-                                                <td style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.82rem' }}>{r.guiaRemessa}</td>
-                                                <td style={{ fontSize: '0.78rem' }}>{r.operador}</td>
-                                                <td style={{ fontSize: '0.78rem' }}>{r.armazem}</td>
-                                                <td style={{ textAlign: 'right', fontSize: '0.78rem' }}>{r.itens.length}</td>
-                                                <td>
-                                                    <span style={{
-                                                        fontSize: '0.72rem', borderRadius: 10, padding: '2px 8px', fontWeight: 600,
-                                                        background: r.estado === 'Ativa' ? '#dcfce7' : '#fee2e2',
-                                                        color: r.estado === 'Ativa' ? '#16a34a' : '#dc2626',
-                                                    }}>{r.estado}</span>
-                                                </td>
-                                                <td style={{ textAlign: 'center', display: 'flex', gap: 4, justifyContent: 'center' }}>
-                                                    <button className="icon-btn" title="Reimprimir nota de entrada"
-                                                        onClick={() => printNotaEntrada(r, encomenda, empresaConfig)}>
-                                                        <Printer size={13} />
-                                                    </button>
-                                                    {r.estado === 'Ativa' && onAnularRececao && (
-                                                        <button className="icon-btn" title="Anular receção" style={{ color: 'var(--red,#dc2626)' }}
-                                                            onClick={() => onAnularRececao(r.id)}>
-                                                            <Ban size={13} />
-                                                        </button>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            ) : (
-                                <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textAlign: 'center', padding: '14px 0 18px' }}>
-                                    Sem receções registadas.
+                            {/* ── Progresso por artigo ── */}
+                            <div style={{ marginBottom: 16 }}>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                                    Progresso de Recepção
                                 </div>
-                            )}
-                            {/* ── Totais acumulados por artigo ── */}
-                            <div style={{ fontSize: '0.73rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                                Totais Acumulados
-                            </div>
-                            <table className="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Artigo</th>
-                                        <th style={{ textAlign: 'right' }}>Encomendado</th>
-                                        <th style={{ textAlign: 'right' }}>Recebido</th>
-                                        <th style={{ textAlign: 'right' }}>Pendente</th>
-                                        <th>Estado</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                     {linhas.map((l, i) => {
+                                        const pct = l.qtdEncomendada > 0 ? Math.min(100, (l.qtdRecebida / l.qtdEncomendada) * 100) : 0;
                                         const pendente = l.qtdEncomendada - l.qtdRecebida;
+                                        const completo = pendente <= 0;
                                         return (
-                                            <tr key={i}>
-                                                <td style={{ fontSize: '0.8rem' }}>
-                                                    <div style={{ fontWeight: 600 }}>{l.descricao}</div>
-                                                    <div style={{ color: 'var(--text-muted)', fontSize: '0.73rem' }}>{l.codigo}</div>
-                                                </td>
-                                                <td style={{ textAlign: 'right', fontSize: '0.8rem' }}>{fmt(l.qtdEncomendada)}</td>
-                                                <td style={{ textAlign: 'right', fontSize: '0.8rem', color: 'var(--green)', fontWeight: 600 }}>{fmt(l.qtdRecebida)}</td>
-                                                <td style={{ textAlign: 'right', fontSize: '0.8rem', color: pendente > 0 ? 'var(--orange,#f97316)' : 'var(--green)', fontWeight: 600 }}>{fmt(pendente)}</td>
-                                                <td>
-                                                    <span style={{
-                                                        fontSize: '0.73rem', borderRadius: 10, padding: '2px 8px',
-                                                        background: pendente === 0 ? '#dcfce7' : '#fffbeb',
-                                                        color: pendente === 0 ? 'var(--green)' : 'var(--orange,#f97316)',
-                                                        fontWeight: 600,
-                                                    }}>
-                                                        {pendente === 0 ? 'Recebido' : 'Pendente'}
+                                            <div key={i} style={{ background: 'var(--bg-subtle,#f8fafc)', borderRadius: 8, padding: '10px 14px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                                                    <div>
+                                                        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)' }}>{l.descricao}</span>
+                                                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: 6 }}>{l.codigo}</span>
+                                                    </div>
+                                                    <span style={{ fontSize: '0.7rem', fontWeight: 600, borderRadius: 10, padding: '2px 8px', flexShrink: 0,
+                                                        background: completo ? '#dcfce7' : '#fffbeb',
+                                                        color: completo ? '#15803d' : '#b45309' }}>
+                                                        {completo ? 'Completo' : `Pendente: ${fmt(pendente)} ${l.unidade}`}
                                                     </span>
-                                                </td>
-                                            </tr>
+                                                </div>
+                                                <div style={{ height: 6, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                                                    <div style={{ height: '100%', borderRadius: 4, width: `${pct}%`,
+                                                        background: completo ? 'var(--green,#22c55e)' : 'var(--blue)', transition: 'width 0.4s' }} />
+                                                </div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                                                    <span>Recebido: <strong style={{ color: 'var(--green,#22c55e)' }}>{fmt(l.qtdRecebida)}</strong></span>
+                                                    <span>Total: {fmt(l.qtdEncomendada)} {l.unidade}</span>
+                                                </div>
+                                            </div>
                                         );
                                     })}
-                                </tbody>
-                            </table>
+                                </div>
+                            </div>
+                            {/* ── Histórico de receções ── */}
+                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                                Histórico de Entregas
+                            </div>
+                            {encomenda.rececoes.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                                    Nenhuma entrega registada ainda.
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    {[...encomenda.rececoes].sort((a, b) => new Date(b.dataHora).getTime() - new Date(a.dataHora).getTime()).map((r, idx, arr) => (
+                                        <div key={r.id} style={{
+                                            display: 'flex', alignItems: 'center', gap: 12,
+                                            background: r.estado === 'Anulada' ? 'transparent' : 'var(--bg-subtle,#f8fafc)',
+                                            border: `1px solid ${r.estado === 'Anulada' ? 'var(--border)' : 'transparent'}`,
+                                            borderRadius: 8, padding: '10px 14px',
+                                            opacity: r.estado === 'Anulada' ? 0.55 : 1,
+                                        }}>
+                                            <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                background: r.estado === 'Anulada' ? '#fee2e2' : idx === 0 ? '#dcfce7' : 'var(--bg-secondary)',
+                                                color: r.estado === 'Anulada' ? '#dc2626' : idx === 0 ? '#15803d' : 'var(--text-muted)' }}>
+                                                {r.estado === 'Anulada' ? <Ban size={15} /> : <RotateCcw size={15} />}
+                                            </div>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                                                    <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.84rem', color: r.estado === 'Anulada' ? 'var(--red,#dc2626)' : 'var(--text-primary)' }}>
+                                                        {r.guiaRemessa}
+                                                    </span>
+                                                    {idx === 0 && r.estado === 'Ativa' && (
+                                                        <span style={{ fontSize: '0.65rem', fontWeight: 600, background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '1px 6px' }}>mais recente</span>
+                                                    )}
+                                                    {r.estado === 'Anulada' && (
+                                                        <span style={{ fontSize: '0.65rem', fontWeight: 600, background: '#fee2e2', color: '#dc2626', borderRadius: 4, padding: '1px 6px' }}>Anulada</span>
+                                                    )}
+                                                </div>
+                                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                                    {new Date(r.dataHora).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                    {' · '}{r.operador}{' · '}{r.armazem}
+                                                    {' · '}{r.itens.length} artigo{r.itens.length !== 1 ? 's' : ''}
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                                                <button className="icon-btn" title="Reimprimir nota de entrada"
+                                                    onClick={() => printNotaEntrada(r, encomenda, empresaConfig)}>
+                                                    <Printer size={13} />
+                                                </button>
+                                                {r.estado === 'Ativa' && onAnularRececao && (
+                                                    <button className="icon-btn" title="Anular receção" style={{ color: 'var(--red,#dc2626)' }}
+                                                        onClick={() => onAnularRececao(r.id)}>
+                                                        <Ban size={13} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </>) : (
-                            <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', textAlign: 'center', padding: 24 }}>
-                                Guarde a encomenda para registar recepções.
+                            <div style={{ textAlign: 'center', padding: '32px 0 24px', color: 'var(--text-muted)' }}>
+                                <Package size={32} style={{ marginBottom: 10, opacity: 0.3 }} />
+                                <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>Guarde a encomenda para registar recepções.</div>
                             </div>
                         )
                     )}
@@ -1101,13 +1147,14 @@ function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: st
 const EncomendaPage: React.FC = () => {
     const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, updateArtigo, addMovimento, currentUser, empresaConfig, fmtMoney, fmtDate, fmt, simboloMoeda } = useGlobal();
 
-    const [pageTab,   setPageTab]   = useState<'encomendas' | 'sugestoes'>('encomendas');
+    const [pageTab,   setPageTab]   = useState<'encomendas' | 'sugestoes' | 'relatorios'>('encomendas');
     const [search,    setSearch]    = useState('');
     const [filterEst, setFEst]      = useState('');
     const [modal,     setModal]     = useState<'new' | string | null>(null);
     const [receber,   setReceber]   = useState<string | null>(null);
     const [printId,   setPrintId]   = useState<string | null>(null);
     const [rececDropdown, setRececDropdown] = useState<string | null>(null);
+    const [rececDropdownPos, setRececDropdownPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
     const [toast,      setToast]     = useState('');
     const [previewHtml, setPreviewHtml] = useState('');
 
@@ -1167,6 +1214,38 @@ const EncomendaPage: React.FC = () => {
     const parciais  = encomendas.filter(e => e.estado === 'Parcial').length;
     const recebidas = encomendas.filter(e => e.estado === 'Recebida').length;
     const valorAberto = encomendas.filter(e => e.estado !== 'Cancelada' && e.estado !== 'Recebida').reduce((s, e) => s + encTotal(e), 0);
+
+    // ── Reports data ─────────────────────────────────────────
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().split('T')[0];
+    const weekAgo  = new Date(today); weekAgo.setDate(today.getDate() - 6);
+    const weekAgoStr = weekAgo.toISOString().split('T')[0];
+
+    const encEmAberto = encomendas.filter(e => e.estado === 'Aberta' || e.estado === 'Parcial');
+    const encEmAtraso = encomendas.filter(e =>
+        (e.estado === 'Aberta' || e.estado === 'Parcial') &&
+        e.dataEntrega && e.dataEntrega < todayStr
+    );
+    const encHoje   = encomendas.filter(e => e.data === todayStr);
+    const encSemana = encomendas.filter(e => e.data >= weekAgoStr && e.data <= todayStr);
+
+    // By-status for chart
+    const statusCounts: Record<string, number> = {
+        Aberta:    encomendas.filter(e => e.estado === 'Aberta').length,
+        Parcial:   encomendas.filter(e => e.estado === 'Parcial').length,
+        Recebida:  encomendas.filter(e => e.estado === 'Recebida').length,
+        Cancelada: encomendas.filter(e => e.estado === 'Cancelada').length,
+    };
+    const totalNaoCanceladas = encomendas.filter(e => e.estado !== 'Cancelada').length || 1;
+
+    // Last 7 days daily volume
+    const dailyVolume = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(today); d.setDate(today.getDate() - (6 - i));
+        const ds = d.toISOString().split('T')[0];
+        const label = d.toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: '2-digit' });
+        return { label, date: ds, count: encomendas.filter(e => e.data === ds).length };
+    });
+    const maxDaily = Math.max(...dailyVolume.map(d => d.count), 1);
 
     const editTarget  = typeof modal === 'string' && modal !== 'new' ? encomendas.find(e => e.id === modal) : undefined;
     const receberEnc  = receber ? encomendas.find(e => e.id === receber) : null;
@@ -1252,6 +1331,13 @@ const EncomendaPage: React.FC = () => {
                         <Plus size={13} /> Nova Encomenda
                     </button>
                 )}
+                {pageTab === 'relatorios' && (
+                    <button className="abtn abtn-secondary" type="button"
+                        onClick={() => window.print()}
+                        style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <Printer size={13} /> Imprimir
+                    </button>
+                )}
             </ActionBar>
 
             <div className="page-content">
@@ -1260,6 +1346,7 @@ const EncomendaPage: React.FC = () => {
                     {([
                         { id: 'encomendas', label: 'Encomendas' },
                         { id: 'sugestoes',  label: `Sugestões de Compra${artigosRuptura.length > 0 ? ` (${artigosRuptura.length})` : ''}` },
+                        { id: 'relatorios', label: 'Relatórios' },
                     ] as const).map(t => (
                         <button key={t.id} type="button" onClick={() => setPageTab(t.id)} style={{
                             padding: '8px 16px', fontSize: '0.82rem', fontWeight: pageTab === t.id ? 700 : 400,
@@ -1385,37 +1472,64 @@ const EncomendaPage: React.FC = () => {
                                                             <div style={{ position: 'relative' }}>
                                                                 <button className="icon-btn" title={`Reimprimir notas de entrada (${ativas.length} entregas)`}
                                                                     style={{ color: '#16a34a' }}
-                                                                    onClick={ev => { ev.stopPropagation(); setRececDropdown(rececDropdown === e.id ? null : e.id); }}>
+                                                                    onClick={ev => {
+                                                                        ev.stopPropagation();
+                                                                        const rect = ev.currentTarget.getBoundingClientRect();
+                                                                        setRececDropdownPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                                                                        setRececDropdown(rececDropdown === e.id ? null : e.id);
+                                                                    }}>
                                                                     <RotateCcw size={12} />
                                                                     <span style={{ fontSize: '0.65rem', fontWeight: 700, marginLeft: 2 }}>{ativas.length}</span>
                                                                 </button>
-                                                                {rececDropdown === e.id && (
+                                                                {rececDropdown === e.id && ReactDOM.createPortal(
                                                                     <div style={{
-                                                                        position: 'absolute', right: 0, top: '100%', zIndex: 200,
+                                                                        position: 'fixed', top: rececDropdownPos.top, right: rececDropdownPos.right, zIndex: 9999,
                                                                         background: 'var(--surface,#fff)', border: '1px solid var(--border)',
-                                                                        borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-                                                                        minWidth: 220, padding: '4px 0',
+                                                                        borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.13)',
+                                                                        minWidth: 260,
                                                                     }} onClick={ev => ev.stopPropagation()}>
-                                                                        <div style={{ padding: '6px 12px 4px', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--border)' }}>
-                                                                            Notas de Entrada
+                                                                        {/* Header */}
+                                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px 8px', borderBottom: '1px solid var(--border)' }}>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                                                <RotateCcw size={12} style={{ color: '#16a34a' }} />
+                                                                                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)' }}>Notas de Entrada</span>
+                                                                            </div>
+                                                                            <span style={{ fontSize: '0.7rem', fontWeight: 600, background: '#dcfce7', color: '#15803d', borderRadius: 10, padding: '1px 8px' }}>
+                                                                                {ativas.length} entrega{ativas.length !== 1 ? 's' : ''}
+                                                                            </span>
                                                                         </div>
-                                                                        {ativas.map((r, idx) => (
-                                                                            <button key={r.id} style={{
-                                                                                display: 'flex', flexDirection: 'column', gap: 1,
-                                                                                width: '100%', padding: '7px 12px', border: 'none',
-                                                                                background: 'none', cursor: 'pointer', textAlign: 'left',
-                                                                            }}
-                                                                                onMouseEnter={ev => (ev.currentTarget.style.background = 'var(--bg-hover,#f5f7fa)')}
-                                                                                onMouseLeave={ev => (ev.currentTarget.style.background = 'none')}
-                                                                                onClick={() => { printNotaEntrada(r, e, empresaConfig); setRececDropdown(null); }}>
-                                                                                <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.8rem', color: '#16a34a' }}>{r.guiaRemessa}</span>
-                                                                                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                                                                                    {new Date(r.dataHora).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                                                                    {idx === 0 ? ' — última' : ''}
-                                                                                </span>
-                                                                            </button>
-                                                                        ))}
-                                                                    </div>
+                                                                        {/* Items */}
+                                                                        <div style={{ padding: '6px 0' }}>
+                                                                            {ativas.map((r, idx) => (
+                                                                                <button key={r.id} style={{
+                                                                                    display: 'flex', alignItems: 'center', gap: 10,
+                                                                                    width: '100%', padding: '8px 14px', border: 'none',
+                                                                                    background: 'none', cursor: 'pointer', textAlign: 'left',
+                                                                                    borderLeft: idx === 0 ? '3px solid #16a34a' : '3px solid transparent',
+                                                                                }}
+                                                                                    onMouseEnter={ev => (ev.currentTarget.style.background = 'var(--bg-hover,#f5f7fa)')}
+                                                                                    onMouseLeave={ev => (ev.currentTarget.style.background = 'none')}
+                                                                                    onClick={() => { printNotaEntrada(r, e, empresaConfig); setRececDropdown(null); }}
+                                                                                    title="Clique para reimprimir">
+                                                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                                                                            <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.82rem', color: '#16a34a' }}>{r.guiaRemessa}</span>
+                                                                                            {idx === 0 && (
+                                                                                                <span style={{ fontSize: '0.62rem', fontWeight: 600, background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>
+                                                                                                    mais recente
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                                                                            {new Date(r.dataHora).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <Printer size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                                                                                </button>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>,
+                                                                    document.body
                                                                 )}
                                                             </div>
                                                         );
@@ -1527,6 +1641,211 @@ const EncomendaPage: React.FC = () => {
                         </div>
                         <div className="table-count">{artigosRupturaFiltrados.length} artigo(s) em ruptura</div>
                     </div>
+                </>)}
+
+                {/* ── Relatórios Tab ── */}
+                {pageTab === 'relatorios' && (<>
+
+                    {/* KPI row */}
+                    <div className="stats-row">
+                        {[
+                            { label: 'Em Aberto',     value: encEmAberto.length,  cls: 'blue',   icon: <ShoppingCart size={16} /> },
+                            { label: 'Em Atraso',     value: encEmAtraso.length,  cls: encEmAtraso.length > 0 ? 'red' : 'green', icon: <Clock size={16} /> },
+                            { label: 'Hoje',          value: encHoje.length,      cls: 'blue',   icon: <CalendarDays size={16} /> },
+                            { label: 'Esta Semana',   value: encSemana.length,    cls: 'blue',   icon: <BarChart2 size={16} /> },
+                        ].map(s => (
+                            <div key={s.label} className="stat-card">
+                                <span className="stat-label">{s.label}</span>
+                                <span className={`stat-value ${s.cls}`}>{s.value}</span>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+
+                        {/* ── Estado das Encomendas ── */}
+                        <div className="settings-section" style={{ margin: 0 }}>
+                            <div className="settings-section-hdr">
+                                <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <ListFilter size={14} /> Estado das Encomendas
+                                </div>
+                                <div className="settings-section-desc">Visão geral por status</div>
+                            </div>
+                            <div className="settings-section-body">
+                                {([
+                                    { estado: 'Aberta',    label: 'Abertas',    color: '#3b82f6', bg: '#eff6ff' },
+                                    { estado: 'Parcial',   label: 'Parciais',   color: '#f97316', bg: '#fff7ed' },
+                                    { estado: 'Recebida',  label: 'Recebidas',  color: '#16a34a', bg: '#f0fdf4' },
+                                    { estado: 'Cancelada', label: 'Canceladas', color: '#9ca3af', bg: '#f9fafb' },
+                                ] as const).map(s => {
+                                    const count = statusCounts[s.estado] ?? 0;
+                                    const pct = encomendas.length > 0 ? Math.round(count / encomendas.length * 100) : 0;
+                                    return (
+                                        <div key={s.estado} style={{ marginBottom: 12 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                <span style={{ fontSize: '0.82rem', fontWeight: 600, color: s.color }}>{s.label}</span>
+                                                <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 700 }}>
+                                                    {count} <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>({pct}%)</span>
+                                                </span>
+                                            </div>
+                                            <div style={{ height: 8, background: 'var(--bg-secondary)', borderRadius: 4, overflow: 'hidden' }}>
+                                                <div style={{ height: '100%', width: `${pct}%`, background: s.color, borderRadius: 4, transition: 'width 0.3s' }} />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Total</span>
+                                    <span style={{ fontSize: '0.82rem', fontWeight: 700 }}>{encomendas.length}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ── Volume Diário (7 dias) ── */}
+                        <div className="settings-section" style={{ margin: 0 }}>
+                            <div className="settings-section-hdr">
+                                <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <BarChart2 size={14} /> Volume — Últimos 7 Dias
+                                </div>
+                                <div className="settings-section-desc">{encSemana.length} encomenda(s) esta semana</div>
+                            </div>
+                            <div className="settings-section-body">
+                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 120 }}>
+                                    {dailyVolume.map(d => (
+                                        <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: d.count > 0 ? 'var(--blue)' : 'var(--text-muted)' }}>
+                                                {d.count > 0 ? d.count : ''}
+                                            </span>
+                                            <div style={{
+                                                width: '100%', background: d.count > 0 ? 'var(--blue)' : 'var(--bg-secondary)',
+                                                borderRadius: '4px 4px 0 0',
+                                                height: d.count > 0 ? `${Math.round((d.count / maxDaily) * 88)}px` : '4px',
+                                                minHeight: 4, transition: 'height 0.3s',
+                                                opacity: d.date === todayStr ? 1 : 0.7,
+                                            }} />
+                                            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.2 }}>
+                                                {d.label.split(',')[0]}<br />{d.label.split(',')[1]?.trim()}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ── Encomendas em Aberto ── */}
+                    <div className="settings-section" style={{ margin: '0 0 16px' }}>
+                        <div className="settings-section-hdr">
+                            <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <ShoppingCart size={14} style={{ color: '#3b82f6' }} /> Encomendas em Aberto
+                            </div>
+                            <div className="settings-section-desc">Encomendas pendentes de recepção completa</div>
+                        </div>
+                        <div className="settings-section-body" style={{ padding: 0 }}>
+                            {encEmAberto.length === 0 ? (
+                                <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.83rem' }}>
+                                    <CheckCircle2 size={28} style={{ margin: '0 auto 8px', display: 'block', color: '#16a34a' }} />
+                                    Sem encomendas em aberto
+                                </div>
+                            ) : (
+                                <div className="table-wrap">
+                                    <table className="data-table">
+                                        <thead><tr>
+                                            <th>Número</th><th>Fornecedor</th><th>Data</th>
+                                            <th>Entrega Prevista</th><th>Estado</th>
+                                            <th style={{ textAlign: 'right' }}>Valor</th>
+                                            <th style={{ textAlign: 'right' }}>% Recebido</th>
+                                        </tr></thead>
+                                        <tbody>
+                                            {encEmAberto.map(e => {
+                                                const totalQtd  = e.linhas.reduce((s, l) => s + l.qtdEncomendada, 0);
+                                                const recQtd    = e.linhas.reduce((s, l) => s + l.qtdRecebida, 0);
+                                                const pctRec    = totalQtd > 0 ? Math.round(recQtd / totalQtd * 100) : 0;
+                                                const atrasada  = e.dataEntrega && e.dataEntrega < todayStr;
+                                                const es = ESTADO_STYLE[e.estado];
+                                                return (
+                                                    <tr key={e.id} style={atrasada ? { background: '#fff5f5' } : {}}>
+                                                        <td style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.8rem', color: 'var(--blue)' }}>{e.numero}</td>
+                                                        <td style={{ fontSize: '0.83rem', fontWeight: 600 }}>{getFornNome(e.fornecedorId)}</td>
+                                                        <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{fmtDate(e.data)}</td>
+                                                        <td style={{ fontSize: '0.78rem', color: atrasada ? '#dc2626' : 'var(--text-secondary)', fontWeight: atrasada ? 700 : 400 }}>
+                                                            {atrasada && <AlertTriangle size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />}
+                                                            {fmtDate(e.dataEntrega)}
+                                                        </td>
+                                                        <td><span className={es.cls}>{es.label}</span></td>
+                                                        <td style={{ textAlign: 'right', fontSize: '0.8rem', fontWeight: 600 }}>{fmtMoney(encTotal(e))}</td>
+                                                        <td style={{ textAlign: 'right', fontSize: '0.78rem' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+                                                                <div style={{ width: 48, height: 6, background: 'var(--bg-secondary)', borderRadius: 3, overflow: 'hidden' }}>
+                                                                    <div style={{ height: '100%', width: `${pctRec}%`, background: '#16a34a', borderRadius: 3 }} />
+                                                                </div>
+                                                                <span style={{ minWidth: 28 }}>{pctRec}%</span>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* ── Encomendas em Atraso ── */}
+                    <div className="settings-section" style={{ margin: 0 }}>
+                        <div className="settings-section-hdr">
+                            <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <AlertTriangle size={14} style={{ color: '#dc2626' }} /> Encomendas em Atraso
+                            </div>
+                            <div className="settings-section-desc">Pedidos que ultrapassaram o prazo previsto de entrega</div>
+                        </div>
+                        <div className="settings-section-body" style={{ padding: 0 }}>
+                            {encEmAtraso.length === 0 ? (
+                                <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.83rem' }}>
+                                    <CheckCircle2 size={28} style={{ margin: '0 auto 8px', display: 'block', color: '#16a34a' }} />
+                                    Nenhuma encomenda em atraso
+                                </div>
+                            ) : (
+                                <div className="table-wrap">
+                                    <table className="data-table">
+                                        <thead><tr>
+                                            <th>Número</th><th>Fornecedor</th><th>Entrega Prevista</th>
+                                            <th style={{ textAlign: 'right' }}>Dias Atraso</th>
+                                            <th>Estado</th>
+                                            <th style={{ textAlign: 'right' }}>Valor</th>
+                                        </tr></thead>
+                                        <tbody>
+                                            {encEmAtraso
+                                                .slice()
+                                                .sort((a, b) => (a.dataEntrega ?? '').localeCompare(b.dataEntrega ?? ''))
+                                                .map(e => {
+                                                    const dias = e.dataEntrega
+                                                        ? Math.floor((today.getTime() - new Date(e.dataEntrega).getTime()) / 86400000)
+                                                        : 0;
+                                                    const es = ESTADO_STYLE[e.estado];
+                                                    return (
+                                                        <tr key={e.id} style={{ background: '#fff5f5' }}>
+                                                            <td style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.8rem', color: '#dc2626' }}>{e.numero}</td>
+                                                            <td style={{ fontSize: '0.83rem', fontWeight: 600 }}>{getFornNome(e.fornecedorId)}</td>
+                                                            <td style={{ fontSize: '0.78rem', color: '#dc2626', fontWeight: 600 }}>{fmtDate(e.dataEntrega)}</td>
+                                                            <td style={{ textAlign: 'right' }}>
+                                                                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#dc2626', background: '#fee2e2', borderRadius: 10, padding: '2px 8px' }}>
+                                                                    +{dias}d
+                                                                </span>
+                                                            </td>
+                                                            <td><span className={es.cls}>{es.label}</span></td>
+                                                            <td style={{ textAlign: 'right', fontSize: '0.8rem', fontWeight: 600 }}>{fmtMoney(encTotal(e))}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
                 </>)}
             </div>
 

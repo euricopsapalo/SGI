@@ -9,7 +9,11 @@ import { Pais } from './pais.entity';
 import { Provincia } from './provincia.entity';
 import { Municipio } from './municipio.entity';
 import { TaxaIva } from './taxa-iva.entity';
+import { ClasseArtigo } from './classe-artigo.entity';
+import { FamiliaArtigo } from './familia-artigo.entity';
 import { TabelasSistemaService } from './tabelas-sistema.service';
+import { ClassesArtigoController } from './classes-artigo.controller';
+import { FamiliasArtigoController } from './familias-artigo.controller';
 import { TiposTrabalhoController } from './tipos-trabalho.controller';
 import { TiposDocumentoController } from './tipos-documento.controller';
 import { TiposOTController } from './tipos-ot.controller';
@@ -21,7 +25,7 @@ import { MunicipiosController } from './municipios.controller';
 import { TaxasIvaController } from './taxas-iva.controller';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([TipoTrabalho, TipoDocumento, TipoOT, FuncaoTecnico, Moeda, Pais, Provincia, Municipio, TaxaIva])],
+    imports: [TypeOrmModule.forFeature([TipoTrabalho, TipoDocumento, TipoOT, FuncaoTecnico, Moeda, Pais, Provincia, Municipio, TaxaIva, ClasseArtigo, FamiliaArtigo])],
     controllers: [
         TiposTrabalhoController,
         TiposDocumentoController,
@@ -32,6 +36,8 @@ import { TaxasIvaController } from './taxas-iva.controller';
         ProvinciasController,
         MunicipiosController,
         TaxasIvaController,
+        ClassesArtigoController,
+        FamiliasArtigoController,
     ],
     providers: [TabelasSistemaService],
     exports: [TypeOrmModule, TabelasSistemaService],

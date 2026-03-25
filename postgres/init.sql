@@ -281,6 +281,19 @@ INSERT INTO armazens (id, codigo, nome, descricao, ativo) VALUES
 SELECT setval('armazens_id_seq', 3);
 
 -- ============================================================
+-- ARTIGO CLASSIFICATION TABLES
+-- ============================================================
+CREATE TABLE classes_artigo (
+    id        SERIAL        PRIMARY KEY,
+    descricao VARCHAR(100)  NOT NULL
+);
+
+CREATE TABLE familias_artigo (
+    id        SERIAL        PRIMARY KEY,
+    descricao VARCHAR(100)  NOT NULL
+);
+
+-- ============================================================
 -- STOCK — ARTIGOS
 -- ============================================================
 CREATE TABLE artigos (
@@ -299,7 +312,12 @@ CREATE TABLE artigos (
     codigo_armazem  VARCHAR(20)   NOT NULL DEFAULT 'ARM-01',
     inativo         BOOLEAN       NOT NULL DEFAULT FALSE,
     critico         BOOLEAN       NOT NULL DEFAULT FALSE,
-    observacao      TEXT
+    observacao      TEXT,
+    stock_inicial   NUMERIC(12,3) NOT NULL DEFAULT 0,
+    unidade_medida  VARCHAR(20)   NOT NULL DEFAULT 'UN',
+    ref_fornecedor  VARCHAR(100),
+    data_ultima_entrada TIMESTAMP,
+    data_ultima_saida   TIMESTAMP
 );
 
 CREATE TABLE movimentos_stock (

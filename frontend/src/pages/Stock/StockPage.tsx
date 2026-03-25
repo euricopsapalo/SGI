@@ -40,7 +40,7 @@ const TABS_A = [
 type ATab = typeof TABS_A[number]['id'];
 
 const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) => {
-    const { armazens, stockArmazem, upsertStockArmazem, removeStockArmazem, fmt, fmtMoney, taxasIva } = useGlobal();
+    const { armazens, stockArmazem, upsertStockArmazem, removeStockArmazem, fmt, fmtMoney, taxasIva, fornecedores, classesArtigo, familiasArtigo } = useGlobal();
     const [tab, setTab] = useState<ATab>('ident');
 
     // Warehouse breakdown state (only for existing articles)
@@ -68,8 +68,13 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
     const [precoUnitario, setPreco] = useState(String(artigo?.precoUnitario ?? ''));
     const [moeda, setMoeda]         = useState(artigo?.moeda ?? 'AOA');
 
-    // Armazém
+    // Armazém — stock_inicial e existencia só editáveis na criação; depois são read-only
+    const isNew = !artigo;
+    const [stockInicial,   setStockIn] = useState(String(artigo?.stockInicial   ?? '0'));
     const [existencia,     setExist]   = useState(String(artigo?.existencia     ?? '0'));
+
+    // Na criação, os dois campos são sempre iguais
+    const handleStockInicialChange = (v: string) => { setStockIn(v); setExist(v); };
     const [nivelMaximo,    setNMax]    = useState(String(artigo?.nivelMaximo    ?? ''));
     const [stockSeguranca, setSeg]     = useState(String(artigo?.stockSeguranca ?? ''));
     const [custoMedio,     setCusto]   = useState(String(artigo?.custoMedio     ?? ''));
@@ -77,6 +82,10 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
     const [codigoArmazem,  setArmazem] = useState(artigo?.codigoArmazem ?? 'ARM-01');
     const [inativo,        setInativo] = useState(artigo?.inativo  ?? false);
     const [critico,        setCritico] = useState(artigo?.critico  ?? false);
+
+    // Fornecedor / Unidade
+    const [unidadeMedida,  setUnidade]     = useState(artigo?.unidadeMedida ?? 'UN');
+    const [refFornecedor,  setRefForn]     = useState(artigo?.refFornecedor ?? '');
 
     // Observação
     const [observacao, setObs] = useState(artigo?.observacao ?? '');
@@ -98,6 +107,7 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
         if (!codigo.trim())    e.codigo    = 'Obrigatório';
         if (!descricao.trim()) e.descricao = 'Obrigatório';
         if (isNaN(Number(precoUnitario)) || precoUnitario === '') e.preco = 'Valor inválido';
+        if (!refFornecedor)    e.fornecedor = 'Obrigatório';
         setErrors(e);
         return Object.keys(e).length === 0;
     };
@@ -108,18 +118,25 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
         onSave({
             codigo, descricao, classe, familia, imagem,
             precoUnitario: Number(precoUnitario), moeda,
-            existencia: Number(existencia), nivelMaximo: Number(nivelMaximo),
+            // stock_inicial e existencia só são enviados na criação; na edição preservam o valor da BD
+            existencia: isNew ? Number(existencia) : (artigo?.existencia ?? 0),
+            stockInicial: isNew ? Number(stockInicial) : (artigo?.stockInicial ?? 0),
+            nivelMaximo: Number(nivelMaximo),
             stockSeguranca: Number(stockSeguranca), custoMedio: Number(custoMedio),
             precoCusto: Number(precoCusto), stockEncomendado: artigo?.stockEncomendado ?? 0,
             codigoArmazem, inativo, critico, observacao,
             stockReservado: artigo?.stockReservado ?? 0,
             codigoIva: codigoIva || undefined,
+            unidadeMedida,
+            refFornecedor: refFornecedor || undefined,
+            dataUltimaEntrada: artigo?.dataUltimaEntrada,
+            dataUltimaSaida: artigo?.dataUltimaSaida,
         });
     };
 
     const tabErr = (t: ATab) => {
         if (t === 'ident') return !!(errors.codigo || errors.descricao);
-        if (t === 'preco') return !!errors.preco;
+        if (t === 'preco') return !!(errors.preco || errors.fornecedor);
         return false;
     };
 
@@ -145,166 +162,249 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
                 <form onSubmit={handleSave} noValidate>
                     <div className="modal-body">
                         {/* ── Identificação ── */}
-                        {tab === 'ident' && (<>
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label className="form-label req">Código</label>
-                                    <input className={`form-input${errors.codigo ? ' err' : ''}`} value={codigo}
-                                        onChange={e => setCodigo(e.target.value)} placeholder="ART-001" />
-                                    {errors.codigo && <span className="form-error"><AlertCircle size={11} /> {errors.codigo}</span>}
-                                </div>
-                                <div className="form-group" style={{ flex: 2 }}>
-                                    <label className="form-label req">Descrição</label>
-                                    <input className={`form-input${errors.descricao ? ' err' : ''}`} value={descricao}
-                                        onChange={e => setDescricao(e.target.value)} placeholder="Descrição do artigo" />
-                                    {errors.descricao && <span className="form-error"><AlertCircle size={11} /> {errors.descricao}</span>}
-                                </div>
-                            </div>
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label className="form-label">Classe</label>
-                                    <input className="form-input" value={classe}
-                                        onChange={e => setClasse(e.target.value)} placeholder="Ex: Consumível" />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Família</label>
-                                    <input className="form-input" value={familia}
-                                        onChange={e => setFamilia(e.target.value)} placeholder="Ex: Filtros" />
-                                </div>
-                            </div>
-                            <div className="form-group">
-                                <label className="form-label">Código IVA</label>
-                                <select className="form-select" value={codigoIva} onChange={e => setCodigoIva(e.target.value)}>
-                                    <option value="">— Sem IVA —</option>
-                                    {taxasIva.map(t => (
-                                        <option key={t.id} value={t.codigo}>
-                                            {t.codigo} — {t.descricao} ({t.taxa}%)
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            {/* Image upload + preview */}
-                            <div className="form-group">
-                                <label className="form-label">Imagem do Artigo</label>
-                                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                        {tab === 'ident' && (
+                            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                                {/* Image column */}
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                                     <div style={{
-                                        width: 90, height: 90, border: '1px solid var(--border)',
-                                        borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        background: 'var(--bg-subtle,#f8fafc)', flexShrink: 0, overflow: 'hidden',
-                                    }}>
+                                        width: 100, height: 100, border: '1px solid var(--border)',
+                                        borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        background: 'var(--bg-subtle,#f8fafc)', overflow: 'hidden', cursor: 'pointer',
+                                    }} onClick={() => fileRef.current?.click()} title="Clique para carregar imagem">
                                         {imagem
                                             ? <img src={imagem} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                            : <ImageIcon size={28} style={{ color: 'var(--text-muted)' }} />
+                                            : <ImageIcon size={30} style={{ color: 'var(--text-muted)' }} />
                                         }
                                     </div>
-                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
-                                            onChange={handleImageFile} />
-                                        <button type="button" className="abtn abtn-secondary" onClick={() => fileRef.current?.click()}>
-                                            <ImageIcon size={12} /> Carregar imagem
+                                    <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageFile} />
+                                    {imagem
+                                        ? <button type="button" className="abtn abtn-ghost" style={{ color: 'var(--red,#ef4444)', fontSize: '0.72rem', padding: '2px 8px' }}
+                                            onClick={() => { setImagem(''); if (fileRef.current) fileRef.current.value = ''; }}>
+                                            <Trash2 size={11} /> Remover
                                         </button>
-                                        {imagem && (
-                                            <button type="button" className="abtn abtn-ghost" style={{ color: 'var(--red,#ef4444)' }}
-                                                onClick={() => { setImagem(''); if (fileRef.current) fileRef.current.value = ''; }}>
-                                                <Trash2 size={12} /> Remover
-                                            </button>
-                                        )}
-                                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                                            JPG, PNG, WEBP — máx 2 MB
-                                        </span>
+                                        : <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.3 }}>Clique na imagem</span>
+                                    }
+                                </div>
+                                {/* Fields column */}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div className="form-row">
+                                        <div className="form-group" style={{ flex: '0 0 110px' }}>
+                                            <label className="form-label req">Código</label>
+                                            <input className={`form-input${errors.codigo ? ' err' : ''}`} value={codigo}
+                                                onChange={e => setCodigo(e.target.value)} placeholder="ART-001" />
+                                            {errors.codigo && <span className="form-error"><AlertCircle size={11} /> {errors.codigo}</span>}
+                                        </div>
+                                        <div className="form-group" style={{ flex: 1 }}>
+                                            <label className="form-label req">Descrição</label>
+                                            <input className={`form-input${errors.descricao ? ' err' : ''}`} value={descricao}
+                                                onChange={e => setDescricao(e.target.value)} placeholder="Descrição do artigo" />
+                                            {errors.descricao && <span className="form-error"><AlertCircle size={11} /> {errors.descricao}</span>}
+                                        </div>
+                                    </div>
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label className="form-label">Classe</label>
+                                            <select className="form-select" value={classe} onChange={e => setClasse(e.target.value)}>
+                                                <option value="">— Seleccionar —</option>
+                                                {classesArtigo.map(c => <option key={c.id} value={c.descricao}>{c.descricao}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="form-label">Família</label>
+                                            <select className="form-select" value={familia} onChange={e => setFamilia(e.target.value)}>
+                                                <option value="">— Seleccionar —</option>
+                                                {familiasArtigo.map(f => <option key={f.id} value={f.descricao}>{f.descricao}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label className="form-label">Unidade de Medida</label>
+                                            <select className="form-select" value={unidadeMedida} onChange={e => setUnidade(e.target.value)}>
+                                                <option value="UN">UN — Unidade</option>
+                                                <option value="KG">KG — Quilograma</option>
+                                                <option value="L">L — Litro</option>
+                                                <option value="M">M — Metro</option>
+                                                <option value="M2">M² — Metro quadrado</option>
+                                                <option value="CX">CX — Caixa</option>
+                                                <option value="PC">PC — Peça</option>
+                                            </select>
+                                        </div>
+                                        <div className="form-group">
+                                            <label className="form-label">Código IVA</label>
+                                            <select className="form-select" value={codigoIva} onChange={e => setCodigoIva(e.target.value)}>
+                                                <option value="">— Sem IVA —</option>
+                                                {taxasIva.map(t => (
+                                                    <option key={t.id} value={t.codigo}>
+                                                        {t.codigo} — {t.descricao} ({t.taxa}%)
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </>)}
+                        )}
 
                         {/* ── Preço ── */}
                         {tab === 'preco' && (<>
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label className="form-label req">Preço Unitário</label>
-                                    <input type="number" min={0} step="0.01"
-                                        className={`form-input${errors.preco ? ' err' : ''}`}
-                                        value={precoUnitario} onChange={e => setPreco(e.target.value)} />
-                                    {errors.preco && <span className="form-error"><AlertCircle size={11} /> {errors.preco}</span>}
+                            <div style={{ background: 'var(--bg-subtle,#f8fafc)', borderRadius: 8, padding: '14px 14px 6px', marginBottom: 12 }}>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Preços de venda</div>
+                                <div className="form-row" style={{ margin: 0 }}>
+                                    <div className="form-group">
+                                        <label className="form-label req">Preço Unitário</label>
+                                        <input type="number" min={0} step="0.01"
+                                            className={`form-input${errors.preco ? ' err' : ''}`}
+                                            value={precoUnitario} onChange={e => setPreco(e.target.value)} />
+                                        {errors.preco && <span className="form-error"><AlertCircle size={11} /> {errors.preco}</span>}
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Moeda</label>
+                                        <select className="form-select" value={moeda} onChange={e => setMoeda(e.target.value)}>
+                                            <option value="AOA">AOA — Kwanza</option>
+                                            <option value="USD">USD — Dólar</option>
+                                            <option value="EUR">EUR — Euro</option>
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Custo Médio</label>
+                                        <input type="number" min={0} step="0.01" className="form-input"
+                                            value={custoMedio} onChange={e => setCusto(e.target.value)} />
+                                    </div>
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label">Moeda</label>
-                                    <select className="form-select" value={moeda} onChange={e => setMoeda(e.target.value)}>
-                                        <option value="AOA">AOA — Kwanza</option>
-                                        <option value="USD">USD — Dólar</option>
-                                        <option value="EUR">EUR — Euro</option>
-                                    </select>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0 10px', borderTop: '1px solid var(--border)', marginTop: 4 }}>
+                                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Valor total em stock</span>
+                                    <span style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--blue)' }}>
+                                        {fmtMoney(Number(precoUnitario || 0) * Number(existencia || 0), moeda)}
+                                    </span>
                                 </div>
                             </div>
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label className="form-label">Custo Médio</label>
-                                    <input type="number" min={0} step="0.01" className="form-input"
-                                        value={custoMedio} onChange={e => setCusto(e.target.value)} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Preço de Compra</label>
-                                    <input type="number" min={0} step="0.01" className="form-input"
-                                        value={precoCusto} onChange={e => setPrecoCusto(e.target.value)}
-                                        placeholder="Preço do fornecedor" />
-                                </div>
-                            </div>
-                            <div style={{ background: 'var(--bg-subtle,#f8fafc)', borderRadius: 8, padding: '12px 14px', marginTop: 8 }}>
-                                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Previsão valor em stock</div>
-                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--blue)', marginTop: 4 }}>
-                                    {fmtMoney(Number(precoUnitario || 0) * Number(existencia || 0), moeda)}
+                            <div style={{ background: 'var(--bg-subtle,#f8fafc)', borderRadius: 8, padding: '14px 14px 6px' }}>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Compra / Fornecimento</div>
+                                <div className="form-row" style={{ margin: 0 }}>
+                                    <div className="form-group">
+                                        <label className="form-label">Preço de Compra</label>
+                                        <input type="number" min={0} step="0.01" className="form-input"
+                                            value={precoCusto} onChange={e => setPrecoCusto(e.target.value)}
+                                            placeholder="Preço do fornecedor" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label req">Fornecedor</label>
+                                        <SearchableSelect
+                                            options={[
+                                                { value: '', label: '— Seleccionar —' },
+                                                ...fornecedores.filter(f => f.ativo).map(f => ({
+                                                    value: f.id,
+                                                    label: f.nome,
+                                                    sub: f.nif || undefined,
+                                                })),
+                                            ]}
+                                            value={refFornecedor}
+                                            onChange={v => { setRefForn(v); if (v) setErrors(p => ({ ...p, fornecedor: '' })); }}
+                                            placeholder="Seleccionar fornecedor..."
+                                        />
+                                        {errors.fornecedor && <span className="form-error"><AlertCircle size={11} /> {errors.fornecedor}</span>}
+                                    </div>
                                 </div>
                             </div>
                         </>)}
 
                         {/* ── Armazém ── */}
                         {tab === 'arm' && (<>
+                            {/* Stock levels */}
+                            <div style={{ background: 'var(--bg-subtle,#f8fafc)', borderRadius: 8, padding: '14px 14px 6px', marginBottom: 12 }}>
+                                <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Níveis de stock</div>
+                                <div className="form-row" style={{ margin: 0 }}>
+                                    <div className="form-group">
+                                        <label className="form-label" title={isNew ? undefined : 'Definido na criação do artigo'}>
+                                            Stock Inicial{!isNew && <span style={{ marginLeft: 4, fontSize: '0.68rem', color: 'var(--text-muted)' }}>— só leitura</span>}
+                                        </label>
+                                        {isNew
+                                            ? <input type="number" min={0} step="0.001" className="form-input"
+                                                value={stockInicial} onChange={e => handleStockInicialChange(e.target.value)} />
+                                            : <input className="form-input" readOnly value={fmt(Number(stockInicial))}
+                                                style={{ background: 'var(--bg-subtle,#f0f4f8)', color: 'var(--text-secondary)', cursor: 'not-allowed' }} />
+                                        }
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label" title={isNew ? 'Igual ao Stock Inicial na criação' : 'Atualizado pelos movimentos de stock'}>
+                                            Existência Actual{!isNew && <span style={{ marginLeft: 4, fontSize: '0.68rem', color: 'var(--text-muted)' }}>— só leitura</span>}
+                                        </label>
+                                        {isNew
+                                            ? <input type="number" min={0} step="0.001" className="form-input" readOnly
+                                                value={stockInicial}
+                                                style={{ background: 'var(--bg-subtle,#f0f4f8)', color: 'var(--text-secondary)', cursor: 'not-allowed' }}
+                                                title="Igual ao Stock Inicial" />
+                                            : <input className="form-input" readOnly value={fmt(Number(existencia))}
+                                                style={{ background: 'var(--bg-subtle,#f0f4f8)', color: 'var(--text-secondary)', cursor: 'not-allowed' }} />
+                                        }
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Stock Segurança</label>
+                                        <input type="number" min={0} className="form-input"
+                                            value={stockSeguranca} onChange={e => setSeg(e.target.value)} />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Nível Máximo</label>
+                                        <input type="number" min={0} className="form-input"
+                                            value={nivelMaximo} onChange={e => setNMax(e.target.value)} />
+                                    </div>
+                                </div>
+                                {Number(nivelMaximo) > 0 && (
+                                    <div style={{ padding: '4px 0 12px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 4 }}>
+                                            <span>0</span>
+                                            <span style={{ color: Number(existencia) <= Number(stockSeguranca) ? 'var(--red,#ef4444)' : 'var(--text-secondary)', fontWeight: 600 }}>
+                                                {fmt(Number(existencia))}
+                                            </span>
+                                            <span>{fmt(Number(nivelMaximo))}</span>
+                                        </div>
+                                        <div style={{ height: 6, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+                                            <div style={{
+                                                height: '100%', borderRadius: 4,
+                                                width: `${Math.min(100, (Number(existencia) / Number(nivelMaximo)) * 100)}%`,
+                                                background: Number(existencia) <= Number(stockSeguranca) ? 'var(--red,#ef4444)' : 'var(--green)',
+                                                transition: 'width 0.3s',
+                                            }} />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            {/* Armazém + flags */}
                             <div className="form-row">
-                                <div className="form-group">
-                                    <label className="form-label">Existência Actual</label>
-                                    <input type="number" min={0} className="form-input"
-                                        value={existencia} onChange={e => setExist(e.target.value)} />
+                                <div className="form-group" style={{ flex: 2 }}>
+                                    <label className="form-label">Armazém Principal</label>
+                                    <select className="form-select" value={codigoArmazem}
+                                        onChange={e => setArmazem(e.target.value)}>
+                                        {armazens.filter(a => a.ativo).map(a => <option key={a.id} value={a.codigo}>{a.codigo} — {a.nome}</option>)}
+                                    </select>
                                 </div>
-                                <div className="form-group">
-                                    <label className="form-label">Nível Máximo</label>
-                                    <input type="number" min={0} className="form-input"
-                                        value={nivelMaximo} onChange={e => setNMax(e.target.value)} />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Stock Segurança</label>
-                                    <input type="number" min={0} className="form-input"
-                                        value={stockSeguranca} onChange={e => setSeg(e.target.value)} />
+                                <div className="form-group" style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 8, paddingBottom: 2 }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', cursor: 'pointer' }}>
+                                        <input type="checkbox" checked={critico} onChange={e => setCritico(e.target.checked)} style={{ width: 14, height: 14, flexShrink: 0 }} />
+                                        Artigo crítico
+                                    </label>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', cursor: 'pointer' }}>
+                                        <input type="checkbox" checked={inativo} onChange={e => setInativo(e.target.checked)} style={{ width: 14, height: 14, flexShrink: 0 }} />
+                                        Inactivo
+                                    </label>
                                 </div>
                             </div>
-                            <div className="form-group">
-                                <label className="form-label">Código Armazém</label>
-                                <select className="form-select" value={codigoArmazem}
-                                    onChange={e => setArmazem(e.target.value)}>
-                                    {armazens.filter(a => a.ativo).map(a => <option key={a.id} value={a.codigo}>{a.codigo} — {a.nome}</option>)}
-                                </select>
-                            </div>
-                            <div style={{ display: 'flex', gap: 20, marginTop: 8 }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', cursor: 'pointer' }}>
-                                    <input type="checkbox" checked={critico} onChange={e => setCritico(e.target.checked)} style={{ width: 14, height: 14 }} />
-                                    Artigo crítico (alerta quando abaixo do segurança)
-                                </label>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', cursor: 'pointer' }}>
-                                    <input type="checkbox" checked={inativo} onChange={e => setInativo(e.target.checked)} style={{ width: 14, height: 14 }} />
-                                    Inactivo
-                                </label>
-                            </div>
-                            {Number(nivelMaximo) > 0 && (
-                                <div style={{ marginTop: 16 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>
-                                        <span>0</span><span>{fmt(Number(existencia))}</span><span>{fmt(Number(nivelMaximo))}</span>
-                                    </div>
-                                    <div style={{ height: 8, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
-                                        <div style={{
-                                            height: '100%', borderRadius: 4,
-                                            width: `${Math.min(100, (Number(existencia) / Number(nivelMaximo)) * 100)}%`,
-                                            background: Number(existencia) <= Number(stockSeguranca) ? 'var(--red,#ef4444)' : 'var(--green)',
-                                        }} />
-                                    </div>
+                            {/* Last movement dates (readonly info) */}
+                            {artigo && (artigo.dataUltimaEntrada || artigo.dataUltimaSaida) && (
+                                <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+                                    {artigo.dataUltimaEntrada && (
+                                        <div style={{ flex: 1, background: 'var(--bg-subtle,#f8fafc)', borderRadius: 6, padding: '8px 12px' }}>
+                                            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Última Entrada</div>
+                                            <div style={{ fontSize: '0.82rem', fontWeight: 500 }}>{new Date(artigo.dataUltimaEntrada).toLocaleString('pt-PT')}</div>
+                                        </div>
+                                    )}
+                                    {artigo.dataUltimaSaida && (
+                                        <div style={{ flex: 1, background: 'var(--bg-subtle,#f8fafc)', borderRadius: 6, padding: '8px 12px' }}>
+                                            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Última Saída</div>
+                                            <div style={{ fontSize: '0.82rem', fontWeight: 500 }}>{new Date(artigo.dataUltimaSaida).toLocaleString('pt-PT')}</div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -383,7 +483,7 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
                         {tab === 'obs' && (
                             <div className="form-group">
                                 <label className="form-label">Observações</label>
-                                <textarea className="form-input" rows={6} style={{ resize: 'vertical' }}
+                                <textarea className="form-input" rows={10} style={{ resize: 'vertical', lineHeight: 1.6 }}
                                     value={observacao} onChange={e => setObs(e.target.value)}
                                     placeholder="Notas internas sobre este artigo..." />
                             </div>
@@ -409,9 +509,10 @@ const TABS_V = TABS_A;
 type VTab = ATab;
 
 const ArtigoViewModal: React.FC<ArtigoViewModalProps> = ({ artigo, onClose, onEdit }) => {
-    const { armazens, stockArmazem, fmt, fmtMoney, taxasIva } = useGlobal();
+    const { armazens, stockArmazem, fmt, fmtMoney, taxasIva, fornecedores } = useGlobal();
     const [tab, setTab] = useState<VTab>('ident');
     const saEntries = stockArmazem.filter(sa => sa.artigoId === artigo.id);
+    const resolveForn = (id?: string) => id ? (fornecedores.find(f => f.id === id)?.nome ?? id) : undefined;
     const resolveArm = (val: string) =>
         armazens.find(a => a.id === val || a.codigo === val)?.nome ?? val;
     const resolveIva = (cod?: string) => {
@@ -462,7 +563,10 @@ const ArtigoViewModal: React.FC<ArtigoViewModalProps> = ({ artigo, onClose, onEd
                                     <Field label="Classe" value={artigo.classe} />
                                     <Field label="Família" value={artigo.familia} />
                                 </div>
-                                <Field label="Código IVA" value={resolveIva(artigo.codigoIva)} />
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                                    <Field label="Unidade de Medida" value={artigo.unidadeMedida} />
+                                    <Field label="Código IVA" value={resolveIva(artigo.codigoIva)} />
+                                </div>
                                 <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
                                     {artigo.critico && (
                                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.75rem', padding: '2px 8px', borderRadius: 4, background: '#fef3c7', color: '#b45309', fontWeight: 600 }}>
@@ -490,6 +594,7 @@ const ArtigoViewModal: React.FC<ArtigoViewModalProps> = ({ artigo, onClose, onEd
                             <Field label="Moeda" value={artigo.moeda} />
                             <Field label="Custo Médio" value={artigo.custoMedio ? fmtMoney(artigo.custoMedio, artigo.moeda) : undefined} />
                             <Field label="Preço de Compra" value={(artigo as any).precoCusto ? fmtMoney((artigo as any).precoCusto, artigo.moeda) : undefined} />
+                            <Field label="Fornecedor" value={resolveForn(artigo.refFornecedor)} />
                             <div style={{ gridColumn: '1 / -1', background: 'var(--bg-subtle,#f8fafc)', borderRadius: 8, padding: '12px 14px', marginTop: 4 }}>
                                 <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Valor total em stock</div>
                                 <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--blue)', marginTop: 4 }}>
@@ -500,11 +605,18 @@ const ArtigoViewModal: React.FC<ArtigoViewModalProps> = ({ artigo, onClose, onEd
                     )}
                     {/* ── Armazém ── */}
                     {tab === 'arm' && (<>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 16px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0 16px' }}>
+                            <Field label="Stock Inicial" value={fmt(artigo.stockInicial)} />
                             <Field label="Existência" value={fmt(artigo.existencia)} />
                             <Field label="Nível Máximo" value={artigo.nivelMaximo ? fmt(artigo.nivelMaximo) : undefined} />
                             <Field label="Stock Segurança" value={artigo.stockSeguranca ? fmt(artigo.stockSeguranca) : undefined} />
                         </div>
+                        {(artigo.dataUltimaEntrada || artigo.dataUltimaSaida) && (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                                <Field label="Última Entrada" value={artigo.dataUltimaEntrada ? new Date(artigo.dataUltimaEntrada).toLocaleString('pt-PT') : undefined} />
+                                <Field label="Última Saída" value={artigo.dataUltimaSaida ? new Date(artigo.dataUltimaSaida).toLocaleString('pt-PT') : undefined} />
+                            </div>
+                        )}
                         <Field label="Armazém Principal" value={resolveArm(artigo.codigoArmazem)} />
                         {artigo.nivelMaximo > 0 && (
                             <div style={{ marginBottom: 16 }}>
@@ -1023,7 +1135,7 @@ const StatsModal: React.FC<{ artigos: Artigo[]; onClose: () => void }> = ({ arti
 type OpState = 'inventario' | 'transferencia' | 'reposicao' | 'devolucao' | 'guia' | 'stats' | null;
 
 const StockPage: React.FC = () => {
-    const { artigos, addArtigo, updateArtigo, adjustExistencia, armazens, addMovimento, currentUser, stockArmazem, fmt, fmtMoney } = useGlobal();
+    const { artigos, addArtigo, updateArtigo, adjustExistencia, armazens, addMovimento, currentUser, stockArmazem, fmt, fmtMoney, classesArtigo, familiasArtigo } = useGlobal();
 
     // Resolve warehouse code from either a code string or a numeric ID (legacy data)
     const resolveArmazem = (val: string) =>
@@ -1041,8 +1153,8 @@ const StockPage: React.FC = () => {
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
-    const classes  = Array.from(new Set(artigos.map(a => a.classe).filter(Boolean)));
-    const familias = Array.from(new Set(artigos.map(a => a.familia).filter(Boolean)));
+    const classes  = classesArtigo.map(c => c.descricao);
+    const familias = familiasArtigo.map(f => f.descricao);
 
     const filtered = artigos.filter(a => {
         const q = search.toLowerCase();

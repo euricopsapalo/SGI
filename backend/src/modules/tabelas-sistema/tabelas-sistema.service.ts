@@ -10,6 +10,8 @@ import { Pais } from './pais.entity';
 import { Provincia } from './provincia.entity';
 import { Municipio } from './municipio.entity';
 import { TaxaIva } from './taxa-iva.entity';
+import { ClasseArtigo } from './classe-artigo.entity';
+import { FamiliaArtigo } from './familia-artigo.entity';
 
 @Injectable()
 export class TabelasSistemaService {
@@ -40,6 +42,12 @@ export class TabelasSistemaService {
 
         @InjectRepository(TaxaIva)
         private taxasIvaRepo: Repository<TaxaIva>,
+
+        @InjectRepository(ClasseArtigo)
+        private classesArtigoRepo: Repository<ClasseArtigo>,
+
+        @InjectRepository(FamiliaArtigo)
+        private familiasArtigoRepo: Repository<FamiliaArtigo>,
     ) {}
 
     // TipoTrabalho
@@ -133,4 +141,22 @@ export class TabelasSistemaService {
         return this.findOneTaxaIva(id);
     }
     removeTaxaIva(id: number) { return this.taxasIvaRepo.delete(id); }
+
+    // ClasseArtigo
+    findAllClassesArtigo() { return this.classesArtigoRepo.find({ order: { descricao: 'ASC' } }); }
+    createClasseArtigo(body: Partial<ClasseArtigo>) { return this.classesArtigoRepo.save(this.classesArtigoRepo.create(body)); }
+    async updateClasseArtigo(id: number, body: Partial<ClasseArtigo>) {
+        await this.classesArtigoRepo.update(id, body);
+        return this.classesArtigoRepo.findOne({ where: { id } });
+    }
+    removeClasseArtigo(id: number) { return this.classesArtigoRepo.delete(id); }
+
+    // FamiliaArtigo
+    findAllFamiliasArtigo() { return this.familiasArtigoRepo.find({ order: { descricao: 'ASC' } }); }
+    createFamiliaArtigo(body: Partial<FamiliaArtigo>) { return this.familiasArtigoRepo.save(this.familiasArtigoRepo.create(body)); }
+    async updateFamiliaArtigo(id: number, body: Partial<FamiliaArtigo>) {
+        await this.familiasArtigoRepo.update(id, body);
+        return this.familiasArtigoRepo.findOne({ where: { id } });
+    }
+    removeFamiliaArtigo(id: number) { return this.familiasArtigoRepo.delete(id); }
 }

@@ -126,6 +126,8 @@ const ConfiguracoesPage: React.FC = () => {
         funcoesTecnico, addFuncaoTecnico, updateFuncaoTecnico, removeFuncaoTecnico,
         tiposDocumento, addTipoDocumento, updateTipoDocumento, removeTipoDocumento,
         armazens, addArmazem, updateArmazem,
+        classesArtigo, addClasseArtigo, updateClasseArtigo, removeClasseArtigo,
+        familiasArtigo, addFamiliaArtigo, updateFamiliaArtigo, removeFamiliaArtigo,
         moedas,
         taxaIvaGlobal, setTaxaIvaGlobal,
         taxasIva, addTaxaIva, updateTaxaIva, removeTaxaIva,
@@ -572,6 +574,26 @@ const ConfiguracoesPage: React.FC = () => {
                                 onAdd={r => addArmazem({ codigo: r.codigo, nome: r.nome, descricao: r.descricao, ativo: true })}
                                 onUpdate={(id, field, val) => updateArmazem(id, { [field]: val })}
                                 onRemove={id => updateArmazem(id, { ativo: false })}
+                            />
+                            <TabelaInlineEditor
+                                titulo="Classes de Artigo"
+                                colunas={[
+                                    { key: 'descricao', label: 'Descrição' },
+                                ]}
+                                rows={classesArtigo}
+                                onAdd={r => addClasseArtigo({ descricao: r.descricao })}
+                                onUpdate={(id, field, val) => updateClasseArtigo(id, { [field]: val })}
+                                onRemove={id => removeClasseArtigo(id)}
+                            />
+                            <TabelaInlineEditor
+                                titulo="Famílias de Artigo"
+                                colunas={[
+                                    { key: 'descricao', label: 'Descrição' },
+                                ]}
+                                rows={familiasArtigo}
+                                onAdd={r => addFamiliaArtigo({ descricao: r.descricao })}
+                                onUpdate={(id, field, val) => updateFamiliaArtigo(id, { [field]: val })}
+                                onRemove={id => removeFamiliaArtigo(id)}
                             />
                         </>}
 
