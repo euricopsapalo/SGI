@@ -355,7 +355,8 @@ interface FornecedorModalProps {
     onSave: (f: Omit<Fornecedor, 'id'>) => void;
 }
 const FornecedorModal: React.FC<FornecedorModalProps> = ({ fornecedor, onClose, onSave }) => {
-    const { provincias, municipios } = useGlobal();
+    const { provincias, municipios, condicoesPagamento, modosPagamento } = useGlobal();
+    const [tab, setTab]             = useState<'geral' | 'comercial'>('geral');
     const [nome, setNome]           = useState(fornecedor?.nome       ?? '');
     const [nif, setNif]             = useState(fornecedor?.nif        ?? '');
     const [telefone, setTel]        = useState(fornecedor?.telefone   ?? '');
@@ -364,6 +365,8 @@ const FornecedorModal: React.FC<FornecedorModalProps> = ({ fornecedor, onClose, 
     const [ativo, setAtivo]         = useState(fornecedor?.ativo      ?? true);
     const [provinciaId, setProvId]  = useState(fornecedor?.provinciaId ? String(fornecedor.provinciaId) : '');
     const [municipioId, setMunId]   = useState(fornecedor?.municipioId ? String(fornecedor.municipioId) : '');
+    const [condicaoPagId, setCondId] = useState(fornecedor?.condicaoPagamentoId ?? '');
+    const [modoPagId, setModoId]    = useState(fornecedor?.modoPagamentoId ?? '');
     const [errors, setErrors]       = useState<Record<string, string>>({});
 
     const munsFiltrados = municipios.filter(m => m.provinciaId === provinciaId);
@@ -379,7 +382,7 @@ const FornecedorModal: React.FC<FornecedorModalProps> = ({ fornecedor, onClose, 
     const handleSave = (ev: React.FormEvent) => {
         ev.preventDefault();
         if (!validate()) return;
-        onSave({ nome, nif, telefone, email, morada, ativo, provinciaId: provinciaId || undefined, municipioId: municipioId || undefined });
+        onSave({ nome, nif, telefone, email, morada, ativo, provinciaId: provinciaId || undefined, municipioId: municipioId || undefined, condicaoPagamentoId: condicaoPagId || undefined, modoPagamentoId: modoPagId || undefined });
     };
 
     return (
@@ -389,59 +392,85 @@ const FornecedorModal: React.FC<FornecedorModalProps> = ({ fornecedor, onClose, 
                     <h3 className="modal-title">{fornecedor ? 'Editar Fornecedor' : 'Novo Fornecedor'}</h3>
                     <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
+                <div className="modal-tabs" style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 16px' }}>
+                    {(['geral', 'comercial'] as const).map(t => (
+                        <button key={t} type="button" onClick={() => setTab(t)}
+                            style={{ padding: '8px 14px', fontSize: '0.8rem', background: 'none', border: 'none', cursor: 'pointer', borderBottom: tab === t ? '2px solid var(--primary)' : '2px solid transparent', color: tab === t ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: tab === t ? 600 : 400 }}>
+                            {t === 'geral' ? 'Dados Gerais' : 'Dados Comerciais'}
+                        </button>
+                    ))}
+                </div>
                 <form onSubmit={handleSave} noValidate>
                     <div className="modal-body">
-                        <div className="form-group">
-                            <label className="form-label req">Nome / Razão Social</label>
-                            <input className={`form-input${errors.nome ? ' err' : ''}`} value={nome}
-                                onChange={e => setNome(e.target.value)} placeholder="Ex: Grundfos Angola, LDA" />
-                            {errors.nome && <span className="form-error"><AlertCircle size={11} /> {errors.nome}</span>}
-                        </div>
-                        <div className="form-row">
+                        {tab === 'geral' && <>
                             <div className="form-group">
-                                <label className="form-label req">NIF</label>
-                                <input className={`form-input${errors.nif ? ' err' : ''}`} value={nif}
-                                    onChange={e => setNif(e.target.value)} placeholder="5XXXXXXXXX" />
-                                {errors.nif && <span className="form-error"><AlertCircle size={11} /> {errors.nif}</span>}
+                                <label className="form-label req">Nome / Razão Social</label>
+                                <input className={`form-input${errors.nome ? ' err' : ''}`} value={nome}
+                                    onChange={e => setNome(e.target.value)} placeholder="Ex: Grundfos Angola, LDA" />
+                                {errors.nome && <span className="form-error"><AlertCircle size={11} /> {errors.nome}</span>}
+                            </div>
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label className="form-label req">NIF</label>
+                                    <input className={`form-input${errors.nif ? ' err' : ''}`} value={nif}
+                                        onChange={e => setNif(e.target.value)} placeholder="5XXXXXXXXX" />
+                                    {errors.nif && <span className="form-error"><AlertCircle size={11} /> {errors.nif}</span>}
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Telefone</label>
+                                    <input className="form-input" value={telefone}
+                                        onChange={e => setTel(e.target.value)} placeholder="222 XXX XXX" />
+                                </div>
                             </div>
                             <div className="form-group">
-                                <label className="form-label">Telefone</label>
-                                <input className="form-input" value={telefone}
-                                    onChange={e => setTel(e.target.value)} placeholder="222 XXX XXX" />
+                                <label className="form-label">Email</label>
+                                <input type="email" className="form-input" value={email}
+                                    onChange={e => setEmail(e.target.value)} placeholder="comercial@empresa.ao" />
                             </div>
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Email</label>
-                            <input type="email" className="form-input" value={email}
-                                onChange={e => setEmail(e.target.value)} placeholder="comercial@empresa.ao" />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Morada</label>
-                            <input className="form-input" value={morada}
-                                onChange={e => setMorada(e.target.value)} placeholder="Rua, nº, Localidade" />
-                        </div>
-                        <div className="form-row">
                             <div className="form-group">
-                                <label className="form-label"><MapPin size={11} style={{ verticalAlign: 'middle' }} /> Província</label>
-                                <select className="form-select" value={provinciaId}
-                                    onChange={e => { setProvId(e.target.value); setMunId(''); }}>
+                                <label className="form-label">Morada</label>
+                                <input className="form-input" value={morada}
+                                    onChange={e => setMorada(e.target.value)} placeholder="Rua, nº, Localidade" />
+                            </div>
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label className="form-label"><MapPin size={11} style={{ verticalAlign: 'middle' }} /> Província</label>
+                                    <select className="form-select" value={provinciaId}
+                                        onChange={e => { setProvId(e.target.value); setMunId(''); }}>
+                                        <option value="">Seleccionar...</option>
+                                        {provincias.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                                    </select>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Município</label>
+                                    <select className="form-select" value={municipioId}
+                                        onChange={e => setMunId(e.target.value)} disabled={!provinciaId}>
+                                        <option value="">Seleccionar...</option>
+                                        {munsFiltrados.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <input type="checkbox" id="for-ativo" checked={ativo} onChange={e => setAtivo(e.target.checked)} style={{ width: 14, height: 14 }} />
+                                <label htmlFor="for-ativo" style={{ fontSize: '0.82rem', color: 'var(--text-primary)', cursor: 'pointer' }}>Fornecedor activo</label>
+                            </div>
+                        </>}
+                        {tab === 'comercial' && <>
+                            <div className="form-group">
+                                <label className="form-label">Condição de Pagamento</label>
+                                <select className="form-select" value={condicaoPagId} onChange={e => setCondId(e.target.value)}>
                                     <option value="">Seleccionar...</option>
-                                    {provincias.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                                    {condicoesPagamento.map(c => <option key={c.id} value={c.id}>{c.descricao}</option>)}
                                 </select>
                             </div>
                             <div className="form-group">
-                                <label className="form-label">Município</label>
-                                <select className="form-select" value={municipioId}
-                                    onChange={e => setMunId(e.target.value)} disabled={!provinciaId}>
+                                <label className="form-label">Modo de Pagamento</label>
+                                <select className="form-select" value={modoPagId} onChange={e => setModoId(e.target.value)}>
                                     <option value="">Seleccionar...</option>
-                                    {munsFiltrados.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
+                                    {modosPagamento.map(m => <option key={m.id} value={m.id}>{m.movimento} — {m.descricao}</option>)}
                                 </select>
                             </div>
-                        </div>
-                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <input type="checkbox" id="for-ativo" checked={ativo} onChange={e => setAtivo(e.target.checked)} style={{ width: 14, height: 14 }} />
-                            <label htmlFor="for-ativo" style={{ fontSize: '0.82rem', color: 'var(--text-primary)', cursor: 'pointer' }}>Fornecedor activo</label>
-                        </div>
+                        </>}
                     </div>
                     <div className="modal-footer">
                         <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>

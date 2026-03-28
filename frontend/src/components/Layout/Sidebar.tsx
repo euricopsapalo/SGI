@@ -43,8 +43,8 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Comercial',
     items: [
-      { to: '/encomendas', icon: ShoppingCart, label: 'Encomendas' },
-      { to: '/stock',      icon: Package,      label: 'Stock'      },
+      { to: '/encomendas', icon: ShoppingCart, label: 'Compras'    },
+      { to: '/stock',      icon: Package,      label: 'Inventário' },
       { to: '/faturacao',  icon: FileText,     label: 'Faturação'  },
     ],
   },

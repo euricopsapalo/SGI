@@ -28,6 +28,8 @@ export interface Cliente {
     nome: string; nif: string; email: string; telefone: string;
     ativo: boolean;
     enderecos: Endereco[];
+    condicaoPagamentoId?: string;
+    modoPagamentoId?: string;
 }
 
 /* ── Helpers ── */
@@ -48,6 +50,8 @@ type FormData = {
     nome: string; nif: string; email: string; telefone: string;
     ativo: boolean;
     enderecos: Endereco[];
+    condicaoPagamentoId?: string;
+    modoPagamentoId?: string;
 };
 
 const BLANK_END: Endereco = { descricao: '', morada: '', cidade: '', principal: true, provinciaId: '', municipioId: '' };
@@ -83,7 +87,8 @@ interface ModalProps { initial: Cliente | null; onClose: () => void; onSave: (da
 
 const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
     const isEdit = Boolean(initial);
-    const { provincias, municipios } = useGlobal();
+    const { provincias, municipios, condicoesPagamento, modosPagamento } = useGlobal();
+    const [tab, setTab] = useState<'geral' | 'comercial'>('geral');
     const [form, setForm] = useState<FormData>(BLANK);
     const [errors, setErrors] = useState<FormErrors>({});
     const [endErrors, setEndErrors] = useState<EndErrors>([]);
@@ -101,10 +106,13 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
                         municipioId: e.municipioId ? String(e.municipioId) : '',
                     }))
                     : [{ ...BLANK_END }],
+                condicaoPagamentoId: initial.condicaoPagamentoId ?? '',
+                modoPagamentoId: initial.modoPagamentoId ?? '',
             });
         } else {
             setForm({ ...BLANK, enderecos: [{ ...BLANK_END }] });
         }
+        setTab('geral');
         setErrors({});
         setEndErrors([]);
     }, [initial]);
@@ -184,10 +192,38 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
                     <h3 className="modal-title">{isEdit ? `Editar — ${initial?.nome}` : 'Novo Cliente'}</h3>
                     <button className="modal-close" onClick={onClose} type="button"><X size={13} /></button>
                 </div>
+                <div className="modal-tabs" style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 16px' }}>
+                    {(['geral', 'comercial'] as const).map(t => (
+                        <button key={t} type="button" onClick={() => setTab(t)}
+                            style={{ padding: '8px 14px', fontSize: '0.8rem', background: 'none', border: 'none', cursor: 'pointer', borderBottom: tab === t ? '2px solid var(--primary)' : '2px solid transparent', color: tab === t ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: tab === t ? 600 : 400 }}>
+                            {t === 'geral' ? 'Dados Gerais' : 'Dados Comerciais'}
+                        </button>
+                    ))}
+                </div>
 
                 <form onSubmit={handleSubmit} noValidate>
                     <div className="modal-body">
 
+                        {tab === 'comercial' && <>
+                            <div className="form-group">
+                                <label className="form-label">Condição de Pagamento</label>
+                                <select className="form-select" value={form.condicaoPagamentoId ?? ''}
+                                    onChange={e => setForm(p => ({ ...p, condicaoPagamentoId: e.target.value }))}>
+                                    <option value="">Seleccionar...</option>
+                                    {condicoesPagamento.map(c => <option key={c.id} value={c.id}>{c.descricao}</option>)}
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Modo de Pagamento</label>
+                                <select className="form-select" value={form.modoPagamentoId ?? ''}
+                                    onChange={e => setForm(p => ({ ...p, modoPagamentoId: e.target.value }))}>
+                                    <option value="">Seleccionar...</option>
+                                    {modosPagamento.map(m => <option key={m.id} value={m.id}>{m.movimento} — {m.descricao}</option>)}
+                                </select>
+                            </div>
+                        </>}
+
+                        {tab === 'geral' && <>
                         {/* Tipo */}
                         <div className="form-group">
                             <label className="form-label req">Tipo de Cliente</label>
@@ -326,6 +362,7 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
                                 </div>
                             ))}
                         </div>
+                        </>}
 
                     </div>
 

@@ -29,6 +29,12 @@ export class Fornecedor {
     @Column({ name: 'municipio_id', nullable: true })
     municipioId: number;
 
+    @Column({ name: 'condicao_pagamento_id', nullable: true })
+    condicaoPagamentoId: number;
+
+    @Column({ name: 'modo_pagamento_id', nullable: true })
+    modoPagamentoId: number;
+
     @CreateDateColumn({ name: 'created_at' })
     createdAt: Date;
 }

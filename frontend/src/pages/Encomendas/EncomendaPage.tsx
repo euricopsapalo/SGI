@@ -4,14 +4,15 @@ import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
 import {
-    useGlobal, Encomenda, EncomendaLinha, EncomendaEstado, EmpresaConfig, Artigo,
-    Rececao, RececaoItem,
+    useGlobal, Encomenda, EncomendaLinha, EncomendaEstado, EmpresaConfig, Artigo, TaxaIva,
+    Rececao, RececaoItem, FaturaFornecedor, LinhaFaturaFornecedor, DocumentoCompra,
+    CondicaoPagamento, ModoPagamento,
 } from '../../contexts/GlobalContext';
 import {
     Search, Plus, X, AlertCircle, Check, ShoppingCart,
     Package, Printer, ChevronDown, Archive, Download, TrendingDown, ShoppingBag,
     Ban, RotateCcw, Eye, BarChart2, Clock, AlertTriangle, CheckCircle2,
-    CalendarDays, ListFilter,
+    CalendarDays, ListFilter, FileText, CreditCard, Wallet,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 
@@ -42,10 +43,11 @@ function makePrintFmt(empresa: EmpresaConfig, simbolo?: string) {
 }
 
 const ESTADO_STYLE: Record<EncomendaEstado, { cls: string; label: string }> = {
-    Aberta:    { cls: 'tbadge tbadge-campo',   label: 'Aberta' },
-    Parcial:   { cls: 'tbadge tbadge-suporte', label: 'Parcial' },
-    Recebida:  { cls: 'tbadge tbadge-admin',   label: 'Recebida' },
+    Aberta:    { cls: 'tbadge tbadge-campo',    label: 'Aberta' },
+    Parcial:   { cls: 'tbadge tbadge-suporte',  label: 'Parcial' },
+    Recebida:  { cls: 'tbadge tbadge-admin',    label: 'Recebida' },
     Cancelada: { cls: 'tbadge tbadge-vendedor', label: 'Cancelada' },
+    Faturada:  { cls: 'tbadge tbadge-vendedor', label: 'Faturada' },
 };
 
 /* ══ Receber Modal ══════════════════════════════════════════ */
@@ -173,9 +175,20 @@ const ReceberModal: React.FC<ReceberModalProps> = ({ encomenda, onClose, onConfi
 };
 
 /* ══ Print Nota de Encomenda — abre janela A4 ══════════════ */
-function buildNotaEncomendaHtml(encomenda: Encomenda, fornecedorNome: string, empresa?: EmpresaConfig, simbolo?: string): string {
+function buildNotaEncomendaHtml(encomenda: Encomenda, fornecedorNome: string, empresa?: EmpresaConfig, simbolo?: string, artigos?: Artigo[], taxasIva?: TaxaIva[]): string {
     const emp = empresa ?? {} as EmpresaConfig;
     const { fmt, fmtMoney, fmtDate } = makePrintFmt(emp, simbolo);
+
+    // Fallback: derive taxaIva from artigo when not persisted in the line
+    const linhasResolvidas: EncomendaLinha[] = (encomenda.linhas ?? []).map(l => {
+        if ((l.taxaIva ?? 0) !== 0 || !artigos || !taxasIva) return l;
+        const art = artigos.find(a => a.id === l.artigoId);
+        if (!art?.codigoIva) return l;
+        const taxa = taxasIva.find(t => t.codigo === art.codigoIva)?.taxa ?? 0;
+        return { ...l, codigoIva: art.codigoIva, taxaIva: taxa };
+    });
+    const encResolvida: Encomenda = { ...encomenda, linhas: linhasResolvidas };
+
     const total = encTotal(encomenda);
 
     // Stamp config per estado
@@ -184,6 +197,7 @@ function buildNotaEncomendaHtml(encomenda: Encomenda, fornecedorNome: string, em
         Parcial:   { label: 'PARCIALMENTE\nRECEBIDO',   color: '#b45309', bg: 'rgba(180,83,9,0.08)',    border: '#b45309' },
         Aberta:    { label: 'EM ABERTO',                color: '#0D6EBF', bg: 'rgba(13,110,191,0.08)',  border: '#0D6EBF' },
         Cancelada: { label: 'CANCELADA',                color: '#dc2626', bg: 'rgba(220,38,38,0.08)',   border: '#dc2626' },
+        Faturada:  { label: 'CONCLUÍDA',                color: '#7c3aed', bg: 'rgba(124,58,237,0.08)', border: '#7c3aed' },
     };
     const stamp = stampMap[encomenda.estado] ?? stampMap['Aberta'];
     const stampLines = stamp.label.split('\n');
@@ -195,15 +209,25 @@ function buildNotaEncomendaHtml(encomenda: Encomenda, fornecedorNome: string, em
         ? new Date(rececaoAtiva[0].dataHora).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' } as any)
         : null;
 
-    const linhasHtml = encomenda.linhas.map(l => `
+    const linhaIva   = (l: EncomendaLinha) => Math.round(linhaTotal(l) * ((l.taxaIva ?? 0) / 100) * 100) / 100;
+    const linhaComIva = (l: EncomendaLinha) => linhaTotal(l) + linhaIva(l);
+    const totalSemIva = encResolvida.linhas.reduce((s, l) => s + linhaTotal(l), 0);
+    const totalIva    = encResolvida.linhas.reduce((s, l) => s + linhaIva(l), 0);
+    const totalComIva = totalSemIva + totalIva;
+
+    const linhasHtml = encResolvida.linhas.map(l => `
         <tr>
             <td style="font-family:monospace">${l.codigo}</td>
             <td>${l.descricao}</td>
             <td style="text-align:center">${l.unidade}</td>
             <td style="text-align:right">${fmt(l.qtdEncomendada)}</td>
-            <td style="text-align:right">${fmtMoney(l.custoUnit, encomenda.moeda)}</td>
+            <td style="text-align:right">${fmtMoney(l.custoUnit, encResolvida.moeda)}</td>
             <td style="text-align:right">${l.desconto > 0 ? `${l.desconto}%` : '—'}</td>
-            <td style="text-align:right;font-weight:600">${fmtMoney(linhaTotal(l), encomenda.moeda)}</td>
+            <td style="text-align:right">${(l.taxaIva ?? 0) > 0 ? `<span style="color:#0D6EBF;font-weight:600">${l.taxaIva}%</span>` : '—'}</td>
+            <td style="text-align:right;font-weight:600">
+                ${fmtMoney(linhaComIva(l), encomenda.moeda)}
+                ${(l.taxaIva ?? 0) > 0 ? `<div style="font-size:7.5pt;font-weight:400;color:#888">s/ IVA: ${fmtMoney(linhaTotal(l), encomenda.moeda)}</div>` : ''}
+            </td>
         </tr>`).join('');
 
     const html = `<!DOCTYPE html>
@@ -316,14 +340,23 @@ function buildNotaEncomendaHtml(encomenda: Encomenda, fornecedorNome: string, em
         <th style="text-align:right">Qtd</th>
         <th style="text-align:right">Custo Un.</th>
         <th style="text-align:right">Desc.%</th>
-        <th style="text-align:right">Total</th>
+        <th style="text-align:right">IVA%</th>
+        <th style="text-align:right">Total c/ IVA</th>
       </tr>
     </thead>
     <tbody>${linhasHtml}</tbody>
     <tfoot>
+      <tr>
+        <td colspan="7" style="text-align:right;padding-right:12px;font-size:8.5pt;color:#555">Subtotal s/ IVA</td>
+        <td style="text-align:right;font-size:8.5pt">${fmtMoney(totalSemIva, encomenda.moeda)}</td>
+      </tr>
+      <tr>
+        <td colspan="7" style="text-align:right;padding-right:12px;font-size:8.5pt;color:#555">IVA</td>
+        <td style="text-align:right;font-size:8.5pt;color:#0D6EBF">${fmtMoney(totalIva, encomenda.moeda)}</td>
+      </tr>
       <tr class="total-row">
-        <td colspan="6" style="text-align:right;padding-right:12px">TOTAL</td>
-        <td style="text-align:right">${fmtMoney(total, encomenda.moeda)}</td>
+        <td colspan="7" style="text-align:right;padding-right:12px;border-top:2px solid #0D6EBF">TOTAL c/ IVA</td>
+        <td style="text-align:right;border-top:2px solid #0D6EBF">${fmtMoney(totalComIva, encomenda.moeda)}</td>
       </tr>
     </tfoot>
   </table>
@@ -343,8 +376,8 @@ function buildNotaEncomendaHtml(encomenda: Encomenda, fornecedorNome: string, em
     return html;
 }
 
-function printNotaEncomenda(encomenda: Encomenda, fornecedorNome: string, empresa?: EmpresaConfig, simbolo?: string) {
-    const html = buildNotaEncomendaHtml(encomenda, fornecedorNome, empresa, simbolo);
+function printNotaEncomenda(encomenda: Encomenda, fornecedorNome: string, empresa?: EmpresaConfig, simbolo?: string, artigos?: Artigo[], taxasIva?: TaxaIva[]) {
+    const html = buildNotaEncomendaHtml(encomenda, fornecedorNome, empresa, simbolo, artigos, taxasIva);
     const w = window.open('', '_blank', 'width=794,height=1123');
     if (!w) return;
     w.document.write(html);
@@ -379,6 +412,9 @@ function buildNotaEntradaHtml(
         </tr>`).join('');
 
     const novoEstado = encomenda.estado;
+    const entradaStamp = encomenda.estado === 'Faturada'
+        ? { label: 'FATURADA',          color: '#7c3aed' }
+        : { label: 'A AGUARDAR\nFATURA', color: '#b45309' };
 
     const html = `<!DOCTYPE html>
 <html lang="pt">
@@ -388,7 +424,15 @@ function buildNotaEntradaHtml(
 <style>
   @page { size: A4; margin: 18mm 15mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; font-size: 10pt; color: #1a1a1a; }
+  body { font-family: Arial, sans-serif; font-size: 10pt; color: #1a1a1a; position: relative; }
+  .stamp-watermark {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(-35deg);
+    font-size: 52pt; font-weight: 900; letter-spacing: 0.12em;
+    color: ${entradaStamp.color}; opacity: 0.08;
+    white-space: pre-line; text-align: center;
+    pointer-events: none; z-index: 0; line-height: 1.1;
+  }
   .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
   .empresa-nome { font-size: 13pt; font-weight: 800; }
   .empresa-info { font-size: 8.5pt; color: #666; margin-top: 3px; line-height: 1.5; }
@@ -420,6 +464,7 @@ function buildNotaEntradaHtml(
 </style>
 </head>
 <body>
+  <div class="stamp-watermark">${entradaStamp.label}</div>
   <div class="header">
     <div>
       <div class="empresa-nome">${emp.nome}</div>
@@ -499,6 +544,158 @@ function printNotaEntrada(
     setTimeout(() => { w.print(); }, 400);
 }
 
+/* ══ Print Fatura Fornecedor ════════════════════════════════ */
+function buildFaturaFornecedorHtml(fatura: FaturaFornecedor, fornecedorNome: string, empresa?: EmpresaConfig, simbolo?: string, artigos?: Artigo[], condicoes?: CondicaoPagamento[], modos?: ModoPagamento[]): string {
+    const emp = empresa ?? {} as EmpresaConfig;
+    const { fmt, fmtMoney, fmtDate } = makePrintFmt(emp, simbolo);
+
+    const stampMap: Record<string, { label: string; color: string; bg: string; border: string }> = {
+        Pendente: { label: 'PENDENTE', color: '#b45309', bg: 'rgba(180,83,9,0.08)',    border: '#b45309' },
+        Paga:     { label: 'PAGA',     color: '#15803d', bg: 'rgba(21,128,61,0.08)',   border: '#15803d' },
+        Anulada:  { label: 'ANULADA',  color: '#6b7280', bg: 'rgba(107,114,128,0.08)', border: '#6b7280' },
+    };
+    const stamp = stampMap[fatura.estadoPagamento] ?? stampMap['Pendente'];
+
+    const dataGeracao = new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    const linhasHtml = (fatura.linhas ?? []).map(l => {
+        const art = artigos?.find(a => a.id === String(l.produtoId ?? ''));
+        const descricao = l.descricaoCustomizada || art?.descricao || '—';
+        const codigo    = art?.codigo ?? '';
+        return `
+        <tr>
+            <td style="font-family:monospace;font-size:8.5pt">${codigo || '—'}</td>
+            <td>${descricao}</td>
+            <td style="text-align:right">${fmt(l.quantidade)}</td>
+            <td style="text-align:center">${l.unidadeVenda || 'UN'}</td>
+            <td style="text-align:right">${fmtMoney(l.precoUnitarioNet, fatura.moeda)}</td>
+            <td style="text-align:right">${l.taxaIva > 0 ? `<span style="color:#7c3aed;font-weight:600">${l.taxaIva}%</span>` : '—'}</td>
+            <td style="text-align:right">${fmtMoney(l.valorIva, fatura.moeda)}</td>
+            <td style="text-align:right;font-weight:600">${fmtMoney(l.valorTotalLinha, fatura.moeda)}</td>
+        </tr>`;
+    }).join('');
+
+    return `<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<title>${fatura.tipoDocumento} — ${fatura.numFaturaExterno}</title>
+<style>
+  @page { size: A4; margin: 18mm 15mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 10pt; color: #1a1a1a; position: relative; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
+  .empresa-nome { font-size: 13pt; font-weight: 800; }
+  .empresa-info { font-size: 8.5pt; color: #666; margin-top: 3px; line-height: 1.5; }
+  .doc-title { text-align: right; }
+  .doc-title h1 { font-size: 14pt; font-weight: 800; letter-spacing: 0.05em; color: #7c3aed; }
+  .doc-title .doc-num { font-size: 11pt; font-weight: 700; margin-top: 3px; }
+  .doc-title .doc-date { font-size: 9pt; color: #666; margin-top: 2px; }
+  .divider { border: none; border-top: 2px solid #7c3aed; margin: 12px 0; }
+  .divider-thin { border: none; border-top: 1px solid #e0e0e0; margin: 10px 0; }
+  .section { margin-bottom: 14px; }
+  .section-title { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #7c3aed; margin-bottom: 5px; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; font-size: 9pt; }
+  .info-row { display: flex; gap: 6px; margin-bottom: 3px; }
+  .info-label { color: #888; min-width: 110px; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 12px 0; }
+  thead tr { background: #7c3aed; color: #fff; }
+  thead th { padding: 6px 8px; text-align: left; font-weight: 600; font-size: 8.5pt; }
+  tbody tr:nth-child(even) { background: #faf5ff; }
+  tbody td { padding: 5px 8px; border-bottom: 1px solid #e8e8e8; }
+  tfoot td { padding: 8px; font-weight: 700; }
+  .total-row { font-size: 11pt; }
+  .obs { font-size: 8.5pt; color: #666; margin-top: 10px; font-style: italic; }
+  .footer { margin-top: 24px; font-size: 7.5pt; color: #aaa; text-align: center; border-top: 1px solid #e0e0e0; padding-top: 8px; }
+  .stamp-watermark {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(-35deg);
+    font-size: 56pt; font-weight: 900; letter-spacing: 0.12em;
+    color: ${stamp.color}; opacity: 0.08;
+    pointer-events: none; z-index: 0;
+  }
+  .stamp-badge {
+    display: inline-block;
+    border: 2.5px solid ${stamp.border};
+    color: ${stamp.color}; background: ${stamp.bg};
+    padding: 3px 10px; border-radius: 4px;
+    font-size: 8.5pt; font-weight: 800; letter-spacing: 0.1em;
+    margin-top: 5px;
+  }
+  @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+  <div class="stamp-watermark">${stamp.label}</div>
+  <div class="header">
+    <div>
+      <div class="empresa-nome">${emp.nome}</div>
+      <div class="empresa-info">
+        ${emp.morada}<br>
+        NIF: ${emp.nif} &nbsp;·&nbsp; Tel: ${emp.telefone}<br>
+        ${emp.email}
+      </div>
+    </div>
+    <div class="doc-title">
+      <h1>${fatura.tipoDocumento}</h1>
+      <div class="doc-num">Nº ${fatura.numFaturaExterno}</div>
+      <div class="doc-date">Data de emissão: ${fmtDate(fatura.dataEmissao)}</div>
+      ${fatura.dataVencimento ? `<div class="doc-date">Data de vencimento: ${fmtDate(fatura.dataVencimento)}</div>` : ''}
+      <div class="doc-date">Registo: ${dataGeracao}</div>
+      <div><span class="stamp-badge">${stamp.label}</span></div>
+    </div>
+  </div>
+  <hr class="divider">
+  <div class="info-grid">
+    <div class="section">
+      <div class="section-title">Fornecedor</div>
+      <div style="font-weight:600;font-size:10pt">${fornecedorNome}</div>
+    </div>
+    <div class="section">
+      <div class="section-title">Detalhes</div>
+      <div class="info-row"><span class="info-label">Tipo documento:</span><span>${fatura.tipoDocumento}</span></div>
+      <div class="info-row"><span class="info-label">Moeda:</span><span>${fatura.moeda}</span></div>
+      <div class="info-row"><span class="info-label">Estado pagamento:</span><span>${fatura.estadoPagamento}</span></div>
+      ${fatura.condicaoPagamentoId && condicoes ? (() => { const c = condicoes.find(x => String(x.id) === String(fatura.condicaoPagamentoId)); return c ? `<div class="info-row"><span class="info-label">Cond. Pagamento:</span><span>${c.descricao}${c.numDias > 0 ? ` (${c.numDias} dias)` : ''}</span></div>` : ''; })() : ''}
+    </div>
+  </div>
+  ${fatura.descricao ? `<div class="info-row" style="font-size:9pt;color:#555;margin-bottom:10px"><span class="info-label">Descrição:</span><span>${fatura.descricao}</span></div>` : ''}
+  <hr class="divider-thin">
+  <div class="section-title" style="margin-top:10px">Artigos</div>
+  <table>
+    <thead><tr>
+      <th>Código</th>
+      <th>Descrição</th>
+      <th style="text-align:right">Qtd</th>
+      <th style="text-align:center">UN</th>
+      <th style="text-align:right">Preço Unit.</th>
+      <th style="text-align:right">IVA%</th>
+      <th style="text-align:right">Valor IVA</th>
+      <th style="text-align:right">Total c/ IVA</th>
+    </tr></thead>
+    <tbody>${linhasHtml}</tbody>
+    <tfoot>
+      <tr><td colspan="7" style="text-align:right;padding-right:12px;font-size:8.5pt;color:#555">Subtotal s/ IVA</td><td style="text-align:right;font-size:8.5pt">${fmtMoney(fatura.totalLiquido, fatura.moeda)}</td></tr>
+      <tr><td colspan="7" style="text-align:right;padding-right:12px;font-size:8.5pt;color:#555">IVA</td><td style="text-align:right;font-size:8.5pt;color:#7c3aed">${fmtMoney(fatura.totalIva, fatura.moeda)}</td></tr>
+      ${fatura.totalRetencao > 0 ? `<tr><td colspan="7" style="text-align:right;padding-right:12px;font-size:8.5pt;color:#555">Retenção</td><td style="text-align:right;font-size:8.5pt;color:#dc2626">− ${fmtMoney(fatura.totalRetencao, fatura.moeda)}</td></tr>` : ''}
+      <tr class="total-row"><td colspan="7" style="text-align:right;padding-right:12px;border-top:2px solid #7c3aed">TOTAL FINAL</td><td style="text-align:right;border-top:2px solid #7c3aed">${fmtMoney(fatura.totalFinal, fatura.moeda)}</td></tr>
+    </tfoot>
+  </table>
+  ${fatura.observacoes ? `<div class="obs">Observações: ${fatura.observacoes}</div>` : ''}
+  <div class="footer">${emp.nome} · ${emp.morada} · NIF: ${emp.nif}</div>
+</body>
+</html>`;
+}
+function printFaturaFornecedor(fatura: FaturaFornecedor, fornecedorNome: string, empresa?: EmpresaConfig, simbolo?: string, artigos?: Artigo[], condicoes?: CondicaoPagamento[], modos?: ModoPagamento[]) {
+    const html = buildFaturaFornecedorHtml(fatura, fornecedorNome, empresa, simbolo, artigos, condicoes, modos);
+    const w = window.open('', '_blank', 'width=794,height=1123');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 400);
+}
+
 /* ══ Encomenda Form Modal ═══════════════════════════════════ */
 const TABS_E = [
     { id: 'cabecalho', label: 'Cabeçalho' },
@@ -527,9 +724,15 @@ const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onS
     const [descricao,       setDesc]     = useState(encomenda?.descricao              ?? '');
     const [observacoes,     setObs]      = useState(encomenda?.observacoes            ?? '');
 
-    // Linhas artigos
-    const [linhas, setLinhas] = useState<EncomendaLinha[]>(
-        encomenda?.linhas ?? []
+    // Linhas artigos — fallback: derivar taxaIva do artigo se não estiver persistido
+    const [linhas, setLinhas] = useState<EncomendaLinha[]>(() =>
+        (encomenda?.linhas ?? []).map(l => {
+            if ((l.taxaIva ?? 0) !== 0) return l;
+            const art = artigos.find(a => a.id === l.artigoId);
+            if (!art?.codigoIva) return l;
+            const taxa = taxasIva.find(t => t.codigo === art.codigoIva)?.taxa ?? 0;
+            return { ...l, codigoIva: art.codigoIva, taxaIva: taxa };
+        })
     );
     const [lineArtId, setLineArtId] = useState<string[]>(encomenda?.linhas.map(l => l.artigoId) ?? []);
 
@@ -907,6 +1110,552 @@ const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onS
     );
 };
 
+/* ══ Converter Nota de Entrada → Fatura Fornecedor ══════════ */
+interface ConvertFaturaModalProps {
+    encomenda: Encomenda;
+    onClose: () => void;
+    onConfirm: (data: {
+        tipoDocumento: string; numFaturaExterno: string;
+        dataEmissao: string; dataVencimento: string;
+        linhas: { artigoId: string; descricao: string; quantidade: number; unidadeVenda: string; precoUnitarioNet: number; taxaIva: number; valorIva: number; valorTotalLinha: number; }[];
+        totalLiquido: number; totalIva: number; totalRetencao: number; totalFinal: number;
+        moeda: string; taxaCambio: number; observacoes: string;
+    }) => void;
+}
+const ConvertFaturaModal: React.FC<ConvertFaturaModalProps> = ({ encomenda, onClose, onConfirm }) => {
+    const { documentosCompra, artigos, taxasIva, fmt, fmtMoney } = useGlobal();
+    const docOpts = documentosCompra.filter(d => d.codigo !== 'VNC');
+    const rececaoAtiva = [...encomenda.rececoes].filter(r => r.estado === 'Ativa').sort((a, b) => b.dataHora.localeCompare(a.dataHora));
+
+    const [tipoDoc,     setTipoDoc]  = useState(docOpts[0]?.codigo ?? 'VFA');
+    const [numFatura,   setNumFat]   = useState('');
+    const [dataEmissao, setDataEm]   = useState(new Date().toISOString().split('T')[0]);
+    const [dataVenc,    setDataVenc] = useState('');
+    const [taxaRet,     setTaxaRet]  = useState(0);
+    const [obs,         setObs]      = useState('');
+    const [numErr,      setNumErr]   = useState(false);
+
+    type LinhaEdit = {
+        artigoId: string; descricao: string; codigo: string;
+        qtdEnc: number; qtdRec: number; unidade: string;
+        preco: number; taxaIva: number;
+    };
+    const [linhas, setLinhas] = useState<LinhaEdit[]>(() =>
+        encomenda.linhas.map(l => {
+            // Fallback: derive taxaIva from artigo when not yet persisted
+            let taxa = l.taxaIva ?? 0;
+            if (taxa === 0) {
+                const art = artigos.find(a => a.id === l.artigoId);
+                if (art?.codigoIva) taxa = taxasIva.find(t => t.codigo === art.codigoIva)?.taxa ?? 0;
+            }
+            return {
+                artigoId: l.artigoId, descricao: l.descricao, codigo: l.codigo,
+                qtdEnc: l.qtdEncomendada, qtdRec: l.qtdRecebida,
+                unidade: l.unidade, preco: l.custoUnit,
+                taxaIva: taxa,
+            };
+        })
+    );
+
+    const updateLinha = (i: number, field: 'preco' | 'taxaIva', val: number) =>
+        setLinhas(p => p.map((l, j) => j === i ? { ...l, [field]: val } : l));
+
+    const calcLinhas = linhas.map(l => {
+        const base = l.qtdRec * l.preco;
+        const iva  = Math.round(base * l.taxaIva / 100 * 100) / 100;
+        return { ...l, base, iva, total: base + iva };
+    });
+    const totalLiq = calcLinhas.reduce((s, l) => s + l.base, 0);
+    const totalIva = calcLinhas.reduce((s, l) => s + l.iva, 0);
+    const retencao = Math.round(totalLiq * taxaRet / 100 * 100) / 100;
+    const totalFin = totalLiq + totalIva - retencao;
+
+    const qtdOk = encomenda.linhas.every(l => l.qtdRecebida >= l.qtdEncomendada);
+
+    const handleConfirm = () => {
+        if (!numFatura.trim()) { setNumErr(true); return; }
+        onConfirm({
+            tipoDocumento: tipoDoc, numFaturaExterno: numFatura.trim(),
+            dataEmissao, dataVencimento: dataVenc, observacoes: obs,
+            moeda: encomenda.moeda, taxaCambio: 1,
+            totalLiquido: Math.round(totalLiq * 100) / 100,
+            totalIva: Math.round(totalIva * 100) / 100,
+            totalRetencao: retencao, totalFinal: Math.round(totalFin * 100) / 100,
+            linhas: calcLinhas.map(l => ({
+                artigoId: l.artigoId, descricao: l.descricao,
+                quantidade: l.qtdRec, unidadeVenda: l.unidade,
+                precoUnitarioNet: l.preco, taxaIva: l.taxaIva,
+                valorIva: l.iva, valorTotalLinha: l.total,
+            })),
+        });
+        onClose();
+    };
+
+    return (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="modal" style={{ maxWidth: 780 }}>
+                <div className="modal-header">
+                    <h3 className="modal-title">
+                        <FileText size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                        Converter em Fatura Fornecedor — {encomenda.numero}
+                    </h3>
+                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                </div>
+                <div className="modal-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
+                    {/* Verification */}
+                    {!qtdOk && (
+                        <div style={{ display: 'flex', gap: 8, background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 6, padding: '10px 14px', marginBottom: 14 }}>
+                            <AlertCircle size={14} style={{ color: '#b45309', flexShrink: 0, marginTop: 1 }} />
+                            <div style={{ fontSize: '0.8rem', color: '#92400e' }}>
+                                <strong>Atenção:</strong> Alguns artigos têm quantidade recebida inferior à encomendada. A fatura será gerada com base nas quantidades recebidas.
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Doc info */}
+                    <div style={{ background: 'var(--bg-subtle,#f8fafc)', borderRadius: 8, padding: '12px 14px', marginBottom: 14 }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Dados do Documento</div>
+                        <div className="form-row" style={{ margin: 0 }}>
+                            <div className="form-group" style={{ margin: 0, flex: '0 0 160px' }}>
+                                <label className="form-label req">Tipo de Documento</label>
+                                <select className="form-select" value={tipoDoc} onChange={e => setTipoDoc(e.target.value)}>
+                                    {docOpts.map(d => <option key={d.id} value={d.codigo}>{d.codigo} — {d.descricao}</option>)}
+                                </select>
+                            </div>
+                            <div className="form-group" style={{ margin: 0 }}>
+                                <label className="form-label req">Nº da Fatura Física (do Fornecedor)</label>
+                                <input className={`form-input${numErr ? ' err' : ''}`} value={numFatura}
+                                    onChange={e => { setNumFat(e.target.value); setNumErr(false); }}
+                                    placeholder="Ex: FAT-2026-00123" autoFocus />
+                                {numErr && <span className="form-error"><AlertCircle size={11} /> Obrigatório</span>}
+                            </div>
+                        </div>
+                        <div className="form-row" style={{ margin: '10px 0 0' }}>
+                            <div className="form-group" style={{ margin: 0 }}>
+                                <label className="form-label req">Data de Emissão</label>
+                                <input type="date" className="form-input" value={dataEmissao} onChange={e => setDataEm(e.target.value)} />
+                            </div>
+                            <div className="form-group" style={{ margin: 0 }}>
+                                <label className="form-label">Data de Vencimento</label>
+                                <input type="date" className="form-input" value={dataVenc} onChange={e => setDataVenc(e.target.value)} />
+                            </div>
+                            <div className="form-group" style={{ margin: 0, flex: '0 0 120px' }}>
+                                <label className="form-label">Retenção %</label>
+                                <input type="number" min={0} max={100} step={0.5} className="form-input" value={taxaRet}
+                                    onChange={e => setTaxaRet(Number(e.target.value))} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Linhas */}
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                        Artigos — Confirmar / Ajustar
+                    </div>
+                    <table className="data-table" style={{ marginBottom: 0 }}>
+                        <thead>
+                            <tr>
+                                <th>Artigo</th>
+                                <th style={{ textAlign: 'right', width: 70 }}>Enc.</th>
+                                <th style={{ textAlign: 'right', width: 70 }}>Rec.</th>
+                                <th style={{ textAlign: 'right', width: 60 }}>UN</th>
+                                <th style={{ textAlign: 'right', width: 120 }}>Preço Unit.</th>
+                                <th style={{ textAlign: 'right', width: 80 }}>IVA %</th>
+                                <th style={{ textAlign: 'right', width: 100 }}>Total c/ IVA</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {calcLinhas.map((l, i) => (
+                                <tr key={i} style={{ background: l.qtdRec < l.qtdEnc ? '#fffbeb' : undefined }}>
+                                    <td>
+                                        <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{l.descricao}</div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{l.codigo}</div>
+                                    </td>
+                                    <td style={{ textAlign: 'right', fontSize: '0.8rem', color: 'var(--text-muted)' }}>{fmt(l.qtdEnc)}</td>
+                                    <td style={{ textAlign: 'right', fontSize: '0.8rem', fontWeight: 700,
+                                        color: l.qtdRec < l.qtdEnc ? '#b45309' : '#15803d' }}>
+                                        {fmt(l.qtdRec)}
+                                    </td>
+                                    <td style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{l.unidade}</td>
+                                    <td>
+                                        <input type="number" min={0} step={0.01} className="form-input"
+                                            style={{ textAlign: 'right', padding: '3px 6px', height: 28, fontSize: '0.78rem' }}
+                                            value={l.preco}
+                                            onChange={e => updateLinha(i, 'preco', Number(e.target.value))} />
+                                    </td>
+                                    <td>
+                                        <input type="number" min={0} max={100} step={0.5} className="form-input"
+                                            style={{ textAlign: 'right', padding: '3px 6px', height: 28, fontSize: '0.78rem' }}
+                                            value={l.taxaIva}
+                                            onChange={e => updateLinha(i, 'taxaIva', Number(e.target.value))} />
+                                    </td>
+                                    <td style={{ textAlign: 'right', fontSize: '0.8rem', fontWeight: 600 }}>
+                                        <div>{fmtMoney(l.total, encomenda.moeda)}</div>
+                                        {l.taxaIva > 0 && <div style={{ fontSize: '0.67rem', color: 'var(--text-muted)', fontWeight: 400 }}>IVA: {fmtMoney(l.iva)}</div>}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {/* Totals */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 20, borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 4 }}>
+                        <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Subtotal s/ IVA</div>
+                            <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{fmtMoney(totalLiq, encomenda.moeda)}</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>IVA</div>
+                            <div style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--blue)' }}>{fmtMoney(totalIva)}</div>
+                        </div>
+                        {taxaRet > 0 && (
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Retenção ({taxaRet}%)</div>
+                                <div style={{ fontWeight: 600, fontSize: '0.82rem', color: '#dc2626' }}>-{fmtMoney(retencao)}</div>
+                            </div>
+                        )}
+                        <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border)', paddingLeft: 20 }}>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Total a Pagar</div>
+                            <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--blue)' }}>{fmtMoney(totalFin, encomenda.moeda)}</div>
+                        </div>
+                    </div>
+                    {/* Obs */}
+                    <div className="form-group" style={{ marginTop: 12 }}>
+                        <label className="form-label">Observações</label>
+                        <textarea className="form-input" rows={2} style={{ resize: 'vertical' }} value={obs} onChange={e => setObs(e.target.value)} />
+                    </div>
+                </div>
+                <div className="modal-footer">
+                    <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
+                    <button type="button" className="abtn abtn-primary" onClick={handleConfirm}>
+                        <FileText size={12} /> Gravar Fatura
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+/* ══ Compra Direta Modal ════════════════════════════════════ */
+interface CompraDiretaModalProps {
+    onClose: () => void;
+    onSave: (f: Omit<FaturaFornecedor, 'id'>) => void;
+}
+const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }) => {
+    const { fornecedores, artigos, documentosCompra, taxasIva, fmt, fmtMoney, condicoesPagamento, modosPagamento } = useGlobal();
+
+    const [modalTab,    setModalTab]= useState<'documento' | 'condicoes'>('documento');
+    const [fornId,      setFornId]  = useState('');
+    const [tipoDoc,     setTipoDoc] = useState(documentosCompra[0]?.codigo ?? 'VFA');
+    const [numFatura,   setNumFat]  = useState('');
+    const [dataEm,      setDataEm]  = useState(new Date().toISOString().split('T')[0]);
+    const [dataVenc,    setDataVenc]= useState('');
+    const [desc,        setDesc]    = useState('');
+    const [obs,         setObs]     = useState('');
+    const [moeda,       setMoeda]   = useState('AOA');
+    const [taxaRet,     setTaxaRet] = useState(0);
+    const [condicaoPagId, setCondId]= useState('');
+    const [modoPagId,   setModoId]  = useState('');
+
+    type Linha = {
+        produtoId: string; descricaoCustomizada: string;
+        quantidade: string; unidadeVenda: string;
+        precoUnitarioNet: string; taxaIva: number;
+        valorIva: number; codigoIsencao: string; valorTotalLinha: number;
+    };
+    const emptyLinha = (): Linha => ({
+        produtoId: '', descricaoCustomizada: '', quantidade: '1',
+        unidadeVenda: 'UN', precoUnitarioNet: '0', taxaIva: 0,
+        valorIva: 0, codigoIsencao: '', valorTotalLinha: 0,
+    });
+    const [linhas, setLinhas] = useState<Linha[]>([emptyLinha()]);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // Auto-fill payment conditions from selected supplier
+    React.useEffect(() => {
+        const forn = fornecedores.find(f => f.id === fornId);
+        if (forn) {
+            if (forn.condicaoPagamentoId) setCondId(String(forn.condicaoPagamentoId));
+            if (forn.modoPagamentoId)     setModoId(String(forn.modoPagamentoId));
+        }
+    }, [fornId, fornecedores]);
+
+    const fornOpts = fornecedores.map(f => ({ value: f.id, label: f.nome, sub: f.nif }));
+    // refFornecedor stores the supplier ID — filter artigos by selected supplier
+    const artigoOpts = artigos
+        .filter(a => !fornId || !a.refFornecedor || a.refFornecedor === fornId)
+        .map(a => ({ value: a.id, label: a.descricao, sub: a.codigo }));
+
+    const selectArtigo = (i: number, artigoId: string) => {
+        const a = artigos.find(x => x.id === artigoId);
+        if (!a) return;
+        // Auto-fill supplier when article is selected first
+        if (!fornId && a.refFornecedor) setFornId(a.refFornecedor);
+        const taxaIva = a.codigoIva ? (taxasIva.find(t => t.codigo === a.codigoIva)?.taxa ?? 0) : 0;
+        const preco = a.precoCusto || a.custoMedio || 0;
+        setLinhas(p => p.map((l, j) => j === i ? {
+            ...l, produtoId: artigoId, descricaoCustomizada: a.descricao,
+            unidadeVenda: a.unidadeMedida || 'UN', precoUnitarioNet: String(preco), taxaIva,
+        } : l));
+    };
+    const updateLinha = <K extends keyof Linha>(i: number, field: K, val: Linha[K]) =>
+        setLinhas(p => p.map((l, j) => j === i ? { ...l, [field]: val } : l));
+    const recalcLinha = (l: Linha): Linha => {
+        const qtd  = Number(l.quantidade) || 0;
+        const preco = Number(l.precoUnitarioNet) || 0;
+        const base = qtd * preco;
+        const iva  = Math.round(base * l.taxaIva / 100 * 100) / 100;
+        return { ...l, valorIva: iva, valorTotalLinha: base + iva };
+    };
+
+    const linhasCalc = linhas.map(recalcLinha);
+    const totalLiq = linhasCalc.reduce((s, l) => s + (Number(l.quantidade) || 0) * (Number(l.precoUnitarioNet) || 0), 0);
+    const totalIva = linhasCalc.reduce((s, l) => s + l.valorIva, 0);
+    const retencao = Math.round(totalLiq * taxaRet / 100 * 100) / 100;
+    const totalFin = totalLiq + totalIva - retencao;
+
+    const validate = () => {
+        const e: Record<string, string> = {};
+        if (!fornId) e.fornecedor = 'Obrigatório';
+        if (!numFatura.trim()) e.numFatura = 'Obrigatório';
+        if (linhasCalc.length === 0) e.linhas = 'Adicione pelo menos uma linha';
+        setErrors(e);
+        return Object.keys(e).length === 0;
+    };
+
+    const handleSave = () => {
+        if (!validate()) return;
+        onSave({
+            fornecedorId: fornId, tipoDocumento: tipoDoc,
+            numFaturaExterno: numFatura.trim(), dataEmissao: dataEm,
+            dataVencimento: dataVenc || undefined, moeda, taxaCambio: 1,
+            totalLiquido: Math.round(totalLiq * 100) / 100,
+            totalIva: Math.round(totalIva * 100) / 100,
+            totalRetencao: retencao,
+            totalFinal: Math.round(totalFin * 100) / 100,
+            estadoPagamento: 'Pendente', observacoes: obs || undefined,
+            descricao: desc || undefined,
+            condicaoPagamentoId: condicaoPagId || undefined,
+            modoPagamentoId: modoPagId || undefined,
+            linhas: linhasCalc.map(l => ({
+                produtoId: l.produtoId || undefined, descricaoCustomizada: l.descricaoCustomizada,
+                quantidade: Number(l.quantidade) || 0, unidadeVenda: l.unidadeVenda,
+                precoUnitarioNet: Number(l.precoUnitarioNet) || 0,
+                taxaIva: l.taxaIva, valorIva: l.valorIva,
+                codigoIsencao: l.codigoIsencao || undefined, valorTotalLinha: l.valorTotalLinha,
+            })),
+        });
+        onClose();
+    };
+
+    return (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="modal" style={{ maxWidth: 820 }}>
+                <div className="modal-header">
+                    <h3 className="modal-title">
+                        <CreditCard size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                        Compra
+                    </h3>
+                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                </div>
+                <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 16px' }}>
+                    {(['documento', 'condicoes'] as const).map(t => (
+                        <button key={t} type="button" onClick={() => setModalTab(t)}
+                            style={{ padding: '8px 14px', fontSize: '0.8rem', background: 'none', border: 'none', cursor: 'pointer', borderBottom: modalTab === t ? '2px solid var(--primary)' : '2px solid transparent', color: modalTab === t ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: modalTab === t ? 600 : 400 }}>
+                            {t === 'documento' ? 'Documento' : 'Condições'}
+                            {t === 'condicoes' && (condicaoPagId || modoPagId) && (
+                                <span style={{ marginLeft: 5, width: 6, height: 6, borderRadius: '50%', background: 'var(--primary)', display: 'inline-block', verticalAlign: 'middle' }} />
+                            )}
+                        </button>
+                    ))}
+                </div>
+                <div className="modal-body" style={{ maxHeight: '74vh', overflowY: 'auto' }}>
+                {modalTab === 'condicoes' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                        <div style={{ background: 'var(--bg-subtle,#f8fafc)', borderRadius: 8, padding: '12px 14px' }}>
+                            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Condições Comerciais</div>
+                            <div className="form-group">
+                                <label className="form-label">Condição de Pagamento</label>
+                                <select className="form-select" value={condicaoPagId} onChange={e => setCondId(e.target.value)}>
+                                    <option value="">Seleccionar...</option>
+                                    {condicoesPagamento.map(c => <option key={c.id} value={c.id}>{c.descricao}{c.numDias > 0 ? ` (${c.numDias} dias)` : ''}</option>)}
+                                </select>
+                                {condicaoPagId && (() => {
+                                    const c = condicoesPagamento.find(x => x.id === condicaoPagId);
+                                    return c ? (
+                                        <div style={{ marginTop: 6, fontSize: '0.78rem', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', borderRadius: 4, padding: '6px 10px', display: 'flex', gap: 16 }}>
+                                            <span><strong>Prazo:</strong> {c.numDias === 0 ? 'Pronto pagamento' : `${c.numDias} dias`}</span>
+                                            {c.desconto > 0 && <span><strong>Desconto:</strong> {c.desconto}%</span>}
+                                        </div>
+                                    ) : null;
+                                })()}
+                            </div>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                                <label className="form-label">Modo de Pagamento</label>
+                                <select className="form-select" value={modoPagId} onChange={e => setModoId(e.target.value)}>
+                                    <option value="">Seleccionar...</option>
+                                    {modosPagamento.map(m => <option key={m.id} value={m.id}>{m.movimento} — {m.descricao}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                        {!fornId && (
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center', padding: '8px 0' }}>
+                                Seleccione um fornecedor no separador Documento para pré-preencher automaticamente.
+                            </div>
+                        )}
+                    </div>
+                )}
+                {modalTab === 'documento' && <>
+                    {/* Cabeçalho */}
+                    <div style={{ background: 'var(--bg-subtle,#f8fafc)', borderRadius: 8, padding: '12px 14px', marginBottom: 14 }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Dados do Documento</div>
+                        <div className="form-row" style={{ margin: 0 }}>
+                            <div className="form-group" style={{ margin: 0, flex: 2 }}>
+                                <label className="form-label req">Fornecedor</label>
+                                <SearchableSelect options={fornOpts} value={fornId} onChange={setFornId} placeholder="Seleccionar fornecedor..." />
+                                {errors.fornecedor && <span className="form-error"><AlertCircle size={11} /> {errors.fornecedor}</span>}
+                            </div>
+                            <div className="form-group" style={{ margin: 0, flex: '0 0 160px' }}>
+                                <label className="form-label req">Tipo Documento</label>
+                                <select className="form-select" value={tipoDoc} onChange={e => setTipoDoc(e.target.value)}>
+                                    {documentosCompra.map(d => <option key={d.id} value={d.codigo}>{d.codigo} — {d.descricao}</option>)}
+                                </select>
+                            </div>
+                            <div className="form-group" style={{ margin: 0 }}>
+                                <label className="form-label req">Nº Fatura Física</label>
+                                <input className={`form-input${errors.numFatura ? ' err' : ''}`} value={numFatura}
+                                    onChange={e => { setNumFat(e.target.value); setErrors(p => ({ ...p, numFatura: '' })); }}
+                                    placeholder="Ex: FAT-2026-00123" />
+                                {errors.numFatura && <span className="form-error"><AlertCircle size={11} /> {errors.numFatura}</span>}
+                            </div>
+                        </div>
+                        <div className="form-row" style={{ margin: '10px 0 0' }}>
+                            <div className="form-group" style={{ margin: 0 }}>
+                                <label className="form-label req">Data de Emissão</label>
+                                <input type="date" className="form-input" value={dataEm} onChange={e => setDataEm(e.target.value)} />
+                            </div>
+                            <div className="form-group" style={{ margin: 0 }}>
+                                <label className="form-label">Data de Vencimento</label>
+                                <input type="date" className="form-input" value={dataVenc} onChange={e => setDataVenc(e.target.value)} />
+                            </div>
+                            <div className="form-group" style={{ margin: 0, flex: '0 0 100px' }}>
+                                <label className="form-label">Retenção %</label>
+                                <input type="number" min={0} max={100} step={0.5} className="form-input" value={taxaRet} onChange={e => setTaxaRet(Number(e.target.value))} />
+                            </div>
+                            <div className="form-group" style={{ margin: 0, flex: '0 0 90px' }}>
+                                <label className="form-label">Moeda</label>
+                                <select className="form-select" value={moeda} onChange={e => setMoeda(e.target.value)}>
+                                    <option value="AOA">AOA</option><option value="USD">USD</option><option value="EUR">EUR</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="form-row" style={{ margin: '10px 0 0' }}>
+                            <div className="form-group" style={{ margin: 0 }}>
+                                <label className="form-label">Descrição</label>
+                                <input className="form-input" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descrição da compra..." />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Linhas */}
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Artigos</div>
+                    {errors.linhas && (
+                        <div style={{ fontSize: '0.78rem', color: 'var(--red,#ef4444)', marginBottom: 8 }}><AlertCircle size={11} /> {errors.linhas}</div>
+                    )}
+                    <table className="data-table" style={{ marginBottom: 0 }}>
+                        <thead>
+                            <tr>
+                                <th>Artigo / Descrição</th>
+                                <th style={{ width: 70, textAlign: 'right' }}>Qtd</th>
+                                <th style={{ width: 55, textAlign: 'center' }}>UN</th>
+                                <th style={{ width: 110, textAlign: 'right' }}>Preço Unit.</th>
+                                <th style={{ width: 75, textAlign: 'right' }}>IVA %</th>
+                                <th style={{ width: 110, textAlign: 'right' }}>Total</th>
+                                <th style={{ width: 28 }} />
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {linhas.map((l, i) => {
+                                const calc = linhasCalc[i];
+                                return (
+                                    <tr key={i}>
+                                        <td>
+                                            <SearchableSelect options={artigoOpts} value={l.produtoId} onChange={v => selectArtigo(i, v)} placeholder="Seleccionar artigo..." />
+                                        </td>
+                                        <td>
+                                            <input type="number" min={0} step={0.001} className="form-input"
+                                                style={{ textAlign: 'right', padding: '3px 6px', height: 28, fontSize: '0.78rem' }}
+                                                value={l.quantidade} onChange={e => updateLinha(i, 'quantidade', e.target.value)} />
+                                        </td>
+                                        <td>
+                                            <input className="form-input"
+                                                style={{ textAlign: 'center', padding: '3px 4px', height: 28, fontSize: '0.75rem' }}
+                                                value={l.unidadeVenda} onChange={e => updateLinha(i, 'unidadeVenda', e.target.value)} />
+                                        </td>
+                                        <td>
+                                            <input type="number" min={0} step={0.01} className="form-input"
+                                                style={{ textAlign: 'right', padding: '3px 6px', height: 28, fontSize: '0.78rem' }}
+                                                value={l.precoUnitarioNet} onChange={e => updateLinha(i, 'precoUnitarioNet', e.target.value)} />
+                                        </td>
+                                        <td>
+                                            <input type="number" min={0} max={100} step={0.5} className="form-input"
+                                                style={{ textAlign: 'right', padding: '3px 6px', height: 28, fontSize: '0.78rem' }}
+                                                value={l.taxaIva} onChange={e => updateLinha(i, 'taxaIva', Number(e.target.value))} />
+                                        </td>
+                                        <td style={{ textAlign: 'right', fontSize: '0.8rem', fontWeight: 600 }}>
+                                            <div>{fmtMoney(calc.valorTotalLinha, moeda)}</div>
+                                            {calc.valorIva > 0 && <div style={{ fontSize: '0.67rem', color: 'var(--text-muted)', fontWeight: 400 }}>IVA: {fmtMoney(calc.valorIva)}</div>}
+                                        </td>
+                                        <td>
+                                            <button type="button" className="icon-btn" onClick={() => setLinhas(p => p.filter((_, j) => j !== i))}><X size={11} /></button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 2 }}>
+                        <button type="button" className="abtn abtn-ghost" onClick={() => setLinhas(p => [...p, emptyLinha()])} style={{ fontSize: '0.78rem' }}>
+                            <Plus size={12} /> Adicionar Linha
+                        </button>
+                        <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Subtotal</div>
+                                <div style={{ fontWeight: 600, fontSize: '0.82rem' }}>{fmtMoney(totalLiq, moeda)}</div>
+                            </div>
+                            {totalIva > 0 && (
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>IVA</div>
+                                    <div style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--blue)' }}>{fmtMoney(totalIva)}</div>
+                                </div>
+                            )}
+                            {retencao > 0 && (
+                                <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Retenção</div>
+                                    <div style={{ fontWeight: 600, fontSize: '0.82rem', color: '#dc2626' }}>-{fmtMoney(retencao)}</div>
+                                </div>
+                            )}
+                            <div style={{ textAlign: 'right', borderLeft: '1px solid var(--border)', paddingLeft: 20 }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Total a Pagar</div>
+                                <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--blue)' }}>{fmtMoney(totalFin, moeda)}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="form-group" style={{ marginTop: 12 }}>
+                        <label className="form-label">Observações</label>
+                        <textarea className="form-input" rows={2} style={{ resize: 'vertical' }} value={obs} onChange={e => setObs(e.target.value)} />
+                    </div>
+                </>}
+                </div>
+                <div className="modal-footer">
+                    <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
+                    <button type="button" className="abtn abtn-primary" onClick={handleSave}>
+                        <Check size={12} /> Registar Compra
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const COLS_ENC: ExportCol[] = [
     { key: 'numero',         label: 'Nº Encomenda' },
     { key: 'fornecedorNome', label: 'Fornecedor' },
@@ -1100,7 +1849,7 @@ function buildSugestoesHtml(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?
     }).join('');
 
     const html = `<!DOCTYPE html><html lang="pt"><head><meta charset="UTF-8">
-<title>Sugestões de Compra</title>
+<title>Sugestões de Encomenda</title>
 <style>
   @page{size:A4;margin:18mm 15mm}*{box-sizing:border-box;margin:0;padding:0}
   body{font-family:Arial,sans-serif;font-size:9.5pt;color:#1a1a1a}
@@ -1114,7 +1863,7 @@ function buildSugestoesHtml(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?
   .footer{margin-top:24px;font-size:7.5pt;color:#aaa;text-align:center;border-top:1px solid #e0e0e0;padding-top:8px}
   @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 </style></head><body>
-<h1>Sugestões de Compra — Rupturas de Stock</h1>
+<h1>Sugestões de Encomenda — Rupturas de Stock</h1>
 <div class="meta">${emp.nome} &nbsp;·&nbsp; NIF: ${emp.nif} &nbsp;·&nbsp; Data: ${today} &nbsp;·&nbsp; ${artigos.length} artigo(s)</div>
 <table>
   <thead><tr>
@@ -1145,9 +1894,9 @@ function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: st
 
 /* ══ Page ════════════════════════════════════════════════════ */
 const EncomendaPage: React.FC = () => {
-    const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, updateArtigo, addMovimento, currentUser, empresaConfig, fmtMoney, fmtDate, fmt, simboloMoeda } = useGlobal();
+    const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, taxasIva, updateArtigo, addMovimento, currentUser, empresaConfig, fmtMoney, fmtDate, fmt, simboloMoeda, faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, condicoesPagamento, modosPagamento } = useGlobal();
 
-    const [pageTab,   setPageTab]   = useState<'encomendas' | 'sugestoes' | 'relatorios'>('encomendas');
+    const [pageTab,   setPageTab]   = useState<'encomendas' | 'sugestoes' | 'compras' | 'relatorios'>('encomendas');
     const [search,    setSearch]    = useState('');
     const [filterEst, setFEst]      = useState('');
     const [modal,     setModal]     = useState<'new' | string | null>(null);
@@ -1172,7 +1921,9 @@ const EncomendaPage: React.FC = () => {
     const [sugClasse,     setSugClasse]   = useState('');
     const [sugFamilia,    setSugFamilia]  = useState('');
     const [sugCritico,    setSugCritico]  = useState(false);
-    const [showConverter, setShowConverter] = useState(false);
+    const [showConverter,    setShowConverter]    = useState(false);
+    const [convertFatId,    setConvertFatId]     = useState<string | null>(null);
+    const [showCompraDireta, setShowCompraDireta] = useState(false);
 
     const artigosRuptura = useMemo(() =>
         todosArtigos.filter(a => a.emRuptura && !a.inativo),
@@ -1306,9 +2057,37 @@ const EncomendaPage: React.FC = () => {
         setPageTab('encomendas');
     };
 
+    const convertFatEncomenda = encomendas.find(e => e.id === convertFatId) ?? null;
+
+    const handleConvertToFatura = async (encId: string, data: Parameters<typeof addFaturaFornecedor>[0] extends { fornecedorId: string } ? any : any) => {
+        const enc = encomendas.find(e => e.id === encId);
+        if (!enc) return;
+        try {
+            await addFaturaFornecedor({
+                ...data,
+                fornecedorId: enc.fornecedorId,
+                idEncomenda: encId,
+                linhas: data.linhas.map((l: any) => ({
+                    ...l,
+                    produtoId: l.artigoId,
+                    descricaoCustomizada: l.descricaoCustomizada || l.descricao || '',
+                })),
+            });
+            updateEncomenda(encId, { estado: 'Faturada' });
+            showToast(`Fatura criada. Encomenda ${enc.numero} marcada como Faturada.`);
+        } catch { showToast('Erro ao criar fatura.'); }
+    };
+
+    const handleCompraDireta = async (f: Omit<FaturaFornecedor, 'id'>) => {
+        try {
+            await addFaturaFornecedor(f);
+            showToast('Compra direta registada. Stock actualizado.');
+        } catch { showToast('Erro ao registar compra.'); }
+    };
+
     return (
         <AppLayout>
-            <ActionBar title="Encomendas" breadcrumb="AQUATEX SGI · Encomendas">
+            <ActionBar title="Compra" breadcrumb="AQUATEX SGI · Compra">
                 <div className="actionbar-spacer" />
                 {pageTab === 'encomendas' && (
                     <button className="abtn abtn-secondary" type="button" onClick={() => setShowExport(true)}>
@@ -1331,6 +2110,11 @@ const EncomendaPage: React.FC = () => {
                         <Plus size={13} /> Nova Encomenda
                     </button>
                 )}
+                {pageTab === 'compras' && (
+                    <button className="abtn abtn-primary" type="button" onClick={() => setShowCompraDireta(true)}>
+                        <Plus size={13} /> Nova Compra Direta
+                    </button>
+                )}
                 {pageTab === 'relatorios' && (
                     <button className="abtn abtn-secondary" type="button"
                         onClick={() => window.print()}
@@ -1345,7 +2129,8 @@ const EncomendaPage: React.FC = () => {
                 <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
                     {([
                         { id: 'encomendas', label: 'Encomendas' },
-                        { id: 'sugestoes',  label: `Sugestões de Compra${artigosRuptura.length > 0 ? ` (${artigosRuptura.length})` : ''}` },
+                        { id: 'sugestoes',  label: `Sugestões de Encomenda${artigosRuptura.length > 0 ? ` (${artigosRuptura.length})` : ''}` },
+                        { id: 'compras',    label: `Compras${faturasFornecedor.length > 0 ? ` (${faturasFornecedor.length})` : ''}` },
                         { id: 'relatorios', label: 'Relatórios' },
                     ] as const).map(t => (
                         <button key={t.id} type="button" onClick={() => setPageTab(t.id)} style={{
@@ -1450,10 +2235,10 @@ const EncomendaPage: React.FC = () => {
                                                             <Archive size={11} /> Receber
                                                         </button>
                                                     )}
-                                                    <button className="icon-btn" title="Pré-visualizar nota de encomenda" onClick={() => setPreviewHtml(buildNotaEncomendaHtml(e, getFornNome(e.fornecedorId), empresaConfig, simboloMoeda))}>
+                                                    <button className="icon-btn" title="Pré-visualizar nota de encomenda" onClick={() => setPreviewHtml(buildNotaEncomendaHtml(e, getFornNome(e.fornecedorId), empresaConfig, simboloMoeda, todosArtigos, taxasIva))}>
                                                         <Eye size={12} />
                                                     </button>
-                                                    <button className="icon-btn" title="Imprimir nota de encomenda" onClick={() => printNotaEncomenda(e, getFornNome(e.fornecedorId), empresaConfig, simboloMoeda)}>
+                                                    <button className="icon-btn" title="Imprimir nota de encomenda" onClick={() => printNotaEncomenda(e, getFornNome(e.fornecedorId), empresaConfig, simboloMoeda, todosArtigos, taxasIva)}>
                                                         <Printer size={12} />
                                                     </button>
                                                     {e.rececoes?.filter(r => r.estado === 'Ativa').length > 0 && (() => {
@@ -1534,6 +2319,13 @@ const EncomendaPage: React.FC = () => {
                                                             </div>
                                                         );
                                                     })()}
+                                                    {e.rececoes?.filter(r => r.estado === 'Ativa').length > 0 && e.estado !== 'Faturada' && e.estado !== 'Cancelada' && (
+                                                        <button className="abtn abtn-ghost" title="Converter em Fatura Fornecedor"
+                                                            style={{ fontSize: '0.72rem', padding: '2px 8px', height: 24, color: '#7c3aed' }}
+                                                            onClick={() => setConvertFatId(e.id)}>
+                                                            <FileText size={11} /> Faturar
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -1640,6 +2432,118 @@ const EncomendaPage: React.FC = () => {
                             </table>
                         </div>
                         <div className="table-count">{artigosRupturaFiltrados.length} artigo(s) em ruptura</div>
+                    </div>
+                </>)}
+
+                {/* ── Compras Tab ── */}
+                {pageTab === 'compras' && (<>
+                    <div className="stats-row">
+                        {[
+                            { label: 'Total Faturas',  value: faturasFornecedor.length,                                               cls: 'blue' },
+                            { label: 'Pendentes',       value: faturasFornecedor.filter(f => f.estadoPagamento === 'Pendente').length, cls: 'orange' },
+                            { label: 'Pagas',           value: faturasFornecedor.filter(f => f.estadoPagamento === 'Paga').length,     cls: 'green' },
+                            { label: 'Valor Pendente',  value: fmtMoney(faturasFornecedor.filter(f => f.estadoPagamento === 'Pendente').reduce((s, f) => s + Number(f.totalFinal), 0)), cls: 'blue' },
+                        ].map(s => (
+                            <div key={s.label} className="stat-card">
+                                <span className="stat-label">{s.label}</span>
+                                <span className={`stat-value ${s.cls}`}>{s.value}</span>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="table-container">
+                        <div className="table-scroll">
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tipo</th>
+                                        <th>Nº Fatura</th>
+                                        <th>Fornecedor</th>
+                                        <th>Encomenda</th>
+                                        <th>Data Emissão</th>
+                                        <th>Vencimento</th>
+                                        <th style={{ textAlign: 'right' }}>Total Líquido</th>
+                                        <th style={{ textAlign: 'right' }}>IVA</th>
+                                        <th style={{ textAlign: 'right' }}>Total Final</th>
+                                        <th>Estado Pgto</th>
+                                        <th style={{ width: 90 }}></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {faturasFornecedor.length === 0 && (
+                                        <tr><td colSpan={10}>
+                                            <div className="empty-state">
+                                                <Wallet size={28} />
+                                                <br />Nenhuma fatura de fornecedor registada.
+                                                <br />
+                                                <button type="button" className="abtn abtn-primary" style={{ marginTop: 12 }} onClick={() => setShowCompraDireta(true)}>
+                                                    <Plus size={12} /> Nova Compra Direta
+                                                </button>
+                                            </div>
+                                        </td></tr>
+                                    )}
+                                    {faturasFornecedor.map(f => {
+                                        const enc = encomendas.find(e => e.id === f.idEncomenda);
+                                        const vencida = f.dataVencimento && f.dataVencimento < todayStr && f.estadoPagamento === 'Pendente';
+                                        return (
+                                            <tr key={f.id} style={{ background: vencida ? '#fff5f5' : undefined }}>
+                                                <td>
+                                                    <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.78rem',
+                                                        background: '#f3e8ff', color: '#7c3aed', borderRadius: 4, padding: '2px 6px' }}>
+                                                        {f.tipoDocumento}
+                                                    </span>
+                                                </td>
+                                                <td style={{ fontFamily: 'monospace', fontSize: '0.8rem', fontWeight: 600, color: 'var(--blue)' }}>
+                                                    {f.numFaturaExterno}
+                                                </td>
+                                                <td style={{ fontWeight: 600, fontSize: '0.83rem' }}>{getFornNome(f.fornecedorId)}</td>
+                                                <td style={{ fontSize: '0.78rem', color: 'var(--blue)' }}>
+                                                    {enc ? enc.numero : f.idEncomenda ? `#${f.idEncomenda}` : <span style={{ color: 'var(--text-muted)' }}>Compra direta</span>}
+                                                </td>
+                                                <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{fmtDate(f.dataEmissao)}</td>
+                                                <td style={{ fontSize: '0.78rem', color: vencida ? '#dc2626' : 'var(--text-muted)', fontWeight: vencida ? 700 : 400 }}>
+                                                    {f.dataVencimento ? fmtDate(f.dataVencimento) : '—'}
+                                                    {vencida && ' ⚠'}
+                                                </td>
+                                                <td style={{ textAlign: 'right', fontSize: '0.8rem' }}>{fmtMoney(f.totalLiquido, f.moeda)}</td>
+                                                <td style={{ textAlign: 'right', fontSize: '0.8rem', color: 'var(--blue)' }}>{fmtMoney(f.totalIva, f.moeda)}</td>
+                                                <td style={{ textAlign: 'right', fontSize: '0.8rem', fontWeight: 700 }}>{fmtMoney(f.totalFinal, f.moeda)}</td>
+                                                <td>
+                                                    <span style={{
+                                                        fontSize: '0.72rem', fontWeight: 600, borderRadius: 10, padding: '2px 8px',
+                                                        background: f.estadoPagamento === 'Paga' ? '#dcfce7' : f.estadoPagamento === 'Anulada' ? '#f3f4f6' : vencida ? '#fee2e2' : '#fefce8',
+                                                        color: f.estadoPagamento === 'Paga' ? '#15803d' : f.estadoPagamento === 'Anulada' ? '#6b7280' : vencida ? '#dc2626' : '#b45309',
+                                                    }}>
+                                                        {f.estadoPagamento}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', alignItems: 'center' }}>
+                                                        <button className="icon-btn" title="Pré-visualizar"
+                                                            onClick={() => setPreviewHtml(buildFaturaFornecedorHtml(f, getFornNome(f.fornecedorId), empresaConfig, simboloMoeda, todosArtigos, condicoesPagamento, modosPagamento))}>
+                                                            <Eye size={14} />
+                                                        </button>
+                                                        <button className="icon-btn" title="Imprimir"
+                                                            onClick={() => printFaturaFornecedor(f, getFornNome(f.fornecedorId), empresaConfig, simboloMoeda, todosArtigos, condicoesPagamento, modosPagamento)}>
+                                                            <Printer size={14} />
+                                                        </button>
+                                                        {f.estadoPagamento === 'Pendente' && (
+                                                            <button
+                                                                className="abtn abtn-success"
+                                                                style={{ fontSize: '0.7rem', padding: '2px 8px', height: 26 }}
+                                                                title="Marcar como Paga"
+                                                                onClick={() => updateFaturaFornecedor(f.id, { estadoPagamento: 'Paga' })}>
+                                                                <Check size={11} /> Paga
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="table-count">{faturasFornecedor.length} fatura(s) de fornecedor</div>
                     </div>
                 </>)}
 
@@ -1876,6 +2780,22 @@ const EncomendaPage: React.FC = () => {
                     onConfirm={handleConverterEmEncomenda}
                 />
             )}
+
+            {convertFatEncomenda && (
+                <ConvertFaturaModal
+                    encomenda={convertFatEncomenda}
+                    onClose={() => setConvertFatId(null)}
+                    onConfirm={data => handleConvertToFatura(convertFatEncomenda.id, data)}
+                />
+            )}
+
+            {showCompraDireta && (
+                <CompraDiretaModal
+                    onClose={() => setShowCompraDireta(false)}
+                    onSave={handleCompraDireta}
+                />
+            )}
+
 
             {showExport && (
                 <ExportModal

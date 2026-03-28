@@ -79,6 +79,18 @@ export class EncomendaService {
         }
 
         await this.encomendaRepo.update(id, rest);
+
+        // Update taxaIva / codigoIva per line (other fields are immutable after creation)
+        if (Array.isArray(linhas)) {
+            for (const l of linhas) {
+                if (!l.id) continue;
+                await this.linhaRepo.update(l.id, {
+                    taxaIva:    l.taxaIva    ?? 0,
+                    codigoIva:  l.codigoIva  ?? null,
+                });
+            }
+        }
+
         return this.findOne(id);
     }
 

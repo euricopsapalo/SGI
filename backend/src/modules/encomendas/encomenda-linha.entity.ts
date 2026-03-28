@@ -33,4 +33,10 @@ export class EncomendaLinha {
 
     @Column({ type: 'numeric', precision: 5, scale: 2, default: 0 })
     desconto: number;
+
+    @Column({ name: 'codigo_iva', length: 20, nullable: true })
+    codigoIva: string;
+
+    @Column({ name: 'taxa_iva', type: 'numeric', precision: 5, scale: 2, default: 0 })
+    taxaIva: number;
 }

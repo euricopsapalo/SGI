@@ -38,6 +38,12 @@ export class Cliente {
     @Column({ default: true })
     ativo: boolean;
 
+    @Column({ name: 'condicao_pagamento_id', nullable: true })
+    condicaoPagamentoId: number;
+
+    @Column({ name: 'modo_pagamento_id', nullable: true })
+    modoPagamentoId: number;
+
     @CreateDateColumn({ name: 'data_criacao' })
     dataCriacao: Date;
 

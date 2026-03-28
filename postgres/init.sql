@@ -505,6 +505,105 @@ CREATE TABLE sys_logs (
 );
 
 -- ============================================================
+-- CONDIÇÕES DE PAGAMENTO (Tabela do Sistema)
+-- ============================================================
+CREATE TABLE condicoes_pagamento (
+    id        SERIAL         PRIMARY KEY,
+    descricao VARCHAR(200)   NOT NULL,
+    num_dias  INTEGER        NOT NULL DEFAULT 0,
+    desconto  NUMERIC(5,2)   NOT NULL DEFAULT 0
+);
+INSERT INTO condicoes_pagamento (id, descricao, num_dias, desconto) VALUES
+    (1, 'Pronto Pagamento',    0,  0),
+    (2, 'Factura 30 dias',    30,  0),
+    (3, 'Factura 45 dias',    45,  0),
+    (4, 'Factura 60 dias',    60,  0),
+    (5, 'Fim do Mês',          0,  0),
+    (6, 'Próximo dia 30',     30,  0),
+    (7, 'Próximo Mês, dia 31',31,  0),
+    (8, 'Prestações',          0,  0);
+SELECT setval('condicoes_pagamento_id_seq', 8);
+
+-- ============================================================
+-- MODOS DE PAGAMENTO (Tabela do Sistema)
+-- ============================================================
+CREATE TABLE modos_pagamento (
+    id        SERIAL        PRIMARY KEY,
+    movimento VARCHAR(20)   NOT NULL UNIQUE,
+    descricao VARCHAR(200)  NOT NULL
+);
+INSERT INTO modos_pagamento (id, movimento, descricao) VALUES
+    (1,  'DEP',   'Rec. por Cheque'),
+    (2,  'DSB',   'Despesas bancárias'),
+    (3,  'DTPAG', 'Desconto de Títulos a Pagar'),
+    (4,  'DTREC', 'Desconto de Títulos a Receber'),
+    (5,  'DVC',   'Diversos a crédito'),
+    (6,  'DVD',   'Diversos a débito'),
+    (7,  'ENC',   'Encargos com Títulos'),
+    (8,  'GARAN', 'Garantias bancárias'),
+    (9,  'JRC',   'Juros Credores'),
+    (10, 'JRD',   'Juros devedores'),
+    (11, 'MB',    'Rec. por Multibanco'),
+    (12, 'NUM',   'Rec. em Numerário'),
+    (13, 'PGNUM', 'Pagamento em Numerário'),
+    (14, 'SLA',   'Saldo abertura'),
+    (15, 'TRFP',  'Transferência D'),
+    (16, 'TRFR',  'Transferência C');
+SELECT setval('modos_pagamento_id_seq', 16);
+
+-- ============================================================
+-- DOCUMENTOS DE COMPRA (Tabela do Sistema)
+-- ============================================================
+CREATE TABLE documentos_compra (
+    id        SERIAL       PRIMARY KEY,
+    codigo    VARCHAR(10)  NOT NULL UNIQUE,
+    descricao VARCHAR(200) NOT NULL
+);
+INSERT INTO documentos_compra (id, codigo, descricao) VALUES
+    (1, 'VFA', 'Vossa Fatura'),
+    (2, 'VFR', 'Vossa Fatura Recibo'),
+    (3, 'VNC', 'Vossa Nota de Crédito');
+SELECT setval('documentos_compra_id_seq', 3);
+
+-- ============================================================
+-- FATURAS FORNECEDOR
+-- ============================================================
+CREATE TABLE faturas_fornecedor (
+    id                   SERIAL        PRIMARY KEY,
+    fornecedor_id        INTEGER       REFERENCES fornecedores(id) ON DELETE SET NULL,
+    id_encomenda         INTEGER,
+    tipo_documento       VARCHAR(10),
+    num_fatura_externo   VARCHAR(50),
+    data_emissao         DATE          NOT NULL,
+    data_vencimento      DATE,
+    data_registo_sistema TIMESTAMP     NOT NULL DEFAULT NOW(),
+    total_liquido        NUMERIC(18,2) NOT NULL DEFAULT 0,
+    total_iva            NUMERIC(18,2) NOT NULL DEFAULT 0,
+    total_retencao       NUMERIC(18,2) NOT NULL DEFAULT 0,
+    total_final          NUMERIC(18,2) NOT NULL DEFAULT 0,
+    moeda                CHAR(3)       NOT NULL DEFAULT 'AOA',
+    taxa_cambio          NUMERIC(18,6) NOT NULL DEFAULT 1.0,
+    estado_pagamento     VARCHAR(20)   NOT NULL DEFAULT 'Pendente',
+    observacoes          TEXT,
+    descricao            TEXT
+);
+
+CREATE TABLE linhas_fatura_fornecedor (
+    id                    SERIAL        PRIMARY KEY,
+    fatura_id             INTEGER       NOT NULL REFERENCES faturas_fornecedor(id) ON DELETE CASCADE,
+    produto_id            INTEGER,
+    id_linha_encomenda    INTEGER,
+    descricao_customizada VARCHAR(255),
+    quantidade            NUMERIC(18,4) NOT NULL DEFAULT 0,
+    unidade_venda         VARCHAR(10)   NOT NULL DEFAULT 'UN',
+    preco_unitario_net    NUMERIC(18,2) NOT NULL DEFAULT 0,
+    taxa_iva              NUMERIC(5,2)  NOT NULL DEFAULT 0,
+    valor_iva             NUMERIC(18,2) NOT NULL DEFAULT 0,
+    codigo_isencao        VARCHAR(10),
+    valor_total_linha     NUMERIC(18,2) NOT NULL DEFAULT 0
+);
+
+-- ============================================================
 -- ÍNDICES
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_equip_instalados_cliente  ON equip_instalados(cliente_id);

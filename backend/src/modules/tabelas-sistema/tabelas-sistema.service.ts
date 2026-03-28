@@ -12,6 +12,9 @@ import { Municipio } from './municipio.entity';
 import { TaxaIva } from './taxa-iva.entity';
 import { ClasseArtigo } from './classe-artigo.entity';
 import { FamiliaArtigo } from './familia-artigo.entity';
+import { DocumentoCompra } from './documento-compra.entity';
+import { CondicaoPagamento } from './condicao-pagamento.entity';
+import { ModoPagamento } from './modo-pagamento.entity';
 
 @Injectable()
 export class TabelasSistemaService {
@@ -48,6 +51,15 @@ export class TabelasSistemaService {
 
         @InjectRepository(FamiliaArtigo)
         private familiasArtigoRepo: Repository<FamiliaArtigo>,
+
+        @InjectRepository(DocumentoCompra)
+        private documentosCompraRepo: Repository<DocumentoCompra>,
+
+        @InjectRepository(CondicaoPagamento)
+        private condicoesPagamentoRepo: Repository<CondicaoPagamento>,
+
+        @InjectRepository(ModoPagamento)
+        private modosPagamentoRepo: Repository<ModoPagamento>,
     ) {}
 
     // TipoTrabalho
@@ -159,4 +171,31 @@ export class TabelasSistemaService {
         return this.familiasArtigoRepo.findOne({ where: { id } });
     }
     removeFamiliaArtigo(id: number) { return this.familiasArtigoRepo.delete(id); }
+
+    // DocumentoCompra
+    findAllDocumentosCompra() { return this.documentosCompraRepo.find({ order: { codigo: 'ASC' } }); }
+    createDocumentoCompra(body: Partial<DocumentoCompra>) { return this.documentosCompraRepo.save(this.documentosCompraRepo.create(body)); }
+    async updateDocumentoCompra(id: number, body: Partial<DocumentoCompra>) {
+        await this.documentosCompraRepo.update(id, body);
+        return this.documentosCompraRepo.findOne({ where: { id } });
+    }
+    removeDocumentoCompra(id: number) { return this.documentosCompraRepo.delete(id); }
+
+    // CondicaoPagamento
+    findAllCondicoesPagamento() { return this.condicoesPagamentoRepo.find({ order: { id: 'ASC' } }); }
+    createCondicaoPagamento(body: Partial<CondicaoPagamento>) { return this.condicoesPagamentoRepo.save(this.condicoesPagamentoRepo.create(body)); }
+    async updateCondicaoPagamento(id: number, body: Partial<CondicaoPagamento>) {
+        await this.condicoesPagamentoRepo.update(id, body);
+        return this.condicoesPagamentoRepo.findOne({ where: { id } });
+    }
+    removeCondicaoPagamento(id: number) { return this.condicoesPagamentoRepo.delete(id); }
+
+    // ModoPagamento
+    findAllModosPagamento() { return this.modosPagamentoRepo.find({ order: { movimento: 'ASC' } }); }
+    createModoPagamento(body: Partial<ModoPagamento>) { return this.modosPagamentoRepo.save(this.modosPagamentoRepo.create(body)); }
+    async updateModoPagamento(id: number, body: Partial<ModoPagamento>) {
+        await this.modosPagamentoRepo.update(id, body);
+        return this.modosPagamentoRepo.findOne({ where: { id } });
+    }
+    removeModoPagamento(id: number) { return this.modosPagamentoRepo.delete(id); }
 }

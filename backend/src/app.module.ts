@@ -25,6 +25,7 @@ import { EncomendaModule } from './modules/encomendas/encomendas.module';
 import { SysLogsModule } from './modules/sys-logs/sys-logs.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { SeedModule } from './modules/seed/seed.module';
+import { FaturasFornecedorModule } from './modules/faturas-fornecedor/faturas-fornecedor.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { SeedModule } from './modules/seed/seed.module';
     SysLogsModule,
     AuthModule,
     SeedModule,
+    FaturasFornecedorModule,
   ],
 })
 export class AppModule {}

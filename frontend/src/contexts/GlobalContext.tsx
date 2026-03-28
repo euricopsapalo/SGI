@@ -19,6 +19,7 @@ export interface Municipio { id: string; nome: string; provinciaId: string; }
 export interface TaxaIva { id: string; codigo: string; descricao: string; taxa: number; }
 export interface ClasseArtigo { id: string; descricao: string; }
 export interface FamiliaArtigo { id: string; descricao: string; }
+export interface DocumentoCompra { id: string; codigo: string; descricao: string; }
 
 // ── Entities ───────────────────────────────────────────────
 export interface Cliente {
@@ -26,6 +27,7 @@ export interface Cliente {
     nif: string; email: string; telefone: string; morada: string;
     municipio: string; provincia: string; ativo: boolean;
     provinciaId?: string; municipioId?: string;
+    condicaoPagamentoId?: string; modoPagamentoId?: string;
 }
 export interface Tecnico {
     id: string; nome: string; telefone: string; email: string;
@@ -38,6 +40,7 @@ export interface Fornecedor {
     id: string; nome: string; nif: string; telefone: string;
     email: string; morada: string; ativo: boolean;
     provinciaId?: string; municipioId?: string;
+    condicaoPagamentoId?: string; modoPagamentoId?: string;
 }
 
 // ── Equipment (Parque) ─────────────────────────────────────
@@ -121,7 +124,7 @@ export interface Artigo {
 }
 
 // ── Purchase Orders ────────────────────────────────────────
-export type EncomendaEstado = 'Aberta' | 'Parcial' | 'Recebida' | 'Cancelada';
+export type EncomendaEstado = 'Aberta' | 'Parcial' | 'Recebida' | 'Cancelada' | 'Faturada';
 export interface EncomendaLinha {
     artigoId: string; codigo: string; descricao: string;
     qtdEncomendada: number; qtdRecebida: number;
@@ -144,6 +147,28 @@ export interface Encomenda {
     responsavel: string; moeda: string; descricao: string; observacoes?: string;
     estado: EncomendaEstado; linhas: EncomendaLinha[];
     rececoes: Rececao[];
+}
+
+// ── Payment tables ─────────────────────────────────────────
+export interface CondicaoPagamento { id: string; descricao: string; numDias: number; desconto: number; }
+export interface ModoPagamento { id: string; movimento: string; descricao: string; }
+
+// ── Supplier Invoices ──────────────────────────────────────
+export interface LinhaFaturaFornecedor {
+    id?: string; produtoId?: string; idLinhaEncomenda?: string;
+    descricaoCustomizada?: string; quantidade: number; unidadeVenda: string;
+    precoUnitarioNet: number; taxaIva: number; valorIva: number;
+    codigoIsencao?: string; valorTotalLinha: number;
+}
+export interface FaturaFornecedor {
+    id: string; fornecedorId: string; idEncomenda?: string;
+    tipoDocumento: string; numFaturaExterno: string;
+    dataEmissao: string; dataVencimento?: string; dataRegistoSistema?: string;
+    totalLiquido: number; totalIva: number; totalRetencao: number; totalFinal: number;
+    moeda: string; taxaCambio: number; estadoPagamento: string;
+    condicaoPagamentoId?: string; modoPagamentoId?: string;
+    observacoes?: string; descricao?: string;
+    linhas: LinhaFaturaFornecedor[];
 }
 
 // ── Invoices ───────────────────────────────────────────────
@@ -277,6 +302,41 @@ const normEncomenda = (e: any): Encomenda => ({
     })),
 });
 
+const normFaturaFornecedor = (f: any): FaturaFornecedor => ({
+    id: f.id?.toString(),
+    fornecedorId: f.fornecedor?.id?.toString() ?? f.fornecedorId?.toString() ?? '',
+    idEncomenda: f.idEncomenda?.toString() ?? undefined,
+    tipoDocumento: f.tipoDocumento ?? '',
+    numFaturaExterno: f.numFaturaExterno ?? '',
+    dataEmissao: f.dataEmissao ?? '',
+    dataVencimento: f.dataVencimento ?? undefined,
+    dataRegistoSistema: f.dataRegistoSistema ?? undefined,
+    totalLiquido: Number(f.totalLiquido ?? 0),
+    totalIva: Number(f.totalIva ?? 0),
+    totalRetencao: Number(f.totalRetencao ?? 0),
+    totalFinal: Number(f.totalFinal ?? 0),
+    moeda: f.moeda ?? 'AOA',
+    taxaCambio: Number(f.taxaCambio ?? 1),
+    estadoPagamento: f.estadoPagamento ?? 'Pendente',
+    condicaoPagamentoId: f.condicaoPagamentoId != null ? String(f.condicaoPagamentoId) : undefined,
+    modoPagamentoId: f.modoPagamentoId != null ? String(f.modoPagamentoId) : undefined,
+    observacoes: f.observacoes ?? undefined,
+    descricao: f.descricao ?? undefined,
+    linhas: (f.linhas ?? []).map((l: any): LinhaFaturaFornecedor => ({
+        id: l.id?.toString(),
+        produtoId: l.produtoId?.toString() ?? undefined,
+        idLinhaEncomenda: l.idLinhaEncomenda?.toString() ?? undefined,
+        descricaoCustomizada: l.descricaoCustomizada ?? undefined,
+        quantidade: Number(l.quantidade),
+        unidadeVenda: l.unidadeVenda ?? 'UN',
+        precoUnitarioNet: Number(l.precoUnitarioNet),
+        taxaIva: Number(l.taxaIva),
+        valorIva: Number(l.valorIva),
+        codigoIsencao: l.codigoIsencao ?? undefined,
+        valorTotalLinha: Number(l.valorTotalLinha),
+    })),
+});
+
 const normFatura = (f: any): Fatura => ({
     id: f.id?.toString(), tipoDocumento: f.tipoDocumento ?? 'FAT',
     otId: f.otId?.toString() ?? '', clienteId: f.cliente?.id?.toString() ?? f.clienteId?.toString() ?? '',
@@ -304,6 +364,9 @@ interface GlobalContextType {
     taxasIva: TaxaIva[]; addTaxaIva: (t: Omit<TaxaIva, 'id'>) => void; updateTaxaIva: (id: string, t: Partial<TaxaIva>) => void; removeTaxaIva: (id: string) => void;
     classesArtigo: ClasseArtigo[]; addClasseArtigo: (c: Omit<ClasseArtigo, 'id'>) => void; updateClasseArtigo: (id: string, c: Partial<ClasseArtigo>) => void; removeClasseArtigo: (id: string) => void;
     familiasArtigo: FamiliaArtigo[]; addFamiliaArtigo: (f: Omit<FamiliaArtigo, 'id'>) => void; updateFamiliaArtigo: (id: string, f: Partial<FamiliaArtigo>) => void; removeFamiliaArtigo: (id: string) => void;
+    documentosCompra: DocumentoCompra[]; addDocumentoCompra: (d: Omit<DocumentoCompra, 'id'>) => void; updateDocumentoCompra: (id: string, d: Partial<DocumentoCompra>) => void; removeDocumentoCompra: (id: string) => void;
+    condicoesPagamento: CondicaoPagamento[]; addCondicaoPagamento: (c: Omit<CondicaoPagamento, 'id'>) => void; updateCondicaoPagamento: (id: string, c: Partial<CondicaoPagamento>) => void; removeCondicaoPagamento: (id: string) => void;
+    modosPagamento: ModoPagamento[]; addModoPagamento: (m: Omit<ModoPagamento, 'id'>) => void; updateModoPagamento: (id: string, m: Partial<ModoPagamento>) => void; removeModoPagamento: (id: string) => void;
     // Finance config
     taxaIvaGlobal: number; setTaxaIvaGlobal: (v: number) => void;
     // Empresa config
@@ -344,6 +407,8 @@ interface GlobalContextType {
     anularRececao: (rececaoId: string) => Promise<Encomenda>;
     // Invoices
     faturas: Fatura[]; addFatura: (f: Omit<Fatura, 'id'>) => Fatura; updateFatura: (id: string, f: Partial<Fatura>) => void;
+    // Supplier Invoices
+    faturasFornecedor: FaturaFornecedor[]; addFaturaFornecedor: (f: Omit<FaturaFornecedor, 'id'>) => Promise<FaturaFornecedor>; updateFaturaFornecedor: (id: string, f: Partial<FaturaFornecedor>) => void;
     // Reload
     reloadData: () => Promise<void>;
 }
@@ -395,6 +460,10 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [taxasIva, setTaxasIva] = useState<TaxaIva[]>([]);
     const [classesArtigo, setClassesArtigo] = useState<ClasseArtigo[]>([]);
     const [familiasArtigo, setFamiliasArtigo] = useState<FamiliaArtigo[]>([]);
+    const [documentosCompra, setDocumentosCompra] = useState<DocumentoCompra[]>([]);
+    const [condicoesPagamento, setCondicoesPagamento] = useState<CondicaoPagamento[]>([]);
+    const [modosPagamento, setModosPagamento] = useState<ModoPagamento[]>([]);
+    const [faturasFornecedor, setFaturasFornecedor] = useState<FaturaFornecedor[]>([]);
     const [stockArmazem, setStockArmazem] = useState<StockArmazem[]>([]);
     const [movimentosStock, setMovimentosStock] = useState<MovimentoStock[]>([]);
     const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
@@ -435,6 +504,10 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 axios.get(`${API}/api/taxas-iva`),              // 23
                 axios.get(`${API}/api/classes-artigo`),         // 24
                 axios.get(`${API}/api/familias-artigo`),        // 25
+                axios.get(`${API}/api/documentos-compra`),      // 26
+                axios.get(`${API}/api/faturas-fornecedor`),     // 27
+                axios.get(`${API}/api/condicoes-pagamento`),    // 28
+                axios.get(`${API}/api/modos-pagamento`),        // 29
             ]);
 
             try { setTiposTrabalho(ok(results[0]).map(norm)); } catch {}
@@ -462,6 +535,10 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             try { setTaxasIva(ok(results[23]).map((r: any) => ({ ...norm(r), taxa: Number(r.taxa) }))); } catch {}
             try { setClassesArtigo(ok(results[24]).map(norm)); } catch {}
             try { setFamiliasArtigo(ok(results[25]).map(norm)); } catch {}
+            try { setDocumentosCompra(ok(results[26]).map(norm)); } catch {}
+            try { setFaturasFornecedor(ok(results[27]).map(normFaturaFornecedor)); } catch {}
+            try { setCondicoesPagamento(ok(results[28]).map(r => ({ ...norm(r), numDias: Number(r.numDias), desconto: Number(r.desconto) }))); } catch {}
+            try { setModosPagamento(ok(results[29]).map(norm)); } catch {}
             try {
                 const cfgData = results[21].status === 'fulfilled' ? results[21].value.data : null;
                 if (cfgData) {
@@ -648,6 +725,85 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             await axios.delete(`${API}/api/familias-artigo/${id}`);
             setFamiliasArtigo(p => p.filter(x => x.id !== id));
         } catch (e) { console.error('removeFamiliaArtigo error', e); throw e; }
+    };
+
+    const addDocumentoCompra = async (d: Omit<DocumentoCompra, 'id'>) => {
+        try {
+            const { data } = await axios.post(`${API}/api/documentos-compra`, d);
+            setDocumentosCompra(p => [...p, norm(data) as DocumentoCompra]);
+        } catch (e) { console.error('addDocumentoCompra error', e); throw e; }
+    };
+    const updateDocumentoCompra = async (id: string, d: Partial<DocumentoCompra>) => {
+        try {
+            await axios.put(`${API}/api/documentos-compra/${id}`, d);
+            setDocumentosCompra(p => p.map(x => x.id === id ? { ...x, ...d } : x));
+        } catch (e) { console.error('updateDocumentoCompra error', e); throw e; }
+    };
+    const removeDocumentoCompra = async (id: string) => {
+        try {
+            await axios.delete(`${API}/api/documentos-compra/${id}`);
+            setDocumentosCompra(p => p.filter(x => x.id !== id));
+        } catch (e) { console.error('removeDocumentoCompra error', e); throw e; }
+    };
+
+    const addCondicaoPagamento = async (c: Omit<CondicaoPagamento, 'id'>) => {
+        try {
+            const { data } = await axios.post(`${API}/api/condicoes-pagamento`, c);
+            setCondicoesPagamento(p => [...p, { ...norm(data), numDias: Number(data.numDias), desconto: Number(data.desconto) } as CondicaoPagamento]);
+        } catch (e) { console.error('addCondicaoPagamento error', e); throw e; }
+    };
+    const updateCondicaoPagamento = async (id: string, c: Partial<CondicaoPagamento>) => {
+        try {
+            await axios.put(`${API}/api/condicoes-pagamento/${id}`, c);
+            setCondicoesPagamento(p => p.map(x => x.id === id ? { ...x, ...c } : x));
+        } catch (e) { console.error('updateCondicaoPagamento error', e); throw e; }
+    };
+    const removeCondicaoPagamento = async (id: string) => {
+        try {
+            await axios.delete(`${API}/api/condicoes-pagamento/${id}`);
+            setCondicoesPagamento(p => p.filter(x => x.id !== id));
+        } catch (e) { console.error('removeCondicaoPagamento error', e); throw e; }
+    };
+
+    const addModoPagamento = async (m: Omit<ModoPagamento, 'id'>) => {
+        try {
+            const { data } = await axios.post(`${API}/api/modos-pagamento`, m);
+            setModosPagamento(p => [...p, norm(data) as ModoPagamento]);
+        } catch (e) { console.error('addModoPagamento error', e); throw e; }
+    };
+    const updateModoPagamento = async (id: string, m: Partial<ModoPagamento>) => {
+        try {
+            await axios.put(`${API}/api/modos-pagamento/${id}`, m);
+            setModosPagamento(p => p.map(x => x.id === id ? { ...x, ...m } : x));
+        } catch (e) { console.error('updateModoPagamento error', e); throw e; }
+    };
+    const removeModoPagamento = async (id: string) => {
+        try {
+            await axios.delete(`${API}/api/modos-pagamento/${id}`);
+            setModosPagamento(p => p.filter(x => x.id !== id));
+        } catch (e) { console.error('removeModoPagamento error', e); throw e; }
+    };
+
+    const addFaturaFornecedor = async (f: Omit<FaturaFornecedor, 'id'>): Promise<FaturaFornecedor> => {
+        const { data } = await axios.post(`${API}/api/faturas-fornecedor`, {
+            ...f,
+            fornecedorId: f.fornecedorId,
+            linhas: f.linhas,
+        });
+        const n = normFaturaFornecedor(data);
+        setFaturasFornecedor(p => [n, ...p]);
+        // Reload artigos to reflect updated stock/custoMedio
+        try {
+            const { data: arts } = await axios.get(`${API}/api/artigos`);
+            setArtigos(arts.map(normArtigo));
+        } catch {}
+        return n;
+    };
+    const updateFaturaFornecedor = async (id: string, f: Partial<FaturaFornecedor>) => {
+        try {
+            await axios.put(`${API}/api/faturas-fornecedor/${id}`, f);
+            setFaturasFornecedor(p => p.map(x => x.id === id ? { ...x, ...f } : x));
+        } catch (e) { console.error('updateFaturaFornecedor error', e); throw e; }
     };
 
     /* ── Entities ───────────────────────────────────────────── */
@@ -1121,6 +1277,9 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             taxasIva, addTaxaIva, updateTaxaIva, removeTaxaIva,
             classesArtigo, addClasseArtigo, updateClasseArtigo, removeClasseArtigo,
             familiasArtigo, addFamiliaArtigo, updateFamiliaArtigo, removeFamiliaArtigo,
+            documentosCompra, addDocumentoCompra, updateDocumentoCompra, removeDocumentoCompra,
+            condicoesPagamento, addCondicaoPagamento, updateCondicaoPagamento, removeCondicaoPagamento,
+            modosPagamento, addModoPagamento, updateModoPagamento, removeModoPagamento,
             clientes, addCliente, updateCliente, removeCliente,
             tecnicos, addTecnico, updateTecnico, removeTecnico,
             fornecedores, addFornecedor, updateFornecedor, removeFornecedor,
@@ -1134,6 +1293,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             movimentosStock, addMovimento,
             encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao,
             faturas, addFatura, updateFatura,
+            faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor,
             reloadData,
         }}>
             {children}

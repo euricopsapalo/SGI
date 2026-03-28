@@ -8,6 +8,7 @@ export enum EstadoEncomenda {
     PARCIAL = 'Parcial',
     RECEBIDA = 'Recebida',
     CANCELADA = 'Cancelada',
+    FATURADA = 'Faturada',
 }
 
 @Entity('encomendas')

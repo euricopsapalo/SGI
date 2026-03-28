@@ -128,6 +128,9 @@ const ConfiguracoesPage: React.FC = () => {
         armazens, addArmazem, updateArmazem,
         classesArtigo, addClasseArtigo, updateClasseArtigo, removeClasseArtigo,
         familiasArtigo, addFamiliaArtigo, updateFamiliaArtigo, removeFamiliaArtigo,
+        documentosCompra, addDocumentoCompra, updateDocumentoCompra, removeDocumentoCompra,
+        condicoesPagamento, addCondicaoPagamento, updateCondicaoPagamento, removeCondicaoPagamento,
+        modosPagamento, addModoPagamento, updateModoPagamento, removeModoPagamento,
         moedas,
         taxaIvaGlobal, setTaxaIvaGlobal,
         taxasIva, addTaxaIva, updateTaxaIva, removeTaxaIva,
@@ -517,85 +520,149 @@ const ConfiguracoesPage: React.FC = () => {
                         </>}
 
                         {/* ── TABELAS DO SISTEMA ── */}
-                        {tab === 'tabelas' && <>
-                            <TabelaInlineEditor
-                                titulo="Tipos de Trabalho"
-                                colunas={[
-                                    { key: 'codigo', label: 'Código' },
-                                    { key: 'descricao', label: 'Descrição' },
-                                ]}
-                                rows={tiposTrabalho}
-                                onAdd={r => addTipoTrabalho({ codigo: r.codigo, descricao: r.descricao })}
-                                onUpdate={(id, field, val) => updateTipoTrabalho(id, { [field]: val })}
-                                onRemove={id => removeTipoTrabalho(id)}
-                            />
-                            <TabelaInlineEditor
-                                titulo="Tipos de OT"
-                                colunas={[
-                                    { key: 'codigo', label: 'Código' },
-                                    { key: 'descricao', label: 'Descrição' },
-                                ]}
-                                rows={tiposOT}
-                                onAdd={r => addTipoOT({ codigo: r.codigo, descricao: r.descricao })}
-                                onUpdate={(id, field, val) => updateTipoOT(id, { [field]: val })}
-                                onRemove={id => removeTipoOT(id)}
-                            />
-                            <TabelaInlineEditor
-                                titulo="Funções de Técnico"
-                                colunas={[
-                                    { key: 'codigo',    label: 'Código' },
-                                    { key: 'descricao', label: 'Descrição' },
-                                    { key: 'custo',     label: 'Custo/h (AOA)', type: 'number' },
-                                ]}
-                                rows={funcoesTecnico}
-                                onAdd={r => addFuncaoTecnico({ codigo: r.codigo, descricao: r.descricao, custo: Number(r.custo) })}
-                                onUpdate={(id, field, val) => updateFuncaoTecnico(id, { [field]: val })}
-                                onRemove={id => removeFuncaoTecnico(id)}
-                            />
-                            <TabelaInlineEditor
-                                titulo="Tipos de Documento"
-                                colunas={[
-                                    { key: 'codigo',    label: 'Código' },
-                                    { key: 'descricao', label: 'Descrição' },
-                                ]}
-                                rows={tiposDocumento}
-                                onAdd={r => addTipoDocumento({ codigo: r.codigo, descricao: r.descricao })}
-                                onUpdate={(id, field, val) => updateTipoDocumento(id, { [field]: val })}
-                                onRemove={id => removeTipoDocumento(id)}
-                            />
-                            <TabelaInlineEditor
-                                titulo="Armazéns"
-                                colunas={[
-                                    { key: 'codigo',    label: 'Código' },
-                                    { key: 'nome',      label: 'Nome' },
-                                    { key: 'descricao', label: 'Descrição' },
-                                ]}
-                                rows={armazens}
-                                onAdd={r => addArmazem({ codigo: r.codigo, nome: r.nome, descricao: r.descricao, ativo: true })}
-                                onUpdate={(id, field, val) => updateArmazem(id, { [field]: val })}
-                                onRemove={id => updateArmazem(id, { ativo: false })}
-                            />
-                            <TabelaInlineEditor
-                                titulo="Classes de Artigo"
-                                colunas={[
-                                    { key: 'descricao', label: 'Descrição' },
-                                ]}
-                                rows={classesArtigo}
-                                onAdd={r => addClasseArtigo({ descricao: r.descricao })}
-                                onUpdate={(id, field, val) => updateClasseArtigo(id, { [field]: val })}
-                                onRemove={id => removeClasseArtigo(id)}
-                            />
-                            <TabelaInlineEditor
-                                titulo="Famílias de Artigo"
-                                colunas={[
-                                    { key: 'descricao', label: 'Descrição' },
-                                ]}
-                                rows={familiasArtigo}
-                                onAdd={r => addFamiliaArtigo({ descricao: r.descricao })}
-                                onUpdate={(id, field, val) => updateFamiliaArtigo(id, { [field]: val })}
-                                onRemove={id => removeFamiliaArtigo(id)}
-                            />
-                        </>}
+                        {tab === 'tabelas' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+
+                                {/* ── Grupo: Ordens de Trabalho ── */}
+                                <div style={{ padding: '10px 0 6px', marginBottom: 4, borderBottom: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                                    Ordens de Trabalho
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                                    <TabelaInlineEditor
+                                        titulo="Tipos de Trabalho"
+                                        colunas={[
+                                            { key: 'codigo', label: 'Código' },
+                                            { key: 'descricao', label: 'Descrição' },
+                                        ]}
+                                        rows={tiposTrabalho}
+                                        onAdd={r => addTipoTrabalho({ codigo: r.codigo, descricao: r.descricao })}
+                                        onUpdate={(id, field, val) => updateTipoTrabalho(id, { [field]: val })}
+                                        onRemove={id => removeTipoTrabalho(id)}
+                                    />
+                                    <TabelaInlineEditor
+                                        titulo="Tipos de OT"
+                                        colunas={[
+                                            { key: 'codigo', label: 'Código' },
+                                            { key: 'descricao', label: 'Descrição' },
+                                        ]}
+                                        rows={tiposOT}
+                                        onAdd={r => addTipoOT({ codigo: r.codigo, descricao: r.descricao })}
+                                        onUpdate={(id, field, val) => updateTipoOT(id, { [field]: val })}
+                                        onRemove={id => removeTipoOT(id)}
+                                    />
+                                    <TabelaInlineEditor
+                                        titulo="Tipos de Documento"
+                                        colunas={[
+                                            { key: 'codigo',    label: 'Código' },
+                                            { key: 'descricao', label: 'Descrição' },
+                                        ]}
+                                        rows={tiposDocumento}
+                                        onAdd={r => addTipoDocumento({ codigo: r.codigo, descricao: r.descricao })}
+                                        onUpdate={(id, field, val) => updateTipoDocumento(id, { [field]: val })}
+                                        onRemove={id => removeTipoDocumento(id)}
+                                    />
+                                    <div style={{ gridColumn: '1 / -1' }}>
+                                        <TabelaInlineEditor
+                                            titulo="Funções de Técnico"
+                                            colunas={[
+                                                { key: 'codigo',    label: 'Código' },
+                                                { key: 'descricao', label: 'Descrição' },
+                                                { key: 'custo',     label: 'Custo/h (AOA)', type: 'number' },
+                                            ]}
+                                            rows={funcoesTecnico}
+                                            onAdd={r => addFuncaoTecnico({ codigo: r.codigo, descricao: r.descricao, custo: Number(r.custo) })}
+                                            onUpdate={(id, field, val) => updateFuncaoTecnico(id, { [field]: val })}
+                                            onRemove={id => removeFuncaoTecnico(id)}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* ── Grupo: Artigos & Stock ── */}
+                                <div style={{ padding: '10px 0 6px', marginBottom: 4, borderBottom: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                                    Artigos & Stock
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                                    <TabelaInlineEditor
+                                        titulo="Classes de Artigo"
+                                        colunas={[
+                                            { key: 'descricao', label: 'Descrição' },
+                                        ]}
+                                        rows={classesArtigo}
+                                        onAdd={r => addClasseArtigo({ descricao: r.descricao })}
+                                        onUpdate={(id, field, val) => updateClasseArtigo(id, { [field]: val })}
+                                        onRemove={id => removeClasseArtigo(id)}
+                                    />
+                                    <TabelaInlineEditor
+                                        titulo="Famílias de Artigo"
+                                        colunas={[
+                                            { key: 'descricao', label: 'Descrição' },
+                                        ]}
+                                        rows={familiasArtigo}
+                                        onAdd={r => addFamiliaArtigo({ descricao: r.descricao })}
+                                        onUpdate={(id, field, val) => updateFamiliaArtigo(id, { [field]: val })}
+                                        onRemove={id => removeFamiliaArtigo(id)}
+                                    />
+                                    <TabelaInlineEditor
+                                        titulo="Documentos de Compra"
+                                        colunas={[
+                                            { key: 'codigo', label: 'Código' },
+                                            { key: 'descricao', label: 'Descrição' },
+                                        ]}
+                                        rows={documentosCompra}
+                                        onAdd={r => addDocumentoCompra({ codigo: r.codigo, descricao: r.descricao })}
+                                        onUpdate={(id, field, val) => updateDocumentoCompra(id, { [field]: val })}
+                                        onRemove={id => removeDocumentoCompra(id)}
+                                    />
+                                    <div style={{ gridColumn: '1 / -1' }}>
+                                        <TabelaInlineEditor
+                                            titulo="Armazéns"
+                                            colunas={[
+                                                { key: 'codigo',    label: 'Código' },
+                                                { key: 'nome',      label: 'Nome' },
+                                                { key: 'descricao', label: 'Descrição' },
+                                            ]}
+                                            rows={armazens}
+                                            onAdd={r => addArmazem({ codigo: r.codigo, nome: r.nome, descricao: r.descricao, ativo: true })}
+                                            onUpdate={(id, field, val) => updateArmazem(id, { [field]: val })}
+                                            onRemove={id => updateArmazem(id, { ativo: false })}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* ── Grupo: Financeiro ── */}
+                                <div style={{ padding: '10px 0 6px', marginBottom: 4, borderBottom: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                                    Financeiro
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                                    <TabelaInlineEditor
+                                        titulo="Condições de Pagamento"
+                                        colunas={[
+                                            { key: 'descricao', label: 'Descrição' },
+                                            { key: 'numDias', label: 'Nº Dias', type: 'number' },
+                                            { key: 'desconto', label: 'Desconto (%)', type: 'number' },
+                                        ]}
+                                        rows={condicoesPagamento}
+                                        onAdd={r => addCondicaoPagamento({ descricao: r.descricao, numDias: Number(r.numDias) || 0, desconto: Number(r.desconto) || 0 })}
+                                        onUpdate={(id, field, val) => updateCondicaoPagamento(id, { [field]: field === 'descricao' ? val : Number(val) })}
+                                        onRemove={id => removeCondicaoPagamento(id)}
+                                    />
+                                    <div style={{ gridColumn: '1 / -1' }}>
+                                        <TabelaInlineEditor
+                                            titulo="Modos de Pagamento"
+                                            colunas={[
+                                                { key: 'movimento', label: 'Código' },
+                                                { key: 'descricao', label: 'Descrição' },
+                                            ]}
+                                            rows={modosPagamento}
+                                            onAdd={r => addModoPagamento({ movimento: r.movimento, descricao: r.descricao })}
+                                            onUpdate={(id, field, val) => updateModoPagamento(id, { [field]: val })}
+                                            onRemove={id => removeModoPagamento(id)}
+                                        />
+                                    </div>
+                                </div>
+
+                            </div>
+                        )}
 
                         {/* ── SEGURANÇA ── */}
                         {tab === 'seguranca' && <>
