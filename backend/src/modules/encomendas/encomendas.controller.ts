@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
 import { EncomendaService } from './encomendas.service';
 
-@Controller('encomendas')
+@Controller('compras')
 export class EncomendaController {
     constructor(private readonly service: EncomendaService) {}
 

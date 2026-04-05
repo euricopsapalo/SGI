@@ -6,7 +6,7 @@ import SearchableSelect from '../../components/SearchableSelect';
 import {
     useGlobal, Encomenda, EncomendaLinha, EncomendaEstado, EmpresaConfig, Artigo, TaxaIva,
     Rececao, RececaoItem, FaturaFornecedor, LinhaFaturaFornecedor, DocumentoCompra,
-    CondicaoPagamento, ModoPagamento,
+    CondicaoPagamento, ModoPagamento, Fornecedor,
 } from '../../contexts/GlobalContext';
 import {
     Search, Plus, X, AlertCircle, Check, ShoppingCart,
@@ -544,8 +544,17 @@ function printNotaEntrada(
     setTimeout(() => { w.print(); }, 400);
 }
 
-/* ══ Print Fatura Fornecedor ════════════════════════════════ */
-function buildFaturaFornecedorHtml(fatura: FaturaFornecedor, fornecedorNome: string, empresa?: EmpresaConfig, simbolo?: string, artigos?: Artigo[], condicoes?: CondicaoPagamento[], modos?: ModoPagamento[]): string {
+/* ══ Print Fatura Fornecedor (VFA / VFR) ════════════════════ */
+function buildFaturaFornecedorHtml(
+    fatura: FaturaFornecedor,
+    fornecedor: Fornecedor | undefined,
+    empresa?: EmpresaConfig,
+    simbolo?: string,
+    artigos?: Artigo[],
+    condicoes?: CondicaoPagamento[],
+    modos?: ModoPagamento[],
+    conferidor?: string,
+): string {
     const emp = empresa ?? {} as EmpresaConfig;
     const { fmt, fmtMoney, fmtDate } = makePrintFmt(emp, simbolo);
 
@@ -555,25 +564,36 @@ function buildFaturaFornecedorHtml(fatura: FaturaFornecedor, fornecedorNome: str
         Anulada:  { label: 'ANULADA',  color: '#6b7280', bg: 'rgba(107,114,128,0.08)', border: '#6b7280' },
     };
     const stamp = stampMap[fatura.estadoPagamento] ?? stampMap['Pendente'];
+    const dataRegisto = fatura.dataRegistoSistema
+        ? fmtDate(String(fatura.dataRegistoSistema).split('T')[0])
+        : new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-    const dataGeracao = new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const modoPag = fatura.modoPagamentoId && modos
+        ? modos.find(m => String(m.id) === String(fatura.modoPagamentoId))?.descricao ?? '—'
+        : '—';
+    const condPag = fatura.condicaoPagamentoId && condicoes
+        ? (() => { const c = condicoes.find(x => String(x.id) === String(fatura.condicaoPagamentoId)); return c ? `${c.descricao}${c.numDias > 0 ? ` (${c.numDias} dias)` : ''}` : '—'; })()
+        : '—';
 
     const linhasHtml = (fatura.linhas ?? []).map(l => {
         const art = artigos?.find(a => a.id === String(l.produtoId ?? ''));
         const descricao = l.descricaoCustomizada || art?.descricao || '—';
-        const codigo    = art?.codigo ?? '';
+        const codigo    = art?.codigo ?? '—';
         return `
         <tr>
-            <td style="font-family:monospace;font-size:8.5pt">${codigo || '—'}</td>
+            <td style="font-family:monospace;font-size:8.5pt">${codigo}</td>
             <td>${descricao}</td>
             <td style="text-align:right">${fmt(l.quantidade)}</td>
             <td style="text-align:center">${l.unidadeVenda || 'UN'}</td>
             <td style="text-align:right">${fmtMoney(l.precoUnitarioNet, fatura.moeda)}</td>
-            <td style="text-align:right">${l.taxaIva > 0 ? `<span style="color:#7c3aed;font-weight:600">${l.taxaIva}%</span>` : '—'}</td>
-            <td style="text-align:right">${fmtMoney(l.valorIva, fatura.moeda)}</td>
+            <td style="text-align:right">${l.taxaIva > 0 ? `<span style="color:#40cfff;font-weight:600">${l.taxaIva}%</span>` : '—'}</td>
             <td style="text-align:right;font-weight:600">${fmtMoney(l.valorTotalLinha, fatura.moeda)}</td>
         </tr>`;
     }).join('');
+
+    const localizacoes = Array.from(new Set(
+        (fatura.linhas ?? []).map(l => artigos?.find(a => a.id === String(l.produtoId ?? ''))?.codigoArmazem).filter(Boolean)
+    )).join(', ') || '—';
 
     return `<!DOCTYPE html>
 <html lang="pt">
@@ -584,110 +604,384 @@ function buildFaturaFornecedorHtml(fatura: FaturaFornecedor, fornecedorNome: str
   @page { size: A4; margin: 18mm 15mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; font-size: 10pt; color: #1a1a1a; position: relative; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
   .empresa-nome { font-size: 13pt; font-weight: 800; }
   .empresa-info { font-size: 8.5pt; color: #666; margin-top: 3px; line-height: 1.5; }
   .doc-title { text-align: right; }
-  .doc-title h1 { font-size: 14pt; font-weight: 800; letter-spacing: 0.05em; color: #7c3aed; }
+  .doc-title h1 { font-size: 14pt; font-weight: 800; letter-spacing: 0.05em; color: #40cfff; }
   .doc-title .doc-num { font-size: 11pt; font-weight: 700; margin-top: 3px; }
-  .doc-title .doc-date { font-size: 9pt; color: #666; margin-top: 2px; }
-  .divider { border: none; border-top: 2px solid #7c3aed; margin: 12px 0; }
-  .divider-thin { border: none; border-top: 1px solid #e0e0e0; margin: 10px 0; }
-  .section { margin-bottom: 14px; }
-  .section-title { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #7c3aed; margin-bottom: 5px; }
-  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; font-size: 9pt; }
-  .info-row { display: flex; gap: 6px; margin-bottom: 3px; }
-  .info-label { color: #888; min-width: 110px; }
-  table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 12px 0; }
-  thead tr { background: #7c3aed; color: #fff; }
+  .doc-title .doc-sub { font-size: 8.5pt; color: #666; margin-top: 2px; }
+  .divider { border: none; border-top: 2px solid #40cfff; margin: 10px 0; }
+  .divider-thin { border: none; border-top: 1px solid #e0e0e0; margin: 8px 0; }
+  .section { margin-bottom: 12px; }
+  .section-title { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #40cfff; margin-bottom: 5px; border-bottom: 1px solid #e0f9ff; padding-bottom: 2px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 16px; }
+  .info-row { display: flex; gap: 6px; margin-bottom: 3px; font-size: 9pt; }
+  .info-label { color: #888; min-width: 110px; flex-shrink: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 8px 0; }
+  thead tr { background: #40cfff; color: #fff; }
   thead th { padding: 6px 8px; text-align: left; font-weight: 600; font-size: 8.5pt; }
-  tbody tr:nth-child(even) { background: #faf5ff; }
+  tbody tr:nth-child(even) { background: #f0fdff; }
   tbody td { padding: 5px 8px; border-bottom: 1px solid #e8e8e8; }
-  tfoot td { padding: 8px; font-weight: 700; }
-  .total-row { font-size: 11pt; }
-  .obs { font-size: 8.5pt; color: #666; margin-top: 10px; font-style: italic; }
-  .footer { margin-top: 24px; font-size: 7.5pt; color: #aaa; text-align: center; border-top: 1px solid #e0e0e0; padding-top: 8px; }
+  tfoot td { padding: 7px 8px; font-weight: 700; }
+  .total-row td { font-size: 11pt; border-top: 2px solid #40cfff; }
+  .obs { font-size: 8.5pt; color: #666; margin-top: 8px; font-style: italic; }
+  .footer { margin-top: 20px; font-size: 7.5pt; color: #aaa; text-align: center; border-top: 1px solid #e0e0e0; padding-top: 7px; }
   .stamp-watermark {
     position: fixed; top: 50%; left: 50%;
     transform: translate(-50%, -50%) rotate(-35deg);
-    font-size: 56pt; font-weight: 900; letter-spacing: 0.12em;
-    color: ${stamp.color}; opacity: 0.08;
-    pointer-events: none; z-index: 0;
+    font-size: 60pt; font-weight: 900; letter-spacing: 0.12em;
+    color: ${stamp.color}; opacity: 0.07;
+    pointer-events: none; z-index: 0; white-space: nowrap;
   }
   .stamp-badge {
-    display: inline-block;
-    border: 2.5px solid ${stamp.border};
+    display: inline-block; border: 2.5px solid ${stamp.border};
     color: ${stamp.color}; background: ${stamp.bg};
     padding: 3px 10px; border-radius: 4px;
-    font-size: 8.5pt; font-weight: 800; letter-spacing: 0.1em;
-    margin-top: 5px;
+    font-size: 8.5pt; font-weight: 800; letter-spacing: 0.1em; margin-top: 4px;
   }
   @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
 </style>
 </head>
 <body>
   <div class="stamp-watermark">${stamp.label}</div>
+
+  <!-- CABEÇALHO -->
   <div class="header">
     <div>
       <div class="empresa-nome">${emp.nome}</div>
       <div class="empresa-info">
+        NIF: ${emp.nif}<br>
         ${emp.morada}<br>
-        NIF: ${emp.nif} &nbsp;·&nbsp; Tel: ${emp.telefone}<br>
-        ${emp.email}
+        Tel: ${emp.telefone} &nbsp;·&nbsp; ${emp.email}
       </div>
     </div>
     <div class="doc-title">
       <h1>${fatura.tipoDocumento}</h1>
       <div class="doc-num">Nº ${fatura.numFaturaExterno}</div>
-      <div class="doc-date">Data de emissão: ${fmtDate(fatura.dataEmissao)}</div>
-      ${fatura.dataVencimento ? `<div class="doc-date">Data de vencimento: ${fmtDate(fatura.dataVencimento)}</div>` : ''}
-      <div class="doc-date">Registo: ${dataGeracao}</div>
+      <div class="doc-sub">Tipo: ${fatura.tipoDocumento} &nbsp;·&nbsp; Moeda: ${fatura.moeda}</div>
       <div><span class="stamp-badge">${stamp.label}</span></div>
     </div>
   </div>
   <hr class="divider">
-  <div class="info-grid">
-    <div class="section">
-      <div class="section-title">Fornecedor</div>
-      <div style="font-weight:600;font-size:10pt">${fornecedorNome}</div>
-    </div>
-    <div class="section">
-      <div class="section-title">Detalhes</div>
-      <div class="info-row"><span class="info-label">Tipo documento:</span><span>${fatura.tipoDocumento}</span></div>
-      <div class="info-row"><span class="info-label">Moeda:</span><span>${fatura.moeda}</span></div>
-      <div class="info-row"><span class="info-label">Estado pagamento:</span><span>${fatura.estadoPagamento}</span></div>
-      ${fatura.condicaoPagamentoId && condicoes ? (() => { const c = condicoes.find(x => String(x.id) === String(fatura.condicaoPagamentoId)); return c ? `<div class="info-row"><span class="info-label">Cond. Pagamento:</span><span>${c.descricao}${c.numDias > 0 ? ` (${c.numDias} dias)` : ''}</span></div>` : ''; })() : ''}
+
+  <!-- DATAS -->
+  <div class="section">
+    <div class="section-title">Datas</div>
+    <div class="grid-3">
+      <div class="info-row"><span class="info-label">Emissão:</span><span>${fmtDate(fatura.dataEmissao)}</span></div>
+      <div class="info-row"><span class="info-label">Entrega:</span><span>${dataRegisto}</span></div>
+      <div class="info-row"><span class="info-label">Vencimento:</span><span>${fatura.dataVencimento ? fmtDate(fatura.dataVencimento) : '—'}</span></div>
     </div>
   </div>
-  ${fatura.descricao ? `<div class="info-row" style="font-size:9pt;color:#555;margin-bottom:10px"><span class="info-label">Descrição:</span><span>${fatura.descricao}</span></div>` : ''}
   <hr class="divider-thin">
-  <div class="section-title" style="margin-top:10px">Artigos</div>
-  <table>
-    <thead><tr>
-      <th>Código</th>
-      <th>Descrição</th>
-      <th style="text-align:right">Qtd</th>
-      <th style="text-align:center">UN</th>
-      <th style="text-align:right">Preço Unit.</th>
-      <th style="text-align:right">IVA%</th>
-      <th style="text-align:right">Valor IVA</th>
-      <th style="text-align:right">Total c/ IVA</th>
-    </tr></thead>
-    <tbody>${linhasHtml}</tbody>
-    <tfoot>
-      <tr><td colspan="7" style="text-align:right;padding-right:12px;font-size:8.5pt;color:#555">Subtotal s/ IVA</td><td style="text-align:right;font-size:8.5pt">${fmtMoney(fatura.totalLiquido, fatura.moeda)}</td></tr>
-      <tr><td colspan="7" style="text-align:right;padding-right:12px;font-size:8.5pt;color:#555">IVA</td><td style="text-align:right;font-size:8.5pt;color:#7c3aed">${fmtMoney(fatura.totalIva, fatura.moeda)}</td></tr>
-      ${fatura.totalRetencao > 0 ? `<tr><td colspan="7" style="text-align:right;padding-right:12px;font-size:8.5pt;color:#555">Retenção</td><td style="text-align:right;font-size:8.5pt;color:#dc2626">− ${fmtMoney(fatura.totalRetencao, fatura.moeda)}</td></tr>` : ''}
-      <tr class="total-row"><td colspan="7" style="text-align:right;padding-right:12px;border-top:2px solid #7c3aed">TOTAL FINAL</td><td style="text-align:right;border-top:2px solid #7c3aed">${fmtMoney(fatura.totalFinal, fatura.moeda)}</td></tr>
-    </tfoot>
-  </table>
+
+  <!-- FORNECEDOR -->
+  <div class="section">
+    <div class="section-title">Fornecedor</div>
+    <div class="grid-2">
+      <div>
+        <div style="font-weight:700;font-size:10pt;margin-bottom:3px">${fornecedor?.nome ?? '—'}</div>
+        <div class="info-row"><span class="info-label">NIF:</span><span>${fornecedor?.nif ?? '—'}</span></div>
+        <div class="info-row"><span class="info-label">Endereço:</span><span>${fornecedor?.morada ?? '—'}</span></div>
+        <div class="info-row"><span class="info-label">Contacto:</span><span>${fornecedor?.telefone ?? '—'} ${fornecedor?.email ? `· ${fornecedor.email}` : ''}</span></div>
+      </div>
+      <div>
+        <div class="info-row"><span class="info-label">Cond. Pagamento:</span><span>${condPag}</span></div>
+        ${fatura.descricao ? `<div class="info-row"><span class="info-label">Descrição:</span><span>${fatura.descricao}</span></div>` : ''}
+      </div>
+    </div>
+  </div>
+  <hr class="divider-thin">
+
+  <!-- ARTIGOS -->
+  <div class="section">
+    <div class="section-title">Artigos</div>
+    <table>
+      <thead><tr>
+        <th>Código</th><th>Descrição</th>
+        <th style="text-align:right">Qtd</th><th style="text-align:center">UN</th>
+        <th style="text-align:right">Preço Unit.</th><th style="text-align:right">IVA %</th>
+        <th style="text-align:right">Total c/ IVA</th>
+      </tr></thead>
+      <tbody>${linhasHtml}</tbody>
+    </table>
+  </div>
+
+  <!-- RESUMO FINANCEIRO -->
+  <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+    <table style="width:280px;margin:0">
+      <thead><tr><th colspan="2" style="text-align:left">Resumo Financeiro</th></tr></thead>
+      <tbody>
+        <tr><td style="color:#555">Subtotal:</td><td style="text-align:right">${fmtMoney(fatura.totalLiquido, fatura.moeda)}</td></tr>
+        <tr><td style="color:#40cfff">IVA:</td><td style="text-align:right;color:#40cfff">${fmtMoney(fatura.totalIva, fatura.moeda)}</td></tr>
+        ${fatura.totalRetencao > 0 ? `<tr><td style="color:#dc2626">Retenção:</td><td style="text-align:right;color:#dc2626">− ${fmtMoney(fatura.totalRetencao, fatura.moeda)}</td></tr>` : ''}
+      </tbody>
+      <tfoot><tr class="total-row"><td>TOTAL FINAL</td><td style="text-align:right">${fmtMoney(fatura.totalFinal, fatura.moeda)}</td></tr></tfoot>
+    </table>
+  </div>
+
+  <!-- PAGAMENTO -->
+  <div class="section">
+    <div class="section-title">Pagamento</div>
+    <div class="grid-2">
+      <div>
+        <div class="info-row"><span class="info-label">Método:</span><span>${modoPag}</span></div>
+        <div class="info-row"><span class="info-label">Data de Pagamento:</span><span>${fatura.dataPagamento ? fmtDate(fatura.dataPagamento) : '—'}</span></div>
+        <div class="info-row"><span class="info-label">Referência:</span><span>${fatura.referenciaPagamento ?? '—'}</span></div>
+      </div>
+      <div>
+        <div class="info-row"><span class="info-label">Estado:</span>
+          <span style="font-weight:700;color:${stamp.color}">${stamp.label}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <hr class="divider-thin">
+
+  <!-- RECEPÇÃO -->
+  <div class="section">
+    <div class="section-title">Recepção</div>
+    <div class="grid-3">
+      <div class="info-row"><span class="info-label">Data de Recepção:</span><span>${dataRegisto}</span></div>
+      <div class="info-row"><span class="info-label">Conferidor:</span><span>${conferidor ?? '—'}</span></div>
+      <div class="info-row"><span class="info-label">Localização:</span><span>${localizacoes}</span></div>
+    </div>
+  </div>
+
   ${fatura.observacoes ? `<div class="obs">Observações: ${fatura.observacoes}</div>` : ''}
-  <div class="footer">${emp.nome} · ${emp.morada} · NIF: ${emp.nif}</div>
+  <div class="footer">${emp.nome} &nbsp;·&nbsp; NIF: ${emp.nif} &nbsp;·&nbsp; ${emp.morada}</div>
 </body>
 </html>`;
 }
-function printFaturaFornecedor(fatura: FaturaFornecedor, fornecedorNome: string, empresa?: EmpresaConfig, simbolo?: string, artigos?: Artigo[], condicoes?: CondicaoPagamento[], modos?: ModoPagamento[]) {
-    const html = buildFaturaFornecedorHtml(fatura, fornecedorNome, empresa, simbolo, artigos, condicoes, modos);
+
+/* ══ Print VNC ══════════════════════════════════════════════ */
+function buildVNCHtml(
+    fatura: FaturaFornecedor,
+    fornecedor: Fornecedor | undefined,
+    empresa?: EmpresaConfig,
+    simbolo?: string,
+    artigos?: Artigo[],
+    _condicoes?: CondicaoPagamento[],
+    _modos?: ModoPagamento[],
+    conferidor?: string,
+): string {
+    const emp = empresa ?? {} as EmpresaConfig;
+    const { fmt, fmtMoney, fmtDate } = makePrintFmt(emp, simbolo);
+
+    const estadoEfetivo = (!fatura.estadoDocumento || fatura.estadoDocumento === 'NA') ? 'Rascunho' : fatura.estadoDocumento;
+    const vncStampMap: Record<string, { label: string; color: string; bg: string; border: string }> = {
+        Rascunho:         { label: 'RASCUNHO',      color: '#374151', bg: 'rgba(55,65,81,0.07)',   border: '#374151' },
+        AguardaAprovacao: { label: 'EM APROVAÇÃO',  color: '#b45309', bg: 'rgba(180,83,9,0.07)',   border: '#b45309' },
+        Validado:         { label: 'VALIDADO',       color: '#15803d', bg: 'rgba(21,128,61,0.07)', border: '#15803d' },
+    };
+    const stamp = vncStampMap[estadoEfetivo] ?? vncStampMap['Rascunho'];
+
+    const isDevolucao  = fatura.tipoNotaCredito === 'Devolucao';
+    const isAcerto     = fatura.tipoNotaCredito === 'AcertoPreco';
+    const dataRegisto  = fatura.dataRegistoSistema
+        ? fmtDate(String(fatura.dataRegistoSistema).split('T')[0])
+        : new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    const tipoNCLabel = isDevolucao ? 'Devolução (Impacto Logístico + Financeiro)' : isAcerto ? 'Acerto de Preço (Impacto Financeiro)' : '—';
+
+    const faturasOrigHtml = (fatura.faturasAssociadas ?? []).map(fa =>
+        `<div class="info-row"><span class="info-label">Fatura Original:</span><span style="font-weight:600">${fa.faturaAssociada?.tipoDocumento ?? ''} ${fa.faturaAssociada?.numFaturaExterno ?? String(fa.faturaAssociadaId)}</span></div>`
+    ).join('') || '<div class="info-row"><span style="color:#888">—</span></div>';
+
+    const artigosDevHtml = isDevolucao ? (fatura.linhas ?? []).map(l => {
+        const art = artigos?.find(a => a.id === String(l.produtoId ?? ''));
+        const descricao = l.descricaoCustomizada || art?.descricao || '—';
+        const codigo    = art?.codigo ?? '—';
+        const armazem   = art?.codigoArmazem ?? '—';
+        return `
+        <tr>
+            <td style="font-family:monospace;font-size:8.5pt">${codigo}</td>
+            <td>${descricao}</td>
+            <td style="text-align:right">${fmt(l.quantidade)}</td>
+            <td style="text-align:right">${fmtMoney(l.precoUnitarioNet, fatura.moeda)}</td>
+            <td style="text-align:right">${l.taxaIva > 0 ? `${l.taxaIva}%` : '—'}</td>
+            <td style="text-align:center">${armazem}</td>
+            <td style="text-align:right;font-weight:600">${fmtMoney(l.valorTotalLinha, fatura.moeda)}</td>
+        </tr>`;
+    }).join('') : '';
+
+    const totalDevolvido = isDevolucao
+        ? (fatura.linhas ?? []).reduce((s, l) => s + Number(l.quantidade), 0)
+        : 0;
+
+    return `<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<title>VNC — ${fatura.numFaturaExterno}</title>
+<style>
+  @page { size: A4; margin: 18mm 15mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 10pt; color: #1a1a1a; position: relative; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .empresa-nome { font-size: 13pt; font-weight: 800; }
+  .empresa-info { font-size: 8.5pt; color: #666; margin-top: 3px; line-height: 1.5; }
+  .doc-title { text-align: right; }
+  .doc-title h1 { font-size: 14pt; font-weight: 800; letter-spacing: 0.05em; color: #40cfff; }
+  .doc-title .doc-num { font-size: 11pt; font-weight: 700; margin-top: 3px; }
+  .doc-title .doc-sub { font-size: 8.5pt; color: #666; margin-top: 2px; }
+  .divider { border: none; border-top: 2px solid #40cfff; margin: 10px 0; }
+  .divider-thin { border: none; border-top: 1px solid #e0e0e0; margin: 8px 0; }
+  .section { margin-bottom: 12px; }
+  .section-title { font-size: 8pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #40cfff; margin-bottom: 5px; border-bottom: 1px solid #e0f9ff; padding-bottom: 2px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 16px; }
+  .info-row { display: flex; gap: 6px; margin-bottom: 3px; font-size: 9pt; }
+  .info-label { color: #888; min-width: 130px; flex-shrink: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 8px 0; }
+  thead tr { background: #40cfff; color: #fff; }
+  thead th { padding: 6px 8px; text-align: left; font-weight: 600; font-size: 8.5pt; }
+  tbody tr:nth-child(even) { background: #f0fdff; }
+  tbody td { padding: 5px 8px; border-bottom: 1px solid #e8e8e8; }
+  tfoot td { padding: 7px 8px; font-weight: 700; }
+  .total-row td { border-top: 2px solid #40cfff; }
+  .impact-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; }
+  .impact-box .impact-title { font-size: 8.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #374151; margin-bottom: 5px; }
+  .obs { font-size: 8.5pt; color: #666; margin-top: 8px; font-style: italic; }
+  .footer { margin-top: 20px; font-size: 7.5pt; color: #aaa; text-align: center; border-top: 1px solid #e0e0e0; padding-top: 7px; }
+  .stamp-watermark {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) rotate(-35deg);
+    font-size: 52pt; font-weight: 900; letter-spacing: 0.12em;
+    color: ${stamp.color}; opacity: 0.07;
+    pointer-events: none; z-index: 0; white-space: nowrap;
+  }
+  .stamp-badge {
+    display: inline-block; border: 2.5px solid ${stamp.border};
+    color: ${stamp.color}; background: ${stamp.bg};
+    padding: 3px 10px; border-radius: 4px;
+    font-size: 8.5pt; font-weight: 800; letter-spacing: 0.1em; margin-top: 4px;
+  }
+  @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+  <div class="stamp-watermark">${stamp.label}</div>
+
+  <!-- CABEÇALHO -->
+  <div class="header">
+    <div>
+      <div class="empresa-nome">${emp.nome}</div>
+      <div class="empresa-info">
+        NIF: ${emp.nif}<br>
+        ${emp.morada}<br>
+        Tel: ${emp.telefone} &nbsp;·&nbsp; ${emp.email}
+      </div>
+    </div>
+    <div class="doc-title">
+      <h1>VNC</h1>
+      <div class="doc-num">Nº ${fatura.numFaturaExterno}</div>
+      <div class="doc-sub">Tipo de Documento: VNC &nbsp;·&nbsp; Moeda: ${fatura.moeda}</div>
+      <div><span class="stamp-badge">${stamp.label}</span></div>
+    </div>
+  </div>
+  <hr class="divider">
+
+  <!-- DATAS -->
+  <div class="section">
+    <div class="section-title">Datas</div>
+    <div class="grid-2">
+      <div class="info-row"><span class="info-label">Emissão (Fornecedor):</span><span>${fmtDate(fatura.dataEmissao)}</span></div>
+      <div class="info-row"><span class="info-label">Registo (Sistema):</span><span>${dataRegisto}</span></div>
+    </div>
+  </div>
+  <hr class="divider-thin">
+
+  <!-- FORNECEDOR -->
+  <div class="section">
+    <div class="section-title">Fornecedor (Origem)</div>
+    <div style="font-weight:700;font-size:10pt;margin-bottom:4px">${fornecedor?.nome ?? '—'}</div>
+    <div class="info-row"><span class="info-label">NIF:</span><span>${fornecedor?.nif ?? '—'}</span></div>
+    <div class="info-row"><span class="info-label">Endereço/Contacto:</span><span>${fornecedor?.morada ?? '—'}${fornecedor?.telefone ? ` | Tel: ${fornecedor.telefone}` : ''}</span></div>
+  </div>
+  <hr class="divider-thin">
+
+  <!-- DOCUMENTO ORIGINAL -->
+  <div class="section">
+    <div class="section-title">Documento Original</div>
+    ${faturasOrigHtml}
+  </div>
+  <hr class="divider-thin">
+
+  <!-- MOTIVO -->
+  <div class="section">
+    <div class="section-title">Motivo da Nota de Crédito</div>
+    <div class="info-row"><span class="info-label">Tipo:</span><span style="font-weight:600">${tipoNCLabel}</span></div>
+    ${fatura.descricao ? `<div class="info-row"><span class="info-label">Descrição:</span><span>${fatura.descricao}</span></div>` : ''}
+  </div>
+
+  ${isDevolucao ? `
+  <hr class="divider-thin">
+  <!-- ARTIGOS DEVOLVIDOS -->
+  <div class="section">
+    <div class="section-title">Artigos Devolvidos (Impacto Logístico)</div>
+    <table>
+      <thead><tr>
+        <th>Código</th><th>Descrição</th>
+        <th style="text-align:right">Qtd</th>
+        <th style="text-align:right">Preço Unit.</th>
+        <th style="text-align:right">IVA (%)</th>
+        <th style="text-align:center">Armazém</th>
+        <th style="text-align:right">Total</th>
+      </tr></thead>
+      <tbody>${artigosDevHtml}</tbody>
+    </table>
+  </div>` : ''}
+
+  <!-- RESUMO FINANCEIRO (impacto financeiro — sempre presente) -->
+  <hr class="divider-thin">
+  <div class="section">
+    <div class="section-title">Resumo Financeiro (Impacto Financeiro)</div>
+    <div style="display:flex;justify-content:flex-end">
+      <table style="width:320px;margin:0">
+        <tbody>
+          <tr><td style="color:#555">Subtotal:</td><td style="text-align:right">${fmtMoney(fatura.totalLiquido, fatura.moeda)}</td></tr>
+          <tr><td style="color:#555">IVA:</td><td style="text-align:right">${fmtMoney(fatura.totalIva, fatura.moeda)}</td></tr>
+          ${fatura.totalRetencao > 0 ? `<tr><td style="color:#dc2626">Retenção:</td><td style="text-align:right;color:#dc2626">− ${fmtMoney(fatura.totalRetencao, fatura.moeda)}</td></tr>` : ''}
+        </tbody>
+        <tfoot><tr class="total-row">
+          <td style="color:#dc2626;font-size:10.5pt">CRÉDITO A SEU FAVOR</td>
+          <td style="text-align:right;color:#dc2626;font-size:10.5pt">${fmtMoney(fatura.totalFinal, fatura.moeda)}</td>
+        </tr></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- RESUMO IMPACTOS -->
+  <hr class="divider-thin">
+  <div class="section">
+    <div class="section-title">Resumo de Impactos</div>
+    <div class="impact-box">
+      ${isDevolucao ? `<div class="impact-title">Impacto Logístico</div>
+      <div class="info-row"><span class="info-label">Total Devolvido:</span><span style="font-weight:700">${fmt(totalDevolvido)} UN</span></div>` : ''}
+      <div class="impact-title" style="margin-top:${isDevolucao ? 8 : 0}px">Impacto Financeiro</div>
+      <div class="info-row"><span class="info-label">Crédito Autorizado:</span><span style="font-weight:700;color:#dc2626">${fmtMoney(fatura.totalFinal, fatura.moeda)}</span></div>
+      <div style="margin-top:8px" class="info-row"><span class="info-label">Status Geral:</span>
+        <span style="font-weight:700;color:${stamp.color}">${estadoEfetivo === 'AguardaAprovacao' ? 'Aguarda Aprovação' : estadoEfetivo}</span>
+      </div>
+    </div>
+  </div>
+
+  ${fatura.observacoes ? `<div class="obs">Observações: ${fatura.observacoes}</div>` : ''}
+
+  <!-- RODAPÉ -->
+  <div class="footer">
+    Entidade de Registo: ${emp.nome} &nbsp;·&nbsp; NIF: ${emp.nif}<br>
+    Nota: Guarde este documento para fins de reconciliação contabilística. Emitido por ${fornecedor?.nome ?? '—'}.
+    ${conferidor ? `&nbsp;·&nbsp; Registado por: ${conferidor}` : ''}
+  </div>
+</body>
+</html>`;
+}
+
+function printDocFornecedor(html: string) {
     const w = window.open('', '_blank', 'width=794,height=1123');
     if (!w) return;
     w.document.write(html);
@@ -1334,13 +1628,47 @@ const ConvertFaturaModal: React.FC<ConvertFaturaModalProps> = ({ encomenda, onCl
     );
 };
 
+/* ══ VNC Estado Badge ═══════════════════════════════════════ */
+const VNC_ESTADO_COLORS: Record<string, { bg: string; color: string }> = {
+    Rascunho:         { bg: '#f3f4f6', color: '#374151' },
+    AguardaAprovacao: { bg: '#fefce8', color: '#b45309' },
+    Validado:         { bg: '#dcfce7', color: '#15803d' },
+};
+const VNC_TRANSITIONS: Record<string, { label: string; next: string } | null> = {
+    Rascunho:         { label: 'Enviar p/ Aprovação', next: 'AguardaAprovacao' },
+    AguardaAprovacao: { label: 'Validar',             next: 'Validado' },
+    Validado:         null,
+};
+interface VNCEstadoBadgeProps { fatura: FaturaFornecedor; onTransition: (novoEstado: string) => void; }
+const VNCEstadoBadge: React.FC<VNCEstadoBadgeProps> = ({ fatura, onTransition }) => {
+    const estado  = fatura.estadoDocumento;
+    const style   = VNC_ESTADO_COLORS[estado] ?? { bg: '#f3f4f6', color: '#374151' };
+    const action  = VNC_TRANSITIONS[estado];
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 600, borderRadius: 10, padding: '2px 8px', background: style.bg, color: style.color, whiteSpace: 'nowrap' }}>
+                {estado === 'AguardaAprovacao' ? 'Aguarda Apr.' : estado}
+            </span>
+            {action && (
+                <button
+                    className="abtn abtn-ghost"
+                    style={{ fontSize: '0.68rem', padding: '1px 6px', height: 22 }}
+                    onClick={() => onTransition(action.next)}
+                >
+                    {action.label}
+                </button>
+            )}
+        </div>
+    );
+};
+
 /* ══ Compra Direta Modal ════════════════════════════════════ */
 interface CompraDiretaModalProps {
     onClose: () => void;
-    onSave: (f: Omit<FaturaFornecedor, 'id'>) => void;
+    onSave: (f: Omit<FaturaFornecedor, 'id'> & { faturasAssociadasIds?: string[] }) => void;
 }
 const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }) => {
-    const { fornecedores, artigos, documentosCompra, taxasIva, fmt, fmtMoney, condicoesPagamento, modosPagamento } = useGlobal();
+    const { fornecedores, artigos, documentosCompra, taxasIva, fmt, fmtMoney, condicoesPagamento, modosPagamento, faturasFornecedor } = useGlobal();
 
     const [modalTab,    setModalTab]= useState<'documento' | 'condicoes'>('documento');
     const [fornId,      setFornId]  = useState('');
@@ -1354,6 +1682,11 @@ const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }
     const [taxaRet,     setTaxaRet] = useState(0);
     const [condicaoPagId, setCondId]= useState('');
     const [modoPagId,   setModoId]  = useState('');
+
+    // VNC-specific state
+    const isVNC = tipoDoc === 'VNC';
+    const [tipoNC,          setTipoNC]         = useState<'Devolucao' | 'AcertoPreco' | ''>('');
+    const [faturasAssocIds, setFaturasAssocIds] = useState<string[]>([]);
 
     type Linha = {
         produtoId: string; descricaoCustomizada: string;
@@ -1377,6 +1710,32 @@ const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }
             if (forn.modoPagamentoId)     setModoId(String(forn.modoPagamentoId));
         }
     }, [fornId, fornecedores]);
+
+    // Reset VNC fields when document type changes
+    React.useEffect(() => {
+        if (tipoDoc !== 'VNC') { setTipoNC(''); setFaturasAssocIds([]); }
+    }, [tipoDoc]);
+
+    // Pre-populate article lines from associated invoices (Devolução mode)
+    React.useEffect(() => {
+        if (tipoDoc !== 'VNC' || tipoNC !== 'Devolucao' || faturasAssocIds.length === 0) return;
+        const novasLinhas: typeof linhas = [];
+        for (const fatId of faturasAssocIds) {
+            const fat = faturasFornecedor.find(f => f.id === fatId);
+            if (!fat) continue;
+            for (const l of fat.linhas) {
+                novasLinhas.push({
+                    produtoId: l.produtoId ?? '', descricaoCustomizada: l.descricaoCustomizada ?? '',
+                    quantidade: String(l.quantidade), unidadeVenda: l.unidadeVenda,
+                    precoUnitarioNet: String(l.precoUnitarioNet), taxaIva: l.taxaIva,
+                    valorIva: l.valorIva, codigoIsencao: l.codigoIsencao ?? '',
+                    valorTotalLinha: l.valorTotalLinha,
+                });
+            }
+        }
+        if (novasLinhas.length > 0) setLinhas(novasLinhas);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [faturasAssocIds, tipoNC, tipoDoc]);
 
     const fornOpts = fornecedores.map(f => ({ value: f.id, label: f.nome, sub: f.nif }));
     // refFornecedor stores the supplier ID — filter artigos by selected supplier
@@ -1416,7 +1775,10 @@ const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }
         const e: Record<string, string> = {};
         if (!fornId) e.fornecedor = 'Obrigatório';
         if (!numFatura.trim()) e.numFatura = 'Obrigatório';
-        if (linhasCalc.length === 0) e.linhas = 'Adicione pelo menos uma linha';
+        if (isVNC && !tipoNC) e.tipoNC = 'Seleccione o tipo de nota de crédito';
+        if (!isVNC && linhasCalc.length === 0) e.linhas = 'Adicione pelo menos uma linha';
+        if (isVNC && tipoNC === 'AcertoPreco' && (!linhas[0]?.descricaoCustomizada?.trim() || !(Number(linhas[0]?.precoUnitarioNet) > 0)))
+            e.linhas = 'Indique a descrição e o valor do acerto';
         setErrors(e);
         return Object.keys(e).length === 0;
     };
@@ -1435,6 +1797,9 @@ const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }
             descricao: desc || undefined,
             condicaoPagamentoId: condicaoPagId || undefined,
             modoPagamentoId: modoPagId || undefined,
+            tipoNotaCredito: isVNC ? (tipoNC as 'Devolucao' | 'AcertoPreco') || null : null,
+            estadoDocumento: isVNC ? 'Rascunho' : 'NA',
+            faturasAssociadasIds: isVNC ? faturasAssocIds : [],
             linhas: linhasCalc.map(l => ({
                 produtoId: l.produtoId || undefined, descricaoCustomizada: l.descricaoCustomizada,
                 quantidade: Number(l.quantidade) || 0, unidadeVenda: l.unidadeVenda,
@@ -1523,10 +1888,53 @@ const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }
                                 <label className="form-label req">Nº Fatura Física</label>
                                 <input className={`form-input${errors.numFatura ? ' err' : ''}`} value={numFatura}
                                     onChange={e => { setNumFat(e.target.value); setErrors(p => ({ ...p, numFatura: '' })); }}
-                                    placeholder="Ex: FAT-2026-00123" />
+                                    placeholder={isVNC ? 'Ex: NC/2026/001' : 'Ex: FAT-2026-00123'} />
                                 {errors.numFatura && <span className="form-error"><AlertCircle size={11} /> {errors.numFatura}</span>}
                             </div>
                         </div>
+                        {/* VNC: Tipo de Nota de Crédito + Faturas Associadas */}
+                        {isVNC && (
+                            <>
+                                <div className="form-row" style={{ margin: '10px 0 0' }}>
+                                    <div className="form-group" style={{ margin: 0, flex: 1 }}>
+                                        <label className="form-label req">Tipo de Nota de Crédito</label>
+                                        <select className="form-select" value={tipoNC} onChange={e => setTipoNC(e.target.value as any)}>
+                                            <option value="">Seleccionar tipo...</option>
+                                            <option value="Devolucao">Devolução (Impacto Logístico + Financeiro)</option>
+                                            <option value="AcertoPreco">Acerto de Preço (Impacto Financeiro apenas)</option>
+                                        </select>
+                                        {errors.tipoNC && <span className="form-error"><AlertCircle size={11} /> {errors.tipoNC}</span>}
+                                    </div>
+                                </div>
+                                <div className="form-row" style={{ margin: '10px 0 0' }}>
+                                    <div className="form-group" style={{ margin: 0, flex: 1 }}>
+                                        <label className="form-label">Faturas Associadas (VFA/VFR do mesmo fornecedor)</label>
+                                        <div style={{ border: '1px solid var(--border)', borderRadius: 4, maxHeight: 130, overflowY: 'auto', padding: '4px 0', background: '#fff' }}>
+                                            {(() => {
+                                                const elegiveis = faturasFornecedor.filter(f =>
+                                                    (f.tipoDocumento === 'VFA' || f.tipoDocumento === 'VFR') &&
+                                                    (!fornId || f.fornecedorId === fornId)
+                                                );
+                                                if (elegiveis.length === 0) return (
+                                                    <div style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                                                        {fornId ? 'Nenhuma fatura VFA/VFR deste fornecedor.' : 'Seleccione um fornecedor para filtrar.'}
+                                                    </div>
+                                                );
+                                                return elegiveis.map(f => (
+                                                    <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', cursor: 'pointer', fontSize: '0.8rem' }}>
+                                                        <input type="checkbox" checked={faturasAssocIds.includes(f.id)}
+                                                            onChange={e => setFaturasAssocIds(prev => e.target.checked ? [...prev, f.id] : prev.filter(x => x !== f.id))} />
+                                                        <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', background: '#eff6ff', color: '#1d4ed8', borderRadius: 3, padding: '1px 5px' }}>{f.tipoDocumento}</span>
+                                                        <span style={{ fontWeight: 600 }}>{f.numFaturaExterno}</span>
+                                                        <span style={{ color: 'var(--text-muted)' }}>({f.dataEmissao})</span>
+                                                    </label>
+                                                ));
+                                            })()}
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
                         <div className="form-row" style={{ margin: '10px 0 0' }}>
                             <div className="form-group" style={{ margin: 0 }}>
                                 <label className="form-label req">Data de Emissão</label>
@@ -1556,10 +1964,42 @@ const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }
                     </div>
 
                     {/* Linhas */}
-                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Artigos</div>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                        {isVNC && tipoNC === 'AcertoPreco' ? 'Acerto / Serviço' : 'Artigos'}
+                    </div>
                     {errors.linhas && (
                         <div style={{ fontSize: '0.78rem', color: 'var(--red,#ef4444)', marginBottom: 8 }}><AlertCircle size={11} /> {errors.linhas}</div>
                     )}
+
+                    {/* AcertoPreco: simplified single-line form */}
+                    {isVNC && tipoNC === 'AcertoPreco' ? (
+                        <div style={{ background: 'var(--bg-subtle,#f8fafc)', borderRadius: 8, padding: '12px 14px', marginBottom: 10 }}>
+                            <div className="form-row" style={{ margin: 0 }}>
+                                <div className="form-group" style={{ margin: 0, flex: 3 }}>
+                                    <label className="form-label req">Descrição do Acerto</label>
+                                    <input className="form-input" placeholder="Ex: Acerto de preço factura VFA-2026-001..."
+                                        value={linhas[0]?.descricaoCustomizada ?? ''}
+                                        onChange={e => setLinhas([{ ...emptyLinha(), descricaoCustomizada: e.target.value, produtoId: '' }])} />
+                                </div>
+                                <div className="form-group" style={{ margin: 0, flex: 1 }}>
+                                    <label className="form-label req">Valor (sem IVA)</label>
+                                    <input type="number" min={0} step={0.01} className="form-input"
+                                        value={linhas[0]?.precoUnitarioNet ?? '0'}
+                                        onChange={e => setLinhas([{ ...emptyLinha(), descricaoCustomizada: linhas[0]?.descricaoCustomizada ?? '', produtoId: '', precoUnitarioNet: e.target.value, quantidade: '1' }])} />
+                                </div>
+                                <div className="form-group" style={{ margin: 0, flex: '0 0 80px' }}>
+                                    <label className="form-label">IVA %</label>
+                                    <input type="number" min={0} max={100} step={0.5} className="form-input"
+                                        value={linhas[0]?.taxaIva ?? 0}
+                                        onChange={e => setLinhas(p => p.map((l, i) => i === 0 ? { ...l, taxaIva: Number(e.target.value) } : l))} />
+                                </div>
+                            </div>
+                            <div style={{ marginTop: 8, fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                Acerto de Preço: sem impacto em stock. Só financeiro.
+                            </div>
+                        </div>
+                    ) : (
+                    <>
                     <table className="data-table" style={{ marginBottom: 0 }}>
                         <thead>
                             <tr>
@@ -1639,6 +2079,17 @@ const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }
                             </div>
                         </div>
                     </div>
+                    </>
+                    )}
+                    {/* Totals summary for AcertoPreco */}
+                    {isVNC && tipoNC === 'AcertoPreco' && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 20, borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 2 }}>
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Total a Pagar</div>
+                                <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--blue)' }}>{fmtMoney(totalFin, moeda)}</div>
+                            </div>
+                        </div>
+                    )}
                     <div className="form-group" style={{ marginTop: 12 }}>
                         <label className="form-label">Observações</label>
                         <textarea className="form-input" rows={2} style={{ resize: 'vertical' }} value={obs} onChange={e => setObs(e.target.value)} />
@@ -1648,7 +2099,7 @@ const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }
                 <div className="modal-footer">
                     <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
                     <button type="button" className="abtn abtn-primary" onClick={handleSave}>
-                        <Check size={12} /> Registar Compra
+                        <Check size={12} /> {isVNC ? 'Criar VNC (Rascunho)' : 'Registar Compra'}
                     </button>
                 </div>
             </div>
@@ -1894,7 +2345,7 @@ function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: st
 
 /* ══ Page ════════════════════════════════════════════════════ */
 const EncomendaPage: React.FC = () => {
-    const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, taxasIva, updateArtigo, addMovimento, currentUser, empresaConfig, fmtMoney, fmtDate, fmt, simboloMoeda, faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, condicoesPagamento, modosPagamento } = useGlobal();
+    const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, taxasIva, updateArtigo, addMovimento, currentUser, empresaConfig, fmtMoney, fmtDate, fmt, simboloMoeda, faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC, condicoesPagamento, modosPagamento, addLog } = useGlobal();
 
     const [pageTab,   setPageTab]   = useState<'encomendas' | 'sugestoes' | 'compras' | 'relatorios'>('encomendas');
     const [search,    setSearch]    = useState('');
@@ -1924,6 +2375,10 @@ const EncomendaPage: React.FC = () => {
     const [showConverter,    setShowConverter]    = useState(false);
     const [convertFatId,    setConvertFatId]     = useState<string | null>(null);
     const [showCompraDireta, setShowCompraDireta] = useState(false);
+    const [pagarModalId,    setPagarModalId]     = useState<string | null>(null);
+    const [pagarData,       setPagarData]        = useState('');
+    const [pagarModoId,     setPagarModoId]      = useState('');
+    const [pagarRef,        setPagarRef]         = useState('');
 
     const artigosRuptura = useMemo(() =>
         todosArtigos.filter(a => a.emRuptura && !a.inativo),
@@ -2078,10 +2533,50 @@ const EncomendaPage: React.FC = () => {
         } catch { showToast('Erro ao criar fatura.'); }
     };
 
-    const handleCompraDireta = async (f: Omit<FaturaFornecedor, 'id'>) => {
+    const handleVNCTransition = async (id: string, novoEstado: string) => {
+        const fatura = faturasFornecedor.find(f => f.id === id);
+        if (!fatura) return;
+        if (novoEstado === 'Validado' && fatura.tipoNotaCredito === 'Devolucao') {
+            if (!window.confirm('Validar esta VNC irá reduzir o stock dos artigos. Confirma?')) return;
+        }
+        try {
+            await updateEstadoVNC(id, novoEstado, currentUser?.nome);
+            showToast(novoEstado === 'Validado'
+                ? 'VNC validada. Stock e movimentos actualizados.'
+                : `Estado actualizado para: ${novoEstado}`);
+        } catch (e: any) {
+            showToast(e?.response?.data?.message ?? 'Erro ao actualizar estado.');
+        }
+    };
+
+    const openPagarModal = (id: string) => {
+        setPagarModalId(id);
+        setPagarData(new Date().toISOString().split('T')[0]);
+        setPagarModoId('');
+        setPagarRef('');
+    };
+
+    const handleConfirmarPagamento = async () => {
+        if (!pagarModalId) return;
+        try {
+            await updateFaturaFornecedor(pagarModalId, {
+                estadoPagamento: 'Paga',
+                dataPagamento: pagarData || new Date().toISOString().split('T')[0],
+                referenciaPagamento: pagarRef || null,
+                modoPagamentoId: pagarModoId || undefined,
+            });
+            showToast('Pagamento registado com sucesso.');
+        } catch { showToast('Erro ao registar pagamento.'); }
+        setPagarModalId(null);
+    };
+
+    const handleCompraDireta = async (f: Omit<FaturaFornecedor, 'id'> & { faturasAssociadasIds?: string[] }) => {
         try {
             await addFaturaFornecedor(f);
-            showToast('Compra direta registada. Stock actualizado.');
+            const isVNC = f.tipoDocumento === 'VNC';
+            showToast(isVNC
+                ? 'VNC criada em estado Rascunho. Sem impacto em stock até validação.'
+                : 'Compra direta registada. Stock actualizado.');
         } catch { showToast('Erro ao registar compra.'); }
     };
 
@@ -2438,12 +2933,20 @@ const EncomendaPage: React.FC = () => {
                 {/* ── Compras Tab ── */}
                 {pageTab === 'compras' && (<>
                     <div className="stats-row">
-                        {[
-                            { label: 'Total Faturas',  value: faturasFornecedor.length,                                               cls: 'blue' },
-                            { label: 'Pendentes',       value: faturasFornecedor.filter(f => f.estadoPagamento === 'Pendente').length, cls: 'orange' },
-                            { label: 'Pagas',           value: faturasFornecedor.filter(f => f.estadoPagamento === 'Paga').length,     cls: 'green' },
-                            { label: 'Valor Pendente',  value: fmtMoney(faturasFornecedor.filter(f => f.estadoPagamento === 'Pendente').reduce((s, f) => s + Number(f.totalFinal), 0)), cls: 'blue' },
-                        ].map(s => (
+                        {(() => {
+                            const naoVNC    = faturasFornecedor.filter(f => f.tipoDocumento !== 'VNC');
+                            const pendentes = naoVNC.filter(f => f.estadoPagamento === 'Pendente');
+                            const vencidas  = pendentes.filter(f => f.dataVencimento && f.dataVencimento < todayStr);
+                            const valorPago = naoVNC.filter(f => f.estadoPagamento === 'Paga').reduce((s, f) => s + Number(f.totalFinal), 0);
+                            return [
+                                { label: 'Total Faturas',  value: faturasFornecedor.length,                                          cls: 'blue' },
+                                { label: 'Pendentes',       value: pendentes.length,                                                  cls: 'orange' },
+                                { label: 'Vencidas',        value: vencidas.length,                                                   cls: vencidas.length > 0 ? 'red' : 'green' },
+                                { label: 'Pagas',           value: naoVNC.filter(f => f.estadoPagamento === 'Paga').length,           cls: 'green' },
+                                { label: 'Valor Pago',      value: fmtMoney(valorPago),                                               cls: 'green' },
+                                { label: 'Valor Pendente',  value: fmtMoney(pendentes.reduce((s, f) => s + Number(f.totalFinal), 0)), cls: pendentes.length > 0 ? 'orange' : 'blue' },
+                            ];
+                        })().map(s => (
                             <div key={s.label} className="stat-card">
                                 <span className="stat-label">{s.label}</span>
                                 <span className={`stat-value ${s.cls}`}>{s.value}</span>
@@ -2465,12 +2968,13 @@ const EncomendaPage: React.FC = () => {
                                         <th style={{ textAlign: 'right' }}>IVA</th>
                                         <th style={{ textAlign: 'right' }}>Total Final</th>
                                         <th>Estado Pgto</th>
+                                        <th>Estado Doc.</th>
                                         <th style={{ width: 90 }}></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {faturasFornecedor.length === 0 && (
-                                        <tr><td colSpan={10}>
+                                        <tr><td colSpan={11}>
                                             <div className="empty-state">
                                                 <Wallet size={28} />
                                                 <br />Nenhuma fatura de fornecedor registada.
@@ -2483,7 +2987,7 @@ const EncomendaPage: React.FC = () => {
                                     )}
                                     {faturasFornecedor.map(f => {
                                         const enc = encomendas.find(e => e.id === f.idEncomenda);
-                                        const vencida = f.dataVencimento && f.dataVencimento < todayStr && f.estadoPagamento === 'Pendente';
+                                        const vencida = f.tipoDocumento !== 'VNC' && f.dataVencimento && f.dataVencimento < todayStr && f.estadoPagamento === 'Pendente';
                                         return (
                                             <tr key={f.id} style={{ background: vencida ? '#fff5f5' : undefined }}>
                                                 <td>
@@ -2501,37 +3005,67 @@ const EncomendaPage: React.FC = () => {
                                                 </td>
                                                 <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{fmtDate(f.dataEmissao)}</td>
                                                 <td style={{ fontSize: '0.78rem', color: vencida ? '#dc2626' : 'var(--text-muted)', fontWeight: vencida ? 700 : 400 }}>
-                                                    {f.dataVencimento ? fmtDate(f.dataVencimento) : '—'}
+                                                    {f.tipoDocumento === 'VNC' ? '—' : (f.dataVencimento ? fmtDate(f.dataVencimento) : '—')}
                                                     {vencida && ' ⚠'}
                                                 </td>
                                                 <td style={{ textAlign: 'right', fontSize: '0.8rem' }}>{fmtMoney(f.totalLiquido, f.moeda)}</td>
                                                 <td style={{ textAlign: 'right', fontSize: '0.8rem', color: 'var(--blue)' }}>{fmtMoney(f.totalIva, f.moeda)}</td>
                                                 <td style={{ textAlign: 'right', fontSize: '0.8rem', fontWeight: 700 }}>{fmtMoney(f.totalFinal, f.moeda)}</td>
                                                 <td>
-                                                    <span style={{
-                                                        fontSize: '0.72rem', fontWeight: 600, borderRadius: 10, padding: '2px 8px',
-                                                        background: f.estadoPagamento === 'Paga' ? '#dcfce7' : f.estadoPagamento === 'Anulada' ? '#f3f4f6' : vencida ? '#fee2e2' : '#fefce8',
-                                                        color: f.estadoPagamento === 'Paga' ? '#15803d' : f.estadoPagamento === 'Anulada' ? '#6b7280' : vencida ? '#dc2626' : '#b45309',
-                                                    }}>
-                                                        {f.estadoPagamento}
-                                                    </span>
+                                                    {f.tipoDocumento === 'VNC' ? (
+                                                        <span style={{ fontSize: '0.72rem', fontWeight: 600, borderRadius: 10, padding: '2px 8px', background: '#f3f4f6', color: '#6b7280' }}>
+                                                            N/A
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{
+                                                            fontSize: '0.72rem', fontWeight: 600, borderRadius: 10, padding: '2px 8px',
+                                                            background: f.estadoPagamento === 'Paga' ? '#dcfce7' : f.estadoPagamento === 'Anulada' ? '#f3f4f6' : vencida ? '#fee2e2' : '#fefce8',
+                                                            color: f.estadoPagamento === 'Paga' ? '#15803d' : f.estadoPagamento === 'Anulada' ? '#6b7280' : vencida ? '#dc2626' : '#b45309',
+                                                        }}>
+                                                            {f.estadoPagamento}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    {f.tipoDocumento === 'VNC' ? (
+                                                        <VNCEstadoBadge
+                                                            fatura={{ ...f, estadoDocumento: (f.estadoDocumento === 'NA' || !f.estadoDocumento) ? 'Rascunho' : f.estadoDocumento }}
+                                                            onTransition={(est) => handleVNCTransition(f.id, est)}
+                                                        />
+                                                    ) : (
+                                                        <span style={{ fontSize: '0.72rem', fontWeight: 600, borderRadius: 10, padding: '2px 8px', background: '#f3f4f6', color: '#6b7280' }}>
+                                                            N/A
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td>
                                                     <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', alignItems: 'center' }}>
                                                         <button className="icon-btn" title="Pré-visualizar"
-                                                            onClick={() => setPreviewHtml(buildFaturaFornecedorHtml(f, getFornNome(f.fornecedorId), empresaConfig, simboloMoeda, todosArtigos, condicoesPagamento, modosPagamento))}>
+                                                            onClick={() => {
+                                                                const forn = fornecedores.find(x => x.id === f.fornecedorId);
+                                                                const html = f.tipoDocumento === 'VNC'
+                                                                    ? buildVNCHtml(f, forn, empresaConfig, simboloMoeda, todosArtigos, condicoesPagamento, modosPagamento, currentUser?.nome)
+                                                                    : buildFaturaFornecedorHtml(f, forn, empresaConfig, simboloMoeda, todosArtigos, condicoesPagamento, modosPagamento, currentUser?.nome);
+                                                                setPreviewHtml(html);
+                                                            }}>
                                                             <Eye size={14} />
                                                         </button>
                                                         <button className="icon-btn" title="Imprimir"
-                                                            onClick={() => printFaturaFornecedor(f, getFornNome(f.fornecedorId), empresaConfig, simboloMoeda, todosArtigos, condicoesPagamento, modosPagamento)}>
+                                                            onClick={() => {
+                                                                const forn = fornecedores.find(x => x.id === f.fornecedorId);
+                                                                const html = f.tipoDocumento === 'VNC'
+                                                                    ? buildVNCHtml(f, forn, empresaConfig, simboloMoeda, todosArtigos, condicoesPagamento, modosPagamento, currentUser?.nome)
+                                                                    : buildFaturaFornecedorHtml(f, forn, empresaConfig, simboloMoeda, todosArtigos, condicoesPagamento, modosPagamento, currentUser?.nome);
+                                                                printDocFornecedor(html);
+                                                            }}>
                                                             <Printer size={14} />
                                                         </button>
-                                                        {f.estadoPagamento === 'Pendente' && (
+                                                        {f.tipoDocumento !== 'VNC' && f.estadoPagamento === 'Pendente' && (
                                                             <button
                                                                 className="abtn abtn-success"
                                                                 style={{ fontSize: '0.7rem', padding: '2px 8px', height: 26 }}
                                                                 title="Marcar como Paga"
-                                                                onClick={() => updateFaturaFornecedor(f.id, { estadoPagamento: 'Paga' })}>
+                                                                onClick={() => openPagarModal(f.id)}>
                                                                 <Check size={11} /> Paga
                                                             </button>
                                                         )}
@@ -2794,6 +3328,40 @@ const EncomendaPage: React.FC = () => {
                     onClose={() => setShowCompraDireta(false)}
                     onSave={handleCompraDireta}
                 />
+            )}
+
+            {pagarModalId && ReactDOM.createPortal(
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: '#ffffff', borderRadius: 10, padding: 24, width: 400, boxShadow: '0 8px 40px rgba(0,0,0,0.32)', border: '1px solid #e5e7eb' }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <CreditCard size={16} style={{ color: '#16a34a' }} /> Registar Pagamento
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>
+                                Data de Pagamento
+                                <input type="date" className="form-input" value={pagarData} onChange={e => setPagarData(e.target.value)} style={{ marginTop: 4 }} />
+                            </label>
+                            <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>
+                                Modo de Pagamento
+                                <select className="form-input" value={pagarModoId} onChange={e => setPagarModoId(e.target.value)} style={{ marginTop: 4 }}>
+                                    <option value="">— Seleccionar —</option>
+                                    {modosPagamento.map(m => <option key={m.id} value={m.id}>{m.descricao}</option>)}
+                                </select>
+                            </label>
+                            <label style={{ fontSize: '0.82rem', fontWeight: 600 }}>
+                                Referência da Transacção
+                                <input type="text" className="form-input" placeholder="Nº transferência, cheque, etc." value={pagarRef} onChange={e => setPagarRef(e.target.value)} style={{ marginTop: 4 }} />
+                            </label>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 20, justifyContent: 'flex-end' }}>
+                            <button type="button" className="abtn abtn-secondary" onClick={() => setPagarModalId(null)}>Cancelar</button>
+                            <button type="button" className="abtn abtn-success" onClick={handleConfirmarPagamento}>
+                                <Check size={13} /> Confirmar Pagamento
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
 
 

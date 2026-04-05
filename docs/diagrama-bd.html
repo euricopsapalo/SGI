@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SGI — Diagrama de Base de Dados</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3148;
+      flex-shrink: 0;
+      gap: 12px;
+    }
+
+    header h1 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #a5b4fc;
+      white-space: nowrap;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background: #2d3148;
+      color: #e2e8f0;
+      border: 1px solid #3d4268;
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    button:hover { background: #3d4268; }
+    button.primary {
+      background: #4f46e5;
+      border-color: #6366f1;
+    }
+    button.primary:hover { background: #6366f1; }
+
+    #zoom-level {
+      font-size: 12px;
+      color: #94a3b8;
+      min-width: 40px;
+      text-align: center;
+    }
+
+    #canvas {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      cursor: grab;
+    }
+    #canvas.grabbing { cursor: grabbing; }
+
+    #diagram-wrapper {
+      position: absolute;
+      top: 0; left: 0;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+
+    #diagram-wrapper .mermaid {
+      padding: 32px;
+    }
+
+    /* Mermaid dark overrides */
+    #diagram-wrapper svg {
+      background: transparent !important;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>⬡ SGI Aquatex — Diagrama de Base de Dados</h1>
+  <div class="controls">
+    <button onclick="zoomIn()">＋ Zoom</button>
+    <span id="zoom-level">100%</span>
+    <button onclick="zoomOut()">－ Zoom</button>
+    <button onclick="resetView()">⟳ Resetar</button>
+    <button onclick="fitToScreen()">⛶ Ajustar</button>
+    <button class="primary" onclick="exportSVG()">↓ Exportar SVG</button>
+    <button class="primary" onclick="exportPNG()">↓ Exportar PNG</button>
+  </div>
+</header>
+
+<div id="canvas">
+  <div id="diagram-wrapper">
+    <div class="mermaid">
+erDiagram
+    paises {
+        int id PK
+        varchar nome
+        varchar codigo
+    }
+    provincias {
+        int id PK
+        varchar nome
+        int pais_id FK
+    }
+    municipios {
+        int id PK
+        varchar nome
+        int provincia_id FK
+    }
+    tipos_trabalho {
+        int id PK
+        varchar codigo
+        varchar descricao
+    }
+    funcoes_tecnico {
+        int id PK
+        varchar codigo
+        varchar descricao
+        numeric custo
+    }
+    armazens {
+        int id PK
+        varchar codigo
+        varchar nome
+        boolean ativo
+    }
+    configuracao_empresa {
+        int id PK
+        varchar nome
+        varchar nif
+        numeric taxa_iva
+    }
+    users {
+        int id PK
+        varchar nome
+        varchar email
+        varchar role
+        boolean ativo
+    }
+    clientes {
+        int id PK
+        varchar tipo
+        varchar nome
+        varchar nif
+        boolean ativo
+    }
+    cliente_enderecos {
+        int id PK
+        int cliente_id FK
+        text morada
+        boolean principal
+    }
+    tecnicos {
+        int id PK
+        varchar nome
+        int funcao_id FK
+        int id_user FK
+        numeric custo_hora
+    }
+    vendedores {
+        int id PK
+        varchar nome
+        numeric comissao_percentagem
+        int id_user FK
+    }
+    fornecedores {
+        int id PK
+        varchar nome
+        varchar nif
+        boolean ativo
+    }
+    modelos_equipamento {
+        int id PK
+        varchar nome
+        varchar marca
+        varchar tipo
+    }
+    artigos {
+        int id PK
+        varchar codigo
+        varchar descricao
+        numeric existencia
+        numeric stock_seguranca
+        boolean critico
+    }
+    movimentos_stock {
+        int id PK
+        int artigo_id FK
+        varchar tipo
+        numeric quantidade
+        timestamp data
+    }
+    equip_instalados {
+        int id PK
+        int cliente_id FK
+        int modelo_id FK
+        varchar nr_serie
+        date data_instalacao
+        varchar estado
+    }
+    equip_historico {
+        int id PK
+        int equip_instalado_id FK
+        date data
+        varchar tipo
+        text descricao
+    }
+    planos_manutencao {
+        int id PK
+        int equip_instalado_id FK
+        int tipo_trabalho_id FK
+        varchar periodicidade
+        boolean ativo
+    }
+    plano_maos_obra {
+        int id PK
+        int plano_id FK
+        int funcao_id FK
+        numeric custo
+    }
+    plano_artigos {
+        int id PK
+        int plano_id FK
+        int artigo_id FK
+        numeric quantidade
+    }
+    ordens_trabalho {
+        int id PK
+        int cliente_id FK
+        int equip_instalado_id FK
+        int plano_id FK
+        varchar estado
+        date data_prog_inicio
+    }
+    ot_maos_obra {
+        int id PK
+        int ot_id FK
+        varchar funcao
+        numeric custo
+    }
+    ot_artigos {
+        int id PK
+        int ot_id FK
+        int artigo_id FK
+        numeric quantidade
+    }
+    ot_reprogramacoes {
+        int id PK
+        int ordem_trabalho_id FK
+        date data_anterior
+        date nova_data
+        text motivo
+    }
+    encomendas {
+        int id PK
+        int fornecedor_id FK
+        varchar numero
+        varchar estado
+        date data
+    }
+    encomenda_linhas {
+        int id PK
+        int encomenda_id FK
+        int artigo_id FK
+        numeric qtd_encomendada
+        numeric qtd_recebida
+    }
+    faturas_v2 {
+        int id PK
+        int cliente_id FK
+        int ot_id
+        varchar estado
+        date data_emissao
+        numeric valor_total
+    }
+    fatura_linhas {
+        int id PK
+        int fatura_id FK
+        varchar descricao
+        numeric quantidade
+        numeric preco_unit
+    }
+    faturas_fornecedor {
+        int id PK
+        int fornecedor_id FK
+        int id_encomenda
+        varchar estado_pagamento
+        numeric total_final
+    }
+    linhas_fatura_fornecedor {
+        int id PK
+        int fatura_id FK
+        numeric quantidade
+        numeric preco_unitario_net
+    }
+    comissoes {
+        int id PK
+        int ot_id FK
+        int tecnico_id FK
+        int vendedor_id FK
+        numeric valor
+    }
+    sys_logs {
+        int id PK
+        timestamp timestamp
+        varchar usuario
+        varchar modulo
+        varchar acao
+    }
+
+    paises ||--o{ provincias : "tem"
+    provincias ||--o{ municipios : "tem"
+    users ||--o| tecnicos : "e"
+    users ||--o| vendedores : "e"
+    funcoes_tecnico ||--o{ tecnicos : "define"
+    funcoes_tecnico ||--o{ plano_maos_obra : "referencia"
+    clientes ||--o{ cliente_enderecos : "tem"
+    clientes ||--o{ equip_instalados : "possui"
+    clientes ||--o{ ordens_trabalho : "tem"
+    clientes ||--o{ faturas_v2 : "recebe"
+    modelos_equipamento ||--o{ equip_instalados : "descreve"
+    equip_instalados ||--o{ equip_historico : "regista"
+    equip_instalados ||--o{ planos_manutencao : "tem"
+    equip_instalados ||--o{ ordens_trabalho : "origina"
+    tipos_trabalho ||--o{ planos_manutencao : "classifica"
+    planos_manutencao ||--o{ plano_maos_obra : "inclui"
+    planos_manutencao ||--o{ plano_artigos : "inclui"
+    planos_manutencao ||--o{ ordens_trabalho : "gera"
+    artigos ||--o{ plano_artigos : "usado em"
+    artigos ||--o{ ot_artigos : "consume"
+    artigos ||--o{ encomenda_linhas : "encomendado"
+    artigos ||--o{ movimentos_stock : "move"
+    ordens_trabalho ||--o{ ot_maos_obra : "tem"
+    ordens_trabalho ||--o{ ot_artigos : "consome"
+    ordens_trabalho ||--o{ ot_reprogramacoes : "regista"
+    ordens_trabalho ||--o{ comissoes : "gera"
+    fornecedores ||--o{ encomendas : "recebe"
+    fornecedores ||--o{ faturas_fornecedor : "emite"
+    encomendas ||--o{ encomenda_linhas : "tem"
+    faturas_v2 ||--o{ fatura_linhas : "tem"
+    faturas_fornecedor ||--o{ linhas_fatura_fornecedor : "tem"
+    tecnicos ||--o{ comissoes : "recebe"
+    vendedores ||--o{ comissoes : "recebe"
+    </div>
+  </div>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    er: { useMaxWidth: false, layoutDirection: 'TB' },
+    themeVariables: {
+      darkMode: true,
+      background: '#0f1117',
+      primaryColor: '#4f46e5',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#6366f1',
+      lineColor: '#6366f1',
+      secondaryColor: '#1e2235',
+      tertiaryColor: '#1a1d27',
+      edgeLabelBackground: '#1a1d27',
+      attributeBackgroundColorEven: '#1e2235',
+      attributeBackgroundColorOdd: '#252840',
+    }
+  });
+
+  // ── Pan & Zoom ──────────────────────────────────────────────
+  const canvas  = document.getElementById('canvas');
+  const wrapper = document.getElementById('diagram-wrapper');
+  const zoomEl  = document.getElementById('zoom-level');
+
+  let scale = 1, tx = 0, ty = 0;
+  let dragging = false, startX = 0, startY = 0, startTx = 0, startTy = 0;
+
+  function applyTransform() {
+    wrapper.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
+    zoomEl.textContent = Math.round(scale * 100) + '%';
+  }
+
+  // Mouse wheel zoom
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect   = canvas.getBoundingClientRect();
+    const mx     = e.clientX - rect.left;
+    const my     = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? 1.1 : 0.9;
+    const ns     = Math.min(Math.max(scale * factor, 0.1), 5);
+    tx = mx - (mx - tx) * (ns / scale);
+    ty = my - (my - ty) * (ns / scale);
+    scale = ns;
+    applyTransform();
+  }, { passive: false });
+
+  // Drag to pan
+  canvas.addEventListener('mousedown', e => {
+    dragging = true; startX = e.clientX; startY = e.clientY;
+    startTx = tx; startTy = ty;
+    canvas.classList.add('grabbing');
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    tx = startTx + (e.clientX - startX);
+    ty = startTy + (e.clientY - startY);
+    applyTransform();
+  });
+  window.addEventListener('mouseup', () => {
+    dragging = false;
+    canvas.classList.remove('grabbing');
+  });
+
+  // Touch support
+  let lastDist = null;
+  canvas.addEventListener('touchstart', e => {
+    if (e.touches.length === 1) {
+      dragging = true;
+      startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+      startTx = tx; startTy = ty;
+    }
+  });
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 2) {
+      const dx   = e.touches[0].clientX - e.touches[1].clientX;
+      const dy   = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      if (lastDist) {
+        const factor = dist / lastDist;
+        scale = Math.min(Math.max(scale * factor, 0.1), 5);
+        applyTransform();
+      }
+      lastDist = dist;
+    } else if (e.touches.length === 1 && dragging) {
+      tx = startTx + (e.touches[0].clientX - startX);
+      ty = startTy + (e.touches[0].clientY - startY);
+      applyTransform();
+    }
+  }, { passive: false });
+  canvas.addEventListener('touchend', () => { dragging = false; lastDist = null; });
+
+  function zoomIn()  { scale = Math.min(scale * 1.2, 5);  applyTransform(); }
+  function zoomOut() { scale = Math.max(scale * 0.8, 0.1); applyTransform(); }
+  function resetView() { scale = 1; tx = 0; ty = 0; applyTransform(); }
+
+  function fitToScreen() {
+    const svg = wrapper.querySelector('svg');
+    if (!svg) return;
+    const cw = canvas.clientWidth, ch = canvas.clientHeight;
+    const sw = svg.scrollWidth,    sh = svg.scrollHeight;
+    scale = Math.min((cw - 64) / sw, (ch - 64) / sh, 1);
+    tx = (cw - sw * scale) / 2;
+    ty = (ch - sh * scale) / 2;
+    applyTransform();
+  }
+
+  function exportSVG() {
+    const svg = wrapper.querySelector('svg');
+    if (!svg) return alert('Aguarde o diagrama carregar.');
+    const blob = new Blob([svg.outerHTML], { type: 'image/svg+xml' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'sgi-diagrama-bd.svg';
+    a.click();
+  }
+
+  function exportPNG() {
+    const svg = wrapper.querySelector('svg');
+    if (!svg) return alert('Aguarde o diagrama carregar.');
+    const w = svg.scrollWidth * 2, h = svg.scrollHeight * 2;
+    const canvas2 = document.createElement('canvas');
+    canvas2.width = w; canvas2.height = h;
+    const ctx = canvas2.getContext('2d');
+    ctx.fillStyle = '#0f1117';
+    ctx.fillRect(0, 0, w, h);
+    const img = new Image();
+    const svgData = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.outerHTML);
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, w, h);
+      const a = document.createElement('a');
+      a.href = canvas2.toDataURL('image/png');
+      a.download = 'sgi-diagrama-bd.png';
+      a.click();
+    };
+    img.src = svgData;
+  }
+
+  // Auto-fit after render
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(fitToScreen, 800);
+  });
+</script>
+</body>
+</html>

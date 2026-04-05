@@ -45,7 +45,7 @@ function App() {
           <Route path="/planos"       element={<TecnicoGuard><PlanosPage /></TecnicoGuard>} />
           <Route path="/ordens"       element={<OrdensPage />} />
           <Route path="/agenda"       element={<AgendaPage />} />
-          <Route path="/encomendas"   element={<TecnicoGuard><EncomendaPage /></TecnicoGuard>} />
+          <Route path="/compras"      element={<TecnicoGuard><EncomendaPage /></TecnicoGuard>} />
           <Route path="/stock"        element={<TecnicoGuard><StockPage /></TecnicoGuard>} />
           <Route path="/faturacao"    element={<TecnicoGuard><FaturacaoPage /></TecnicoGuard>} />
           <Route path="/utilizadores" element={<TecnicoGuard><UtilizadoresPage /></TecnicoGuard>} />

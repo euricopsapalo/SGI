@@ -49,7 +49,7 @@ const NAV_GROUPS: NavGroup[] = [
     {
         label: 'Comercial', icon: ShoppingCart,
         items: [
-            { to: '/encomendas', icon: ShoppingCart, label: 'Compras'    },
+            { to: '/compras', icon: ShoppingCart, label: 'Compras'    },
             { to: '/stock',      icon: Package,      label: 'Inventário' },
             { to: '/faturacao',  icon: FileText,     label: 'Faturação'  },
         ],

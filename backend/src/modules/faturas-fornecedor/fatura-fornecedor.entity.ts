@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn } from 'typeorm';
 import { Fornecedor } from '../fornecedores/fornecedor.entity';
 import { LinhaFaturaFornecedor } from './linha-fatura-fornecedor.entity';
+import { VncFaturaAssociada } from './vnc-fatura-associada.entity';
 
 @Entity('faturas_fornecedor')
 export class FaturaFornecedor {
@@ -62,6 +63,21 @@ export class FaturaFornecedor {
     @Column({ nullable: true, type: 'text' })
     descricao: string;
 
+    @Column({ name: 'tipo_nota_credito', length: 20, nullable: true, default: null })
+    tipoNotaCredito: string | null;
+
+    @Column({ name: 'estado_documento', length: 30, default: 'NA' })
+    estadoDocumento: string;
+
+    @Column({ name: 'data_pagamento', type: 'date', nullable: true, default: null })
+    dataPagamento: string | null;
+
+    @Column({ name: 'referencia_pagamento', length: 100, nullable: true, default: null })
+    referenciaPagamento: string | null;
+
     @OneToMany(() => LinhaFaturaFornecedor, (l) => l.fatura, { cascade: true })
     linhas: LinhaFaturaFornecedor[];
+
+    @OneToMany(() => VncFaturaAssociada, (v) => v.vnc, { cascade: true })
+    faturasAssociadas: VncFaturaAssociada[];
 }

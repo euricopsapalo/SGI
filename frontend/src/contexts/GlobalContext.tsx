@@ -160,6 +160,13 @@ export interface LinhaFaturaFornecedor {
     precoUnitarioNet: number; taxaIva: number; valorIva: number;
     codigoIsencao?: string; valorTotalLinha: number;
 }
+export type TipoNotaCredito = 'Devolucao' | 'AcertoPreco';
+export type EstadoDocumentoVNC = 'NA' | 'Rascunho' | 'AguardaAprovacao' | 'Validado';
+export interface VncFaturaAssociada {
+    id?: string;
+    faturaAssociadaId: string;
+    faturaAssociada?: { id: string; numFaturaExterno: string; tipoDocumento: string; };
+}
 export interface FaturaFornecedor {
     id: string; fornecedorId: string; idEncomenda?: string;
     tipoDocumento: string; numFaturaExterno: string;
@@ -168,6 +175,11 @@ export interface FaturaFornecedor {
     moeda: string; taxaCambio: number; estadoPagamento: string;
     condicaoPagamentoId?: string; modoPagamentoId?: string;
     observacoes?: string; descricao?: string;
+    tipoNotaCredito?: TipoNotaCredito | null;
+    estadoDocumento: EstadoDocumentoVNC;
+    faturasAssociadas?: VncFaturaAssociada[];
+    dataPagamento?: string | null;
+    referenciaPagamento?: string | null;
     linhas: LinhaFaturaFornecedor[];
 }
 
@@ -322,6 +334,19 @@ const normFaturaFornecedor = (f: any): FaturaFornecedor => ({
     modoPagamentoId: f.modoPagamentoId != null ? String(f.modoPagamentoId) : undefined,
     observacoes: f.observacoes ?? undefined,
     descricao: f.descricao ?? undefined,
+    tipoNotaCredito: (f.tipoNotaCredito ?? null) as TipoNotaCredito | null,
+    estadoDocumento: (f.estadoDocumento ?? 'NA') as EstadoDocumentoVNC,
+    dataPagamento: f.dataPagamento ?? null,
+    referenciaPagamento: f.referenciaPagamento ?? null,
+    faturasAssociadas: (f.faturasAssociadas ?? []).map((a: any): VncFaturaAssociada => ({
+        id: a.id?.toString(),
+        faturaAssociadaId: a.faturaAssociadaId?.toString() ?? a.faturaAssociada?.id?.toString() ?? '',
+        faturaAssociada: a.faturaAssociada ? {
+            id: a.faturaAssociada.id?.toString(),
+            numFaturaExterno: a.faturaAssociada.numFaturaExterno,
+            tipoDocumento: a.faturaAssociada.tipoDocumento,
+        } : undefined,
+    })),
     linhas: (f.linhas ?? []).map((l: any): LinhaFaturaFornecedor => ({
         id: l.id?.toString(),
         produtoId: l.produtoId?.toString() ?? undefined,
@@ -408,7 +433,7 @@ interface GlobalContextType {
     // Invoices
     faturas: Fatura[]; addFatura: (f: Omit<Fatura, 'id'>) => Fatura; updateFatura: (id: string, f: Partial<Fatura>) => void;
     // Supplier Invoices
-    faturasFornecedor: FaturaFornecedor[]; addFaturaFornecedor: (f: Omit<FaturaFornecedor, 'id'>) => Promise<FaturaFornecedor>; updateFaturaFornecedor: (id: string, f: Partial<FaturaFornecedor>) => void;
+    faturasFornecedor: FaturaFornecedor[]; addFaturaFornecedor: (f: Omit<FaturaFornecedor, 'id'> & { faturasAssociadasIds?: string[] }) => Promise<FaturaFornecedor>; updateFaturaFornecedor: (id: string, f: Partial<FaturaFornecedor>) => void; updateEstadoVNC: (id: string, estado: string, usuario?: string) => Promise<void>;
     // Reload
     reloadData: () => Promise<void>;
 }
@@ -496,7 +521,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 axios.get(`${API}/api/armazens`),             // 15
                 axios.get(`${API}/api/artigos`),              // 16
                 axios.get(`${API}/api/movimentos-stock`),      // 17
-                axios.get(`${API}/api/encomendas`),            // 18
+                axios.get(`${API}/api/compras`),            // 18
                 axios.get(`${API}/api/faturas`),               // 19
                 axios.get(`${API}/api/logs`),                  // 20
                 axios.get(`${API}/api/configuracao`),          // 21
@@ -537,7 +562,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             try { setFamiliasArtigo(ok(results[25]).map(norm)); } catch {}
             try { setDocumentosCompra(ok(results[26]).map(norm)); } catch {}
             try { setFaturasFornecedor(ok(results[27]).map(normFaturaFornecedor)); } catch {}
-            try { setCondicoesPagamento(ok(results[28]).map(r => ({ ...norm(r), numDias: Number(r.numDias), desconto: Number(r.desconto) }))); } catch {}
+            try { setCondicoesPagamento(ok(results[28]).map((r: any) => ({ ...norm(r), numDias: Number(r.numDias), desconto: Number(r.desconto) }))); } catch {}
             try { setModosPagamento(ok(results[29]).map(norm)); } catch {}
             try {
                 const cfgData = results[21].status === 'fulfilled' ? results[21].value.data : null;
@@ -784,26 +809,56 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } catch (e) { console.error('removeModoPagamento error', e); throw e; }
     };
 
-    const addFaturaFornecedor = async (f: Omit<FaturaFornecedor, 'id'>): Promise<FaturaFornecedor> => {
+    const addFaturaFornecedor = async (f: Omit<FaturaFornecedor, 'id'> & { faturasAssociadasIds?: string[] }): Promise<FaturaFornecedor> => {
         const { data } = await axios.post(`${API}/api/faturas-fornecedor`, {
             ...f,
             fornecedorId: f.fornecedorId,
             linhas: f.linhas,
+            faturasAssociadasIds: (f as any).faturasAssociadasIds ?? [],
+            tipoNotaCredito: f.tipoNotaCredito ?? null,
+            estadoDocumento: f.estadoDocumento ?? 'NA',
         });
         const n = normFaturaFornecedor(data);
         setFaturasFornecedor(p => [n, ...p]);
-        // Reload artigos to reflect updated stock/custoMedio
-        try {
-            const { data: arts } = await axios.get(`${API}/api/artigos`);
-            setArtigos(arts.map(normArtigo));
-        } catch {}
+        log('Compras', 'Documento registado',
+            `${n.tipoDocumento} Nº ${n.numFaturaExterno} | Total: ${n.totalFinal} ${n.moeda}` +
+            (n.tipoDocumento === 'VNC'
+                ? ` | Tipo NC: ${n.tipoNotaCredito ?? '—'} | Criado em Rascunho (sem impacto em stock)`
+                : ` | Stock e custo médio actualizados`));
+        // Reload artigos to reflect updated stock/custoMedio (VFA/VFR only; VNC defers to validation)
+        if (f.tipoDocumento !== 'VNC') {
+            try {
+                const { data: arts } = await axios.get(`${API}/api/artigos`);
+                setArtigos(arts.map(normArtigo));
+            } catch {}
+        }
         return n;
     };
     const updateFaturaFornecedor = async (id: string, f: Partial<FaturaFornecedor>) => {
         try {
             await axios.put(`${API}/api/faturas-fornecedor/${id}`, f);
             setFaturasFornecedor(p => p.map(x => x.id === id ? { ...x, ...f } : x));
+            if (f.estadoPagamento === 'Paga') {
+                log('Compras', 'Pagamento registado',
+                    `Doc ID: ${id} | Referência: ${f.referenciaPagamento ?? '—'} | Data: ${f.dataPagamento ?? '—'}`, 'info');
+            }
         } catch (e) { console.error('updateFaturaFornecedor error', e); throw e; }
+    };
+    const updateEstadoVNC = async (id: string, estado: string, usuario?: string) => {
+        const { data } = await axios.patch(`${API}/api/faturas-fornecedor/${id}/estado`, { estado, usuario });
+        const n = normFaturaFornecedor(data);
+        setFaturasFornecedor(p => p.map(x => x.id === id ? n : x));
+        log('Compras', 'VNC — estado actualizado',
+            `Nº ${n.numFaturaExterno} | Tipo NC: ${n.tipoNotaCredito ?? '—'} | ${n.estadoDocumento}` +
+            (estado === 'Validado' && n.tipoNotaCredito === 'Devolucao' ? ' | Stock reduzido (devolução)' : ''),
+            estado === 'Validado' ? 'warning' : 'info');
+        // Reload stock when Validado (Devolução reduces existencia)
+        if (estado === 'Validado') {
+            try {
+                const { data: arts } = await axios.get(`${API}/api/artigos`);
+                setArtigos(arts.map(normArtigo));
+            } catch {}
+        }
     };
 
     /* ── Entities ───────────────────────────────────────────── */
@@ -1135,7 +1190,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     /* ── Purchases ──────────────────────────────────────────── */
     const addEncomenda = (e: Omit<Encomenda, 'id'>): Encomenda => {
         const placeholder: Encomenda = { ...e, id: '' };
-        axios.post(`${API}/api/encomendas`, e)
+        axios.post(`${API}/api/compras`, e)
             .then(({ data }) => {
                 const n = normEncomenda(data);
                 setEncomendas(p => [...p, n]);
@@ -1147,7 +1202,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
     const updateEncomenda = async (id: string, e: Partial<Encomenda>) => {
         try {
-            await axios.put(`${API}/api/encomendas/${id}`, e);
+            await axios.put(`${API}/api/compras/${id}`, e);
             setEncomendas(p => p.map(x => x.id === id ? { ...x, ...e } : x));
             // When cancelling, backend releases stockEncomendado — refresh artigos
             if (e.estado === 'Cancelada') {
@@ -1162,7 +1217,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         operador: string,
         armazem: string,
     ): Promise<Encomenda> => {
-        const { data } = await axios.post(`${API}/api/encomendas/${encId}/receber`, {
+        const { data } = await axios.post(`${API}/api/compras/${encId}/receber`, {
             recebidas, guiaRemessa, operador, armazem,
         });
         const enc = normEncomenda(data);
@@ -1174,7 +1229,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const anularRececao = async (rececaoId: string): Promise<Encomenda> => {
-        const { data } = await axios.post(`${API}/api/encomendas/rececoes/${rececaoId}/anular`);
+        const { data } = await axios.post(`${API}/api/compras/rececoes/${rececaoId}/anular`);
         const enc = normEncomenda(data);
         setEncomendas(p => p.map(x => x.id === enc.id ? enc : x));
         const artRes = await axios.get(`${API}/api/artigos`);
@@ -1293,7 +1348,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             movimentosStock, addMovimento,
             encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao,
             faturas, addFatura, updateFatura,
-            faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor,
+            faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC,
             reloadData,
         }}>
             {children}
