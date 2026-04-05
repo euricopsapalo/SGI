@@ -4,11 +4,12 @@ import { EncomendaLinha } from './encomenda-linha.entity';
 import { Rececao } from './rececao.entity';
 
 export enum EstadoEncomenda {
-    ABERTA = 'Aberta',
-    PARCIAL = 'Parcial',
-    RECEBIDA = 'Recebida',
+    ABERTA    = 'Aberta',
+    APROVADA  = 'Aprovada',
+    PARCIAL   = 'Parcial',
+    RECEBIDA  = 'Recebida',
     CANCELADA = 'Cancelada',
-    FATURADA = 'Faturada',
+    FATURADA  = 'Faturada',
 }
 
 @Entity('encomendas')

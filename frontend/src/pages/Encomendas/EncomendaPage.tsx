@@ -44,6 +44,7 @@ function makePrintFmt(empresa: EmpresaConfig, simbolo?: string) {
 
 const ESTADO_STYLE: Record<EncomendaEstado, { cls: string; label: string }> = {
     Aberta:    { cls: 'tbadge tbadge-campo',    label: 'Aberta' },
+    Aprovada:  { cls: 'tbadge tbadge-active',   label: 'Aprovada' },
     Parcial:   { cls: 'tbadge tbadge-suporte',  label: 'Parcial' },
     Recebida:  { cls: 'tbadge tbadge-admin',    label: 'Recebida' },
     Cancelada: { cls: 'tbadge tbadge-vendedor', label: 'Cancelada' },
@@ -194,6 +195,7 @@ function buildNotaEncomendaHtml(encomenda: Encomenda, fornecedorNome: string, em
     // Stamp config per estado
     const stampMap: Record<string, { label: string; color: string; bg: string; border: string }> = {
         Recebida:  { label: 'RECEBIDO',                 color: '#15803d', bg: 'rgba(21,128,61,0.08)',   border: '#15803d' },
+        Aprovada:  { label: 'APROVADA',                 color: '#15803d', bg: 'rgba(21,128,61,0.08)',   border: '#15803d' },
         Parcial:   { label: 'PARCIALMENTE\nRECEBIDO',   color: '#b45309', bg: 'rgba(180,83,9,0.08)',    border: '#b45309' },
         Aberta:    { label: 'EM ABERTO',                color: '#0D6EBF', bg: 'rgba(13,110,191,0.08)',  border: '#0D6EBF' },
         Cancelada: { label: 'CANCELADA',                color: '#dc2626', bg: 'rgba(220,38,38,0.08)',   border: '#dc2626' },
@@ -2427,9 +2429,9 @@ const EncomendaPage: React.FC = () => {
     const weekAgo  = new Date(today); weekAgo.setDate(today.getDate() - 6);
     const weekAgoStr = weekAgo.toISOString().split('T')[0];
 
-    const encEmAberto = encomendas.filter(e => e.estado === 'Aberta' || e.estado === 'Parcial');
+    const encEmAberto = encomendas.filter(e => e.estado === 'Aberta' || e.estado === 'Aprovada' || e.estado === 'Parcial');
     const encEmAtraso = encomendas.filter(e =>
-        (e.estado === 'Aberta' || e.estado === 'Parcial') &&
+        (e.estado === 'Aberta' || e.estado === 'Aprovada' || e.estado === 'Parcial') &&
         e.dataEntrega && e.dataEntrega < todayStr
     );
     const encHoje   = encomendas.filter(e => e.data === todayStr);
@@ -2438,6 +2440,7 @@ const EncomendaPage: React.FC = () => {
     // By-status for chart
     const statusCounts: Record<string, number> = {
         Aberta:    encomendas.filter(e => e.estado === 'Aberta').length,
+        Aprovada:  encomendas.filter(e => e.estado === 'Aprovada').length,
         Parcial:   encomendas.filter(e => e.estado === 'Parcial').length,
         Recebida:  encomendas.filter(e => e.estado === 'Recebida').length,
         Cancelada: encomendas.filter(e => e.estado === 'Cancelada').length,
@@ -2669,6 +2672,7 @@ const EncomendaPage: React.FC = () => {
                     <select className="filter-select" value={filterEst} onChange={e => setFEst(e.target.value)}>
                         <option value="">Todos os estados</option>
                         <option value="Aberta">Aberta</option>
+                        <option value="Aprovada">Aprovada</option>
                         <option value="Parcial">Parcial</option>
                         <option value="Recebida">Recebida</option>
                         <option value="Cancelada">Cancelada</option>
@@ -2726,18 +2730,29 @@ const EncomendaPage: React.FC = () => {
                                                             <Package size={12} />
                                                         </button>
                                                     )}
-                                                    {(e.estado === 'Aberta' || e.estado === 'Parcial') && (
+                                                    {e.estado === 'Aberta' && (
+                                                        <button className="abtn abtn-ghost" title="Aprovar encomenda"
+                                                            style={{ fontSize: '0.72rem', padding: '2px 8px', height: 24, color: '#15803d' }}
+                                                            onClick={() => updateEncomenda(e.id, { estado: 'Aprovada' })}>
+                                                            <CheckCircle2 size={11} /> Aprovar
+                                                        </button>
+                                                    )}
+                                                    {(e.estado === 'Aprovada' || e.estado === 'Parcial') && (
                                                         <button className="abtn abtn-ghost" title="Receber" style={{ fontSize: '0.72rem', padding: '2px 8px', height: 24 }}
                                                             onClick={() => setReceber(e.id)}>
                                                             <Archive size={11} /> Receber
                                                         </button>
                                                     )}
-                                                    <button className="icon-btn" title="Pré-visualizar nota de encomenda" onClick={() => setPreviewHtml(buildNotaEncomendaHtml(e, getFornNome(e.fornecedorId), empresaConfig, simboloMoeda, todosArtigos, taxasIva))}>
-                                                        <Eye size={12} />
-                                                    </button>
-                                                    <button className="icon-btn" title="Imprimir nota de encomenda" onClick={() => printNotaEncomenda(e, getFornNome(e.fornecedorId), empresaConfig, simboloMoeda, todosArtigos, taxasIva)}>
-                                                        <Printer size={12} />
-                                                    </button>
+                                                    {e.estado !== 'Aberta' && (
+                                                        <button className="icon-btn" title="Pré-visualizar nota de encomenda" onClick={() => setPreviewHtml(buildNotaEncomendaHtml(e, getFornNome(e.fornecedorId), empresaConfig, simboloMoeda, todosArtigos, taxasIva))}>
+                                                            <Eye size={12} />
+                                                        </button>
+                                                    )}
+                                                    {e.estado !== 'Aberta' && (
+                                                        <button className="icon-btn" title="Imprimir nota de encomenda" onClick={() => printNotaEncomenda(e, getFornNome(e.fornecedorId), empresaConfig, simboloMoeda, todosArtigos, taxasIva)}>
+                                                            <Printer size={12} />
+                                                        </button>
+                                                    )}
                                                     {e.rececoes?.filter(r => r.estado === 'Ativa').length > 0 && (() => {
                                                         const ativas = [...e.rececoes.filter(r => r.estado === 'Ativa')]
                                                             .sort((a, b) => new Date(b.dataHora).getTime() - new Date(a.dataHora).getTime());

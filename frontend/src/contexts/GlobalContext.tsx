@@ -124,7 +124,7 @@ export interface Artigo {
 }
 
 // ── Purchase Orders ────────────────────────────────────────
-export type EncomendaEstado = 'Aberta' | 'Parcial' | 'Recebida' | 'Cancelada' | 'Faturada';
+export type EncomendaEstado = 'Aberta' | 'Aprovada' | 'Parcial' | 'Recebida' | 'Cancelada' | 'Faturada';
 export interface EncomendaLinha {
     artigoId: string; codigo: string; descricao: string;
     qtdEncomendada: number; qtdRecebida: number;

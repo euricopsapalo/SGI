@@ -59,7 +59,7 @@ export class EncomendaService {
     }
 
     async update(id: number, body: any) {
-        const { linhas, fornecedorId, ...rest } = body;
+        const { linhas, fornecedorId, rececoes, numero, ...rest } = body;
 
         // If cancelling, release pending stockEncomendado for each line
         if (rest.estado === EstadoEncomenda.CANCELADA) {
@@ -195,23 +195,25 @@ export class EncomendaService {
     }
 
     private async recalcularEstado(encomendaId: number) {
-        const linhas = await this.linhaRepo.find({
-            where: { encomenda: { id: encomendaId } },
-        });
+        const encomenda = await this.findOne(encomendaId);
+        if (!encomenda) return;
+        const linhas = encomenda.linhas;
         const todasRecebidas = linhas.every(
             (l) => Number(l.qtdRecebida) >= Number(l.qtdEncomendada),
         );
         const algumaRecebida = linhas.some((l) => Number(l.qtdRecebida) > 0);
 
-        let novoEstado: EstadoEncomenda;
         if (todasRecebidas) {
-            novoEstado = EstadoEncomenda.RECEBIDA;
+            await this.encomendaRepo.update(encomendaId, { estado: EstadoEncomenda.RECEBIDA });
         } else if (algumaRecebida) {
-            novoEstado = EstadoEncomenda.PARCIAL;
+            await this.encomendaRepo.update(encomendaId, { estado: EstadoEncomenda.PARCIAL });
         } else {
-            novoEstado = EstadoEncomenda.ABERTA;
+            // Quando nada foi recebido (ex.: após anulação total), reverter para Aprovada
+            // sem sobrescrever estados Aberta ou outros
+            const estadoAtual = encomenda.estado;
+            if (estadoAtual === EstadoEncomenda.PARCIAL || estadoAtual === EstadoEncomenda.RECEBIDA) {
+                await this.encomendaRepo.update(encomendaId, { estado: EstadoEncomenda.APROVADA });
+            }
         }
-
-        await this.encomendaRepo.update(encomendaId, { estado: novoEstado });
     }
 }
