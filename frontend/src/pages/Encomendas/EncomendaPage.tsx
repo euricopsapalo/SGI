@@ -2721,9 +2721,11 @@ const EncomendaPage: React.FC = () => {
                                             </td>
                                             <td>
                                                 <div className="row-actions" style={{ gap: 4 }}>
-                                                    <button className="icon-btn" title="Editar" onClick={() => setModal(e.id)}>
-                                                        <Package size={12} />
-                                                    </button>
+                                                    {e.estado === 'Aberta' && (
+                                                        <button className="icon-btn" title="Editar" onClick={() => setModal(e.id)}>
+                                                            <Package size={12} />
+                                                        </button>
+                                                    )}
                                                     {(e.estado === 'Aberta' || e.estado === 'Parcial') && (
                                                         <button className="abtn abtn-ghost" title="Receber" style={{ fontSize: '0.72rem', padding: '2px 8px', height: 24 }}
                                                             onClick={() => setReceber(e.id)}>
