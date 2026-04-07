@@ -415,11 +415,12 @@ interface GlobalContextType {
     // Plans
     planos: PlanoManutencao[]; addPlano: (p: Omit<PlanoManutencao, 'id'>) => PlanoManutencao; updatePlano: (id: string, p: Partial<PlanoManutencao>) => void; removePlano: (id: string) => void;
     // Work Orders
-    ordens: OrdemTrabalho[]; addOrdem: (o: Omit<OrdemTrabalho, 'id'>) => OrdemTrabalho; updateOrdem: (id: string, o: Partial<OrdemTrabalho>) => void; removeOrdem: (id: string) => void;
+    ordens: OrdemTrabalho[]; addOrdem: (o: Omit<OrdemTrabalho, 'id'>) => Promise<OrdemTrabalho>; updateOrdem: (id: string, o: Partial<OrdemTrabalho>) => void; removeOrdem: (id: string) => void;
     emitirOT: (id: string, dataEmissao?: string, dataInicio?: string) => void;
     terminarOT: (id: string, dataFim?: string) => void;
     encerrarOT: (id: string, dataEncerramento?: string) => void;
     reprogramarOT: (id: string, novaData: string, dataAnterior?: string, motivo?: string) => Promise<void>;
+    reverterOT: (id: string) => Promise<void>;
     // Warehouse
     armazens: Armazem[]; addArmazem: (a: Omit<Armazem, 'id'>) => Armazem; updateArmazem: (id: string, a: Partial<Armazem>) => void;
     // Stock
@@ -997,16 +998,12 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     /* ── Work Orders ────────────────────────────────────────── */
-    const addOrdem = (o: Omit<OrdemTrabalho, 'id'>): OrdemTrabalho => {
-        const placeholder: OrdemTrabalho = { ...o, id: '' };
-        axios.post(`${API}/api/ordens`, o)
-            .then(({ data }) => {
-                const n = normOrdem(data);
-                setOrdens(p => [...p, n]);
-                log('Ordens de Trabalho', 'OT criada', `Tipo: ${o.tipo} | ${o.descricao?.slice(0, 60)}`);
-            })
-            .catch(e => console.error('addOrdem error', e));
-        return placeholder;
+    const addOrdem = async (o: Omit<OrdemTrabalho, 'id'>): Promise<OrdemTrabalho> => {
+        const { data } = await axios.post(`${API}/api/ordens`, o);
+        const n = normOrdem(data);
+        setOrdens(p => [...p, n]);
+        log('Ordens de Trabalho', 'OT criada', `Tipo: ${o.tipo} | ${o.descricao?.slice(0, 60)}`);
+        return n;
     };
     const updateOrdem = async (id: string, o: Partial<OrdemTrabalho>) => {
         try {
@@ -1026,33 +1023,20 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const emitirOT = async (id: string, dataEmissao?: string, dataInicio?: string) => {
         try {
-            // Use fresh OT data from the backend response — works for both periodic and pontual OTs
-            const { data: emittedRaw } = await axios.put(`${API}/api/ordens/${id}/emitir`, { dataEmissao, dataInicio });
+            // Backend handles state validation and stock deduction
+            const usuario = currentUserRef.current?.email ?? 'sistema';
+            const { data: emittedRaw } = await axios.put(`${API}/api/ordens/${id}/emitir`, { dataEmissao, dataInicio, usuario });
             const emitted = normOrdem(emittedRaw);
             setOrdens(p => p.map(x => x.id === id ? emitted : x));
             log('Ordens de Trabalho', 'OT emitida', `ID: ${id}`);
 
-            // Deduct physical stock for every article on the OT
-            const hoje = today();
-            const artigosSnapshot = artigos;
-            for (const art of (emitted.artigos ?? [])) {
-                if (!art.artigoId || art.quantidade <= 0) continue;
-                await axios.put(`${API}/api/artigos/${art.artigoId}/ajuste`, { delta: -art.quantidade })
-                    .then(({ data: updated }) => setArtigos(p => p.map(x => x.id === art.artigoId ? normArtigo(updated) : x)))
-                    .catch(e => console.error('ajuste existencia error', e));
-                const artigoInfo = artigosSnapshot.find(a => a.id === art.artigoId);
-                axios.post(`${API}/api/movimentos-stock`, {
-                    artigoId: art.artigoId,
-                    tipo: 'saida',
-                    quantidade: art.quantidade,
-                    armazemId: artigoInfo?.codigoArmazem ?? '',
-                    referencia: `OT-${id}`,
-                    usuario: currentUserRef.current?.email ?? 'sistema',
-                    observacao: `Saída OT ${id}`,
-                    data: hoje,
-                }).then(({ data }) => setMovimentosStock(p => [...p, normMovimento(data)]))
-                  .catch(e => console.error('movimento OT error', e));
-            }
+            // Refresh artigos and movimentos to reflect backend stock changes
+            const [artigosRes, movRes] = await Promise.all([
+                axios.get(`${API}/api/artigos`),
+                axios.get(`${API}/api/movimentos-stock`),
+            ]);
+            setArtigos(artigosRes.data.map(normArtigo));
+            setMovimentosStock(movRes.data.map(normMovimento));
         } catch (e) { console.error('emitirOT error', e); throw e; }
     };
 
@@ -1100,6 +1084,31 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setOrdens(p => p.map(x => x.id === id ? updated : x));
             log('Ordens de Trabalho', 'OT reprogramada', `ID: ${id} → ${novaData}; Motivo: ${motivo ?? ''}`, 'warning');
         } catch (e) { console.error('reprogramarOT error', e); throw e; }
+    };
+
+    const reverterOT = async (id: string) => {
+        try {
+            const usuario = currentUserRef.current?.email ?? 'sistema';
+            const { data } = await axios.put(`${API}/api/ordens/${id}/reverter`, { usuario });
+            const updated = normOrdem(data);
+            setOrdens(p => p.map(x => x.id === id ? updated : x));
+            // If a child OT was deleted (reverting Terminado), refresh all OTs
+            const prev = ordens.find(o => o.id === id);
+            if (prev?.estado === 'Terminado') {
+                const { data: all } = await axios.get(`${API}/api/ordens`);
+                setOrdens(all.map(normOrdem));
+            }
+            // If reverting Em curso → Programado, refresh artigos (stock restored by backend)
+            if (prev?.estado === 'Em curso') {
+                const [artigosRes, movRes] = await Promise.all([
+                    axios.get(`${API}/api/artigos`),
+                    axios.get(`${API}/api/movimentos-stock`),
+                ]);
+                setArtigos(artigosRes.data.map(normArtigo));
+                setMovimentosStock(movRes.data.map(normMovimento));
+            }
+            log('Ordens de Trabalho', 'OT revertida', `ID: ${id} → ${updated.estado}`, 'warning');
+        } catch (e) { console.error('reverterOT error', e); throw e; }
     };
 
     /* ── Warehouse ──────────────────────────────────────────── */
@@ -1341,7 +1350,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             modelosEquipamento, addModelo, updateModelo,
             equipInstalados, addEquipInstalado, updateEquipInstalado,
             planos, addPlano, updatePlano, removePlano,
-            ordens, addOrdem, updateOrdem, removeOrdem, emitirOT, terminarOT, encerrarOT, reprogramarOT,
+            ordens, addOrdem, updateOrdem, removeOrdem, emitirOT, terminarOT, encerrarOT, reprogramarOT, reverterOT,
             armazens, addArmazem, updateArmazem,
             artigos: artigosComReserva, addArtigo, updateArtigo, adjustExistencia, adjustReservado,
             stockArmazem, upsertStockArmazem, removeStockArmazem,

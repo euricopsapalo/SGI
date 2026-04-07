@@ -22,7 +22,7 @@ export class OrdensTrabalhoController {
 
     @Put(':id/emitir')
     emitir(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
-        return this.service.emitir(id, body?.dataEmissao, body?.dataInicio);
+        return this.service.emitir(id, body?.dataEmissao, body?.dataInicio, body?.usuario);
     }
 
     @Put(':id/terminar')
@@ -33,6 +33,11 @@ export class OrdensTrabalhoController {
     @Put(':id/encerrar')
     encerrar(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
         return this.service.encerrar(id, body?.dataEncerramento);
+    }
+
+    @Put(':id/reverter')
+    reverter(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
+        return this.service.reverter(id, body?.usuario);
     }
 
     @Post(':id/reprogramar')

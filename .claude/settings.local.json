@@ -3,7 +3,10 @@
     "allow": [
       "Bash(docker-compose logs:*)",
       "Bash(/dev/null docker:*)",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "Bash(npx tsc:*)",
+      "Bash(C:/SGI/gh_cli/bin/gh.exe --version)",
+      "Bash(C:/SGI/gh_cli/bin/gh.exe auth:*)"
     ]
   }
 }

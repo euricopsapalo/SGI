@@ -6,9 +6,13 @@ import { OtArtigo } from './ot-artigo.entity';
 import { OtReprogramacao } from './ot-reprogramacao.entity';
 import { OrdensTrabalhoService } from './ordens-trabalho.service';
 import { OrdensTrabalhoController } from './ordens-trabalho.controller';
+import { ArtigosModule } from '../artigos/artigos.module';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([OrdemTrabalho, OtMaoObra, OtArtigo, OtReprogramacao])],
+    imports: [
+        TypeOrmModule.forFeature([OrdemTrabalho, OtMaoObra, OtArtigo, OtReprogramacao]),
+        ArtigosModule,
+    ],
     controllers: [OrdensTrabalhoController],
     providers: [OrdensTrabalhoService],
     exports: [TypeOrmModule, OrdensTrabalhoService],

@@ -1002,7 +1002,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
 
 /* ══ Main Page ═══════════════════════════════════════════ */
 const OrdensPage: React.FC = () => {
-    const { ordens, addOrdem, updateOrdem, emitirOT, terminarOT, encerrarOT, equipInstalados, clientes, modelosEquipamento, currentUser, tiposOT, fmtDate, empresaConfig, simboloMoeda } = useGlobal();
+    const { ordens, addOrdem, updateOrdem, emitirOT, terminarOT, encerrarOT, reverterOT, equipInstalados, clientes, modelosEquipamento, currentUser, tiposOT, fmtDate, empresaConfig, simboloMoeda } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
 
     const [search, setSearch]         = useState('');
@@ -1051,20 +1051,33 @@ const OrdensPage: React.FC = () => {
 
     const editOT = typeof modal === 'string' && modal !== 'new' ? ordens.find(o => o.id === modal) : undefined;
 
-    const handleSave = (data: Omit<OrdemTrabalho, 'id'>) => {
-        if (typeof modal === 'string' && modal !== 'new') {
-            updateOrdem(modal, data);
-            showToast('OT actualizada.');
-        } else {
-            const ot = addOrdem(data);
-            showToast(`${ot.id} criada.`);
+    const handleSave = async (data: Omit<OrdemTrabalho, 'id'>) => {
+        try {
+            if (typeof modal === 'string' && modal !== 'new') {
+                await updateOrdem(modal, data);
+                showToast('OT actualizada.');
+            } else {
+                const ot = await addOrdem(data);
+                showToast(`OT ${ot.id} criada.`);
+            }
+            setModal(null);
+        } catch (e: any) {
+            showToast(e?.response?.data?.message ?? 'Erro ao guardar OT.');
         }
-        setModal(null);
     };
 
-    const handleEmitir = (id: string) => { emitirOT(id); setModal(null); showToast(`OT ${id} emitida — Em curso.`); };
-    const handleTerminar = (id: string, df: string) => { terminarOT(id, df); setModal(null); showToast(`OT ${id} terminada. Nova OT gerada se periódica.`); };
-    const handleEncerrar = (id: string, de: string) => { encerrarOT(id, de); setModal(null); showToast(`OT ${id} encerrada.`); };
+    const handleEmitir = async (id: string) => {
+        try { await emitirOT(id); setModal(null); showToast(`OT ${id} emitida — Em curso.`); }
+        catch (e: any) { showToast(e?.response?.data?.message ?? `Erro ao emitir OT ${id}.`); }
+    };
+    const handleTerminar = async (id: string, df: string) => {
+        try { await terminarOT(id, df); setModal(null); showToast(`OT ${id} terminada. Nova OT gerada se periódica.`); }
+        catch (e: any) { showToast(e?.response?.data?.message ?? `Erro ao terminar OT ${id}.`); }
+    };
+    const handleEncerrar = async (id: string, de: string) => {
+        try { await encerrarOT(id, de); setModal(null); showToast(`OT ${id} encerrada.`); }
+        catch (e: any) { showToast(e?.response?.data?.message ?? `Erro ao encerrar OT ${id}.`); }
+    };
 
     const PROX_ESTADO: Record<OTEstado, string> = { 'Programado': 'Emitir → Em curso', 'Em curso': 'Terminar', 'Terminado': 'Encerrar', 'Encerrado': '—' };
     const PREV_ESTADO: Partial<Record<OTEstado, OTEstado>> = { 'Em curso': 'Programado', 'Terminado': 'Em curso', 'Encerrado': 'Terminado' };
@@ -1074,9 +1087,15 @@ const OrdensPage: React.FC = () => {
         else if (ot.estado === 'Terminado') handleEncerrar(ot.id, today());
         setCtx(null);
     };
-    const handleReverter = (ot: OrdemTrabalho) => {
+    const handleReverter = async (ot: OrdemTrabalho) => {
         const prev = PREV_ESTADO[ot.estado];
-        if (prev) { updateOrdem(ot.id, { estado: prev }); showToast(`OT ${ot.id} revertida → ${prev}.`); }
+        if (!prev) { setCtx(null); return; }
+        try {
+            await reverterOT(ot.id);
+            showToast(`OT ${ot.id} revertida → ${prev}.`);
+        } catch (e: any) {
+            showToast(e?.response?.data?.message ?? `Erro ao reverter OT ${ot.id}.`);
+        }
         setCtx(null);
     };
 

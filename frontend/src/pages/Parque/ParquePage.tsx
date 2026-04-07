@@ -963,7 +963,7 @@ const ParquePage: React.FC = () => {
                 maosDeObra: [], artigos: [],
                 dataProgInicio: data.dataInstalacao, dataProgFim: data.dataInstalacao,
                 estado: 'Programado',
-            } as any);
+            } as any).catch(e => console.error('Auto OT Montagem error', e));
             showToast(`${eq.id} registado. OT de Montagem criada automaticamente.`);
         }
         setModal(null); setEditId(null);
