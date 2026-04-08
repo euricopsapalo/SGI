@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { Roles } from '../auth/roles.decorator';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Controller('users')
 @Roles('admin')
@@ -14,10 +16,10 @@ export class UsersController {
     findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOne(id); }
 
     @Post()
-    create(@Body() body: any) { return this.service.create(body); }
+    create(@Body() dto: CreateUserDto) { return this.service.create(dto as any); }
 
     @Put(':id')
-    update(@Param('id', ParseIntPipe) id: number, @Body() body: any) { return this.service.update(id, body); }
+    update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateUserDto) { return this.service.update(id, dto as any); }
 
     @Delete(':id')
     remove(@Param('id', ParseIntPipe) id: number) { return this.service.remove(id); }

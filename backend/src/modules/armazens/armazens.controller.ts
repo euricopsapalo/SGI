@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
 import { ArmazensService } from './armazens.service';
+import { CreateArmazemDto } from './dto/create-armazem.dto';
+import { UpdateArmazemDto } from './dto/update-armazem.dto';
 
 @Controller('armazens')
 export class ArmazensController {
@@ -12,10 +14,10 @@ export class ArmazensController {
     findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOne(id); }
 
     @Post()
-    create(@Body() body: any) { return this.service.create(body); }
+    create(@Body() dto: CreateArmazemDto) { return this.service.create(dto); }
 
     @Put(':id')
-    update(@Param('id', ParseIntPipe) id: number, @Body() body: any) { return this.service.update(id, body); }
+    update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateArmazemDto) { return this.service.update(id, dto); }
 
     @Delete(':id')
     remove(@Param('id', ParseIntPipe) id: number) { return this.service.remove(id); }

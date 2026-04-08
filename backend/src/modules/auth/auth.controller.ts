@@ -1,7 +1,10 @@
-import { Controller, Post, Body, HttpCode, Request, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, Request } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Public } from './public.decorator';
-import { JwtAuthGuard } from './jwt-auth.guard';
+import { LoginDto } from './dto/login.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -10,28 +13,28 @@ export class AuthController {
     @Public()
     @Post('login')
     @HttpCode(200)
-    login(@Body() body: { email: string; password: string }) {
-        return this.authService.login(body.email, body.password);
+    login(@Body() dto: LoginDto) {
+        return this.authService.login(dto.email, dto.password);
     }
 
     @Public()
     @Post('forgot-password')
     @HttpCode(200)
-    forgotPassword(@Body() body: { email: string }) {
-        return this.authService.forgotPassword(body.email);
+    forgotPassword(@Body() dto: ForgotPasswordDto) {
+        return this.authService.forgotPassword(dto.email);
     }
 
     @Public()
     @Post('reset-password')
     @HttpCode(200)
-    resetPassword(@Body() body: { token: string; newPassword: string }) {
-        return this.authService.resetPassword(body.token, body.newPassword);
+    resetPassword(@Body() dto: ResetPasswordDto) {
+        return this.authService.resetPassword(dto.token, dto.newPassword);
     }
 
     @Post('change-password')
     @HttpCode(200)
-    changePassword(@Request() req: any, @Body() body: { currentPassword: string; newPassword: string }) {
-        return this.authService.changePassword(req.user.id, body.currentPassword, body.newPassword);
+    changePassword(@Request() req: any, @Body() dto: ChangePasswordDto) {
+        return this.authService.changePassword(req.user.id, dto.currentPassword, dto.newPassword);
     }
 
     @Post('me')

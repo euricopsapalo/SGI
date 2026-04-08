@@ -1,6 +1,7 @@
 import { Controller, Get, Put, Body } from '@nestjs/common';
 import { ConfiguracaoService } from './configuracao.service';
 import { Roles } from '../auth/roles.decorator';
+import { UpdateConfiguracaoDto } from './dto/update-configuracao.dto';
 
 @Controller('configuracao')
 export class ConfiguracaoController {
@@ -11,5 +12,5 @@ export class ConfiguracaoController {
 
     @Put()
     @Roles('admin')
-    update(@Body() body: any) { return this.service.update(body); }
+    update(@Body() dto: UpdateConfiguracaoDto) { return this.service.update(dto); }
 }

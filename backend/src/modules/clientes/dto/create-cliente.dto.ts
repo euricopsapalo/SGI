@@ -1,0 +1,68 @@
+import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class CreateClienteEnderecoDto {
+  @IsOptional()
+  @IsString()
+  descricao?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  morada: string;
+
+  @IsString()
+  @IsNotEmpty()
+  cidade: string;
+
+  @IsOptional()
+  @IsBoolean()
+  principal?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  provinciaId?: number;
+
+  @IsOptional()
+  @IsNumber()
+  municipioId?: number;
+}
+
+export class CreateClienteDto {
+  @IsEnum(['empresa', 'particular'])
+  @IsOptional()
+  tipo?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  nome: string;
+
+  @IsOptional()
+  @IsString()
+  nif?: string;
+
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  telefone?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  ativo?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  condicaoPagamentoId?: number;
+
+  @IsOptional()
+  @IsNumber()
+  modoPagamentoId?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateClienteEnderecoDto)
+  enderecos?: CreateClienteEnderecoDto[];
+}

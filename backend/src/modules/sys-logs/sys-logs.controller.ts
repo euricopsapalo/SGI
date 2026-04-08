@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Delete, Param, Body, ParseIntPipe, Query } from '@nestjs/common';
 import { SysLogsService } from './sys-logs.service';
 import { Roles } from '../auth/roles.decorator';
+import { CreateLogDto } from './dto/create-log.dto';
 
 @Controller('logs')
 export class SysLogsController {
@@ -17,8 +18,8 @@ export class SysLogsController {
     }
 
     @Post()
-    create(@Body() body: any) {
-        return this.service.create(body);
+    create(@Body() dto: CreateLogDto) {
+        return this.service.create(dto as any);
     }
 
     @Delete(':id')
