@@ -6,6 +6,7 @@ import {
   ClipboardList, ShoppingCart, type LucideIcon,
 } from 'lucide-react';
 import AquatexLogo from '../AquatexLogo';
+import { useGlobal } from '../../contexts/GlobalContext';
 
 interface NavItemDef { to: string; icon: LucideIcon; label: string; }
 
@@ -61,7 +62,10 @@ const NAV_SECTIONS: NavSection[] = [
 interface SidebarProps { isOpen?: boolean; }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
-  const currentUser = { name: 'Eurico Sapalo', role: 'Administrador', initials: 'ES' };
+  const { currentUser } = useGlobal();
+  const userName = currentUser?.nome ?? '';
+  const userRole = currentUser?.role ?? '';
+  const userInitials = userName.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
 
   return (
     <aside className={`sidebar${isOpen ? ' open' : ''}`}>
@@ -90,10 +94,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
 
       <div className="sidebar-footer">
         <div className="sidebar-user">
-          <div className="user-avatar-sm">{currentUser.initials}</div>
+          <div className="user-avatar-sm">{userInitials}</div>
           <div className="sidebar-user-info">
-            <div className="sidebar-user-name">{currentUser.name}</div>
-            <div className="sidebar-user-role">{currentUser.role}</div>
+            <div className="sidebar-user-name">{userName}</div>
+            <div className="sidebar-user-role">{userRole}</div>
           </div>
           <LogOut size={15} strokeWidth={1.75} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
         </div>
