@@ -9,44 +9,44 @@ import { CreateOrdemTrabalhoDto } from '../src/modules/ordens-trabalho/dto/creat
 import { LoginDto } from '../src/modules/auth/dto/login.dto';
 import { UpdateClienteDto } from '../src/modules/clientes/dto/update-cliente.dto';
 
-// ── Stub controllers (no DB, no auth — isolate ValidationPipe behaviour) ──
+// ── Controllers stub (sem BD, sem auth — isolar comportamento do ValidationPipe) ──
 
 @Controller('test-clientes')
 class TestClientesController {
   @Post()
-  create(@Body() dto: CreateClienteDto) { return { received: dto }; }
+  create(@Body() dto: CreateClienteDto) { return { recebido: dto }; }
 
   @Put('1')
-  update(@Body() dto: UpdateClienteDto) { return { received: dto }; }
+  update(@Body() dto: UpdateClienteDto) { return { recebido: dto }; }
 }
 
 @Controller('test-fornecedores')
 class TestFornecedoresController {
   @Post()
-  create(@Body() dto: CreateFornecedorDto) { return { received: dto }; }
+  create(@Body() dto: CreateFornecedorDto) { return { recebido: dto }; }
 }
 
 @Controller('test-artigos')
 class TestArtigosController {
   @Post()
-  create(@Body() dto: CreateArtigoDto) { return { received: dto }; }
+  create(@Body() dto: CreateArtigoDto) { return { recebido: dto }; }
 }
 
 @Controller('test-ordens')
 class TestOrdensController {
   @Post()
-  create(@Body() dto: CreateOrdemTrabalhoDto) { return { received: dto }; }
+  create(@Body() dto: CreateOrdemTrabalhoDto) { return { recebido: dto }; }
 }
 
 @Controller('test-auth')
 class TestAuthController {
   @Post('login')
-  login(@Body() dto: LoginDto) { return { received: dto }; }
+  login(@Body() dto: LoginDto) { return { recebido: dto }; }
 }
 
-// ── Test suite ──
+// ── Suite de testes ──
 
-describe('ValidationPipe E2E — invalid data returns 400', () => {
+describe('ValidationPipe E2E — validação de dados de entrada', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -61,7 +61,7 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
     }).compile();
 
     app = module.createNestApplication();
-    // Same pipe as main.ts
+    // Mesmo pipe configurado no main.ts
     app.useGlobalPipes(new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
@@ -76,12 +76,12 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
   });
 
   // ─────────────────────────────────────────────
-  // TEST 1 — POST invalid data → 400
+  // TESTE 1 — POST com dados inválidos → 400
   // ─────────────────────────────────────────────
 
-  describe('Rejects invalid payloads with 400', () => {
+  describe('Rejeita payloads inválidos com 400', () => {
 
-    it('POST /test-auth/login — empty body → 400', () => {
+    it('POST /test-auth/login — corpo vazio → 400', () => {
       return request(app.getHttpServer())
         .post('/test-auth/login')
         .send({})
@@ -96,10 +96,10 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         });
     });
 
-    it('POST /test-auth/login — invalid email → 400', () => {
+    it('POST /test-auth/login — email inválido → 400', () => {
       return request(app.getHttpServer())
         .post('/test-auth/login')
-        .send({ email: 'not-an-email', password: 'abc123' })
+        .send({ email: 'nao-e-email', password: 'abc123' })
         .expect(400)
         .expect((res) => {
           expect(res.body.message).toEqual(
@@ -108,7 +108,7 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         });
     });
 
-    it('POST /test-clientes — missing required nome → 400', () => {
+    it('POST /test-clientes — campo obrigatório nome em falta → 400', () => {
       return request(app.getHttpServer())
         .post('/test-clientes')
         .send({ nif: '123456' })
@@ -120,10 +120,10 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         });
     });
 
-    it('POST /test-clientes — invalid tipo enum → 400', () => {
+    it('POST /test-clientes — enum tipo inválido → 400', () => {
       return request(app.getHttpServer())
         .post('/test-clientes')
-        .send({ nome: 'Test', tipo: 'invalid_type' })
+        .send({ nome: 'Teste', tipo: 'tipo_invalido' })
         .expect(400)
         .expect((res) => {
           expect(res.body.message).toEqual(
@@ -132,12 +132,12 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         });
     });
 
-    it('POST /test-clientes — invalid nested endereco → 400', () => {
+    it('POST /test-clientes — endereço nested inválido → 400', () => {
       return request(app.getHttpServer())
         .post('/test-clientes')
         .send({
-          nome: 'Test',
-          enderecos: [{ descricao: 'HQ' }], // missing morada and cidade
+          nome: 'Teste',
+          enderecos: [{ descricao: 'Sede' }], // falta morada e cidade
         })
         .expect(400)
         .expect((res) => {
@@ -150,17 +150,17 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         });
     });
 
-    it('POST /test-fornecedores — missing required nome → 400', () => {
+    it('POST /test-fornecedores — campo obrigatório nome em falta → 400', () => {
       return request(app.getHttpServer())
         .post('/test-fornecedores')
         .send({ email: 'forn@test.com' })
         .expect(400);
     });
 
-    it('POST /test-artigos — missing required fields → 400', () => {
+    it('POST /test-artigos — campos obrigatórios em falta → 400', () => {
       return request(app.getHttpServer())
         .post('/test-artigos')
-        .send({ descricao: 'Only desc' }) // missing codigo, classe, familia
+        .send({ descricao: 'Apenas descrição' }) // falta codigo, classe, familia
         .expect(400)
         .expect((res) => {
           expect(res.body.message).toEqual(
@@ -173,7 +173,7 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         });
     });
 
-    it('POST /test-ordens — missing required descricao → 400', () => {
+    it('POST /test-ordens — campo obrigatório descricao em falta → 400', () => {
       return request(app.getHttpServer())
         .post('/test-ordens')
         .send({ clienteId: 1 })
@@ -185,10 +185,10 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         });
     });
 
-    it('POST /test-ordens — invalid tipo enum → 400', () => {
+    it('POST /test-ordens — enum tipo inválido → 400', () => {
       return request(app.getHttpServer())
         .post('/test-ordens')
-        .send({ descricao: 'Test OT', tipo: 'invalido' })
+        .send({ descricao: 'OT Teste', tipo: 'invalido' })
         .expect(400)
         .expect((res) => {
           expect(res.body.message).toEqual(
@@ -197,10 +197,10 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         });
     });
 
-    it('POST /test-ordens — invalid estado enum → 400', () => {
+    it('POST /test-ordens — enum estado inválido → 400', () => {
       return request(app.getHttpServer())
         .post('/test-ordens')
-        .send({ descricao: 'Test OT', estado: 'Desconhecido' })
+        .send({ descricao: 'OT Teste', estado: 'Desconhecido' })
         .expect(400)
         .expect((res) => {
           expect(res.body.message).toEqual(
@@ -209,12 +209,12 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         });
     });
 
-    it('POST /test-ordens — invalid nested maosObra → 400', () => {
+    it('POST /test-ordens — mão de obra nested inválida → 400', () => {
       return request(app.getHttpServer())
         .post('/test-ordens')
         .send({
-          descricao: 'Test OT',
-          maosObra: [{ custo: 100 }], // missing funcao
+          descricao: 'OT Teste',
+          maosObra: [{ custo: 100 }], // falta funcao
         })
         .expect(400)
         .expect((res) => {
@@ -226,12 +226,12 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
   });
 
   // ─────────────────────────────────────────────
-  // TEST 2 — forbidNonWhitelisted rejects unknown fields
+  // TESTE 2 — forbidNonWhitelisted rejeita campos desconhecidos
   // ─────────────────────────────────────────────
 
-  describe('Rejects non-whitelisted properties (forbidNonWhitelisted)', () => {
+  describe('Rejeita propriedades não permitidas (forbidNonWhitelisted)', () => {
 
-    it('POST /test-auth/login — extra field → 400', () => {
+    it('POST /test-auth/login — campo extra → 400', () => {
       return request(app.getHttpServer())
         .post('/test-auth/login')
         .send({ email: 'user@test.com', password: 'abc123', hacked: true })
@@ -243,10 +243,10 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         });
     });
 
-    it('POST /test-clientes — extra field sqlInjection → 400', () => {
+    it('POST /test-clientes — campo extra com injecção SQL → 400', () => {
       return request(app.getHttpServer())
         .post('/test-clientes')
-        .send({ nome: 'Test', sqlInjection: "'; DROP TABLE clientes;--" })
+        .send({ nome: 'Teste', sqlInjection: "'; DROP TABLE clientes;--" })
         .expect(400)
         .expect((res) => {
           expect(res.body.message).toEqual(
@@ -255,7 +255,7 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         });
     });
 
-    it('POST /test-fornecedores — extra field isAdmin → 400', () => {
+    it('POST /test-fornecedores — campo extra isAdmin → 400', () => {
       return request(app.getHttpServer())
         .post('/test-fornecedores')
         .send({ nome: 'Forn', isAdmin: true })
@@ -267,7 +267,7 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         });
     });
 
-    it('POST /test-artigos — extra field role → 400', () => {
+    it('POST /test-artigos — campo extra role → 400', () => {
       return request(app.getHttpServer())
         .post('/test-artigos')
         .send({ codigo: 'A1', descricao: 'X', classe: 'C', familia: 'F', role: 'admin' })
@@ -279,10 +279,10 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         });
     });
 
-    it('POST /test-ordens — extra field __proto__ → 400', () => {
+    it('POST /test-ordens — campo malicioso com XSS → 400', () => {
       return request(app.getHttpServer())
         .post('/test-ordens')
-        .send({ descricao: 'Test', malicious: '<script>alert(1)</script>' })
+        .send({ descricao: 'Teste', malicious: '<script>alert(1)</script>' })
         .expect(400)
         .expect((res) => {
           expect(res.body.message).toEqual(
@@ -293,35 +293,35 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
   });
 
   // ─────────────────────────────────────────────
-  // TEST 3 — Valid payloads pass through correctly
+  // TESTE 3 — Payloads válidos do frontend passam correctamente
   // ─────────────────────────────────────────────
 
-  describe('Valid frontend payloads pass through without errors', () => {
+  describe('Payloads válidos do frontend passam sem erros', () => {
 
-    it('POST /test-auth/login — valid credentials → 201', () => {
+    it('POST /test-auth/login — credenciais válidas → 201', () => {
       return request(app.getHttpServer())
         .post('/test-auth/login')
         .send({ email: 'admin@aquatex.co.ao', password: 'secret123' })
         .expect(201)
         .expect((res) => {
-          expect(res.body.received).toEqual({
+          expect(res.body.recebido).toEqual({
             email: 'admin@aquatex.co.ao',
             password: 'secret123',
           });
         });
     });
 
-    it('POST /test-clientes — valid minimal cliente → 201', () => {
+    it('POST /test-clientes — cliente mínimo válido → 201', () => {
       return request(app.getHttpServer())
         .post('/test-clientes')
         .send({ nome: 'AQUATEX Luanda' })
         .expect(201)
         .expect((res) => {
-          expect(res.body.received.nome).toBe('AQUATEX Luanda');
+          expect(res.body.recebido.nome).toBe('AQUATEX Luanda');
         });
     });
 
-    it('POST /test-clientes — valid full cliente with enderecos → 201', () => {
+    it('POST /test-clientes — cliente completo com endereços → 201', () => {
       return request(app.getHttpServer())
         .post('/test-clientes')
         .send({
@@ -337,24 +337,24 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         })
         .expect(201)
         .expect((res) => {
-          expect(res.body.received.nome).toBe('AQUATEX Luanda');
-          expect(res.body.received.tipo).toBe('empresa');
-          expect(res.body.received.enderecos).toHaveLength(1);
-          expect(res.body.received.enderecos[0].morada).toBe('Rua Principal 123');
+          expect(res.body.recebido.nome).toBe('AQUATEX Luanda');
+          expect(res.body.recebido.tipo).toBe('empresa');
+          expect(res.body.recebido.enderecos).toHaveLength(1);
+          expect(res.body.recebido.enderecos[0].morada).toBe('Rua Principal 123');
         });
     });
 
-    it('PUT /test-clientes/1 — valid partial update → 200', () => {
+    it('PUT /test-clientes/1 — actualização parcial válida → 200', () => {
       return request(app.getHttpServer())
         .put('/test-clientes/1')
         .send({ telefone: '+244 912 000 111' })
         .expect(200)
         .expect((res) => {
-          expect(res.body.received.telefone).toBe('+244 912 000 111');
+          expect(res.body.recebido.telefone).toBe('+244 912 000 111');
         });
     });
 
-    it('POST /test-fornecedores — valid fornecedor → 201', () => {
+    it('POST /test-fornecedores — fornecedor válido → 201', () => {
       return request(app.getHttpServer())
         .post('/test-fornecedores')
         .send({
@@ -365,12 +365,12 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         })
         .expect(201)
         .expect((res) => {
-          expect(res.body.received.nome).toBe('Pentair Water');
-          expect(res.body.received.ativo).toBe(true);
+          expect(res.body.recebido.nome).toBe('Pentair Water');
+          expect(res.body.recebido.ativo).toBe(true);
         });
     });
 
-    it('POST /test-artigos — valid artigo → 201', () => {
+    it('POST /test-artigos — artigo válido → 201', () => {
       return request(app.getHttpServer())
         .post('/test-artigos')
         .send({
@@ -384,13 +384,13 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         })
         .expect(201)
         .expect((res) => {
-          expect(res.body.received.codigo).toBe('FLT-001');
-          expect(res.body.received.existencia).toBe(50);
-          expect(res.body.received.critico).toBe(true);
+          expect(res.body.recebido.codigo).toBe('FLT-001');
+          expect(res.body.recebido.existencia).toBe(50);
+          expect(res.body.recebido.critico).toBe(true);
         });
     });
 
-    it('POST /test-ordens — valid ordem de trabalho → 201', () => {
+    it('POST /test-ordens — ordem de trabalho válida → 201', () => {
       return request(app.getHttpServer())
         .post('/test-ordens')
         .send({
@@ -404,21 +404,21 @@ describe('ValidationPipe E2E — invalid data returns 400', () => {
         })
         .expect(201)
         .expect((res) => {
-          expect(res.body.received.descricao).toBe('Manutenção preventiva - troca de filtros');
-          expect(res.body.received.tipo).toBe('programada');
-          expect(res.body.received.estado).toBe('Programado');
-          expect(res.body.received.maosObra).toHaveLength(1);
-          expect(res.body.received.artigos).toHaveLength(1);
+          expect(res.body.recebido.descricao).toBe('Manutenção preventiva - troca de filtros');
+          expect(res.body.recebido.tipo).toBe('programada');
+          expect(res.body.recebido.estado).toBe('Programado');
+          expect(res.body.recebido.maosObra).toHaveLength(1);
+          expect(res.body.recebido.artigos).toHaveLength(1);
         });
     });
 
-    it('POST /test-ordens — valid minimal ordem → 201', () => {
+    it('POST /test-ordens — ordem mínima válida → 201', () => {
       return request(app.getHttpServer())
         .post('/test-ordens')
         .send({ descricao: 'Reparação urgente' })
         .expect(201)
         .expect((res) => {
-          expect(res.body.received.descricao).toBe('Reparação urgente');
+          expect(res.body.recebido.descricao).toBe('Reparação urgente');
         });
     });
   });
