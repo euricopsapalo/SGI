@@ -1,5 +1,10 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
 import { ArtigosService } from './artigos.service';
+import { CreateArtigoDto } from './dto/create-artigo.dto';
+import { UpdateArtigoDto } from './dto/update-artigo.dto';
+import { AjusteExistenciaDto } from './dto/ajuste-existencia.dto';
+import { UpsertStockArmazemDto } from './dto/upsert-stock-armazem.dto';
+import { CreateMovimentoStockDto } from './dto/create-movimento-stock.dto';
 
 @Controller('artigos')
 export class ArtigosController {
@@ -8,7 +13,6 @@ export class ArtigosController {
     @Get()
     findAll() { return this.service.findAll(); }
 
-    // stock-armazem routes must come before :id to avoid param conflicts
     @Get('stock-armazem')
     findAllStockArmazem() { return this.service.findAllStockArmazem(); }
 
@@ -19,22 +23,22 @@ export class ArtigosController {
     findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOne(id); }
 
     @Post()
-    create(@Body() body: any) { return this.service.create(body); }
+    create(@Body() dto: CreateArtigoDto) { return this.service.create(dto as any); }
 
     @Put(':id')
-    update(@Param('id', ParseIntPipe) id: number, @Body() body: any) { return this.service.update(id, body); }
+    update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateArtigoDto) { return this.service.update(id, dto as any); }
 
     @Delete(':id')
     remove(@Param('id', ParseIntPipe) id: number) { return this.service.remove(id); }
 
     @Put(':id/ajuste')
-    ajusteExistencia(@Param('id', ParseIntPipe) id: number, @Body() body: { delta: number }) {
-        return this.service.ajusteExistencia(id, body.delta);
+    ajusteExistencia(@Param('id', ParseIntPipe) id: number, @Body() dto: AjusteExistenciaDto) {
+        return this.service.ajusteExistencia(id, dto.delta);
     }
 
     @Put(':id/reserva')
-    ajusteReserva(@Param('id', ParseIntPipe) id: number, @Body() body: { delta: number }) {
-        return this.service.ajusteReserva(id, body.delta);
+    ajusteReserva(@Param('id', ParseIntPipe) id: number, @Body() dto: AjusteExistenciaDto) {
+        return this.service.ajusteReserva(id, dto.delta);
     }
 
     @Get(':id/stock-armazem')
@@ -45,9 +49,9 @@ export class ArtigosController {
     @Post(':id/stock-armazem')
     upsertStockArmazem(
         @Param('id', ParseIntPipe) id: number,
-        @Body() body: { armazemId: number; quantidade: number; stockMinimo: number },
+        @Body() dto: UpsertStockArmazemDto,
     ) {
-        return this.service.upsertStockArmazem(id, body.armazemId, body.quantidade ?? 0, body.stockMinimo ?? 0);
+        return this.service.upsertStockArmazem(id, dto.armazemId, dto.quantidade ?? 0, dto.stockMinimo ?? 0);
     }
 }
 
@@ -62,7 +66,7 @@ export class MovimentosStockController {
     findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOneMovimento(id); }
 
     @Post()
-    create(@Body() body: any) { return this.service.createMovimento(body); }
+    create(@Body() dto: CreateMovimentoStockDto) { return this.service.createMovimento(dto); }
 
     @Delete(':id')
     remove(@Param('id', ParseIntPipe) id: number) { return this.service.removeMovimento(id); }

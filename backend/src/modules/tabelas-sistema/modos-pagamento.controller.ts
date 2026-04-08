@@ -1,11 +1,13 @@
-import { Controller, Get, Post, Put, Delete, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
 import { TabelasSistemaService } from './tabelas-sistema.service';
+import { CreateModoPagamentoDto } from './dto/create-modo-pagamento.dto';
+import { UpdateModoPagamentoDto } from './dto/update-modo-pagamento.dto';
 
 @Controller('modos-pagamento')
 export class ModosPagamentoController {
     constructor(private readonly svc: TabelasSistemaService) {}
     @Get()    findAll() { return this.svc.findAllModosPagamento(); }
-    @Post()   create(@Body() body: any) { return this.svc.createModoPagamento(body); }
-    @Put(':id') update(@Param('id') id: string, @Body() body: any) { return this.svc.updateModoPagamento(+id, body); }
-    @Delete(':id') remove(@Param('id') id: string) { return this.svc.removeModoPagamento(+id); }
+    @Post()   create(@Body() dto: CreateModoPagamentoDto) { return this.svc.createModoPagamento(dto); }
+    @Put(':id') update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateModoPagamentoDto) { return this.svc.updateModoPagamento(id, dto); }
+    @Delete(':id') remove(@Param('id', ParseIntPipe) id: number) { return this.svc.removeModoPagamento(id); }
 }

@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
 import { TecnicosService } from './tecnicos.service';
+import { CreateTecnicoDto } from './dto/create-tecnico.dto';
+import { UpdateTecnicoDto } from './dto/update-tecnico.dto';
 
 @Controller('tecnicos')
 export class TecnicosController {
@@ -16,13 +18,13 @@ export class TecnicosController {
     }
 
     @Post()
-    create(@Body() body: any) {
-        return this.service.create(body);
+    create(@Body() dto: CreateTecnicoDto) {
+        return this.service.create(dto);
     }
 
     @Put(':id')
-    update(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
-        return this.service.update(id, body);
+    update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateTecnicoDto) {
+        return this.service.update(id, dto);
     }
 
     @Delete(':id')

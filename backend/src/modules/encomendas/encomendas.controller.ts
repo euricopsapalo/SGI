@@ -1,5 +1,8 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
 import { EncomendaService } from './encomendas.service';
+import { CreateEncomendaDto } from './dto/create-encomenda.dto';
+import { UpdateEncomendaDto } from './dto/update-encomenda.dto';
+import { ReceberLinhasDto } from './dto/receber-linhas.dto';
 
 @Controller('compras')
 export class EncomendaController {
@@ -12,10 +15,10 @@ export class EncomendaController {
     findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOne(id); }
 
     @Post()
-    create(@Body() body: any) { return this.service.create(body); }
+    create(@Body() dto: CreateEncomendaDto) { return this.service.create(dto); }
 
     @Put(':id')
-    update(@Param('id', ParseIntPipe) id: number, @Body() body: any) { return this.service.update(id, body); }
+    update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateEncomendaDto) { return this.service.update(id, dto); }
 
     @Delete(':id')
     remove(@Param('id', ParseIntPipe) id: number) { return this.service.remove(id); }
@@ -23,23 +26,17 @@ export class EncomendaController {
     @Post(':id/receber')
     receberLinhas(
         @Param('id', ParseIntPipe) id: number,
-        @Body() body: {
-            recebidas: Array<{ artigoId: string; qtd: number }>;
-            guiaRemessa: string;
-            operador: string;
-            armazem: string;
-        },
+        @Body() dto: ReceberLinhasDto,
     ) {
         return this.service.receberLinhas(
             id,
-            body.recebidas ?? [],
-            body.guiaRemessa ?? '',
-            body.operador ?? 'Sistema',
-            body.armazem ?? '',
+            dto.recebidas ?? [],
+            dto.guiaRemessa ?? '',
+            dto.operador ?? 'Sistema',
+            dto.armazem ?? '',
         );
     }
 
-    // Static prefix 'rececoes' — NestJS resolves before ':id'
     @Post('rececoes/:rececaoId/anular')
     anularRececao(@Param('rececaoId', ParseIntPipe) rececaoId: number) {
         return this.service.anularRececao(rececaoId);

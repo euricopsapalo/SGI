@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
 import { TabelasSistemaService } from './tabelas-sistema.service';
+import { CreateFuncaoTecnicoDto } from './dto/create-funcao-tecnico.dto';
+import { UpdateFuncaoTecnicoDto } from './dto/update-funcao-tecnico.dto';
 
 @Controller('funcoes-tecnico')
 export class FuncoesTecnicoController {
@@ -12,10 +14,10 @@ export class FuncoesTecnicoController {
     findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOneFuncaoTecnico(id); }
 
     @Post()
-    create(@Body() body: any) { return this.service.createFuncaoTecnico(body); }
+    create(@Body() dto: CreateFuncaoTecnicoDto) { return this.service.createFuncaoTecnico(dto); }
 
     @Put(':id')
-    update(@Param('id', ParseIntPipe) id: number, @Body() body: any) { return this.service.updateFuncaoTecnico(id, body); }
+    update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateFuncaoTecnicoDto) { return this.service.updateFuncaoTecnico(id, dto); }
 
     @Delete(':id')
     remove(@Param('id', ParseIntPipe) id: number) { return this.service.removeFuncaoTecnico(id); }
