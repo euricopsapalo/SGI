@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
 import { TabelasSistemaService } from './tabelas-sistema.service';
+import { CreatePaisDto } from './dto/create-pais.dto';
+import { UpdatePaisDto } from './dto/update-pais.dto';
 
 @Controller('paises')
 export class PaisesController {
@@ -12,10 +14,10 @@ export class PaisesController {
     findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOnePais(id); }
 
     @Post()
-    create(@Body() body: any) { return this.service.createPais(body); }
+    create(@Body() dto: CreatePaisDto) { return this.service.createPais(dto); }
 
     @Put(':id')
-    update(@Param('id', ParseIntPipe) id: number, @Body() body: any) { return this.service.updatePais(id, body); }
+    update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePaisDto) { return this.service.updatePais(id, dto); }
 
     @Delete(':id')
     remove(@Param('id', ParseIntPipe) id: number) { return this.service.removePais(id); }

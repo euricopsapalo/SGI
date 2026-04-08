@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
 import { FornecedoresService } from './fornecedores.service';
+import { CreateFornecedorDto } from './dto/create-fornecedor.dto';
+import { UpdateFornecedorDto } from './dto/update-fornecedor.dto';
 
 @Controller('fornecedores')
 export class FornecedoresController {
@@ -16,13 +18,13 @@ export class FornecedoresController {
     }
 
     @Post()
-    create(@Body() body: any) {
-        return this.service.create(body);
+    create(@Body() dto: CreateFornecedorDto) {
+        return this.service.create(dto);
     }
 
     @Put(':id')
-    update(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
-        return this.service.update(id, body);
+    update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateFornecedorDto) {
+        return this.service.update(id, dto);
     }
 
     @Delete(':id')

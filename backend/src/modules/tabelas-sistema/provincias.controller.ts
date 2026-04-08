@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe, Query } from '@nestjs/common';
 import { TabelasSistemaService } from './tabelas-sistema.service';
+import { CreateProvinciaDto } from './dto/create-provincia.dto';
+import { UpdateProvinciaDto } from './dto/update-provincia.dto';
 
 @Controller('provincias')
 export class ProvinciasController {
@@ -17,10 +19,10 @@ export class ProvinciasController {
     findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOneProvincia(id); }
 
     @Post()
-    create(@Body() body: any) { return this.service.createProvincia(body); }
+    create(@Body() dto: CreateProvinciaDto) { return this.service.createProvincia(dto); }
 
     @Put(':id')
-    update(@Param('id', ParseIntPipe) id: number, @Body() body: any) { return this.service.updateProvincia(id, body); }
+    update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateProvinciaDto) { return this.service.updateProvincia(id, dto); }
 
     @Delete(':id')
     remove(@Param('id', ParseIntPipe) id: number) { return this.service.removeProvincia(id); }

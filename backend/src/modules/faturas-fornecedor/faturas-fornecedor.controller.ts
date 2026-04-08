@@ -1,5 +1,8 @@
 import { Controller, Get, Post, Put, Patch, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
 import { FaturasFornecedorService } from './faturas-fornecedor.service';
+import { CreateFaturaFornecedorDto } from './dto/create-fatura-fornecedor.dto';
+import { UpdateFaturaFornecedorDto } from './dto/update-fatura-fornecedor.dto';
+import { UpdateEstadoFaturaFornecedorDto } from './dto/update-estado-fatura-fornecedor.dto';
 
 @Controller('faturas-fornecedor')
 export class FaturasFornecedorController {
@@ -7,11 +10,11 @@ export class FaturasFornecedorController {
 
     @Get()    findAll() { return this.service.findAll(); }
     @Get(':id') findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOne(id); }
-    @Post()   create(@Body() body: any) { return this.service.create(body); }
-    @Put(':id') update(@Param('id', ParseIntPipe) id: number, @Body() body: any) { return this.service.update(id, body); }
+    @Post()   create(@Body() dto: CreateFaturaFornecedorDto) { return this.service.create(dto); }
+    @Put(':id') update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateFaturaFornecedorDto) { return this.service.update(id, dto); }
     @Patch(':id/estado') updateEstado(
         @Param('id', ParseIntPipe) id: number,
-        @Body() body: { estado: string; usuario?: string }
-    ) { return this.service.updateEstado(id, body.estado, body.usuario); }
+        @Body() dto: UpdateEstadoFaturaFornecedorDto
+    ) { return this.service.updateEstado(id, dto.estado, dto.usuario); }
     @Delete(':id') remove(@Param('id', ParseIntPipe) id: number) { return this.service.remove(id); }
 }

@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
 import { TabelasSistemaService } from './tabelas-sistema.service';
+import { CreateTaxaIvaDto } from './dto/create-taxa-iva.dto';
+import { UpdateTaxaIvaDto } from './dto/update-taxa-iva.dto';
 
 @Controller('taxas-iva')
 export class TaxasIvaController {
@@ -12,10 +14,10 @@ export class TaxasIvaController {
     findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOneTaxaIva(id); }
 
     @Post()
-    create(@Body() body: any) { return this.service.createTaxaIva(body); }
+    create(@Body() dto: CreateTaxaIvaDto) { return this.service.createTaxaIva(dto); }
 
     @Put(':id')
-    update(@Param('id', ParseIntPipe) id: number, @Body() body: any) { return this.service.updateTaxaIva(id, body); }
+    update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateTaxaIvaDto) { return this.service.updateTaxaIva(id, dto); }
 
     @Delete(':id')
     remove(@Param('id', ParseIntPipe) id: number) { return this.service.removeTaxaIva(id); }

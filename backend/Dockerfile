@@ -5,8 +5,11 @@ WORKDIR /app
 # Copia apenas os arquivos de dependência primeiro para aproveitar o cache do Docker
 COPY package*.json ./
 
-# Instala as dependências
-RUN npm install --legacy-peer-deps
+# Instala as dependências (com retry para redes instáveis)
+RUN npm config set fetch-retries 5 \
+ && npm config set fetch-retry-mintimeout 20000 \
+ && npm config set fetch-retry-maxtimeout 120000 \
+ && npm install --legacy-peer-deps
 
 # Copia o restante do código da aplicação (o .dockerignore vai barrar a node_modules local)
 COPY . .

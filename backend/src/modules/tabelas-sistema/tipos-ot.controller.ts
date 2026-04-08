@@ -1,5 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
 import { TabelasSistemaService } from './tabelas-sistema.service';
+import { CreateCodigoDescricaoDto } from './dto/create-codigo-descricao.dto';
+import { UpdateCodigoDescricaoDto } from './dto/update-codigo-descricao.dto';
 
 @Controller('tipos-ot')
 export class TiposOTController {
@@ -12,10 +14,10 @@ export class TiposOTController {
     findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOneTipoOT(id); }
 
     @Post()
-    create(@Body() body: any) { return this.service.createTipoOT(body); }
+    create(@Body() dto: CreateCodigoDescricaoDto) { return this.service.createTipoOT(dto); }
 
     @Put(':id')
-    update(@Param('id', ParseIntPipe) id: number, @Body() body: any) { return this.service.updateTipoOT(id, body); }
+    update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateCodigoDescricaoDto) { return this.service.updateTipoOT(id, dto); }
 
     @Delete(':id')
     remove(@Param('id', ParseIntPipe) id: number) { return this.service.removeTipoOT(id); }
