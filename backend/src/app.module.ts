@@ -26,6 +26,7 @@ import { SysLogsModule } from './modules/sys-logs/sys-logs.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { SeedModule } from './modules/seed/seed.module';
 import { FaturasFornecedorModule } from './modules/faturas-fornecedor/faturas-fornecedor.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { FaturasFornecedorModule } from './modules/faturas-fornecedor/faturas-fo
     AuthModule,
     SeedModule,
     FaturasFornecedorModule,
+    HealthModule,
   ],
 })
 export class AppModule {}

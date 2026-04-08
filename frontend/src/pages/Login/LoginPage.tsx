@@ -39,7 +39,11 @@ const LoginPage: React.FC = () => {
             addLog({ usuario: user.email, modulo: 'Autenticação', acao: 'Login', detalhes: `Utilizador: ${user.nome} (${user.role})`, tipo: 'info' });
             navigate('/dashboard');
         } catch (err: any) {
-            setError(err?.response?.data?.message || 'Email ou password incorretos.');
+            if (err?.response) {
+                setError(err.response.data?.message || 'Email ou password incorretos.');
+            } else {
+                setError('Servidor indisponível. O sistema ainda está a iniciar — aguarde alguns segundos e tente novamente.');
+            }
             setLoading(false);
         }
     };
