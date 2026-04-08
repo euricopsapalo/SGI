@@ -3,9 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, LogIn, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 import AquatexLogo from '../../components/AquatexLogo';
 import { useGlobal } from '../../contexts/GlobalContext';
-import axios from 'axios';
-
-const API = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+import api from '../../services/api';
 const ROLE_MAP: Record<string, string> = {
     admin: 'Administrador', suporte: 'Suporte',
     campo: 'Técnico de Campo', vendedor: 'Vendedor',
@@ -34,7 +32,7 @@ const LoginPage: React.FC = () => {
         if (!email || !password) { setError('Por favor preencha todos os campos.'); return; }
         setLoading(true);
         try {
-            const { data } = await axios.post(`${API}/api/auth/login`, { email, password });
+            const { data } = await api.post('/auth/login', { email, password });
             const user = { nome: data.user.nome, email: data.user.email, role: ROLE_MAP[data.user.role] || data.user.role };
             setCurrentUser(user);
             localStorage.setItem('sgi_token', data.access_token);
@@ -51,7 +49,7 @@ const LoginPage: React.FC = () => {
         if (!forgotEmail) { setError('Introduza o seu email.'); return; }
         setLoading(true);
         try {
-            await axios.post(`${API}/api/auth/forgot-password`, { email: forgotEmail });
+            await api.post('/auth/forgot-password', { email: forgotEmail });
             setSuccess('Se o email existir, receberá um código de recuperação. Verifique a sua caixa de entrada.');
             setTimeout(() => go('reset'), 3500);
         } catch { setError('Erro ao processar o pedido. Tente novamente.'); }
@@ -64,7 +62,7 @@ const LoginPage: React.FC = () => {
         if (newPassword.length < 6) { setError('A password deve ter pelo menos 6 caracteres.'); return; }
         setLoading(true);
         try {
-            await axios.post(`${API}/api/auth/reset-password`, { token: resetToken, newPassword });
+            await api.post('/auth/reset-password', { token: resetToken, newPassword });
             setSuccess('Password alterada com sucesso! Redirecionando...');
             setTimeout(() => go('login'), 2500);
         } catch (err: any) {
