@@ -21,6 +21,14 @@ import RelatoriosPage from './pages/Relatorios/RelatoriosPage';
 import ConfiguracoesPage from './pages/Configuracoes/ConfiguracoesPage';
 import LogsPage from './pages/Logs/LogsPage';
 
+/* Requires authentication — redirects to /login if no user */
+function AuthGuard({ children }: { children: React.ReactElement }) {
+  const { currentUser } = useGlobal();
+  const token = localStorage.getItem('sgi_token');
+  if (!token && !currentUser) return <Navigate to="/login" replace />;
+  return children;
+}
+
 /* Blocks routes for Técnico de Campo — redirects to /ordens */
 function TecnicoGuard({ children }: { children: React.ReactElement }) {
   const { currentUser } = useGlobal();
@@ -37,21 +45,21 @@ function App() {
           <Route path="/login"    element={<LoginPage />} />
           <Route path="/"         element={<Navigate to="/login" replace />} />
 
-          <Route path="/dashboard"    element={<DashboardPage />} />
-          <Route path="/clientes"     element={<TecnicoGuard><ClientesPage /></TecnicoGuard>} />
-          <Route path="/tecnicos"     element={<TecnicoGuard><TecnicosPage /></TecnicoGuard>} />
-          <Route path="/fornecedores" element={<TecnicoGuard><FornecedoresPage /></TecnicoGuard>} />
-          <Route path="/parque"       element={<TecnicoGuard><ParquePage /></TecnicoGuard>} />
-          <Route path="/planos"       element={<TecnicoGuard><PlanosPage /></TecnicoGuard>} />
-          <Route path="/ordens"       element={<OrdensPage />} />
-          <Route path="/agenda"       element={<AgendaPage />} />
-          <Route path="/compras"      element={<TecnicoGuard><EncomendaPage /></TecnicoGuard>} />
-          <Route path="/stock"        element={<TecnicoGuard><StockPage /></TecnicoGuard>} />
-          <Route path="/faturacao"    element={<TecnicoGuard><FaturacaoPage /></TecnicoGuard>} />
-          <Route path="/utilizadores" element={<TecnicoGuard><UtilizadoresPage /></TecnicoGuard>} />
-          <Route path="/relatorios"   element={<TecnicoGuard><RelatoriosPage /></TecnicoGuard>} />
-          <Route path="/logs"         element={<TecnicoGuard><LogsPage /></TecnicoGuard>} />
-          <Route path="/configuracoes" element={<TecnicoGuard><ConfiguracoesPage /></TecnicoGuard>} />
+          <Route path="/dashboard"    element={<AuthGuard><DashboardPage /></AuthGuard>} />
+          <Route path="/clientes"     element={<AuthGuard><TecnicoGuard><ClientesPage /></TecnicoGuard></AuthGuard>} />
+          <Route path="/tecnicos"     element={<AuthGuard><TecnicoGuard><TecnicosPage /></TecnicoGuard></AuthGuard>} />
+          <Route path="/fornecedores" element={<AuthGuard><TecnicoGuard><FornecedoresPage /></TecnicoGuard></AuthGuard>} />
+          <Route path="/parque"       element={<AuthGuard><TecnicoGuard><ParquePage /></TecnicoGuard></AuthGuard>} />
+          <Route path="/planos"       element={<AuthGuard><TecnicoGuard><PlanosPage /></TecnicoGuard></AuthGuard>} />
+          <Route path="/ordens"       element={<AuthGuard><OrdensPage /></AuthGuard>} />
+          <Route path="/agenda"       element={<AuthGuard><AgendaPage /></AuthGuard>} />
+          <Route path="/compras"      element={<AuthGuard><TecnicoGuard><EncomendaPage /></TecnicoGuard></AuthGuard>} />
+          <Route path="/stock"        element={<AuthGuard><TecnicoGuard><StockPage /></TecnicoGuard></AuthGuard>} />
+          <Route path="/faturacao"    element={<AuthGuard><TecnicoGuard><FaturacaoPage /></TecnicoGuard></AuthGuard>} />
+          <Route path="/utilizadores" element={<AuthGuard><TecnicoGuard><UtilizadoresPage /></TecnicoGuard></AuthGuard>} />
+          <Route path="/relatorios"   element={<AuthGuard><TecnicoGuard><RelatoriosPage /></TecnicoGuard></AuthGuard>} />
+          <Route path="/logs"         element={<AuthGuard><TecnicoGuard><LogsPage /></TecnicoGuard></AuthGuard>} />
+          <Route path="/configuracoes" element={<AuthGuard><TecnicoGuard><ConfiguracoesPage /></TecnicoGuard></AuthGuard>} />
 
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

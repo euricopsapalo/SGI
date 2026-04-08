@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Delete, Param, Body, ParseIntPipe, Query } from '@nestjs/common';
 import { SysLogsService } from './sys-logs.service';
+import { Roles } from '../auth/roles.decorator';
 
 @Controller('logs')
 export class SysLogsController {
@@ -21,6 +22,7 @@ export class SysLogsController {
     }
 
     @Delete(':id')
+    @Roles('admin')
     remove(@Param('id', ParseIntPipe) id: number) {
         return this.service.remove(id);
     }

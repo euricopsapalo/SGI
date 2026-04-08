@@ -4,10 +4,8 @@ import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { Search, Plus, Pencil, Eye, Phone, Mail, MapPin, Building2, User, X, Check, AlertCircle, Trash2, Download, Printer } from 'lucide-react';
 import SearchableSelect from '../../components/SearchableSelect';
-import axios from 'axios';
+import api from '../../services/api';
 import { useGlobal, EquipInstalado, OrdemTrabalho, ModeloEquipamento } from '../../contexts/GlobalContext';
-
-const API = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
 /* ══════════════════════════════════════════
    Types
@@ -1113,7 +1111,7 @@ const ClientesPage: React.FC = () => {
     const handleRemove = async (id: number, nome: string) => {
         if (!window.confirm(`Eliminar o cliente "${nome}"? Esta acção não pode ser desfeita.`)) return;
         try {
-            await axios.delete(`${API}/api/clientes/${id}`);
+            await api.delete(`/clientes/${id}`);
             showToast(`Cliente "${nome}" eliminado.`);
             addLog({ usuario: currentUser?.email ?? 'sistema', modulo: 'Clientes', acao: 'Cliente eliminado', detalhes: `Nome: ${nome}`, tipo: 'warning' });
             loadClientes();
@@ -1124,7 +1122,7 @@ const ClientesPage: React.FC = () => {
 
     const loadClientes = useCallback(async () => {
         try {
-            const { data } = await axios.get(`${API}/api/clientes`);
+            const { data } = await api.get(`/clientes`);
             setClientes(data);
         } catch (e) {
             console.error('Erro ao carregar clientes', e);
@@ -1142,10 +1140,10 @@ const ClientesPage: React.FC = () => {
     const handleSave = async (data: FormData) => {
         try {
             if (editTarget) {
-                await axios.put(`${API}/api/clientes/${editTarget.id}`, data);
+                await api.put(`/clientes/${editTarget.id}`, data);
                 showToast('Cliente actualizado com sucesso.');
             } else {
-                await axios.post(`${API}/api/clientes`, data);
+                await api.post(`/clientes`, data);
                 showToast('Cliente criado com sucesso.');
             }
             await loadClientes();

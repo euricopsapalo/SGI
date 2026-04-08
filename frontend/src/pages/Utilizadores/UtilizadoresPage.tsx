@@ -3,13 +3,12 @@ import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import UtilizadorModal from './UtilizadorModal';
 import { useGlobal } from '../../contexts/GlobalContext';
-import axios from 'axios';
+import api from '../../services/api';
 import {
     Search, Plus, Filter, Pencil, Trash2,
     ToggleLeft, ToggleRight, MoreVertical, Check,
 } from 'lucide-react';
 
-const API = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
 /* ── Role mappings ── */
 const PERFIL_TO_ROLE: Record<string, string> = {
@@ -121,7 +120,7 @@ const UtilizadoresPage: React.FC = () => {
 
     const loadUsers = useCallback(async () => {
         try {
-            const { data } = await axios.get(`${API}/api/users`);
+            const { data } = await api.get(`/users`);
             setUsers(data.map(normUser));
         } catch (e) {
             console.error('Erro ao carregar utilizadores', e);
@@ -154,10 +153,10 @@ const UtilizadoresPage: React.FC = () => {
 
         try {
             if (editUser) {
-                await axios.put(`${API}/api/users/${editUser.id}`, payload);
+                await api.put(`/users/${editUser.id}`, payload);
                 showToast('Utilizador atualizado com sucesso.');
             } else {
-                await axios.post(`${API}/api/users`, payload);
+                await api.post(`/users`, payload);
                 showToast('Utilizador criado com sucesso.');
             }
             await loadUsers();
@@ -173,7 +172,7 @@ const UtilizadoresPage: React.FC = () => {
         const u = users.find(x => x.id === id);
         if (!u) return;
         try {
-            await axios.put(`${API}/api/users/${id}/${u.ativo ? 'deactivate' : 'activate'}`);
+            await api.put(`/users/${id}/${u.ativo ? 'deactivate' : 'activate'}`);
             setUsers(prev => prev.map(x => x.id === id ? { ...x, ativo: !x.ativo } : x));
             showToast('Estado do utilizador atualizado.');
         } catch (e) {
@@ -184,7 +183,7 @@ const UtilizadoresPage: React.FC = () => {
     const handleDelete = async (id: number) => {
         if (!window.confirm('Eliminar este utilizador?')) return;
         try {
-            await axios.delete(`${API}/api/users/${id}`);
+            await api.delete(`/users/${id}`);
             setUsers(prev => prev.filter(u => u.id !== id));
             showToast('Utilizador eliminado.');
         } catch (e) {
