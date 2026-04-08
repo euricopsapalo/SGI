@@ -12,5 +12,6 @@
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true
-  }
+  },
+  "exclude": ["**/*.spec.ts", "test/**"]
 }

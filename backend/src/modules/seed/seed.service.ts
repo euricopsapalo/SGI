@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
@@ -22,7 +22,7 @@ const DEFAULT_TAXAS_IVA = [
 ];
 
 @Injectable()
-export class SeedService implements OnApplicationBootstrap {
+export class SeedService implements OnModuleInit {
     private readonly logger = new Logger(SeedService.name);
 
     constructor(
@@ -33,8 +33,16 @@ export class SeedService implements OnApplicationBootstrap {
         private readonly taxaIvaRepo: Repository<TaxaIva>,
     ) {}
 
-    async onApplicationBootstrap() {
-        // ── Users ──
+    /**
+     * OnModuleInit é aguardado pelo NestJS antes de aceitar pedidos HTTP,
+     * garantindo que os utilizadores seed existem quando o primeiro login chega.
+     */
+    async onModuleInit() {
+        await this.seedUsers();
+        await this.seedTaxasIva();
+    }
+
+    private async seedUsers() {
         try {
             for (const seed of DEFAULT_USERS) {
                 const existing = await this.userRepo.findOne({ where: { email: seed.email } });
@@ -46,7 +54,6 @@ export class SeedService implements OnApplicationBootstrap {
                     );
                     this.logger.log(`Utilizador criado: ${seed.email}`);
                 } else {
-                    // Verifica se a hash está válida; se não, corrige
                     const valid = await bcrypt.compare(seed.password, existing.passwordHash);
                     if (!valid) {
                         const hash = await bcrypt.hash(seed.password, 10);
@@ -58,8 +65,9 @@ export class SeedService implements OnApplicationBootstrap {
         } catch (err) {
             this.logger.error(`Erro ao executar seed de utilizadores: ${err.message}`);
         }
+    }
 
-        // ── Taxas IVA ──
+    private async seedTaxasIva() {
         try {
             const count = await this.taxaIvaRepo.count();
             if (count === 0) {
