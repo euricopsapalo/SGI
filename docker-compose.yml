@@ -38,11 +38,17 @@
     ports:
       - "3001:3001"
     volumes:
-      - ./backend:/app # Sincroniza o seu código local com o container          
+      - ./backend:/app # Sincroniza o seu código local com o container
       - /app/node_modules # Protege as dependências instaladas dentro do container
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
 
   frontend:
     build: ./frontend
@@ -58,7 +64,8 @@
       - ./frontend:/app
       - /app/node_modules
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
   adminer:
     image: adminer:latest
