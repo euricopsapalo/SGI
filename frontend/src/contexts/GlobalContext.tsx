@@ -202,10 +202,9 @@ export interface EmpresaConfig {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   COMPANY INFO (fallback — replaced by empresaConfig from API)
+   DEFAULT EMPTY STATE (until loaded from backend API)
 ══════════════════════════════════════════════════════════════ */
-/** @deprecated Use empresaConfig from useGlobal() — all company data comes from the backend */
-const EMPRESA_INFO_EMPTY: EmpresaConfig = {
+const EMPRESA_CONFIG_DEFAULT: EmpresaConfig = {
     nome: '', nif: '', morada: '', telefone: '', email: '',
     iban: '', banco: '', moeda: 'AOA', taxaIva: 0,
 };
@@ -484,7 +483,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const [taxaIvaGlobal, setTaxaIvaGlobal] = useState<number>(0);
-    const [empresaConfig, setEmpresaConfig] = useState<EmpresaConfig>(EMPRESA_INFO_EMPTY);
+    const [empresaConfig, setEmpresaConfig] = useState<EmpresaConfig>(EMPRESA_CONFIG_DEFAULT);
     const [tiposTrabalho, setTiposTrabalho] = useState<TipoTrabalho[]>([]);
     const [tiposDocumento, setTiposDocumento] = useState<TipoDocumento[]>([]);
     const [tiposOT, setTiposOT] = useState<TipoOT[]>([]);
@@ -606,7 +605,11 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    useEffect(() => { reloadData(); }, [reloadData]);
+    // Only load data when authenticated (token exists)
+    useEffect(() => {
+        const token = localStorage.getItem('sgi_token');
+        if (token) reloadData();
+    }, [reloadData, currentUser]);
 
     /* ── Logs ───────────────────────────────────────────────── */
     const addLog = async (l: Omit<SysLog, 'id' | 'timestamp'>) => {
