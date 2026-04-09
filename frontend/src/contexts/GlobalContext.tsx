@@ -1023,7 +1023,10 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     /* ── Work Orders ────────────────────────────────────────── */
     const addOrdem = async (o: Omit<OrdemTrabalho, 'id'>): Promise<OrdemTrabalho> => {
-        const { data } = await api.post(`/ordens`, o);
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { reprogramacoes, maosDeObra, ...rest } = o as any;
+        const payload = { ...rest, ...(maosDeObra !== undefined ? { maosObra: maosDeObra } : {}) };
+        const { data } = await api.post(`/ordens`, payload);
         const n = normOrdem(data);
         setOrdens(p => [...p, n]);
         log('Ordens de Trabalho', 'OT criada', `Tipo: ${o.tipo} | ${o.descricao?.slice(0, 60)}`);
@@ -1032,7 +1035,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const updateOrdem = async (id: string, o: Partial<OrdemTrabalho>) => {
         try {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { reprogramacoes, ...payload } = o as any;
+            const { reprogramacoes, maosDeObra, ...rest } = o as any;
+            const payload = { ...rest, ...(maosDeObra !== undefined ? { maosObra: maosDeObra } : {}) };
             const { data: updated } = await api.put(`/ordens/${id}`, payload);
             setOrdens(p => p.map(x => x.id === id ? normOrdem(updated) : x));
             log('Ordens de Trabalho', 'OT actualizada', `ID: ${id}`);
