@@ -48,5 +48,28 @@ describe('SysLogs DTOs', () => {
         expect(errors.length).toBe(0);
       }
     });
+
+    // ── Regressão fix #13 ────────────────────────────────────────────────
+    // O frontend enviava `timestamp` no payload; a entity gera-o via
+    // @CreateDateColumn, portanto o campo NÃO pode existir no DTO. Se
+    // alguém voltar a adicioná-lo, este teste detecta.
+    it('should NOT declare timestamp property (regression #13)', () => {
+      const sample = new CreateLogDto();
+      // Nenhum atalho: garantimos que a instância vazia não expõe timestamp
+      expect(Object.prototype.hasOwnProperty.call(sample, 'timestamp')).toBe(false);
+      expect((sample as any).timestamp).toBeUndefined();
+    });
+
+    it('should accept a payload WITHOUT timestamp (regression #13)', async () => {
+      const dto = plainToInstance(CreateLogDto, {
+        usuario: 'user@aquatex.ao',
+        modulo: 'Autenticação',
+        acao: 'Login',
+        detalhes: 'Utilizador: Admin',
+        tipo: 'info',
+      });
+      const errors = await validate(dto);
+      expect(errors.length).toBe(0);
+    });
   });
 });

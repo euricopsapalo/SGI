@@ -403,7 +403,9 @@ CREATE TABLE ot_artigos (
     artigo_id  INTEGER       REFERENCES artigos(id) ON DELETE SET NULL,
     descricao  VARCHAR(300)  NOT NULL,
     quantidade NUMERIC(12,3) NOT NULL DEFAULT 1,
-    preco      NUMERIC(12,2) NOT NULL DEFAULT 0
+    preco      NUMERIC(12,2) NOT NULL DEFAULT 0,
+    codigo_iva VARCHAR(20),
+    taxa_iva   NUMERIC(5,2)
 );
 
 -- Histórico de reprogramações de OT

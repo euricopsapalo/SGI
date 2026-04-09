@@ -310,6 +310,8 @@ const OT_CSS = `
   tr:nth-child(odd)  td { background: #fff; }
   .info-table tr:nth-child(even) td:first-child,
   .info-table tr:nth-child(odd)  td:first-child { background: #f5f5f5; }
+  .summary-row td { background: #f0f4ff !important; font-size: 0.76rem; color: #444; border-top: 1px solid #ccc; }
+  .summary-total td { background: #2B2B2B !important; color: #fff !important; font-weight: 700; font-size: 0.8rem; border-top: 2px solid #000; }
   .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 28px; }
   .sign-box  { border: 1px solid #bbb; border-radius: 4px; padding: 12px 16px; }
   .sign-lbl  { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #555; margin-bottom: 6px; }
@@ -333,17 +335,36 @@ function buildOTHtml(
     const cli   = clientes.find(c => c.id === ot.clienteId)?.nome ?? '—';
     const empresaNome = empresa?.nome || 'AQUATEX';
 
-    const maosHtml = (ot.maosDeObra?.length ?? 0) > 0
-        ? `<h3 class="sec-title">Mão de Obra</h3>
-<table><thead><tr><th>Função</th><th style="text-align:right">Custo/h (${simbolo ?? 'Kz'})</th><th>Hora</th></tr></thead><tbody>
-${ot.maosDeObra.map(m => `<tr><td>${m.funcao}</td><td style="text-align:right">${m.custo.toLocaleString('pt-PT')}</td><td>${m.hora}</td></tr>`).join('')}
-</tbody></table>` : '';
-
-    const artsHtml = (ot.artigos?.length ?? 0) > 0
-        ? `<h3 class="sec-title">Artigos / Consumíveis</h3>
-<table><thead><tr><th>Descrição</th><th style="text-align:center">Qtd</th><th style="text-align:right">Preço Unit. (${simbolo ?? 'Kz'})</th><th style="text-align:right">Total (${simbolo ?? 'Kz'})</th></tr></thead><tbody>
-${ot.artigos.map(a => `<tr><td>${a.descricao}</td><td style="text-align:center">${a.quantidade}</td><td style="text-align:right">${a.preco.toLocaleString('pt-PT')}</td><td style="text-align:right">${(a.quantidade * a.preco).toLocaleString('pt-PT')}</td></tr>`).join('')}
-</tbody></table>` : '';
+    const artsHtml = (() => {
+        if ((ot.artigos?.length ?? 0) === 0) return '';
+        const sim = simbolo ?? 'Kz';
+        const rows = ot.artigos.map(a =>
+            `<tr><td>${a.descricao}</td><td style="text-align:center">${a.quantidade}</td><td style="text-align:right">${a.preco.toLocaleString('pt-PT')}</td><td style="text-align:right">${(a.quantidade * a.preco).toLocaleString('pt-PT')}</td></tr>`
+        ).join('');
+        const subtotal = ot.artigos.reduce((s, a) => s + a.quantidade * a.preco, 0);
+        // Group IVA by rate (only articles with codigoIva/taxaIva > 0)
+        const ivaMap: Record<string, { label: string; valor: number }> = {};
+        for (const a of ot.artigos) {
+            if (!a.codigoIva || !a.taxaIva || a.taxaIva <= 0) continue;
+            const key = a.codigoIva;
+            if (!ivaMap[key]) ivaMap[key] = { label: `IVA ${a.codigoIva} (${a.taxaIva}%)`, valor: 0 };
+            ivaMap[key].valor += a.quantidade * a.preco * (a.taxaIva / 100);
+        }
+        const ivaEntries = Object.values(ivaMap);
+        const totalIva = ivaEntries.reduce((s, x) => s + x.valor, 0);
+        const total = subtotal + totalIva;
+        const ivaRows = ivaEntries.map(iv =>
+            `<tr class="summary-row"><td colspan="3" style="text-align:right;font-style:italic">${iv.label}</td><td style="text-align:right">${iv.valor.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</td></tr>`
+        ).join('');
+        const summaryRows = `
+<tr class="summary-row"><td colspan="3" style="text-align:right">Subtotal</td><td style="text-align:right">${subtotal.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} ${sim}</td></tr>
+${ivaRows}
+<tr class="summary-total"><td colspan="3" style="text-align:right">Total</td><td style="text-align:right">${total.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} ${sim}</td></tr>`;
+        return `<h3 class="sec-title">Artigos / Consumíveis</h3>
+<table><thead><tr><th>Descrição</th><th style="text-align:center">Qtd</th><th style="text-align:right">Preço Unit. (${sim})</th><th style="text-align:right">Total (${sim})</th></tr></thead><tbody>
+${rows}${summaryRows}
+</tbody></table>`;
+    })();
 
     const diagHtml = ot.orgao
         ? `<h3 class="sec-title">Diagnóstico</h3>
@@ -382,7 +403,7 @@ ${ot.dataInicio      ? `<tr><td>Início Efectivo</td><td>${fmtDate(ot.dataInicio
 ${ot.dataFim         ? `<tr><td>Fim Efectivo</td><td>${fmtDate(ot.dataFim)}</td></tr>` : ''}
 ${ot.dataEncerramento? `<tr><td>Encerramento</td><td>${fmtDate(ot.dataEncerramento)}</td></tr>` : ''}
 </table>
-${maosHtml}${artsHtml}${diagHtml}
+${artsHtml}${diagHtml}
 <div class="sign-grid">
   <div class="sign-box">
     <div class="sign-lbl">Técnico de Campo</div>

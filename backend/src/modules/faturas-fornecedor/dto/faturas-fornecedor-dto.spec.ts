@@ -60,6 +60,34 @@ describe('Faturas-Fornecedor DTOs', () => {
       const errors = await validate(dto);
       expect(errors.some(e => e.property === 'dataEmissao')).toBe(true);
     });
+
+    // ── Regressão fix #14 ────────────────────────────────────────────────
+    it('should accept faturasAssociadas com objectos {faturaAssociadaId} (regression #14)', async () => {
+      const dto = plainToInstance(CreateFaturaFornecedorDto, {
+        tipoDocumento: 'VNC',
+        numFaturaExterno: 'VNC-001',
+        dataEmissao: '2026-04-08',
+        tipoNotaCredito: 'Devolucao',
+        faturasAssociadas: [
+          { faturaAssociadaId: 7 },
+          { faturaAssociadaId: 8 },
+        ],
+      });
+      const errors = await validate(dto);
+      expect(errors.length).toBe(0);
+    });
+
+    it('should reject faturasAssociadas item sem faturaAssociadaId (regression #14)', async () => {
+      const dto = plainToInstance(CreateFaturaFornecedorDto, {
+        tipoDocumento: 'VNC',
+        numFaturaExterno: 'VNC-002',
+        dataEmissao: '2026-04-08',
+        faturasAssociadas: [{} as any],
+      });
+      const errors = await validate(dto);
+      // Erro aninhado — devemos ter pelo menos uma violação
+      expect(errors.length).toBeGreaterThan(0);
+    });
   });
 
   describe('UpdateEstadoFaturaFornecedorDto', () => {

@@ -71,7 +71,15 @@ export class OrdensTrabalhoService {
         }
         if (artsRaw.length > 0) {
             await this.artigoRepo.save(
-                artsRaw.map(a => this.artigoRepo.create({ ordemTrabalho: { id: saved.id }, artigoId: a.artigoId ? Number(a.artigoId) : null, descricao: a.descricao ?? '', quantidade: a.quantidade, preco: a.preco }))
+                artsRaw.map(a => this.artigoRepo.create({
+                    ordemTrabalho: { id: saved.id },
+                    artigoId: a.artigoId ? Number(a.artigoId) : null,
+                    descricao: a.descricao ?? '',
+                    quantidade: a.quantidade,
+                    preco: a.preco,
+                    codigoIva: a.codigoIva ?? null,
+                    taxaIva: a.taxaIva ?? null,
+                }))
             );
         }
 
@@ -98,7 +106,15 @@ export class OrdensTrabalhoService {
             await this.artigoRepo.delete({ ordemTrabalho: { id } } as any);
             if (artigos.length > 0) {
                 await this.artigoRepo.save(
-                    artigos.map((a: any) => this.artigoRepo.create({ ordemTrabalho: { id }, artigoId: a.artigoId ? Number(a.artigoId) : null, descricao: a.descricao ?? '', quantidade: a.quantidade, preco: a.preco }))
+                    artigos.map((a: any) => this.artigoRepo.create({
+                        ordemTrabalho: { id },
+                        artigoId: a.artigoId ? Number(a.artigoId) : null,
+                        descricao: a.descricao ?? '',
+                        quantidade: a.quantidade,
+                        preco: a.preco,
+                        codigoIva: a.codigoIva ?? null,
+                        taxaIva: a.taxaIva ?? null,
+                    }))
                 );
             }
         }
@@ -217,6 +233,8 @@ export class OrdensTrabalhoService {
                         descricao: a.descricao,
                         quantidade: a.quantidade,
                         preco: a.preco,
+                        codigoIva: a.codigoIva ?? null,
+                        taxaIva: a.taxaIva ?? null,
                     }))
                 );
             }

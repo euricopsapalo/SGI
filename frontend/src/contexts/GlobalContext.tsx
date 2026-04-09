@@ -477,7 +477,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     React.useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
     const log = (modulo: string, acao: string, detalhes = '', tipo: SysLog['tipo'] = 'info') => {
         const usuario = currentUserRef.current?.email ?? 'sistema';
-        api.post(`/logs`, { timestamp: new Date().toISOString(), usuario, modulo, acao, detalhes, tipo })
+        api.post(`/logs`, { usuario, modulo, acao, detalhes, tipo })
             .then(({ data }) => setLogs(p => [norm(data) as SysLog, ...p]))
             .catch(() => {});
     };
@@ -614,7 +614,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     /* ── Logs ───────────────────────────────────────────────── */
     const addLog = async (l: Omit<SysLog, 'id' | 'timestamp'>) => {
         try {
-            const { data } = await api.post(`/logs`, { ...l, timestamp: new Date().toISOString() });
+            const { data } = await api.post(`/logs`, l);
             const n = norm(data) as SysLog;
             setLogs(p => [n, ...p]);
         } catch (e) {
@@ -833,11 +833,13 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const addFaturaFornecedor = async (f: Omit<FaturaFornecedor, 'id'> & { faturasAssociadasIds?: string[] }): Promise<FaturaFornecedor> => {
+        const { faturasAssociadasIds, ...rest } = f as any;
         const { data } = await api.post(`/faturas-fornecedor`, {
-            ...f,
+            ...rest,
             fornecedorId: f.fornecedorId,
             linhas: f.linhas,
-            faturasAssociadasIds: (f as any).faturasAssociadasIds ?? [],
+            faturasAssociadas: (faturasAssociadasIds ?? [])
+                .map((id: string) => ({ faturaAssociadaId: Number(id) })),
             tipoNotaCredito: f.tipoNotaCredito ?? null,
             estadoDocumento: f.estadoDocumento ?? 'NA',
         });
@@ -1021,7 +1023,10 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     /* ── Work Orders ────────────────────────────────────────── */
     const addOrdem = async (o: Omit<OrdemTrabalho, 'id'>): Promise<OrdemTrabalho> => {
-        const { data } = await api.post(`/ordens`, o);
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { reprogramacoes, maosDeObra, ...rest } = o as any;
+        const payload = { ...rest, ...(maosDeObra !== undefined ? { maosObra: maosDeObra } : {}) };
+        const { data } = await api.post(`/ordens`, payload);
         const n = normOrdem(data);
         setOrdens(p => [...p, n]);
         log('Ordens de Trabalho', 'OT criada', `Tipo: ${o.tipo} | ${o.descricao?.slice(0, 60)}`);
@@ -1030,7 +1035,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const updateOrdem = async (id: string, o: Partial<OrdemTrabalho>) => {
         try {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { reprogramacoes, ...payload } = o as any;
+            const { reprogramacoes, maosDeObra, ...rest } = o as any;
+            const payload = { ...rest, ...(maosDeObra !== undefined ? { maosObra: maosDeObra } : {}) };
             const { data: updated } = await api.put(`/ordens/${id}`, payload);
             setOrdens(p => p.map(x => x.id === id ? normOrdem(updated) : x));
             log('Ordens de Trabalho', 'OT actualizada', `ID: ${id}`);
