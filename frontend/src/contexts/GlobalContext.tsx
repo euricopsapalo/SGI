@@ -477,7 +477,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     React.useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
     const log = (modulo: string, acao: string, detalhes = '', tipo: SysLog['tipo'] = 'info') => {
         const usuario = currentUserRef.current?.email ?? 'sistema';
-        api.post(`/logs`, { timestamp: new Date().toISOString(), usuario, modulo, acao, detalhes, tipo })
+        api.post(`/logs`, { usuario, modulo, acao, detalhes, tipo })
             .then(({ data }) => setLogs(p => [norm(data) as SysLog, ...p]))
             .catch(() => {});
     };
@@ -614,7 +614,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     /* ── Logs ───────────────────────────────────────────────── */
     const addLog = async (l: Omit<SysLog, 'id' | 'timestamp'>) => {
         try {
-            const { data } = await api.post(`/logs`, { ...l, timestamp: new Date().toISOString() });
+            const { data } = await api.post(`/logs`, l);
             const n = norm(data) as SysLog;
             setLogs(p => [n, ...p]);
         } catch (e) {
@@ -833,11 +833,13 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     const addFaturaFornecedor = async (f: Omit<FaturaFornecedor, 'id'> & { faturasAssociadasIds?: string[] }): Promise<FaturaFornecedor> => {
+        const { faturasAssociadasIds, ...rest } = f as any;
         const { data } = await api.post(`/faturas-fornecedor`, {
-            ...f,
+            ...rest,
             fornecedorId: f.fornecedorId,
             linhas: f.linhas,
-            faturasAssociadasIds: (f as any).faturasAssociadasIds ?? [],
+            faturasAssociadas: (faturasAssociadasIds ?? [])
+                .map((id: string) => ({ faturaAssociadaId: Number(id) })),
             tipoNotaCredito: f.tipoNotaCredito ?? null,
             estadoDocumento: f.estadoDocumento ?? 'NA',
         });

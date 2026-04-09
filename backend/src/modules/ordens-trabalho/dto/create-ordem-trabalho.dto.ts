@@ -12,6 +12,8 @@ export class OtArtigoDto {
   @IsString() @IsNotEmpty() descricao: string;
   @IsOptional() @IsNumber() quantidade?: number;
   @IsOptional() @IsNumber() preco?: number;
+  @IsOptional() @IsString() codigoIva?: string;
+  @IsOptional() @IsNumber() taxaIva?: number;
 }
 
 export class CreateOrdemTrabalhoDto {

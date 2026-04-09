@@ -40,8 +40,11 @@ export class FaturasFornecedorService {
         const tipo = (body.tipoDocumento ?? '').toUpperCase();
         const isVNC = tipo === 'VNC';
 
+        // Strip relational/extra fields that are handled explicitly below
+        const { faturasAssociadas: _fa, fornecedorId: _fid, linhas: _linhas, ...rest } = body ?? {};
+
         const entity = this.faturaRepo.create({
-            ...body,
+            ...rest,
             estadoDocumento: isVNC ? 'Rascunho' : 'NA',
             tipoNotaCredito: isVNC ? (body.tipoNotaCredito ?? null) : null,
             fornecedor: body.fornecedorId ? { id: Number(body.fornecedorId) } : undefined,
@@ -53,10 +56,12 @@ export class FaturasFornecedorService {
         const saved = await this.faturaRepo.save(entity) as unknown as FaturaFornecedor;
 
         // Ligar faturas associadas (só VNC)
-        if (isVNC && Array.isArray(body.faturasAssociadasIds) && body.faturasAssociadasIds.length > 0) {
-            for (const fatId of body.faturasAssociadasIds) {
+        if (isVNC && Array.isArray(body.faturasAssociadas) && body.faturasAssociadas.length > 0) {
+            for (const fa of body.faturasAssociadas) {
+                const faturaAssociadaId = Number(fa?.faturaAssociadaId ?? fa);
+                if (!faturaAssociadaId) continue;
                 await this.vncAssociadaRepo.save(
-                    this.vncAssociadaRepo.create({ vncId: saved.id, faturaAssociadaId: Number(fatId) })
+                    this.vncAssociadaRepo.create({ vncId: saved.id, faturaAssociadaId })
                 );
             }
         }
