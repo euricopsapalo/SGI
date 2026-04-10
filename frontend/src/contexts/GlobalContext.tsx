@@ -477,7 +477,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     React.useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
     const log = (modulo: string, acao: string, detalhes = '', tipo: SysLog['tipo'] = 'info') => {
         const usuario = currentUserRef.current?.email ?? 'sistema';
-        api.post(`/logs`, { timestamp: new Date().toISOString(), usuario, modulo, acao, detalhes, tipo })
+        api.post(`/logs`, { usuario, modulo, acao, detalhes, tipo })
             .then(({ data }) => setLogs(p => [norm(data) as SysLog, ...p]))
             .catch(() => {});
     };
@@ -614,11 +614,11 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     /* ── Logs ───────────────────────────────────────────────── */
     const addLog = async (l: Omit<SysLog, 'id' | 'timestamp'>) => {
         try {
-            const { data } = await api.post(`/logs`, { ...l, timestamp: new Date().toISOString() });
+            const { data } = await api.post(`/logs`, l);
             const n = norm(data) as SysLog;
             setLogs(p => [n, ...p]);
         } catch (e) {
-            console.error('addLog error', e);
+            // Interceptor handles toast display
         }
     };
 
@@ -627,217 +627,219 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         try {
             const { data } = await api.post(`/tipos-trabalho`, t);
             setTiposTrabalho(p => [...p, norm(data)]);
-        } catch (e) { console.error('addTipoTrabalho error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const updateTipoTrabalho = async (id: string, t: Partial<TipoTrabalho>) => {
         try {
             await api.put(`/tipos-trabalho/${id}`, t);
             setTiposTrabalho(p => p.map(x => x.id === id ? { ...x, ...t } : x));
-        } catch (e) { console.error('updateTipoTrabalho error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removeTipoTrabalho = async (id: string) => {
         try {
             await api.delete(`/tipos-trabalho/${id}`);
             setTiposTrabalho(p => p.filter(x => x.id !== id));
-        } catch (e) { console.error('removeTipoTrabalho error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const addTipoOT = async (t: Omit<TipoOT, 'id'>) => {
         try {
             const { data } = await api.post(`/tipos-ot`, t);
             setTiposOT(p => [...p, norm(data)]);
-        } catch (e) { console.error('addTipoOT error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const updateTipoOT = async (id: string, t: Partial<TipoOT>) => {
         try {
             await api.put(`/tipos-ot/${id}`, t);
             setTiposOT(p => p.map(x => x.id === id ? { ...x, ...t } : x));
-        } catch (e) { console.error('updateTipoOT error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removeTipoOT = async (id: string) => {
         try {
             await api.delete(`/tipos-ot/${id}`);
             setTiposOT(p => p.filter(x => x.id !== id));
-        } catch (e) { console.error('removeTipoOT error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const addFuncaoTecnico = async (f: Omit<FuncaoTecnico, 'id'>) => {
         try {
             const { data } = await api.post(`/funcoes-tecnico`, f);
             setFuncoesTecnico(p => [...p, norm(data)]);
-        } catch (e) { console.error('addFuncaoTecnico error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const updateFuncaoTecnico = async (id: string, f: Partial<FuncaoTecnico>) => {
         try {
             await api.put(`/funcoes-tecnico/${id}`, f);
             setFuncoesTecnico(p => p.map(x => x.id === id ? { ...x, ...f } : x));
-        } catch (e) { console.error('updateFuncaoTecnico error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removeFuncaoTecnico = async (id: string) => {
         try {
             await api.delete(`/funcoes-tecnico/${id}`);
             setFuncoesTecnico(p => p.filter(x => x.id !== id));
-        } catch (e) { console.error('removeFuncaoTecnico error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const addMoeda = async (m: Omit<Moeda, 'id'>) => {
         try {
             const { data } = await api.post(`/moedas`, m);
             setMoedas(p => [...p, norm(data)]);
-        } catch (e) { console.error('addMoeda error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const updateMoeda = async (id: string, m: Partial<Moeda>) => {
         try {
             await api.put(`/moedas/${id}`, m);
             setMoedas(p => p.map(x => x.id === id ? { ...x, ...m } : x));
-        } catch (e) { console.error('updateMoeda error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removeMoeda = async (id: string) => {
         try {
             await api.delete(`/moedas/${id}`);
             setMoedas(p => p.filter(x => x.id !== id));
-        } catch (e) { console.error('removeMoeda error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const addTipoDocumento = async (t: Omit<TipoDocumento, 'id'>) => {
         try {
             const { data } = await api.post(`/tipos-documento`, t);
             setTiposDocumento(p => [...p, norm(data)]);
-        } catch (e) { console.error('addTipoDocumento error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const updateTipoDocumento = async (id: string, t: Partial<TipoDocumento>) => {
         try {
             await api.put(`/tipos-documento/${id}`, t);
             setTiposDocumento(p => p.map(x => x.id === id ? { ...x, ...t } : x));
-        } catch (e) { console.error('updateTipoDocumento error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removeTipoDocumento = async (id: string) => {
         try {
             await api.delete(`/tipos-documento/${id}`);
             setTiposDocumento(p => p.filter(x => x.id !== id));
-        } catch (e) { console.error('removeTipoDocumento error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const addTaxaIva = async (t: Omit<TaxaIva, 'id'>) => {
         try {
             const { data } = await api.post(`/taxas-iva`, t);
             setTaxasIva(p => [...p, { ...norm(data), taxa: Number(data.taxa) }]);
-        } catch (e) { console.error('addTaxaIva error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const updateTaxaIva = async (id: string, t: Partial<TaxaIva>) => {
         try {
             await api.put(`/taxas-iva/${id}`, t);
             setTaxasIva(p => p.map(x => x.id === id ? { ...x, ...t } : x));
-        } catch (e) { console.error('updateTaxaIva error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removeTaxaIva = async (id: string) => {
         try {
             await api.delete(`/taxas-iva/${id}`);
             setTaxasIva(p => p.filter(x => x.id !== id));
-        } catch (e) { console.error('removeTaxaIva error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const addClasseArtigo = async (c: Omit<ClasseArtigo, 'id'>) => {
         try {
             const { data } = await api.post(`/classes-artigo`, c);
             setClassesArtigo(p => [...p, norm(data) as ClasseArtigo]);
-        } catch (e) { console.error('addClasseArtigo error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const updateClasseArtigo = async (id: string, c: Partial<ClasseArtigo>) => {
         try {
             await api.put(`/classes-artigo/${id}`, c);
             setClassesArtigo(p => p.map(x => x.id === id ? { ...x, ...c } : x));
-        } catch (e) { console.error('updateClasseArtigo error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removeClasseArtigo = async (id: string) => {
         try {
             await api.delete(`/classes-artigo/${id}`);
             setClassesArtigo(p => p.filter(x => x.id !== id));
-        } catch (e) { console.error('removeClasseArtigo error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const addFamiliaArtigo = async (f: Omit<FamiliaArtigo, 'id'>) => {
         try {
             const { data } = await api.post(`/familias-artigo`, f);
             setFamiliasArtigo(p => [...p, norm(data) as FamiliaArtigo]);
-        } catch (e) { console.error('addFamiliaArtigo error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const updateFamiliaArtigo = async (id: string, f: Partial<FamiliaArtigo>) => {
         try {
             await api.put(`/familias-artigo/${id}`, f);
             setFamiliasArtigo(p => p.map(x => x.id === id ? { ...x, ...f } : x));
-        } catch (e) { console.error('updateFamiliaArtigo error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removeFamiliaArtigo = async (id: string) => {
         try {
             await api.delete(`/familias-artigo/${id}`);
             setFamiliasArtigo(p => p.filter(x => x.id !== id));
-        } catch (e) { console.error('removeFamiliaArtigo error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const addDocumentoCompra = async (d: Omit<DocumentoCompra, 'id'>) => {
         try {
             const { data } = await api.post(`/documentos-compra`, d);
             setDocumentosCompra(p => [...p, norm(data) as DocumentoCompra]);
-        } catch (e) { console.error('addDocumentoCompra error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const updateDocumentoCompra = async (id: string, d: Partial<DocumentoCompra>) => {
         try {
             await api.put(`/documentos-compra/${id}`, d);
             setDocumentosCompra(p => p.map(x => x.id === id ? { ...x, ...d } : x));
-        } catch (e) { console.error('updateDocumentoCompra error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removeDocumentoCompra = async (id: string) => {
         try {
             await api.delete(`/documentos-compra/${id}`);
             setDocumentosCompra(p => p.filter(x => x.id !== id));
-        } catch (e) { console.error('removeDocumentoCompra error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const addCondicaoPagamento = async (c: Omit<CondicaoPagamento, 'id'>) => {
         try {
             const { data } = await api.post(`/condicoes-pagamento`, c);
             setCondicoesPagamento(p => [...p, { ...norm(data), numDias: Number(data.numDias), desconto: Number(data.desconto) } as CondicaoPagamento]);
-        } catch (e) { console.error('addCondicaoPagamento error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const updateCondicaoPagamento = async (id: string, c: Partial<CondicaoPagamento>) => {
         try {
             await api.put(`/condicoes-pagamento/${id}`, c);
             setCondicoesPagamento(p => p.map(x => x.id === id ? { ...x, ...c } : x));
-        } catch (e) { console.error('updateCondicaoPagamento error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removeCondicaoPagamento = async (id: string) => {
         try {
             await api.delete(`/condicoes-pagamento/${id}`);
             setCondicoesPagamento(p => p.filter(x => x.id !== id));
-        } catch (e) { console.error('removeCondicaoPagamento error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const addModoPagamento = async (m: Omit<ModoPagamento, 'id'>) => {
         try {
             const { data } = await api.post(`/modos-pagamento`, m);
             setModosPagamento(p => [...p, norm(data) as ModoPagamento]);
-        } catch (e) { console.error('addModoPagamento error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const updateModoPagamento = async (id: string, m: Partial<ModoPagamento>) => {
         try {
             await api.put(`/modos-pagamento/${id}`, m);
             setModosPagamento(p => p.map(x => x.id === id ? { ...x, ...m } : x));
-        } catch (e) { console.error('updateModoPagamento error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removeModoPagamento = async (id: string) => {
         try {
             await api.delete(`/modos-pagamento/${id}`);
             setModosPagamento(p => p.filter(x => x.id !== id));
-        } catch (e) { console.error('removeModoPagamento error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const addFaturaFornecedor = async (f: Omit<FaturaFornecedor, 'id'> & { faturasAssociadasIds?: string[] }): Promise<FaturaFornecedor> => {
+        const { faturasAssociadasIds, ...rest } = f as any;
         const { data } = await api.post(`/faturas-fornecedor`, {
-            ...f,
+            ...rest,
             fornecedorId: f.fornecedorId,
             linhas: f.linhas,
-            faturasAssociadasIds: (f as any).faturasAssociadasIds ?? [],
+            faturasAssociadas: (faturasAssociadasIds ?? [])
+                .map((id: string) => ({ faturaAssociadaId: Number(id) })),
             tipoNotaCredito: f.tipoNotaCredito ?? null,
             estadoDocumento: f.estadoDocumento ?? 'NA',
         });
@@ -865,7 +867,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 log('Compras', 'Pagamento registado',
                     `Doc ID: ${id} | Referência: ${f.referenciaPagamento ?? '—'} | Data: ${f.dataPagamento ?? '—'}`, 'info');
             }
-        } catch (e) { console.error('updateFaturaFornecedor error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const updateEstadoVNC = async (id: string, estado: string, usuario?: string) => {
         const { data } = await api.patch(`/faturas-fornecedor/${id}/estado`, { estado, usuario });
@@ -893,7 +895,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setClientes(p => [...p, n]);
                 log('Clientes', 'Cliente criado', `Nome: ${c.nome}`);
             })
-            .catch(e => console.error('addCliente error', e));
+            .catch(() => {});
         return placeholder;
     };
     const updateCliente = async (id: string, c: Partial<Cliente>) => {
@@ -901,7 +903,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             await api.put(`/clientes/${id}`, c);
             setClientes(p => p.map(x => x.id === id ? { ...x, ...c } : x));
             log('Clientes', 'Cliente actualizado', `ID: ${id}`);
-        } catch (e) { console.error('updateCliente error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removeCliente = async (id: string) => {
         const nome = clientes.find(x => x.id === id)?.nome ?? id;
@@ -918,7 +920,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setTecnicos(p => [...p, n]);
                 log('Técnicos', 'Técnico criado', `Nome: ${t.nome}`);
             })
-            .catch(e => console.error('addTecnico error', e));
+            .catch(() => {});
         return placeholder;
     };
     const updateTecnico = async (id: string, t: Partial<Tecnico>) => {
@@ -926,7 +928,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             await api.put(`/tecnicos/${id}`, t);
             setTecnicos(p => p.map(x => x.id === id ? { ...x, ...t } : x));
             log('Técnicos', 'Técnico actualizado', `ID: ${id}`);
-        } catch (e) { console.error('updateTecnico error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removeTecnico = async (id: string) => {
         const nome = tecnicos.find(x => x.id === id)?.nome ?? id;
@@ -943,7 +945,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setFornecedores(p => [...p, n]);
                 log('Fornecedores', 'Fornecedor criado', `Nome: ${f.nome}`);
             })
-            .catch(e => console.error('addFornecedor error', e));
+            .catch(() => {});
         return placeholder;
     };
     const updateFornecedor = async (id: string, f: Partial<Fornecedor>) => {
@@ -951,7 +953,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             await api.put(`/fornecedores/${id}`, f);
             setFornecedores(p => p.map(x => x.id === id ? { ...x, ...f } : x));
             log('Fornecedores', 'Fornecedor actualizado', `ID: ${id}`);
-        } catch (e) { console.error('updateFornecedor error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removeFornecedor = async (id: string) => {
         const nome = fornecedores.find(x => x.id === id)?.nome ?? id;
@@ -968,14 +970,14 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 const n = norm(data) as ModeloEquipamento;
                 setModelosEquipamento(p => [...p, n]);
             })
-            .catch(e => console.error('addModelo error', e));
+            .catch(() => {});
         return placeholder;
     };
     const updateModelo = async (id: string, m: Partial<ModeloEquipamento>) => {
         try {
             await api.put(`/modelos-equipamento/${id}`, m);
             setModelosEquipamento(p => p.map(x => x.id === id ? { ...x, ...m } : x));
-        } catch (e) { console.error('updateModelo error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const addEquipInstalado = (e: Omit<EquipInstalado, 'id'>): EquipInstalado => {
@@ -985,14 +987,14 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 const n = normEquip(data);
                 setEquipInstalados(p => [...p, n]);
             })
-            .catch(err => console.error('addEquipInstalado error', err));
+            .catch(() => {});
         return placeholder;
     };
     const updateEquipInstalado = async (id: string, e: Partial<EquipInstalado>) => {
         try {
             await api.put(`/equip-instalados/${id}`, e);
             setEquipInstalados(p => p.map(x => x.id === id ? { ...x, ...e } : x));
-        } catch (e) { console.error('updateEquipInstalado error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     /* ── Plans ──────────────────────────────────────────────── */
@@ -1003,25 +1005,28 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 const n = normPlano(data);
                 setPlanos(prev => [...prev, n]);
             })
-            .catch(e => console.error('addPlano error', e));
+            .catch(() => {});
         return placeholder;
     };
     const updatePlano = async (id: string, p: Partial<PlanoManutencao>) => {
         try {
             await api.put(`/planos/${id}`, p);
             setPlanos(prev => prev.map(x => x.id === id ? { ...x, ...p } : x));
-        } catch (e) { console.error('updatePlano error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removePlano = async (id: string) => {
         try {
             await api.delete(`/planos/${id}`);
             setPlanos(prev => prev.filter(x => x.id !== id));
-        } catch (e) { console.error('removePlano error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     /* ── Work Orders ────────────────────────────────────────── */
     const addOrdem = async (o: Omit<OrdemTrabalho, 'id'>): Promise<OrdemTrabalho> => {
-        const { data } = await api.post(`/ordens`, o);
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { reprogramacoes, maosDeObra, ...rest } = o as any;
+        const payload = { ...rest, ...(maosDeObra !== undefined ? { maosObra: maosDeObra } : {}) };
+        const { data } = await api.post(`/ordens`, payload);
         const n = normOrdem(data);
         setOrdens(p => [...p, n]);
         log('Ordens de Trabalho', 'OT criada', `Tipo: ${o.tipo} | ${o.descricao?.slice(0, 60)}`);
@@ -1030,17 +1035,18 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const updateOrdem = async (id: string, o: Partial<OrdemTrabalho>) => {
         try {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { reprogramacoes, ...payload } = o as any;
+            const { reprogramacoes, maosDeObra, ...rest } = o as any;
+            const payload = { ...rest, ...(maosDeObra !== undefined ? { maosObra: maosDeObra } : {}) };
             const { data: updated } = await api.put(`/ordens/${id}`, payload);
             setOrdens(p => p.map(x => x.id === id ? normOrdem(updated) : x));
             log('Ordens de Trabalho', 'OT actualizada', `ID: ${id}`);
-        } catch (e) { console.error('updateOrdem error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const removeOrdem = async (id: string) => {
         try {
             await api.delete(`/ordens/${id}`);
             setOrdens(p => p.filter(x => x.id !== id));
-        } catch (e) { console.error('removeOrdem error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const emitirOT = async (id: string, dataEmissao?: string, dataInicio?: string) => {
@@ -1059,7 +1065,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             ]);
             setArtigos(artigosRes.data.map(normArtigo));
             setMovimentosStock(movRes.data.map(normMovimento));
-        } catch (e) { console.error('emitirOT error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const terminarOT = async (id: string, dataFim?: string) => {
@@ -1068,7 +1074,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const { data: all } = await api.get(`/ordens`);
             setOrdens(all.map(normOrdem));
             log('Ordens de Trabalho', 'OT terminada', `ID: ${id}`);
-        } catch (e) { console.error('terminarOT error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const encerrarOT = async (id: string, dataEncerramento?: string) => {
@@ -1076,7 +1082,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             await api.put(`/ordens/${id}/encerrar`, { dataEncerramento });
             setOrdens(p => p.map(x => x.id === id ? { ...x, estado: 'Encerrado', dataEncerramento: dataEncerramento ?? today() } : x));
             log('Ordens de Trabalho', 'OT encerrada', `ID: ${id}`);
-        } catch (e) { console.error('encerrarOT error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const updateEmpresaConfig = async (c: Partial<EmpresaConfig>) => {
@@ -1095,7 +1101,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             };
             setEmpresaConfig(ec);
             setTaxaIvaGlobal(Number(data.taxaIva ?? 0));
-        } catch (e) { console.error('updateEmpresaConfig error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const reprogramarOT = async (id: string, novaData: string, dataAnterior?: string, motivo?: string) => {
@@ -1105,7 +1111,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const updated = normOrdem(data);
             setOrdens(p => p.map(x => x.id === id ? updated : x));
             log('Ordens de Trabalho', 'OT reprogramada', `ID: ${id} → ${novaData}; Motivo: ${motivo ?? ''}`, 'warning');
-        } catch (e) { console.error('reprogramarOT error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const reverterOT = async (id: string) => {
@@ -1130,7 +1136,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setMovimentosStock(movRes.data.map(normMovimento));
             }
             log('Ordens de Trabalho', 'OT revertida', `ID: ${id} → ${updated.estado}`, 'warning');
-        } catch (e) { console.error('reverterOT error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     /* ── Warehouse ──────────────────────────────────────────── */
@@ -1141,14 +1147,14 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 const n = norm(data) as Armazem;
                 setArmazens(p => [...p, n]);
             })
-            .catch(e => console.error('addArmazem error', e));
+            .catch(() => {});
         return placeholder;
     };
     const updateArmazem = async (id: string, a: Partial<Armazem>) => {
         try {
             await api.put(`/armazens/${id}`, a);
             setArmazens(p => p.map(x => x.id === id ? { ...x, ...a } : x));
-        } catch (e) { console.error('updateArmazem error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     /* ── Stock ──────────────────────────────────────────────── */
@@ -1159,27 +1165,27 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 const n = normArtigo(data);
                 setArtigos(p => [...p, n]);
             })
-            .catch(e => console.error('addArtigo error', e));
+            .catch(() => {});
         return placeholder;
     };
     const updateArtigo = async (id: string, a: Partial<Artigo>) => {
         try {
             await api.put(`/artigos/${id}`, a);
             setArtigos(p => p.map(x => x.id === id ? { ...x, ...a } : x));
-        } catch (e) { console.error('updateArtigo error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const adjustExistencia = async (id: string, delta: number) => {
         try {
             await api.put(`/artigos/${id}/ajuste`, { delta });
             setArtigos(p => p.map(x => x.id === id ? { ...x, existencia: x.existencia + delta } : x));
-        } catch (e) { console.error('adjustExistencia error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     const adjustReservado = async (id: string, delta: number) => {
         try {
             await api.put(`/artigos/${id}/reserva`, { delta });
             setArtigos(p => p.map(x => x.id === id ? { ...x, stockReservado: Math.max(0, x.stockReservado + delta) } : x));
-        } catch (e) { console.error('adjustReservado error', e); }
+        } catch (e) { /* interceptor handles toast */ }
     };
 
     const upsertStockArmazem = async (artigoId: string, armazemId: string, quantidade: number, stockMinimo: number) => {
@@ -1206,7 +1212,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             .then(({ data }) => {
                 setMovimentosStock(p => [...p, normMovimento(data)]);
             })
-            .catch(e => console.error('addMovimento error', e));
+            .catch(() => {});
         const artCodigo = artigos.find(a => a.id === m.artigoId)?.codigo ?? m.artigoId;
         const qtdStr = m.quantidade > 0 ? `+${m.quantidade}` : String(m.quantidade);
         const armazemStr = m.armazemDestinoId
@@ -1228,7 +1234,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 // Refresh artigos so stockEncomendado reflects new PO
                 api.get(`/artigos`).then(r => setArtigos(r.data.map(normArtigo)));
             })
-            .catch(err => console.error('addEncomenda error', err));
+            .catch(() => {});
         return placeholder;
     };
     const updateEncomenda = async (id: string, e: Partial<Encomenda>) => {
@@ -1239,7 +1245,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (e.estado === 'Cancelada') {
                 api.get(`/artigos`).then(r => setArtigos(r.data.map(normArtigo)));
             }
-        } catch (e) { console.error('updateEncomenda error', e); throw e; }
+        } catch (e) { throw e; }
     };
     const criarRececao = async (
         encId: string,
@@ -1278,14 +1284,14 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setFaturas(p => [...p, n]);
                 log('Faturação', 'Documento emitido', `Tipo: ${f.tipoDocumento} | Total: ${f.valorTotal} ${f.moeda}`);
             })
-            .catch(e => console.error('addFatura error', e));
+            .catch(() => {});
         return placeholder;
     };
     const updateFatura = async (id: string, f: Partial<Fatura>) => {
         try {
             await api.put(`/faturas/${id}`, f);
             setFaturas(p => p.map(x => x.id === id ? { ...x, ...f } : x));
-        } catch (e) { console.error('updateFatura error', e); throw e; }
+        } catch (e) { throw e; }
     };
 
     /* ── Compute stockReservado dynamically from Programado OTs ── */

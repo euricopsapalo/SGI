@@ -56,6 +56,37 @@ describe('Ordens-Trabalho DTOs', () => {
         expect(errors.length).toBe(0);
       }
     });
+
+    // ── Regressão fix #15 ────────────────────────────────────────────────
+    it('should accept artigos com codigoIva e taxaIva (regression #15)', async () => {
+      const dto = plainToInstance(CreateOrdemTrabalhoDto, {
+        descricao: 'OT com IVA por linha',
+        artigos: [
+          { artigoId: 5, descricao: 'Filtro 10"', quantidade: 2, preco: 2500, codigoIva: 'I14', taxaIva: 14 },
+          { artigoId: 6, descricao: 'O-ring',     quantidade: 4, preco: 100,  codigoIva: 'I5',  taxaIva: 5  },
+        ],
+      });
+      const errors = await validate(dto);
+      expect(errors.length).toBe(0);
+    });
+
+    it('should accept artigos SEM codigoIva/taxaIva (campos opcionais) (regression #15)', async () => {
+      const dto = plainToInstance(CreateOrdemTrabalhoDto, {
+        descricao: 'OT sem IVA',
+        artigos: [{ descricao: 'Serviço', quantidade: 1, preco: 10000 }],
+      });
+      const errors = await validate(dto);
+      expect(errors.length).toBe(0);
+    });
+
+    it('should reject artigos com taxaIva não numérica (regression #15)', async () => {
+      const dto = plainToInstance(CreateOrdemTrabalhoDto, {
+        descricao: 'OT com IVA inválido',
+        artigos: [{ descricao: 'X', codigoIva: 'I14', taxaIva: 'catorze' as any }],
+      });
+      const errors = await validate(dto);
+      expect(errors.length).toBeGreaterThan(0);
+    });
   });
 
   describe('EmitirOtDto', () => {

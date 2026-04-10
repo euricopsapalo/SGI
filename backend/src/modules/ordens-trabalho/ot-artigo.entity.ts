@@ -21,4 +21,10 @@ export class OtArtigo {
 
     @Column({ type: 'numeric', precision: 12, scale: 2, default: 0 })
     preco: number;
+
+    @Column({ name: 'codigo_iva', length: 20, nullable: true })
+    codigoIva: string;
+
+    @Column({ name: 'taxa_iva', type: 'numeric', precision: 5, scale: 2, nullable: true })
+    taxaIva: number;
 }

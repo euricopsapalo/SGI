@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { showToast, extractErrorMessage } from '../utils/errorHandler';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
@@ -15,17 +16,23 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// Handle 401 responses — auto-logout
+// Handle responses — auto-logout on 401, global toast on errors
 api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
             localStorage.removeItem('sgi_token');
-            // Only redirect if not already on login page
             if (!window.location.pathname.includes('/login')) {
+                showToast('Sessão expirada. Por favor, faça login novamente.', 'warning');
                 window.location.href = '/login';
             }
+            return Promise.reject(error);
         }
+
+        // Show toast for all other errors
+        const message = extractErrorMessage(error);
+        showToast(message, 'error');
+
         return Promise.reject(error);
     },
 );

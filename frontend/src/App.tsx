@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import './index.css';
 import { GlobalProvider, useGlobal } from './contexts/GlobalContext';
+import GlobalToast from './components/GlobalToast';
 
 /* Pages */
 import LoginPage from './pages/Login/LoginPage';
@@ -40,6 +41,7 @@ function TecnicoGuard({ children }: { children: React.ReactElement }) {
 function App() {
   return (
     <GlobalProvider>
+      <GlobalToast />
       <BrowserRouter>
         <Routes>
           <Route path="/login"    element={<LoginPage />} />
