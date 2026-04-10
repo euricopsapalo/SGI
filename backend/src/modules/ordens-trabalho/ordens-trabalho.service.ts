@@ -7,7 +7,7 @@ import { OtArtigo } from './ot-artigo.entity';
 import { OtReprogramacao } from './ot-reprogramacao.entity';
 import { ArtigosService } from '../artigos/artigos.service';
 
-function calcNextDate(fromDate: string, periodicidade: string): string {
+export function calcNextDate(fromDate: string, periodicidade: string): string {
     const d = new Date(fromDate);
     switch (periodicidade) {
         case 'Mensal':     d.setMonth(d.getMonth() + 1);       break;
