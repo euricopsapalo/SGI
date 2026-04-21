@@ -440,7 +440,7 @@ const GlobalContext = createContext<GlobalContextType | null>(null);
 
 export const useGlobal = () => {
     const ctx = useContext(GlobalContext);
-    if (!ctx) throw new Error('useGlobal must be used inside GlobalProvider');
+    if (!ctx) throw new Error('useGlobal deve ser usado dentro do GlobalProvider');
     return ctx;
 };
 

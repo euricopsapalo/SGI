@@ -1013,7 +1013,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
                         {ot && (
                             <button type="button" className="abtn abtn-secondary" onClick={handlePrint}><Printer size={12} /> Imprimir</button>
                         )}
-                        {!readOnly && <button type="submit" className="abtn abtn-primary"><Check size={12} /> OK</button>}
+                        {!readOnly && <button type="submit" className="abtn abtn-primary"><Check size={12} /> Guardar</button>}
                     </div>
                 </form>
             </div>
