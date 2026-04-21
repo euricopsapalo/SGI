@@ -190,7 +190,7 @@ const ConfiguracoesPage: React.FC = () => {
                 casasDecimais: Number(moeda.decimals),
                 formatoData: moeda.dateFormat,
             });
-        } catch (e) { console.error('save empresa error', e); }
+        } catch (e) { console.error('Erro ao guardar empresa', e); }
         setDirty(false);
         setToast(true);
         setTimeout(() => setToast(false), 3000);

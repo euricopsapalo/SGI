@@ -84,7 +84,7 @@ const LogsPage: React.FC = () => {
                     </select>
                     <select className="filter-select" value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
                         <option value="">Todos os tipos</option>
-                        <option value="info">Info</option>
+                        <option value="info">Informação</option>
                         <option value="warning">Aviso</option>
                         <option value="error">Erro</option>
                     </select>
