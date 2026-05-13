@@ -2,7 +2,7 @@
 
 **Repositório:** [euricopsapalo/SGI](https://github.com/euricopsapalo/SGI)
 **Documento base:** [`docs/ANALISE_TECNICA_SGI_2026-05-13.md`](./ANALISE_TECNICA_SGI_2026-05-13.md)
-**Data:** 2026-05-13 — **Última actualização:** 2026-05-13
+**Data:** 2026-05-13 — **Última actualização:** 2026-05-14
 **Issues criadas:** #21 → #49 (29 issues)
 
 ---
@@ -34,7 +34,7 @@ Sem isto, **não há produção possível**. Devem ser fechadas em bloco.
 
 | Ordem | # | Título | Estimativa | Estado |
 |---|---|---|---|---|
-| 1 | [#21](https://github.com/euricopsapalo/SGI/issues/21) | Aplicar `JwtAuthGuard` global em todos os endpoints | 1.5 d | 🔴 |
+| 1 | [#21](https://github.com/euricopsapalo/SGI/issues/21) | Aplicar `JwtAuthGuard` global em todos os endpoints | 1.5 d | 🔵 PR aberto |
 | 2 | [#22](https://github.com/euricopsapalo/SGI/issues/22) | Remover `.env` do git e rodar credenciais expostas | 0.5 d | 🔴 |
 | 3 | [#23](https://github.com/euricopsapalo/SGI/issues/23) | CORS aberto — restringir origem por env var | 0.25 d | 🔴 |
 | 4 | [#24](https://github.com/euricopsapalo/SGI/issues/24) | `JWT_SECRET` obrigatório (sem fallback hardcoded) | 0.25 d | 🔴 |
@@ -156,7 +156,7 @@ Actualizar nesta tabela à medida que as issues avançam. Manter a coluna **PR**
 
 | # | Prioridade | Sprint | Título | Estado | Início | Fim | PR |
 |---|---|---|---|---|---|---|---|
-| #21 | P0 | 1 | JwtAuthGuard global | 🔴 Aberto | — | — | — |
+| #21 | P0 | 1 | JwtAuthGuard global | 🔵 PR aberto | 2026-05-14 | — | _pendente_ |
 | #22 | P0 | 1 | Remover `.env` do git | 🔴 Aberto | — | — | — |
 | #23 | P0 | 1 | CORS restrito | 🔴 Aberto | — | — | — |
 | #24 | P0 | 1 | JWT_SECRET obrigatório | 🔴 Aberto | — | — | — |
