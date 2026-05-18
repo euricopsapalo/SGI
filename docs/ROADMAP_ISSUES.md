@@ -2,8 +2,15 @@
 
 **Repositório:** [euricopsapalo/SGI](https://github.com/euricopsapalo/SGI)
 **Documento base:** [`docs/ANALISE_TECNICA_SGI_2026-05-13.md`](./ANALISE_TECNICA_SGI_2026-05-13.md)
-**Data:** 2026-05-13 — **Última actualização:** 2026-05-14
-**Issues criadas:** #21 → #49 (29 issues)
+**Data:** 2026-05-13 — **Última actualização:** 2026-05-18
+**Issues criadas:** #21 → #60 (épico #60 + RF #54–#59 da reformulação OT)
+**Reformulação OT (2026-05-18):** o antigo épico AQUATEX de OT (#26–#30, incl. RF-OT-001
+"técnicos" e RF-OT-002 "nº sequencial") foi **descartado por não estar implementado** e
+substituído pela série **Reformulação do Processo de OT** — épico
+[#60](https://github.com/euricopsapalo/SGI/issues/60), issues
+[#54](https://github.com/euricopsapalo/SGI/issues/54)–[#59](https://github.com/euricopsapalo/SGI/issues/59),
+documentos em [`docs/ordens-trabalho/`](./ordens-trabalho/README.md), baseada na
+especificação `processo_ordens_trabalho.md`.
 
 ---
 
@@ -12,7 +19,7 @@
 Cada issue tem **prioridade** (`P0`/`P1`/`P2`/`P3`), um **épico** opcional, dependências, e estado. A ordem de implementação obedece a três regras:
 
 1. **P0 antes de tudo** — bloqueadores de produção (segurança / dados).
-2. **P1 a seguir** — funcionalidades de negócio que destravam entregáveis ao cliente (Guia AQUATEX).
+2. **P1 a seguir** — funcionalidades de negócio que destravam entregáveis ao cliente (Reformulação do Processo de OT).
 3. **P2/P3 em paralelo** depois, agrupados por tema, sem ordem absoluta.
 
 | Prioridade | Significado | Quando |
@@ -45,21 +52,39 @@ Sem isto, **não há produção possível**. Devem ser fechadas em bloco.
 
 ---
 
-### 🔴 Sprint 2—3 — Guia de Serviço AQUATEX (P1) — entregável de cliente
+### 🔴 Sprint 2—3 — Reformulação do Processo de OT (P1) — entregável de cliente
 
-**Épico:** [#26](https://github.com/euricopsapalo/SGI/issues/26) — Guia de Serviço AQUATEX (pixel-próxima da ficha física).
+**Épico:** [#60](https://github.com/euricopsapalo/SGI/issues/60) — Reformulação do Processo
+de Gestão de Ordens de Trabalho — ver
+[`docs/ordens-trabalho/README.md`](./ordens-trabalho/README.md). Base:
+`processo_ordens_trabalho.md`.
 
-Hoje a impressão da OT é genérica. Para o sistema ser apresentável ao cliente AQUATEX, é preciso replicar a ficha oficial (`docs/Guia de Serviço manutenção - Andreia Barroso.docx`).
+> ⚠️ **Substitui** o antigo épico "Guia de Serviço AQUATEX" (#26–#30). Os requisitos de OT
+> antigos não implementados (RF-OT-001 "técnicos", RF-OT-002 "nº sequencial", #29 campos OT,
+> #30 layout `buildOTHtml`) foram **descartados**; o conteúdo ainda pertinente (técnicos
+> registado/executado, assinatura na ficha) foi absorvido na nova série. A impressão
+> pixel-próxima da ficha AQUATEX pode ser retomada como RF separado depois desta série.
 
-| Ordem | # | Título | Depende de | Estimativa | Estado |
-|---|---|---|---|---|---|
-| 6 | [#27](https://github.com/euricopsapalo/SGI/issues/27) | **RF-OT-001** — Técnicos explícitos (campo + marcador) | — | 3 d | 🔴 |
-| 7 | [#28](https://github.com/euricopsapalo/SGI/issues/28) | **RF-OT-002** — Nº sequencial de intervenção por equipamento | — | 0.5 d | 🔴 |
-| 8 | [#29](https://github.com/euricopsapalo/SGI/issues/29) | Novos campos OT (PAT, contrato, sucesso, pagamento, extras) | — | 1.5 d | 🔴 |
-| 9 | [#30](https://github.com/euricopsapalo/SGI/issues/30) | Reescrever `buildOTHtml` com layout AQUATEX | #27 #28 #29 | 1.5 d | 🔴 |
+Hoje a OT tem 4 estados e não reflete o fluxo real (registo → programação com
+confirmar/adiar → execução → fecho com geração periódica). Esta série reformula o processo
+de raiz, aproveitando o que já existe (`ordens_trabalho`, `ot_artigos`, `ot_reprogramacoes`,
+`artigos.stock_reservado`, `terminar()`/`calcNextDate()`).
 
-**Total Sprint 2—3:** ≈ 6.5 dias-pessoa.
-**Critério de saída:** impressão da OT validada visualmente com as 4 fichas físicas em `docs/`.
+| Ordem | # | RF | Título | Depende de | Estimativa | Estado |
+|---|---|---|---|---|---|---|
+| 6 | [#54](https://github.com/euricopsapalo/SGI/issues/54) | [RF-OT-001](./ordens-trabalho/RF-OT-001-ciclo-estados.md) | Ciclo de vida e máquina de estados (6 estados) | — | 4 d | 🔴 |
+| 7 | [#55](https://github.com/euricopsapalo/SGI/issues/55) | [RF-OT-002](./ordens-trabalho/RF-OT-002-registo-marcacao.md) | Registo da OT e formulário de marcação | #54 | 4 d | 🔴 |
+| 8 | [#56](https://github.com/euricopsapalo/SGI/issues/56) | [RF-OT-003](./ordens-trabalho/RF-OT-003-confirmar-adiar.md) | Programação: confirmar/adiar + janela 6 meses | #54 #55 | 3.5 d | 🔴 |
+| 9 | [#57](https://github.com/euricopsapalo/SGI/issues/57) | [RF-OT-004](./ordens-trabalho/RF-OT-004-reserva-stock.md) | Reserva e validação de stock na confirmação | #56 | 3 d | 🔴 |
+| 10 | [#58](https://github.com/euricopsapalo/SGI/issues/58) | [RF-OT-005](./ordens-trabalho/RF-OT-005-execucao-consumo.md) | Execução e consumo de peças (Linha de Consumo) | #54 #57 | 2.5 d | 🔴 |
+| 11 | [#59](https://github.com/euricopsapalo/SGI/issues/59) | [RF-OT-006](./ordens-trabalho/RF-OT-006-fecho-geracao.md) | Fecho, assinatura e geração automática periódica | #54 #58 | 2.5 d | 🔴 |
+
+> Épico de rastreio: [#60](https://github.com/euricopsapalo/SGI/issues/60).
+
+**Total Sprint 2—3:** ≈ 19.5 dias-pessoa.
+**Critério de saída:** OT percorre Registada → … → Finalizada com reserva de stock na
+confirmação, libertação no adiamento e geração automática da periódica datada pela data
+planeada; CA de RF-OT-001 a RF-OT-006 verdes.
 
 ---
 
@@ -126,10 +151,11 @@ P0  ───┤                 │  ← bloqueia produção  │
                                                  ▼
                               ┌────── Sprint 1 fechado ──────┐
                               │                              │
-                ┌── #27 RF-OT-001 ──┐                        │
-P1 (épico #26) ─┤                   ├── #30 layout AQUATEX ──┤
-                ├── #28 RF-OT-002 ──┤                        │
-                └── #29 campos OT ──┘                        │
+                RF-OT-001 estados                            │
+                   │                                         │
+P1 (Reform. OT) ── RF-OT-002 ─ RF-OT-003 ─ RF-OT-004 ────────┤
+                   │                          │              │
+                   └────── RF-OT-005 ─ RF-OT-006 ────────────┤
                                                              ▼
                               ┌────── Sprint 2-3 fechado ────┐
                               │                              │
@@ -161,11 +187,18 @@ Actualizar nesta tabela à medida que as issues avançam. Manter a coluna **PR**
 | #23 | P0 | 1 | CORS restrito | 🔴 Aberto | — | — | — |
 | #24 | P0 | 1 | JWT_SECRET obrigatório | 🔴 Aberto | — | — | — |
 | #25 | P0 | 1 | Token reset com randomBytes | 🔴 Aberto | — | — | — |
-| #26 | P1 | 2—3 | **EPIC** Guia AQUATEX | 🔴 Aberto | — | — | — |
-| #27 | P1 | 2 | RF-OT-001 técnicos | 🔴 Aberto | — | — | — |
-| #28 | P1 | 2 | RF-OT-002 nº sequencial | 🔴 Aberto | — | — | — |
-| #29 | P1 | 2 | Campos OT AQUATEX | 🔴 Aberto | — | — | — |
-| #30 | P1 | 3 | Layout `buildOTHtml` | 🔴 Aberto | — | — | — |
+| ~~#26~~ | — | — | ~~EPIC Guia AQUATEX~~ — descartado/substituído | 🟢 Fechado | — | 2026-05-18 | substituído por Reform. OT |
+| ~~#27~~ | — | — | ~~RF-OT-001 técnicos~~ — descartado | 🟢 Fechado | — | 2026-05-18 | absorvido em RF-OT-002 |
+| ~~#28~~ | — | — | ~~RF-OT-002 nº sequencial~~ — descartado | 🟢 Fechado | — | 2026-05-18 | — |
+| ~~#29~~ | — | — | ~~Campos OT AQUATEX~~ — descartado | 🟢 Fechado | — | 2026-05-18 | — |
+| ~~#30~~ | — | — | ~~Layout `buildOTHtml`~~ — descartado | 🟢 Fechado | — | 2026-05-18 | RF de impressão futuro |
+| #60 | P1 | 2—3 | **EPIC** Reformulação Processo OT | 🔴 Aberto | — | — | — |
+| #54 | P1 | 2—3 | RF-OT-001 ciclo de estados OT | 🔴 Aberto | — | — | — |
+| #55 | P1 | 2—3 | RF-OT-002 registo + marcação | 🔴 Aberto | — | — | — |
+| #56 | P1 | 2—3 | RF-OT-003 confirmar/adiar | 🔴 Aberto | — | — | — |
+| #57 | P1 | 2—3 | RF-OT-004 reserva de stock | 🔴 Aberto | — | — | — |
+| #58 | P1 | 2—3 | RF-OT-005 execução/consumo | 🔴 Aberto | — | — | — |
+| #59 | P1 | 2—3 | RF-OT-006 fecho + geração periódica | 🔴 Aberto | — | — | — |
 | #31 | P2 | 4 | Migrations TypeORM | 🔴 Aberto | — | — | — |
 | #32 | P2 | 4 | Fatura unificada | 🔴 Aberto | — | — | — |
 | #33 | P2 | 4 | Consolidar duplicação | 🔴 Aberto | — | — | — |
@@ -193,11 +226,11 @@ Actualizar nesta tabela à medida que as issues avançam. Manter a coluna **PR**
 | Sprint | Tema | Issues | Dias-pessoa |
 |---|---|---|---|
 | 1 | Segurança P0 | 5 | 3 |
-| 2—3 | Guia AQUATEX P1 | 4 + 1 épico | 6.5 |
+| 2—3 | Reformulação do Processo de OT P1 | 6 RF + 1 épico | 19.5 |
 | 4 | Estrutura de dados P2 | 7 | 11.5 |
 | 5 | Testes / hardening P2 | 4 | 8.5 |
 | 6+ | UX / performance P3 | 8 | 15 (paralelo) |
-| **Total** | | **29** | **≈ 44.5 d** (≈ 9 semanas com 1 dev, ≈ 5 semanas com 2 devs) |
+| **Total** | | **31** | **≈ 57.5 d** (≈ 12 semanas com 1 dev, ≈ 6 semanas com 2 devs) |
 
 ---
 
