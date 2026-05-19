@@ -505,14 +505,16 @@ const RC_CSS = `
 
 function fRC(d?: string) { return d ? new Date(d).toLocaleDateString('pt-PT') : '—'; }
 function otCorRC(estado: string) {
-    if (estado === 'Terminado') return '#16a34a';
-    if (estado === 'Em curso')  return '#f97316';
-    if (estado === 'Encerrado') return '#6b7280';
+    if (estado === 'Finalizada')  return '#16a34a';
+    if (estado === 'Em execução') return '#eab308';
+    if (estado === 'Adiada')      return '#f97316';
+    if (estado === 'Confirmada')  return '#7c3aed';
+    if (estado === 'Registada')   return '#6b7280';
     return '#2563eb';
 }
 function proxManutRC(equipId: string, ordens: OrdemTrabalho[]) {
     const dates = ordens
-        .filter(o => String(o.equipInstaladoId) === String(equipId) && (o.estado === 'Programado' || o.estado === 'Em curso'))
+        .filter(o => String(o.equipInstaladoId) === String(equipId) && o.estado !== 'Finalizada')
         .map(o => o.dataProgFim || o.dataProgInicio).filter(Boolean) as string[];
     return dates.length > 0 ? [...dates].sort()[0] : undefined;
 }

@@ -15,13 +15,13 @@ describe('Ordens-Trabalho DTOs', () => {
 
     it('should pass with all fields', async () => {
       const dto = plainToInstance(CreateOrdemTrabalhoDto, {
-        tipo: 'programada',
+        tipo: 'periodica',
         clienteId: 1,
         descricao: 'Manutenção preventiva',
         tipoTrabalho: 'preventiva',
         previsaoTempo: 2.5,
         periodicidade: 'Mensal',
-        estado: 'Programado',
+        estado: 'Programada',
         dataProgInicio: '2026-04-10',
         dataProgFim: '2026-04-10',
         maosObra: [{ funcao: 'Técnico', custo: 5000 }],
@@ -50,7 +50,7 @@ describe('Ordens-Trabalho DTOs', () => {
     });
 
     it('should accept all valid estados', async () => {
-      for (const estado of ['Programado', 'Em curso', 'Terminado', 'Encerrado']) {
+      for (const estado of ['Registada', 'Programada', 'Adiada', 'Confirmada', 'Em execução', 'Finalizada']) {
         const dto = plainToInstance(CreateOrdemTrabalhoDto, { descricao: 'Test', estado });
         const errors = await validate(dto);
         expect(errors.length).toBe(0);

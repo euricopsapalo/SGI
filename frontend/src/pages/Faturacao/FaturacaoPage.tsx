@@ -43,7 +43,7 @@ const EmitirDocumentoModal: React.FC<EmitirModalProps> = ({ onClose, onSave }) =
     const isFP  = tipoDoc === 'FP';
 
     const otOpts = ordens
-        .filter(o => o.estado === 'Terminado' || o.estado === 'Encerrado')
+        .filter(o => o.estado === 'Finalizada')
         .map(o => {
             const cli = clientes.find(c => c.id === o.clienteId);
             return { value: o.id, label: `${o.id} — ${cli?.nome ?? o.clienteId}`, sub: o.tipoTrabalho };

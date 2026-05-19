@@ -19,9 +19,9 @@ const DashboardPage: React.FC = () => {
         : ordens;
 
     // KPIs
-    const programadas   = minhasOrdens.filter(o => o.estado === 'Programado').length;
-    const emCurso       = minhasOrdens.filter(o => o.estado === 'Em curso').length;
-    const terminadasMes = minhasOrdens.filter(o => o.estado === 'Terminado' && o.dataFim?.startsWith(thisMonth)).length;
+    const programadas   = minhasOrdens.filter(o => o.estado === 'Programada' || o.estado === 'Registada' || o.estado === 'Adiada' || o.estado === 'Confirmada').length;
+    const emCurso       = minhasOrdens.filter(o => o.estado === 'Em execução').length;
+    const terminadasMes = minhasOrdens.filter(o => o.estado === 'Finalizada' && o.dataFim?.startsWith(thisMonth)).length;
     const manutUrgente  = equipInstalados.filter(e => {
         if (!e.dataProximaManutencao) return false;
         const diff = Math.round((new Date(e.dataProximaManutencao).getTime() - Date.now()) / 86400000);
@@ -31,7 +31,7 @@ const DashboardPage: React.FC = () => {
     // Alertas
     const artigosAbaixo = artigos.filter(a => a.critico && a.existencia <= a.stockSeguranca);
     const semStock      = artigos.filter(a => a.existencia === 0);
-    const otAtrasadas   = minhasOrdens.filter(o => o.estado === 'Programado' && o.dataProgInicio && o.dataProgInicio < today);
+    const otAtrasadas   = minhasOrdens.filter(o => (o.estado === 'Programada' || o.estado === 'Confirmada') && o.dataProgInicio && o.dataProgInicio < today);
     const fatPendentes  = faturas.filter(f => f.estado === 'Pendente').length;
     const encAbertas    = encomendas.filter(e => e.estado === 'Aberta' || e.estado === 'Parcial').length;
 
@@ -49,7 +49,8 @@ const DashboardPage: React.FC = () => {
         .slice(0, 6);
 
     const DOT: Record<string, string> = {
-        'Programado': 'dot-blue', 'Em curso': 'dot-orange', 'Terminado': 'dot-green', 'Encerrado': 'dot-gray',
+        'Registada': 'dot-gray', 'Programada': 'dot-blue', 'Adiada': 'dot-orange',
+        'Confirmada': 'dot-purple', 'Em execução': 'dot-yellow', 'Finalizada': 'dot-green',
     };
     const getClienteNome = (id: string) => clientes.find(c => c.id === id)?.nome ?? id;
 

@@ -8,17 +8,21 @@ import { ChevronLeft, ChevronRight, Calendar, X, Clock, PlayCircle, CheckCircle,
 const TODAY = new Date();
 
 const ESTADO_COLOR: Record<OTEstado, { bg: string; color: string; border: string }> = {
-    'Programado': { bg: '#EFF6FF', color: '#1d4ed8', border: '#BFDBFE' },
-    'Em curso':   { bg: '#FFF7ED', color: '#c2410c', border: '#FDBA74' },
-    'Terminado':  { bg: '#F0FDF4', color: '#166534', border: '#BBF7D0' },
-    'Encerrado':  { bg: '#F3F4F6', color: '#6B7280', border: '#E5E7EB' },
+    'Registada':   { bg: '#F3F4F6', color: '#6B7280', border: '#E5E7EB' },
+    'Programada':  { bg: '#EFF6FF', color: '#1d4ed8', border: '#BFDBFE' },
+    'Adiada':      { bg: '#FFF7ED', color: '#c2410c', border: '#FDBA74' },
+    'Confirmada':  { bg: '#F5F3FF', color: '#6d28d9', border: '#DDD6FE' },
+    'Em execução': { bg: '#FEFCE8', color: '#a16207', border: '#FEF08A' },
+    'Finalizada':  { bg: '#F0FDF4', color: '#166534', border: '#BBF7D0' },
 };
 const ESTADO_DOT: Record<OTEstado, string> = {
-    'Programado': 'dot-blue', 'Em curso': 'dot-orange', 'Terminado': 'dot-green', 'Encerrado': 'dot-gray',
+    'Registada': 'dot-gray', 'Programada': 'dot-blue', 'Adiada': 'dot-orange',
+    'Confirmada': 'dot-purple', 'Em execução': 'dot-yellow', 'Finalizada': 'dot-green',
 };
 const ESTADO_ICON: Record<OTEstado, React.ReactNode> = {
-    'Programado': <Clock size={11} />, 'Em curso': <PlayCircle size={11} />,
-    'Terminado':  <CheckCircle size={11} />, 'Encerrado': <Archive size={11} />,
+    'Registada': <Clock size={11} />, 'Programada': <Clock size={11} />,
+    'Adiada': <AlertCircle size={11} />, 'Confirmada': <CheckCircle size={11} />,
+    'Em execução': <PlayCircle size={11} />, 'Finalizada': <Archive size={11} />,
 };
 
 const addDays     = (d: Date, n: number) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
@@ -444,7 +448,7 @@ ${legend}
     };
 
     /* Draggable only for Programado OTs and non-técnico-campo users */
-    const canDrag = (ot: OrdemTrabalho) => !isTecnicoCampo && ot.estado === 'Programado';
+    const canDrag = (ot: OrdemTrabalho) => !isTecnicoCampo && (ot.estado === 'Programada' || ot.estado === 'Adiada');
 
     const dropStyle = (dateStr: string): React.CSSProperties =>
         dropOver === dateStr && dragOT
@@ -625,7 +629,7 @@ ${legend}
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 4 }}>Total OT no período</div>
                 <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--blue)' }}>{periodOT.length}</div>
             </div>
-            {(['Programado', 'Em curso', 'Terminado', 'Encerrado'] as OTEstado[]).map(est => {
+            {(['Registada', 'Programada', 'Adiada', 'Confirmada', 'Em execução', 'Finalizada'] as OTEstado[]).map(est => {
                 const cnt = periodOT.filter(o => o.estado === est).length;
                 if (cnt === 0) return null;
                 const ec = ESTADO_COLOR[est];

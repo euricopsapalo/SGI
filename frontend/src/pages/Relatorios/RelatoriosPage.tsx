@@ -130,7 +130,7 @@ const RelatoriosPage: React.FC = () => {
     /* ── Comissões (real) — OTs concluídas por técnico ── */
     const comissoesData = useMemo(() => {
         const byTec: Record<string, { nome: string; tipo: string; os: number; montagem: number; preventiva: number; corretiva: number; total: number }> = {};
-        ordens.filter(o => o.estado === 'Terminado' || o.estado === 'Encerrado').forEach(o => {
+        ordens.filter(o => o.estado === 'Finalizada').forEach(o => {
             if (!o.responsavel) return;
             if (!byTec[o.responsavel]) byTec[o.responsavel] = { nome: o.responsavel, tipo: 'Técnico Campo', os: 0, montagem: 0, preventiva: 0, corretiva: 0, total: 0 };
             byTec[o.responsavel].os++;
@@ -151,7 +151,7 @@ const RelatoriosPage: React.FC = () => {
             if (!o.responsavel) return;
             if (!byTec[o.responsavel]) byTec[o.responsavel] = { nome: o.responsavel, osMes: 0, concluidas: 0, pendentes: 0 };
             byTec[o.responsavel].osMes++;
-            if (o.estado === 'Terminado' || o.estado === 'Encerrado') byTec[o.responsavel].concluidas++;
+            if (o.estado === 'Finalizada') byTec[o.responsavel].concluidas++;
             else byTec[o.responsavel].pendentes++;
         });
         return Object.values(byTec).sort((a, b) => b.osMes - a.osMes);
@@ -161,7 +161,7 @@ const RelatoriosPage: React.FC = () => {
     const carteiraData = useMemo(() => clientes.map(c => {
         const equips  = equipInstalados.filter(e => String(e.clienteId) === String(c.id));
         const cOrdens = ordens.filter(o => String(o.clienteId) === String(c.id));
-        const otAtivas = cOrdens.filter(o => o.estado === 'Programado' || o.estado === 'Em curso').length;
+        const otAtivas = cOrdens.filter(o => o.estado !== 'Finalizada').length;
         const valorFaturado = faturas.filter(f => String(f.clienteId) === String(c.id)).reduce((s, f) => s + Number(f.valorTotal), 0);
         return {
             id: c.id, nome: c.nome, tipo: c.tipo === 'empresa' ? 'Empresa' : 'Particular',

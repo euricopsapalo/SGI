@@ -368,6 +368,7 @@ CREATE TABLE plano_artigos (
 CREATE TABLE ordens_trabalho (
     id                 SERIAL       PRIMARY KEY,
     tipo               VARCHAR(20)  NOT NULL DEFAULT 'pontual',
+    assinada_cliente   BOOLEAN      NOT NULL DEFAULT false,
     cliente_id         INTEGER      REFERENCES clientes(id) ON DELETE RESTRICT,
     equip_instalado_id INTEGER      REFERENCES equip_instalados(id) ON DELETE SET NULL,
     plano_id           INTEGER      REFERENCES planos_manutencao(id) ON DELETE SET NULL,
@@ -386,7 +387,9 @@ CREATE TABLE ordens_trabalho (
     data_inicio        DATE,
     data_fim           DATE,
     data_encerramento  DATE,
-    estado             VARCHAR(20)  NOT NULL DEFAULT 'Programado'
+    estado             VARCHAR(20)  NOT NULL DEFAULT 'Registada',
+    CONSTRAINT chk_ot_estado CHECK (estado IN
+        ('Registada','Programada','Adiada','Confirmada','Em execução','Finalizada'))
 );
 
 CREATE TABLE ot_maos_obra (

@@ -53,9 +53,9 @@ const diffHours = (start?: string, end?: string): number | null => {
 
 // OT estado badge class
 const otBadgeClass = (e: string) =>
-    e === 'Terminado' || e === 'Encerrado' ? 'badge-green'
-    : e === 'Em curso' ? 'badge-orange'
-    : e === 'Programado' ? 'badge-blue' : 'badge-gray';
+    e === 'Finalizada' ? 'badge-green'
+    : e === 'Em execução' ? 'badge-orange'
+    : e === 'Programada' || e === 'Confirmada' ? 'badge-blue' : 'badge-gray';
 
 /* ══ Print Functions ═════════════════════════════════════════ */
 function buildOTPorTecnicoHtml(tecnicos: Tecnico[], ordens: OrdemTrabalho[], funcoes: FuncaoTecnico[], periodo: string, empresa?: EmpresaConfig | null): string {
@@ -69,10 +69,10 @@ function buildOTPorTecnicoHtml(tecnicos: Tecnico[], ordens: OrdemTrabalho[], fun
     const periodoLabel: Record<string, string> = { semana: 'Última Semana', mes: 'Mês Actual', trimestre: 'Último Trimestre', ano: 'Ano Actual', total: 'Todo o Período' };
     const rows = tecnicos.filter(t => t.ativo).map(t => {
         const tOTs = filtOT.filter(o => o.responsavel === t.nome);
-        const prog = tOTs.filter(o => o.estado === 'Programado').length;
-        const emCurso = tOTs.filter(o => o.estado === 'Em curso').length;
-        const term = tOTs.filter(o => o.estado === 'Terminado').length;
-        const enc = tOTs.filter(o => o.estado === 'Encerrado').length;
+        const prog = tOTs.filter(o => o.estado === 'Programada' || o.estado === 'Registada' || o.estado === 'Adiada' || o.estado === 'Confirmada').length;
+        const emCurso = tOTs.filter(o => o.estado === 'Em execução').length;
+        const term = tOTs.filter(o => o.estado === 'Finalizada').length;
+        const enc = 0;
         const funcao = funcoes.find(f => String(f.id) === String(t.funcaoId))?.descricao ?? '—';
         return `<tr><td style="font-weight:600">${t.nome}</td><td>${funcao}</td>
             <td style="text-align:center;font-weight:700;color:#1d4ed8">${tOTs.length}</td>
@@ -89,7 +89,7 @@ function printOTPorTecnico(tecnicos: Tecnico[], ordens: OrdemTrabalho[], funcoes
 
 function buildTempoResolucaoHtml(tecnicos: Tecnico[], ordens: OrdemTrabalho[], funcoes: FuncaoTecnico[], empresa?: EmpresaConfig | null): string {
     const rows = tecnicos.filter(t => t.ativo).map(t => {
-        const concluidas = ordens.filter(o => (o.estado === 'Terminado' || o.estado === 'Encerrado') && o.responsavel === t.nome && o.dataFim);
+        const concluidas = ordens.filter(o => o.estado === 'Finalizada' && o.responsavel === t.nome && o.dataFim);
         const diffs = concluidas.map(o => diffHours(o.dataInicio, o.dataFim)).filter((v): v is number => v !== null);
         const media = diffs.length > 0 ? (diffs.reduce((s, v) => s + v, 0) / diffs.length).toFixed(1) : '—';
         const minVal = diffs.length > 0 ? Math.min(...diffs).toFixed(1) : '—';
@@ -111,7 +111,7 @@ function printTempoResolucao(tecnicos: Tecnico[], ordens: OrdemTrabalho[], funco
 function buildTaxaConclusaoHtml(tecnicos: Tecnico[], ordens: OrdemTrabalho[], funcoes: FuncaoTecnico[], empresa?: EmpresaConfig | null): string {
     const rows = tecnicos.filter(t => t.ativo).map(t => {
         const tOTs = ordens.filter(o => o.responsavel === t.nome);
-        const concluidas = tOTs.filter(o => o.estado === 'Terminado' || o.estado === 'Encerrado').length;
+        const concluidas = tOTs.filter(o => o.estado === 'Finalizada').length;
         const taxa = tOTs.length > 0 ? Math.round((concluidas / tOTs.length) * 100) : 0;
         const funcao = funcoes.find(f => String(f.id) === String(t.funcaoId))?.descricao ?? '—';
         const taxaColor = taxa >= 80 ? '#065f46' : taxa >= 50 ? '#9a3412' : '#991b1b';
@@ -134,7 +134,7 @@ function printTaxaConclusao(tecnicos: Tecnico[], ordens: OrdemTrabalho[], funcoe
 function buildOTAtrasoHtml(tecnicos: Tecnico[], ordens: OrdemTrabalho[], funcoes: FuncaoTecnico[], empresa?: EmpresaConfig | null): string {
     const today = new Date(); today.setHours(0,0,0,0);
     const atrasadas = ordens.filter(o =>
-        (o.estado === 'Programado' || o.estado === 'Em curso') &&
+        o.estado !== 'Finalizada' &&
         o.dataProgFim && new Date(o.dataProgFim) < today
     );
     const sections = tecnicos.filter(t => t.ativo).map(t => {
@@ -194,7 +194,7 @@ function buildAgendaHtml(
         const cliente = clientes.find(c => String(c.id) === String(o.clienteId));
         const clienteStr = cliente?.nome ?? '—';
         const enderecoStr = cliente ? [cliente.morada, cliente.municipio, cliente.provincia].filter(Boolean).join(', ') || '—' : '—';
-        const tipoLabel = o.tipo === 'programada' ? 'Programada' : 'Pontual';
+        const tipoLabel = o.tipo === 'periodica' ? 'Periódica' : 'Pontual';
         return `<tr>
             <td>${o.id}</td>
             <td>${equipStr}</td>
@@ -230,9 +230,9 @@ function printAgendaTecnico(
 function buildDistribuicaoCargaHtml(tecnicos: Tecnico[], ordens: OrdemTrabalho[], funcoes: FuncaoTecnico[], empresa?: EmpresaConfig | null): string {
     const data = tecnicos.filter(t => t.ativo).map(t => {
         const tOTs = ordens.filter(o => o.responsavel === t.nome);
-        const abertas = tOTs.filter(o => o.estado === 'Programado' || o.estado === 'Em curso').length;
+        const abertas = tOTs.filter(o => o.estado !== 'Finalizada').length;
         const funcao = funcoes.find(f => String(f.id) === String(t.funcaoId))?.descricao ?? '—';
-        return { nome: t.nome, funcao, total: tOTs.length, abertas, prog: tOTs.filter(o => o.estado === 'Programado').length, emCurso: tOTs.filter(o => o.estado === 'Em curso').length };
+        return { nome: t.nome, funcao, total: tOTs.length, abertas, prog: tOTs.filter(o => o.estado === 'Programada' || o.estado === 'Registada' || o.estado === 'Adiada' || o.estado === 'Confirmada').length, emCurso: tOTs.filter(o => o.estado === 'Em execução').length };
     }).sort((a, b) => b.abertas - a.abertas);
     const maxAbertas = Math.max(...data.map(d => d.abertas), 1);
     const rows = data.map(d => {
@@ -260,7 +260,7 @@ function buildDisponibilidadeHtml(tecnicos: Tecnico[], ordens: OrdemTrabalho[], 
     const data = tecnicos.filter(t => t.ativo).map(t => {
         const tOTs = ordens.filter(o => {
             if (o.responsavel !== t.nome) return false;
-            if (o.estado !== 'Programado' && o.estado !== 'Em curso') return false;
+            if (o.estado === 'Finalizada') return false;
             const oStart = o.dataProgInicio ? new Date(o.dataProgInicio) : null;
             const oEnd   = o.dataProgFim   ? new Date(o.dataProgFim)   : null;
             if (from && oEnd   && oEnd   < from) return false;
@@ -440,7 +440,7 @@ const RelatoriosTecnicoModal: React.FC<RelatoriosTecnicoModalProps> = ({ tecnico
                                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                                         <label className="form-label" style={{ margin: 0, whiteSpace: 'nowrap', minWidth: 52 }}>Estado</label>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px' }}>
-                                            {(['Programado', 'Em curso', 'Terminado', 'Encerrado'] as const).map(e => (
+                                            {(['Registada', 'Programada', 'Adiada', 'Confirmada', 'Em execução', 'Finalizada'] as const).map(e => (
                                                 <label key={e} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.79rem', cursor: 'pointer' }}>
                                                     <input type="checkbox" checked={agendaEstados.includes(e)} onChange={() => toggleEstado(e)} />
                                                     {e}
