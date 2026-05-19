@@ -39,7 +39,9 @@ export class AuthController {
 
     @Post('me')
     @HttpCode(200)
-    getProfile(@Request() req: any) {
-        return { user: req.user };
+    async getProfile(@Request() req: any) {
+        // Issue #65: incluir tecnicoId/tecnicoNome (caso o user esteja vinculado)
+        const tec = await this.authService.resolveTecnicoLink(req.user.id ?? req.user.sub);
+        return { user: { ...req.user, tecnicoId: tec?.id, tecnicoNome: tec?.nome } };
     }
 }

@@ -12,16 +12,18 @@ import {
 
 /* ── Role mappings ── */
 const PERFIL_TO_ROLE: Record<string, string> = {
-    'Administrador':    'admin',
-    'Técnico Suporte':  'suporte',
-    'Técnico Campo':    'campo',
-    'Vendedor':         'vendedor',
+    'Administrador':           'admin',
+    'Coordenador':             'coordenador',
+    'Técnico Suporte':         'suporte',
+    'Técnico Campo':           'campo',
+    'Vendedor':                'vendedor',
 };
 const ROLE_TO_PERFIL: Record<string, Utilizador['perfil']> = {
-    'admin':    'Administrador',
-    'suporte':  'Técnico Suporte',
-    'campo':    'Técnico Campo',
-    'vendedor': 'Vendedor',
+    'admin':       'Administrador',
+    'coordenador': 'Coordenador',
+    'suporte':     'Técnico Suporte',
+    'campo':       'Técnico Campo',
+    'vendedor':    'Vendedor',
 };
 
 /* ── Types ── */
@@ -30,7 +32,7 @@ export interface Utilizador {
     nome: string;
     email: string;
     telefone: string;
-    perfil: 'Administrador' | 'Técnico Suporte' | 'Técnico Campo' | 'Vendedor';
+    perfil: 'Administrador' | 'Coordenador' | 'Técnico Suporte' | 'Técnico Campo' | 'Vendedor';
     ativo: boolean;
     ultimoAcesso: string;
     iniciais: string;
@@ -53,6 +55,7 @@ const normUser = (u: any): Utilizador => ({
 
 const PERF_BADGE: Record<string, string> = {
     'Administrador':    'tbadge tbadge-admin',
+    'Coordenador':      'tbadge tbadge-suporte',
     'Técnico Suporte':  'tbadge tbadge-suporte',
     'Técnico Campo':    'tbadge tbadge-campo',
     'Vendedor':         'tbadge tbadge-vendedor',

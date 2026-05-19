@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
-import { User } from './user.entity';
+import { User, UserRole } from './user.entity';
 
 @Injectable()
 export class UsersService {
@@ -45,6 +45,19 @@ export class UsersService {
             update.passwordHash = await bcrypt.hash(body.password, 10);
         }
         delete (update as any).password;
+
+        // Issue #65: se o user está vinculado a um Tecnico, role tem de continuar 'campo'.
+        if (update.role && update.role !== UserRole.CAMPO) {
+            const [linked] = await this.repo.query(
+                `SELECT id FROM tecnicos WHERE id_user = $1 LIMIT 1`, [id],
+            );
+            if (linked) {
+                throw new ConflictException(
+                    `User #${id} está vinculado ao Tecnico #${linked.id} — role tem de ser 'campo'. Desvincule o técnico antes de mudar.`,
+                );
+            }
+        }
+
         await this.repo.update(id, update);
         return this.findOne(id);
     }

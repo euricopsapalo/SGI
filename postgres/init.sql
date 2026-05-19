@@ -152,7 +152,8 @@ CREATE TABLE users (
     nome               VARCHAR(150) NOT NULL,
     email              VARCHAR(200) NOT NULL UNIQUE,
     password_hash      VARCHAR(255) NOT NULL,
-    role               VARCHAR(20)  NOT NULL DEFAULT 'campo',
+    role               VARCHAR(20)  NOT NULL DEFAULT 'campo'
+        CONSTRAINT chk_users_role CHECK (role IN ('admin','suporte','coordenador','campo','vendedor')),
     ativo              BOOLEAN      NOT NULL DEFAULT TRUE,
     telefone           VARCHAR(30),
     reset_token        VARCHAR(100),
@@ -160,10 +161,11 @@ CREATE TABLE users (
     created_at         TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
 );
 INSERT INTO users (id, nome, email, password_hash, role, ativo) VALUES
-    (1, 'Eurico Sapalo', 'admin@aquatex.ao',   '$2b$10$OY6Skmi01TTBGyksi/u1XOGNLkWxIYGeD894IBnOaXgQnn9tnlExS', 'admin',   TRUE),
-    (2, 'Manuel Silva',  'tecnico@aquatex.ao', '$2b$10$OY6Skmi01TTBGyksi/u1XOGNLkWxIYGeD894IBnOaXgQnn9tnlExS', 'campo',   TRUE),
-    (3, 'Sofia Vendas',  'vendas@aquatex.ao',  '$2b$10$OY6Skmi01TTBGyksi/u1XOGNLkWxIYGeD894IBnOaXgQnn9tnlExS', 'vendedor',TRUE);
-SELECT setval('users_id_seq', 3);
+    (1, 'Eurico Sapalo',    'admin@aquatex.ao',       '$2b$10$OY6Skmi01TTBGyksi/u1XOGNLkWxIYGeD894IBnOaXgQnn9tnlExS', 'admin',       TRUE),
+    (2, 'Manuel Silva',     'tecnico@aquatex.ao',     '$2b$10$OY6Skmi01TTBGyksi/u1XOGNLkWxIYGeD894IBnOaXgQnn9tnlExS', 'campo',       TRUE),
+    (3, 'Sofia Vendas',     'vendas@aquatex.ao',      '$2b$10$OY6Skmi01TTBGyksi/u1XOGNLkWxIYGeD894IBnOaXgQnn9tnlExS', 'vendedor',    TRUE),
+    (4, 'Florinda Amério',  'coordenador@aquatex.ao', '$2b$10$OY6Skmi01TTBGyksi/u1XOGNLkWxIYGeD894IBnOaXgQnn9tnlExS', 'coordenador', TRUE);
+SELECT setval('users_id_seq', 4);
 
 -- ============================================================
 -- CLIENTES
@@ -200,7 +202,8 @@ CREATE TABLE tecnicos (
     custo_hora           NUMERIC(12,2) NOT NULL DEFAULT 0,
     ativo                BOOLEAN       NOT NULL DEFAULT TRUE,
     comissao_por_servico NUMERIC(10,2) NOT NULL DEFAULT 0,
-    id_user              INTEGER       REFERENCES users(id) ON DELETE SET NULL
+    -- Issue #65: vínculo 1:1 obrigatório com User (role 'campo')
+    id_user              INTEGER       NOT NULL UNIQUE REFERENCES users(id) ON DELETE RESTRICT
 );
 
 -- ============================================================

@@ -500,11 +500,17 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (token && !currentUser) {
             api.post('/auth/me').then(({ data }) => {
                 const ROLE_MAP: Record<string, string> = {
-                    admin: 'Administrador', suporte: 'Suporte',
+                    admin: 'Administrador', suporte: 'Suporte', coordenador: 'Coordenador',
                     campo: 'Técnico de Campo', vendedor: 'Vendedor',
                 };
                 const u = data.user;
-                setCurrentUserState({ nome: u.nome, email: u.email, role: ROLE_MAP[u.role] || u.role });
+                setCurrentUserState({
+                    nome: u.nome,
+                    email: u.email,
+                    role: ROLE_MAP[u.role] || u.role,
+                    tecnicoId: u.tecnicoId ? String(u.tecnicoId) : undefined,
+                    tecnicoNome: u.tecnicoNome,
+                });
             }).catch(() => {
                 localStorage.removeItem('sgi_token');
             });

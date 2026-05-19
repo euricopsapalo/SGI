@@ -22,11 +22,21 @@ export class AuthService {
         if (!user || !user.ativo) throw new UnauthorizedException('Credenciais inválidas.');
         const valid = await bcrypt.compare(password, user.passwordHash);
         if (!valid) throw new UnauthorizedException('Credenciais inválidas.');
-        const payload = { sub: user.id, email: user.email, role: user.role, nome: user.nome };
+        // Issue #65: enriquecer com tecnicoId se o user é técnico de campo
+        const tec = await this.resolveTecnicoLink(user.id);
+        const payload = { sub: user.id, email: user.email, role: user.role, nome: user.nome, tecnicoId: tec?.id };
         return {
             access_token: this.jwtService.sign(payload),
-            user: { id: user.id, nome: user.nome, email: user.email, role: user.role },
+            user: { id: user.id, nome: user.nome, email: user.email, role: user.role, tecnicoId: tec?.id, tecnicoNome: tec?.nome },
         };
+    }
+
+    /** Issue #65: devolve {id, nome} do Tecnico vinculado, ou null. */
+    async resolveTecnicoLink(userId: number): Promise<{ id: number; nome: string } | null> {
+        const rows = await this.userRepo.query(
+            `SELECT id, nome FROM tecnicos WHERE id_user = $1 LIMIT 1`, [userId],
+        );
+        return rows[0] ?? null;
     }
 
     async forgotPassword(email: string) {
