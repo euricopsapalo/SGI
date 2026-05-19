@@ -9,8 +9,9 @@ import {
 
 export enum UserRole {
     ADMIN = 'admin',
-    SUPORTE = 'suporte',
-    CAMPO = 'campo',
+    SUPORTE = 'suporte',         // legado: mantido para compatibilidade
+    COORDENADOR = 'coordenador', // novo: coordenador de intervenções (RF-OT-002/issue #65)
+    CAMPO = 'campo',             // técnico de campo (vinculado a Tecnico 1:1 obrigatório)
     VENDEDOR = 'vendedor',
 }
 

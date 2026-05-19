@@ -139,6 +139,7 @@ const UtilizadorModal: React.FC<Props> = ({ initial, tecnicos, onClose, onSave }
                                 <label className="form-label req">Perfil</label>
                                 <select className="form-select" value={form.perfil} onChange={handlePerfilChange}>
                                     <option value="Administrador">Administrador</option>
+                                    <option value="Coordenador">Coordenador de Intervenções</option>
                                     <option value="Técnico Suporte">Técnico Suporte</option>
                                     <option value="Técnico Campo">Técnico Campo</option>
                                     <option value="Vendedor">Vendedor</option>

@@ -47,9 +47,16 @@ export class Tecnico {
     })
     comissaoPorServico: number;
 
-    @OneToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+    /**
+     * Issue #65: vínculo 1:1 obrigatório com User (role 'campo').
+     * Todo Tecnico = técnico de campo, e precisa de conta de acesso.
+     */
+    @OneToOne(() => User, { nullable: false, onDelete: 'RESTRICT' })
     @JoinColumn({ name: 'id_user' })
     user: User;
+
+    @Column({ name: 'id_user' })
+    userId: number;
 
     @OneToMany(() => Comissao, (c) => c.tecnico)
     comissoes: Comissao[];
