@@ -7,11 +7,13 @@ import { OtReprogramacao } from './ot-reprogramacao.entity';
 import { OrdensTrabalhoService } from './ordens-trabalho.service';
 import { OrdensTrabalhoController } from './ordens-trabalho.controller';
 import { ArtigosModule } from '../artigos/artigos.module';
+import { SysLogsModule } from '../sys-logs/sys-logs.module';
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([OrdemTrabalho, OtMaoObra, OtArtigo, OtReprogramacao]),
         ArtigosModule,
+        SysLogsModule,
     ],
     controllers: [OrdensTrabalhoController],
     providers: [OrdensTrabalhoService],

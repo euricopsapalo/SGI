@@ -15,10 +15,12 @@ import ExportModal, { ExportCol } from '../../components/ExportModal';
 
 /* ── Constants ───────────────────────────────────────── */
 const ESTADO_CONFIG: Record<OTEstado, { dot: string; label: string; icon: React.ReactNode }> = {
-    'Programado': { dot: 'dot-blue',   label: 'Programado', icon: <Clock      size={13} /> },
-    'Em curso':   { dot: 'dot-orange', label: 'Em curso',   icon: <PlayCircle size={13} /> },
-    'Terminado':  { dot: 'dot-green',  label: 'Terminado',  icon: <CheckCircle size={13} /> },
-    'Encerrado':  { dot: 'dot-gray',   label: 'Encerrado',  icon: <Archive    size={13} /> },
+    'Registada':   { dot: 'dot-gray',   label: 'Registada',   icon: <Clock      size={13} /> },
+    'Programada':  { dot: 'dot-blue',   label: 'Programada',  icon: <Clock      size={13} /> },
+    'Adiada':      { dot: 'dot-orange', label: 'Adiada',      icon: <AlertCircle size={13} /> },
+    'Confirmada':  { dot: 'dot-purple', label: 'Confirmada',  icon: <CheckCircle size={13} /> },
+    'Em execução': { dot: 'dot-yellow', label: 'Em execução', icon: <PlayCircle size={13} /> },
+    'Finalizada':  { dot: 'dot-green',  label: 'Finalizada',  icon: <Archive    size={13} /> },
 };
 const PERIOD_OPTIONS = ['Mensal', 'Trimestral', 'Semestral', 'Anual', 'Única'];
 
@@ -76,9 +78,11 @@ const INTERV_CSS = `
 function fDInterv(d?: string) { return d ? new Date(d).toLocaleDateString('pt-PT') : '—'; }
 
 function otEstadoCor(estado: string) {
-    if (estado === 'Terminado') return '#16a34a';
-    if (estado === 'Em curso')  return '#f97316';
-    if (estado === 'Encerrado') return '#6b7280';
+    if (estado === 'Finalizada')  return '#16a34a';
+    if (estado === 'Em execução') return '#eab308';
+    if (estado === 'Adiada')      return '#f97316';
+    if (estado === 'Confirmada')  return '#7c3aed';
+    if (estado === 'Registada')   return '#6b7280';
     return '#2563eb';
 }
 
@@ -386,7 +390,7 @@ ${rows}${summaryRows}
 </div>
 <h3 class="sec-title">Identificação</h3>
 <table class="info-table">
-<tr><td>Tipo</td><td>${ot.tipo === 'programada' ? 'Programada' : 'Pontual'} — ${ot.tipoTrabalho}</td></tr>
+<tr><td>Tipo</td><td>${ot.tipo === 'periodica' ? 'Programada' : 'Pontual'} — ${ot.tipoTrabalho}</td></tr>
 <tr><td>Equipamento</td><td>${equip?.id ?? '—'} — ${mod} <span style="color:#888">(${equip?.nrSerie ?? '—'})</span></td></tr>
 <tr><td>Cliente</td><td>${cli}</td></tr>
 <tr><td>Responsável</td><td>${ot.responsavel}</td></tr>
@@ -441,13 +445,11 @@ interface OTFormProps {
     ot?: OrdemTrabalho;
     onClose: () => void;
     onSave: (o: Omit<OrdemTrabalho, 'id'>) => void;
-    onEmitir?: () => void;
-    onTerminar?: (dataFim: string) => void;
-    onEncerrar?: (dataEnc: string) => void;
+    acoes?: { label: string; target: string; run: () => void }[];
     readOnly?: boolean;
 }
 
-const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTerminar, onEncerrar, readOnly }) => {
+const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly }) => {
     const { equipInstalados, clientes, modelosEquipamento, planos, tiposTrabalho, tiposOT, funcoesTecnico, artigos: catalog, tecnicos, currentUser, taxasIva, fmtMoney, fmtDate, fmt, simboloMoeda, empresaConfig } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
     const [tab, setTab] = useState<'origem' | 'maos' | 'artigos' | 'diagnostico' | 'gestao'>('origem');
@@ -472,7 +474,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
 
     // Auto-load from plano when OT is Programado with planoId but has no mão de obra/artigos
     useEffect(() => {
-        if (!ot || ot.estado !== 'Programado') return;
+        if (!ot || ot.estado === 'Em execução' || ot.estado === 'Finalizada') return;
         if (!ot.planoId) return;
         if ((ot.maosDeObra?.length ?? 0) > 0 || (ot.artigos?.length ?? 0) > 0) return;
         const plano = planos.find(p => p.id === ot.planoId);
@@ -501,10 +503,6 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
     const [dFi, setDFi] = useState(ot?.dataFim        ?? '');
     const [dEn, setDEn] = useState(ot?.dataEncerramento ?? '');
 
-    // Emit/Terminate confirmation
-    const [emitirForm, setEmitirForm]     = useState(false);
-    const [terminarForm, setTerminarForm] = useState(false);
-    const [encerrarForm, setEncerrarForm] = useState(false);
 
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -593,14 +591,14 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
 
     const buildOT = (): Omit<OrdemTrabalho, 'id'> => ({
         tipo, equipInstaladoId: equipId, clienteId,
-        descricao, previsaoTempo: Number(previsao) || 0, periodicidade: tipo === 'programada' ? periodo : undefined,
+        descricao, previsaoTempo: Number(previsao) || 0, periodicidade: tipo === 'periodica' ? periodo : undefined,
         planoId: planoId || undefined, tipoTrabalho: tipoTrab, tipoOT: tipoOT || undefined, responsavel,
         maosDeObra: maos, artigos: arts,
         orgao: orgao || undefined, sintoma: sintoma || undefined, causa: causa || undefined,
         dataProgInicio: dpI || undefined, dataProgFim: dpF || undefined,
         dataEmissao: dEm || undefined, dataInicio: dIn || undefined,
         dataFim: dFi || undefined, dataEncerramento: dEn || undefined,
-        estado: ot?.estado ?? 'Programado',
+        estado: ot?.estado ?? 'Registada',
         reprogramacoes: [],
     });
 
@@ -619,9 +617,6 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
     ] as const;
 
     const estado = ot?.estado;
-    const canEmitir   = estado === 'Programado';
-    const canTerminar = estado === 'Em curso';
-    const canEncerrar = estado === 'Terminado';
 
     const [previewHtml, setPreviewHtml] = useState('');
 
@@ -656,7 +651,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                                 <span className={`dot ${ESTADO_CONFIG[ot.estado].dot}`} />
                                 <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{ot.estado}</span>
-                                <span className="tbadge tbadge-admin">{ot.tipo === 'programada' ? 'Programada' : 'Pontual'}</span>
+                                <span className="tbadge tbadge-admin">{ot.tipo === 'periodica' ? 'Programada' : 'Pontual'}</span>
                             </div>
                         )}
                     </div>
@@ -682,7 +677,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label className="form-label req">Tipo de OT</label>
-                                        <select className={`form-select${errors.tipoOT ? ' err' : ''}`} value={tipoOT} onChange={e => { const v = e.target.value; setTipoOT(v); setTipo(v.toLowerCase().includes('pontual') ? 'pontual' : 'programada'); }}>
+                                        <select className={`form-select${errors.tipoOT ? ' err' : ''}`} value={tipoOT} onChange={e => { const v = e.target.value; setTipoOT(v); setTipo(v.toLowerCase().includes('pontual') ? 'pontual' : 'periodica'); }}>
                                             <option value="">Seleccionar...</option>
                                             {tiposOT.map(t => <option key={t.id} value={t.descricao}>{t.descricao}</option>)}
                                         </select>
@@ -695,7 +690,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
                                     </div>
                                 </div>
 
-                                {tipo === 'programada' && equipId && planoOpts.length > 0 && (
+                                {tipo === 'periodica' && equipId && planoOpts.length > 0 && (
                                     <div className="form-group" style={{ padding: '8px 12px', background: 'var(--blue-light,#eff6ff)', border: '1px solid #BFDBFE', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
                                         <span style={{ fontSize: '0.8rem', flex: 1 }}>Carregar a partir de um plano de manutenção:</span>
                                         <select className="form-select" style={{ width: 'auto', flex: 2 }} value={planoId} onChange={e => loadPlano(e.target.value)}>
@@ -736,7 +731,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
                                         <input type="number" min={0.5} step={0.5} className="form-input"
                                             value={previsao} onChange={e => setPrevisao(e.target.value)} />
                                     </div>
-                                    {tipo === 'programada' && (
+                                    {tipo === 'periodica' && (
                                         <div className="form-group">
                                             <label className="form-label">Periodicidade</label>
                                             <select className="form-select" value={periodo} onChange={e => setPeriodo(e.target.value)}>
@@ -858,7 +853,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
                         {/* ── GESTÃO ── */}
                         {tab === 'gestao' && (
                             <>
-                                {tipo === 'programada' && (
+                                {tipo === 'periodica' && (
                                     <div className="form-row">
                                         <div className="form-group">
                                             <label className="form-label">Data Prog. Início</label>
@@ -894,92 +889,38 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label className="form-label" style={{ color: 'var(--text-muted)' }}>Emitida</label>
-                                        <input type="date" className="form-input" value={dEm} onChange={e => setDEm(e.target.value)} disabled={!ot || ot.estado === 'Programado'} />
+                                        <input type="date" className="form-input" value={dEm} onChange={e => setDEm(e.target.value)} disabled={!ot || (ot.estado !== 'Em execução' && ot.estado !== 'Finalizada')} />
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label" style={{ color: 'var(--text-muted)' }}>Início</label>
-                                        <input type="date" className="form-input" value={dIn} onChange={e => setDIn(e.target.value)} disabled={!ot || ot.estado === 'Programado'} />
+                                        <input type="date" className="form-input" value={dIn} onChange={e => setDIn(e.target.value)} disabled={!ot || (ot.estado !== 'Em execução' && ot.estado !== 'Finalizada')} />
                                     </div>
                                 </div>
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label className="form-label" style={{ color: 'var(--text-muted)' }}>Fim</label>
-                                        <input type="date" className="form-input" value={dFi} onChange={e => setDFi(e.target.value)} disabled={!ot || ot.estado !== 'Terminado' && ot.estado !== 'Encerrado'} />
+                                        <input type="date" className="form-input" value={dFi} onChange={e => setDFi(e.target.value)} disabled={!ot || ot.estado !== 'Finalizada'} />
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label" style={{ color: 'var(--text-muted)' }}>Encerramento</label>
-                                        <input type="date" className="form-input" value={dEn} onChange={e => setDEn(e.target.value)} disabled={!ot || ot.estado !== 'Encerrado'} />
+                                        <input type="date" className="form-input" value={dEn} onChange={e => setDEn(e.target.value)} disabled={!ot || ot.estado !== 'Finalizada'} />
                                     </div>
                                 </div>
 
-                                {/* Emitir */}
-                                {canEmitir && !emitirForm && (
-                                    <div style={{ marginTop: 12 }}>
-                                        <button type="button" className="abtn abtn-primary" style={{ background: 'var(--orange)', borderColor: 'var(--orange)' }} onClick={() => { setDEm(today()); setDIn(today()); setEmitirForm(true); setTab('gestao'); }}>
-                                            <PlayCircle size={13} /> Emitir
-                                        </button>
-                                    </div>
-                                )}
-                                {canEmitir && emitirForm && (
-                                    <div style={{ marginTop: 12, padding: '10px 12px', background: '#fff7ed', border: '1px solid #FED7AA', borderRadius: 4 }}>
-                                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--orange)', marginBottom: 8 }}>Confirmar Emissão</div>
-                                        <div className="form-row">
-                                            <div className="form-group">
-                                                <label className="form-label">Data Emissão</label>
-                                                <input type="date" className="form-input" value={dEm} onChange={e => setDEm(e.target.value)} />
-                                            </div>
-                                            <div className="form-group">
-                                                <label className="form-label">Data Início</label>
-                                                <input type="date" className="form-input" value={dIn} onChange={e => setDIn(e.target.value)} />
-                                            </div>
-                                        </div>
-                                        <div style={{ display: 'flex', gap: 8 }}>
-                                            <button type="button" className="abtn abtn-secondary" onClick={() => setEmitirForm(false)}>Cancelar</button>
-                                            <button type="button" className="abtn abtn-primary" style={{ background: 'var(--orange)', borderColor: 'var(--orange)' }} onClick={() => onEmitir?.()}>Confirmar Emissão</button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Terminar */}
-                                {canTerminar && !terminarForm && (
-                                    <div style={{ marginTop: 12 }}>
-                                        <button type="button" className="abtn abtn-primary" style={{ background: 'var(--green)', borderColor: 'var(--green)' }} onClick={() => { setDFi(today()); setTerminarForm(true); setTab('gestao'); }}>
-                                            <CheckCircle size={13} /> Terminar
-                                        </button>
-                                    </div>
-                                )}
-                                {canTerminar && terminarForm && (
-                                    <div style={{ marginTop: 12, padding: '10px 12px', background: '#f0fdf4', border: '1px solid #BBF7D0', borderRadius: 4 }}>
-                                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--green)', marginBottom: 8 }}>Confirmar Conclusão</div>
-                                        <div className="form-group">
-                                            <label className="form-label">Data de Fim</label>
-                                            <input type="date" className="form-input" value={dFi} onChange={e => setDFi(e.target.value)} />
-                                        </div>
-                                        <div style={{ display: 'flex', gap: 8 }}>
-                                            <button type="button" className="abtn abtn-secondary" onClick={() => setTerminarForm(false)}>Cancelar</button>
-                                            <button type="button" className="abtn abtn-primary" style={{ background: 'var(--green)', borderColor: 'var(--green)' }} onClick={() => onTerminar?.(dFi || today())}>Confirmar Conclusão</button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Encerrar */}
-                                {canEncerrar && !encerrarForm && (
-                                    <div style={{ marginTop: 12 }}>
-                                        <button type="button" className="abtn abtn-secondary" onClick={() => { setDEn(today()); setEncerrarForm(true); setTab('gestao'); }}>
-                                            <Archive size={13} /> Encerrar
-                                        </button>
-                                    </div>
-                                )}
-                                {canEncerrar && encerrarForm && (
+                                {/* Ações da máquina de estados (RF-OT-001) — dinâmicas por transicoesPossiveis */}
+                                {ot && acoes && acoes.length > 0 && (
                                     <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 4 }}>
-                                        <div style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: 8 }}>Confirmar Encerramento</div>
-                                        <div className="form-group">
-                                            <label className="form-label">Data de Encerramento</label>
-                                            <input type="date" className="form-input" value={dEn} onChange={e => setDEn(e.target.value)} />
+                                        <div style={{ fontSize: '0.82rem', fontWeight: 700, marginBottom: 8 }}>
+                                            Transições disponíveis — estado actual: <strong>{ot.estado}</strong>
                                         </div>
-                                        <div style={{ display: 'flex', gap: 8 }}>
-                                            <button type="button" className="abtn abtn-secondary" onClick={() => setEncerrarForm(false)}>Cancelar</button>
-                                            <button type="button" className="abtn abtn-primary" onClick={() => onEncerrar?.(dEn || today())}>Confirmar Encerramento</button>
+                                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                            {acoes.map(a => (
+                                                <button key={a.target} type="button" className="abtn abtn-primary"
+                                                    style={{ background: otEstadoCor(a.target), borderColor: otEstadoCor(a.target) }}
+                                                    onClick={a.run}>
+                                                    {a.label} → {a.target}
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
                                 )}
@@ -1023,7 +964,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, onEmitir, onTermin
 
 /* ══ Main Page ═══════════════════════════════════════════ */
 const OrdensPage: React.FC = () => {
-    const { ordens, addOrdem, updateOrdem, emitirOT, terminarOT, encerrarOT, reverterOT, equipInstalados, clientes, modelosEquipamento, currentUser, tiposOT, fmtDate, empresaConfig, simboloMoeda } = useGlobal();
+    const { ordens, addOrdem, updateOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, finalizarOT, equipInstalados, clientes, modelosEquipamento, currentUser, tiposOT, fmtDate, empresaConfig, simboloMoeda } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
 
     const [search, setSearch]         = useState('');
@@ -1059,10 +1000,10 @@ const OrdensPage: React.FC = () => {
     [ordens, isTecnicoCampo, currentUser]);
 
     const stats = useMemo(() => ({
-        programados: baseOrdens.filter(o => o.estado === 'Programado').length,
-        emCurso:     baseOrdens.filter(o => o.estado === 'Em curso').length,
-        terminados:  baseOrdens.filter(o => o.estado === 'Terminado').length,
-        encerrados:  baseOrdens.filter(o => o.estado === 'Encerrado').length,
+        programados: baseOrdens.filter(o => o.estado === 'Registada' || o.estado === 'Programada' || o.estado === 'Adiada' || o.estado === 'Confirmada').length,
+        emCurso:     baseOrdens.filter(o => o.estado === 'Em execução').length,
+        terminados:  baseOrdens.filter(o => o.estado === 'Finalizada').length,
+        encerrados:  baseOrdens.filter(o => o.estado === 'Finalizada').length,
     }), [baseOrdens]);
 
     const exportData = filtered.map(o => {
@@ -1087,35 +1028,35 @@ const OrdensPage: React.FC = () => {
         }
     };
 
-    const handleEmitir = async (id: string) => {
-        try { await emitirOT(id); setModal(null); showToast(`OT ${id} emitida — Em curso.`); }
-        catch (e: any) { showToast(e?.response?.data?.message ?? `Erro ao emitir OT ${id}.`); }
-    };
-    const handleTerminar = async (id: string, df: string) => {
-        try { await terminarOT(id, df); setModal(null); showToast(`OT ${id} terminada. Nova OT gerada se periódica.`); }
-        catch (e: any) { showToast(e?.response?.data?.message ?? `Erro ao terminar OT ${id}.`); }
-    };
-    const handleEncerrar = async (id: string, de: string) => {
-        try { await encerrarOT(id, de); setModal(null); showToast(`OT ${id} encerrada.`); }
-        catch (e: any) { showToast(e?.response?.data?.message ?? `Erro ao encerrar OT ${id}.`); }
+    /** Ações da máquina de estados RF-OT-001 — uma entrada por transição possível. */
+    type TransicaoAcao = { target: OTEstado; label: string; run: (id: string) => Promise<void> };
+    const ACOES_POR_ESTADO: Record<OTEstado, TransicaoAcao[]> = {
+        'Registada':   [{ target: 'Programada',  label: 'Agendar',   run: id => agendarOT(id, today()) }],
+        'Programada':  [
+            { target: 'Confirmada', label: 'Confirmar', run: id => confirmarOT(id) },
+            { target: 'Adiada',     label: 'Adiar',     run: id => adiarOT(id) },
+        ],
+        'Adiada':      [{ target: 'Programada',  label: 'Reagendar', run: id => agendarOT(id, today()) }],
+        'Confirmada':  [
+            { target: 'Em execução', label: 'Iniciar', run: id => iniciarOT(id, today()) },
+            { target: 'Adiada',      label: 'Adiar',   run: id => adiarOT(id) },
+        ],
+        'Em execução': [{ target: 'Finalizada',  label: 'Finalizar', run: id => finalizarOT(id, today()) }],
+        'Finalizada':  [],
     };
 
-    const PROX_ESTADO: Record<OTEstado, string> = { 'Programado': 'Emitir → Em curso', 'Em curso': 'Terminar', 'Terminado': 'Encerrar', 'Encerrado': '—' };
-    const PREV_ESTADO: Partial<Record<OTEstado, OTEstado>> = { 'Em curso': 'Programado', 'Terminado': 'Em curso', 'Encerrado': 'Terminado' };
-    const handleProxEstado = (ot: OrdemTrabalho) => {
-        if (ot.estado === 'Programado') handleEmitir(ot.id);
-        else if (ot.estado === 'Em curso') handleTerminar(ot.id, today());
-        else if (ot.estado === 'Terminado') handleEncerrar(ot.id, today());
-        setCtx(null);
+    const acoesDisponiveis = (ot: OrdemTrabalho): TransicaoAcao[] => {
+        const permitidas = ot.transicoesPossiveis ?? [];
+        return (ACOES_POR_ESTADO[ot.estado] ?? []).filter(a => permitidas.includes(a.target));
     };
-    const handleReverter = async (ot: OrdemTrabalho) => {
-        const prev = PREV_ESTADO[ot.estado];
-        if (!prev) { setCtx(null); return; }
+
+    const executarTransicao = async (ot: OrdemTrabalho, acao: TransicaoAcao) => {
         try {
-            await reverterOT(ot.id);
-            showToast(`OT ${ot.id} revertida → ${prev}.`);
+            await acao.run(ot.id);
+            setModal(null);
+            showToast(`OT ${ot.id}: ${acao.label} → ${acao.target}.`);
         } catch (e: any) {
-            showToast(e?.response?.data?.message ?? `Erro ao reverter OT ${ot.id}.`);
+            showToast(e?.response?.data?.message ?? `Erro: ${acao.label} OT ${ot.id}.`);
         }
         setCtx(null);
     };
@@ -1259,8 +1200,7 @@ const OrdensPage: React.FC = () => {
                         {[
                             { label: 'Abrir',    action: () => { setModal(ctx.id); setCtx(null); } },
                             { label: '⎙ Imprimir', action: () => { printOT(ot, equipInstalados, modelosEquipamento, clientes, empresaConfig, simboloMoeda); setCtx(null); } },
-                            ...(ot.estado !== 'Encerrado' ? [{ label: `→ ${PROX_ESTADO[ot.estado]}`, action: () => handleProxEstado(ot) }] : []),
-                            ...(!isTecnicoCampo && PREV_ESTADO[ot.estado] ? [{ label: `↩ Reverter → ${PREV_ESTADO[ot.estado]}`, action: () => handleReverter(ot) }] : []),
+                            ...acoesDisponiveis(ot).map(a => ({ label: `→ ${a.label} (${a.target})`, action: () => executarTransicao(ot, a) })),
                         ].map(item => (
                             <button key={item.label} type="button" onClick={item.action}
                                 style={{ display: 'block', width: '100%', padding: '8px 14px', border: 'none', background: 'none', textAlign: 'left', fontSize: '0.82rem', cursor: 'pointer', color: 'var(--text-primary)' }}
@@ -1278,9 +1218,7 @@ const OrdensPage: React.FC = () => {
                     ot={editOT}
                     onClose={() => setModal(null)}
                     onSave={handleSave}
-                    onEmitir={editOT ? () => handleEmitir(editOT.id) : undefined}
-                    onTerminar={editOT ? (df) => handleTerminar(editOT.id, df) : undefined}
-                    onEncerrar={editOT ? (de) => handleEncerrar(editOT.id, de) : undefined}
+                    acoes={editOT && !isTecnicoCampo ? acoesDisponiveis(editOT).map(a => ({ label: a.label, target: a.target, run: () => executarTransicao(editOT, a) })) : undefined}
                     readOnly={isTecnicoCampo && !!editOT}
                 />
             )}

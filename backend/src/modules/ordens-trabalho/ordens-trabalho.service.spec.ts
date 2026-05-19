@@ -12,6 +12,9 @@ import { OtMaoObra } from './ot-mao-obra.entity';
 import { OtArtigo } from './ot-artigo.entity';
 import { OtReprogramacao } from './ot-reprogramacao.entity';
 import { ArtigosService } from '../artigos/artigos.service';
+import { SysLogsService } from '../sys-logs/sys-logs.service';
+import { OTEstado } from './ordem-trabalho.entity';
+import { UnprocessableEntityException } from '@nestjs/common';
 
 describe('OrdensTrabalhoService (regression #15)', () => {
     let service: OrdensTrabalhoService;
@@ -51,6 +54,8 @@ describe('OrdensTrabalhoService (regression #15)', () => {
             createMovimento: jest.fn(),
         };
 
+        const sysLogsMock = { create: jest.fn(async (b) => b) };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 OrdensTrabalhoService,
@@ -59,16 +64,72 @@ describe('OrdensTrabalhoService (regression #15)', () => {
                 { provide: getRepositoryToken(OtArtigo), useValue: artigoRepo },
                 { provide: getRepositoryToken(OtReprogramacao), useValue: reprogramacaoRepo },
                 { provide: ArtigosService, useValue: artigosServiceMock },
+                { provide: SysLogsService, useValue: sysLogsMock },
             ],
         }).compile();
 
         service = module.get<OrdensTrabalhoService>(OrdensTrabalhoService);
+        (service as any).sysLogsMock = sysLogsMock;
+    });
+
+    // ── RF-OT-001 — máquina de estados ───────────────────────────────
+    describe('máquina de estados (assertTransicao)', () => {
+        const setEstado = (estado: OTEstado) =>
+            repo.findOne.mockResolvedValue({ id: 1, estado, artigos: [], dataProgInicio: '2026-06-01', descricao: 'x', responsavel: 'r' });
+
+        it('Registada → Programada é válida e regista sys_logs OT_TRANSICAO', async () => {
+            setEstado(OTEstado.REGISTADA);
+            await service.agendar(1, '2026-06-01', undefined, 'tester');
+            const log = (service as any).sysLogsMock.create.mock.calls.find(
+                (c: any[]) => c[0].acao === 'OT_TRANSICAO',
+            );
+            expect(log[0].detalhes).toBe('#1: Registada → Programada');
+        });
+
+        it('Programada → Confirmada é válida', async () => {
+            setEstado(OTEstado.PROGRAMADA);
+            await expect(service.confirmar(1, 'tester')).resolves.toBeDefined();
+        });
+
+        it('Confirmada → Em execução é válida', async () => {
+            setEstado(OTEstado.CONFIRMADA);
+            await expect(service.iniciar(1, undefined, 'tester')).resolves.toBeDefined();
+        });
+
+        it('Em execução → Finalizada é válida', async () => {
+            setEstado(OTEstado.EM_EXECUCAO);
+            await expect(service.finalizar(1, undefined, 'tester')).resolves.toBeDefined();
+        });
+
+        it('Programada → Adiada e Confirmada → Adiada são válidas', async () => {
+            setEstado(OTEstado.PROGRAMADA);
+            await expect(service.adiar(1, 'chuva', 'tester')).resolves.toBeDefined();
+            setEstado(OTEstado.CONFIRMADA);
+            await expect(service.adiar(1, 'avaria', 'tester')).resolves.toBeDefined();
+        });
+
+        it('rejeita salto Registada → Em execução com 422', async () => {
+            setEstado(OTEstado.REGISTADA);
+            await expect(service.iniciar(1, undefined, 'tester')).rejects.toBeInstanceOf(
+                UnprocessableEntityException,
+            );
+        });
+
+        it('rejeita Registada → Confirmada / Programada → Finalizada / Finalizada → * com 422', async () => {
+            setEstado(OTEstado.REGISTADA);
+            await expect(service.confirmar(1)).rejects.toBeInstanceOf(UnprocessableEntityException);
+            setEstado(OTEstado.PROGRAMADA);
+            await expect(service.finalizar(1)).rejects.toBeInstanceOf(UnprocessableEntityException);
+            setEstado(OTEstado.FINALIZADA);
+            await expect(service.agendar(1, '2026-06-01')).rejects.toBeInstanceOf(UnprocessableEntityException);
+            await expect(service.iniciar(1)).rejects.toBeInstanceOf(UnprocessableEntityException);
+        });
     });
 
     it('create — propaga codigoIva e taxaIva para artigoRepo.create em cada linha', async () => {
         await service.create({
             descricao: 'OT com IVA por linha',
-            tipo: 'programada',
+            tipo: 'periodica',
             clienteId: 1,
             artigos: [
                 { artigoId: 5, descricao: 'Filtro 10"', quantidade: 2, preco: 2500, codigoIva: 'I14', taxaIva: 14 },

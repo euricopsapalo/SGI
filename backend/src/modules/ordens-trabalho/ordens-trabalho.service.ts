@@ -1,11 +1,17 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+    Injectable,
+    BadRequestException,
+    NotFoundException,
+    UnprocessableEntityException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { OrdemTrabalho, OTEstado, OTTipo } from './ordem-trabalho.entity';
+import { OrdemTrabalho, OTEstado, OTTipo, OT_TRANSICOES } from './ordem-trabalho.entity';
 import { OtMaoObra } from './ot-mao-obra.entity';
 import { OtArtigo } from './ot-artigo.entity';
 import { OtReprogramacao } from './ot-reprogramacao.entity';
 import { ArtigosService } from '../artigos/artigos.service';
+import { SysLogsService } from '../sys-logs/sys-logs.service';
 
 export function calcNextDate(fromDate: string, periodicidade: string): string {
     const d = new Date(fromDate);
@@ -31,7 +37,44 @@ export class OrdensTrabalhoService {
         @InjectRepository(OtReprogramacao)
         private readonly repRepo: Repository<OtReprogramacao>,
         private readonly artigosService: ArtigosService,
+        private readonly sysLogs: SysLogsService,
     ) {}
+
+    /**
+     * Guarda central da máquina de estados (RF-OT-001 §5.1).
+     * Rejeita qualquer transição não presente na matriz com HTTP 422.
+     */
+    private assertTransicao(ot: OrdemTrabalho, novo: OTEstado): void {
+        if (!OT_TRANSICOES[ot.estado]?.includes(novo)) {
+            throw new UnprocessableEntityException(
+                `Transição de estado inválida: ${ot.estado} → ${novo}`,
+            );
+        }
+    }
+
+    /** Aplica a transição (após assertTransicao) e regista em sys_logs. */
+    private async transitar(
+        id: number,
+        de: OTEstado,
+        para: OTEstado,
+        extra: Record<string, unknown>,
+        usuario?: string,
+    ): Promise<void> {
+        await this.repo.update(id, { estado: para, ...extra });
+        await this.sysLogs.create({
+            usuario: usuario ?? 'sistema',
+            modulo: 'OT',
+            acao: 'OT_TRANSICAO',
+            detalhes: `#${id}: ${de} → ${para}`,
+        });
+    }
+
+    /** Anexa as transições possíveis a partir do estado actual. */
+    private withTransicoes<T extends OrdemTrabalho | null>(ot: T): T {
+        if (!ot) return ot;
+        (ot as any).transicoesPossiveis = OT_TRANSICOES[ot.estado] ?? [];
+        return ot;
+    }
 
     /** Fetch OT or throw 404, optionally validate current estado */
     private async findOrFail(id: number, expectedEstado?: OTEstado): Promise<OrdemTrabalho> {
@@ -45,12 +88,14 @@ export class OrdensTrabalhoService {
         return ot;
     }
 
-    findAll() {
-        return this.repo.find({ relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes'] });
+    async findAll() {
+        const ots = await this.repo.find({ relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes'] });
+        return ots.map(o => this.withTransicoes(o));
     }
 
-    findOne(id: number) {
-        return this.repo.findOne({ where: { id }, relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes'] });
+    async findOne(id: number) {
+        const ot = await this.repo.findOne({ where: { id }, relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes'] });
+        return this.withTransicoes(ot);
     }
 
     async create(body: any) {
@@ -124,33 +169,71 @@ export class OrdensTrabalhoService {
 
     async remove(id: number) {
         const ot = await this.findOrFail(id);
-        if (ot.estado !== OTEstado.PROGRAMADO) {
+        if (ot.estado !== OTEstado.REGISTADA) {
             throw new BadRequestException(
-                `Não é possível eliminar a OT ${id} — estado actual: "${ot.estado}". Apenas OTs em "Programado" podem ser eliminadas.`,
+                `Não é possível eliminar a OT ${id} — estado actual: "${ot.estado}". Apenas OTs em "Registada" podem ser eliminadas.`,
             );
         }
         return this.repo.delete(id);
     }
 
-    async emitir(id: number, dataEmissao?: string, dataInicio?: string, usuario?: string) {
-        const ot = await this.findOrFail(id, OTEstado.PROGRAMADO);
+    /** Registada/Adiada → Programada (RF-OT-003). Define a data programada. */
+    async agendar(id: number, dataProgInicio?: string, dataProgFim?: string, usuario?: string) {
+        const ot = await this.findOrFail(id);
+        this.assertTransicao(ot, OTEstado.PROGRAMADA);
 
-        // Validate required fields before emission
+        const extra: Record<string, unknown> = {};
+        if (dataProgInicio) extra.dataProgInicio = dataProgInicio;
+        if (dataProgFim) extra.dataProgFim = dataProgFim;
+        if (!ot.dataProgInicio && !dataProgInicio) {
+            throw new BadRequestException('Data programada de início é obrigatória ao agendar');
+        }
+
+        await this.transitar(id, ot.estado, OTEstado.PROGRAMADA, extra, usuario);
+        return this.findOne(id);
+    }
+
+    /** Programada → Confirmada (RF-OT-003/RF-OT-004). */
+    async confirmar(id: number, usuario?: string) {
+        const ot = await this.findOrFail(id);
+        this.assertTransicao(ot, OTEstado.CONFIRMADA);
+
         const erros: string[] = [];
         if (!ot.responsavel) erros.push('Responsável não atribuído');
         if (!ot.descricao) erros.push('Descrição em falta');
         if (!ot.dataProgInicio) erros.push('Data programada de início em falta');
         if (erros.length > 0) {
-            throw new BadRequestException(`Não é possível emitir a OT ${id}: ${erros.join('; ')}`);
+            throw new BadRequestException(`Não é possível confirmar a OT ${id}: ${erros.join('; ')}`);
         }
 
-        const today = new Date().toISOString().split('T')[0];
+        await this.transitar(id, ot.estado, OTEstado.CONFIRMADA, {}, usuario);
+        return this.findOne(id);
+    }
 
-        await this.repo.update(id, {
-            estado: OTEstado.EM_CURSO,
-            dataEmissao: dataEmissao ?? today,
-            dataInicio: dataInicio ?? today,
+    /** Programada/Confirmada → Adiada (RF-OT-003). */
+    async adiar(id: number, motivo?: string, usuario?: string) {
+        const ot = await this.findOrFail(id);
+        this.assertTransicao(ot, OTEstado.ADIADA);
+        await this.transitar(id, ot.estado, OTEstado.ADIADA, {}, usuario);
+        await this.sysLogs.create({
+            usuario: usuario ?? 'sistema',
+            modulo: 'OT',
+            acao: 'OT_ADIADA',
+            detalhes: `#${id} adiada. Motivo: ${motivo ?? '—'}`,
         });
+        return this.findOne(id);
+    }
+
+    /** Confirmada → Em execução (RF-OT-005). Deduz stock dos artigos da OT. */
+    async iniciar(id: number, dataInicio?: string, usuario?: string) {
+        const ot = await this.findOrFail(id);
+        this.assertTransicao(ot, OTEstado.EM_EXECUCAO);
+
+        const today = new Date().toISOString().split('T')[0];
+        await this.transitar(id, ot.estado, OTEstado.EM_EXECUCAO, {
+            dataEmissao: ot.dataEmissao ?? today,
+            dataInicio: dataInicio ?? today,
+        }, usuario);
 
         // Deduct stock for every article on the OT
         for (const art of (ot.artigos ?? [])) {
@@ -169,25 +252,30 @@ export class OrdensTrabalhoService {
         return this.findOne(id);
     }
 
-    async terminar(id: number, dataFim?: string) {
-        const ot = await this.findOrFail(id, OTEstado.EM_CURSO);
+    /** Em execução → Finalizada (RF-OT-006). OTs periódicas geram a ordem seguinte. */
+    async finalizar(id: number, dataFim?: string, usuario?: string) {
+        const ot = await this.findOrFail(id);
+        this.assertTransicao(ot, OTEstado.FINALIZADA);
+
         const today = new Date().toISOString().split('T')[0];
         const fim = dataFim ?? today;
 
-        // Validate dates
         if (ot.dataInicio && fim < ot.dataInicio) {
             throw new BadRequestException(
                 `Data de fim (${fim}) não pode ser anterior à data de início (${ot.dataInicio})`,
             );
         }
 
-        await this.repo.update(id, { estado: OTEstado.TERMINADO, dataFim: fim });
+        await this.transitar(id, ot.estado, OTEstado.FINALIZADA, {
+            dataFim: fim,
+            assinadaCliente: true,
+        }, usuario);
 
         // Create next periodic OT automatically
         const updated = await this.findOne(id);
         if (
             updated &&
-            updated.tipo === OTTipo.PROGRAMADA &&
+            updated.tipo === OTTipo.PERIODICA &&
             updated.periodicidade &&
             updated.periodicidade !== 'Única'
         ) {
@@ -196,7 +284,7 @@ export class OrdensTrabalhoService {
 
             // Save new OT first (without children) to get its ID
             const newOt = await this.repo.save(this.repo.create({
-                tipo: OTTipo.PROGRAMADA,
+                tipo: OTTipo.PERIODICA,
                 cliente: updated.cliente,
                 equipInstaladoId: updated.equipInstaladoId,
                 planoId: updated.planoId,
@@ -209,7 +297,7 @@ export class OrdensTrabalhoService {
                 orgao: updated.orgao,
                 sintoma: updated.sintoma,
                 causa: updated.causa,
-                estado: OTEstado.PROGRAMADO,
+                estado: OTEstado.PROGRAMADA,
                 dataProgInicio: nextStart,
                 dataProgFim: nextEnd,
             }));
@@ -241,93 +329,6 @@ export class OrdensTrabalhoService {
         }
 
         return this.findAll();
-    }
-
-    async encerrar(id: number, dataEncerramento?: string) {
-        const ot = await this.findOrFail(id, OTEstado.TERMINADO);
-        const today = new Date().toISOString().split('T')[0];
-        const enc = dataEncerramento ?? today;
-
-        if (ot.dataFim && enc < ot.dataFim) {
-            throw new BadRequestException(
-                `Data de encerramento (${enc}) não pode ser anterior à data de fim (${ot.dataFim})`,
-            );
-        }
-
-        await this.repo.update(id, {
-            estado: OTEstado.ENCERRADO,
-            dataEncerramento: enc,
-        });
-        return this.findOne(id);
-    }
-
-    /** Reverts OT to previous state, undoing side-effects */
-    async reverter(id: number, usuario?: string) {
-        const ot = await this.findOrFail(id);
-
-        const PREV: Partial<Record<OTEstado, OTEstado>> = {
-            [OTEstado.EM_CURSO]: OTEstado.PROGRAMADO,
-            [OTEstado.TERMINADO]: OTEstado.EM_CURSO,
-            [OTEstado.ENCERRADO]: OTEstado.TERMINADO,
-        };
-
-        const prevEstado = PREV[ot.estado];
-        if (!prevEstado) {
-            throw new BadRequestException(`OT ${id} está em "${ot.estado}" — não é possível reverter`);
-        }
-
-        // Rollback side-effects based on current state
-        if (ot.estado === OTEstado.EM_CURSO) {
-            // Reverting Em curso → Programado: restore stock that was deducted on emitir
-            for (const art of (ot.artigos ?? [])) {
-                if (!art.artigoId || art.quantidade <= 0) continue;
-                await this.artigosService.ajusteExistencia(art.artigoId, Number(art.quantidade));
-                await this.artigosService.createMovimento({
-                    artigoId: art.artigoId,
-                    tipo: 'entrada',
-                    quantidade: art.quantidade,
-                    referencia: `OT-${id}-REV`,
-                    usuario: usuario ?? 'sistema',
-                    observacao: `Reversão OT ${id} — reposição de stock`,
-                });
-            }
-            await this.repo.update(id, {
-                estado: OTEstado.PROGRAMADO,
-                dataEmissao: null,
-                dataInicio: null,
-            });
-        } else if (ot.estado === OTEstado.TERMINADO) {
-            // Reverting Terminado → Em curso: delete auto-created child OT if any
-            if (ot.tipo === OTTipo.PROGRAMADA && ot.periodicidade && ot.periodicidade !== 'Única') {
-                // Find the child OT: same equip, same plano, Programado, created after this one
-                const candidates = await this.repo.find({
-                    where: {
-                        equipInstaladoId: ot.equipInstaladoId,
-                        planoId: ot.planoId,
-                        estado: OTEstado.PROGRAMADO,
-                        tipo: OTTipo.PROGRAMADA,
-                    },
-                    order: { id: 'DESC' },
-                });
-                // The child OT is the most recent one with matching characteristics and id > current
-                const child = candidates.find(c => c.id > ot.id);
-                if (child) {
-                    await this.repo.delete(child.id);
-                }
-            }
-            await this.repo.update(id, {
-                estado: OTEstado.EM_CURSO,
-                dataFim: null,
-            });
-        } else if (ot.estado === OTEstado.ENCERRADO) {
-            // Reverting Encerrado → Terminado: clear closure date
-            await this.repo.update(id, {
-                estado: OTEstado.TERMINADO,
-                dataEncerramento: null,
-            });
-        }
-
-        return this.findOne(id);
     }
 
     async reprogramar(id: number, novaData: string, dataAnterior?: string, motivo?: string, usuario?: string) {

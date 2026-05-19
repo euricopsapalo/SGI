@@ -179,9 +179,9 @@ describe('Regressão DTO mismatches — PR #16 (closes #13, #14, #15)', () => {
                 .post('/test-ordens')
                 .send({
                     descricao: 'Manutenção preventiva com filtros',
-                    tipo: 'programada',
+                    tipo: 'periodica',
                     clienteId: 1,
-                    estado: 'Programado',
+                    estado: 'Programada',
                     artigos: [
                         { artigoId: 5, descricao: 'Filtro 10"', quantidade: 2, preco: 2500, codigoIva: 'I14', taxaIva: 14 },
                         { artigoId: 6, descricao: 'O-ring',     quantidade: 4, preco: 100,  codigoIva: 'I5',  taxaIva: 5  },

@@ -395,9 +395,9 @@ describe('ValidationPipe E2E — validação de dados de entrada', () => {
         .post('/test-ordens')
         .send({
           descricao: 'Manutenção preventiva - troca de filtros',
-          tipo: 'programada',
+          tipo: 'periodica',
           clienteId: 1,
-          estado: 'Programado',
+          estado: 'Programada',
           responsavel: 'João Silva',
           maosObra: [{ funcao: 'Técnico', custo: 5000, hora: '08:00' }],
           artigos: [{ descricao: 'Filtro 10"', quantidade: 2, preco: 2500 }],
@@ -405,8 +405,8 @@ describe('ValidationPipe E2E — validação de dados de entrada', () => {
         .expect(201)
         .expect((res) => {
           expect(res.body.recebido.descricao).toBe('Manutenção preventiva - troca de filtros');
-          expect(res.body.recebido.tipo).toBe('programada');
-          expect(res.body.recebido.estado).toBe('Programado');
+          expect(res.body.recebido.tipo).toBe('periodica');
+          expect(res.body.recebido.estado).toBe('Programada');
           expect(res.body.recebido.maosObra).toHaveLength(1);
           expect(res.body.recebido.artigos).toHaveLength(1);
         });

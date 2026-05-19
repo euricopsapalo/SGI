@@ -1,4 +1,4 @@
-import { IsArray, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class OtMaoObraDto {
@@ -17,7 +17,7 @@ export class OtArtigoDto {
 }
 
 export class CreateOrdemTrabalhoDto {
-  @IsOptional() @IsEnum(['programada', 'pontual']) tipo?: string;
+  @IsOptional() @IsEnum(['pontual', 'periodica']) tipo?: string;
   @IsOptional() @IsNumber() clienteId?: number;
   @IsOptional() @IsNumber() equipInstaladoId?: number;
   @IsOptional() @IsNumber() planoId?: number;
@@ -36,7 +36,8 @@ export class CreateOrdemTrabalhoDto {
   @IsOptional() @IsString() dataInicio?: string;
   @IsOptional() @IsString() dataFim?: string;
   @IsOptional() @IsString() dataEncerramento?: string;
-  @IsOptional() @IsEnum(['Programado', 'Em curso', 'Terminado', 'Encerrado']) estado?: string;
+  @IsOptional() @IsEnum(['Registada', 'Programada', 'Adiada', 'Confirmada', 'Em execução', 'Finalizada']) estado?: string;
+  @IsOptional() @IsBoolean() assinadaCliente?: boolean;
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => OtMaoObraDto) maosObra?: OtMaoObraDto[];
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => OtArtigoDto) artigos?: OtArtigoDto[];
 }

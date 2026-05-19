@@ -5,16 +5,28 @@ import { OtArtigo } from './ot-artigo.entity';
 import { OtReprogramacao } from './ot-reprogramacao.entity';
 
 export enum OTEstado {
-    PROGRAMADO = 'Programado',
-    EM_CURSO = 'Em curso',
-    TERMINADO = 'Terminado',
-    ENCERRADO = 'Encerrado',
+    REGISTADA = 'Registada',
+    PROGRAMADA = 'Programada',
+    ADIADA = 'Adiada',
+    CONFIRMADA = 'Confirmada',
+    EM_EXECUCAO = 'Em execução',
+    FINALIZADA = 'Finalizada',
 }
 
 export enum OTTipo {
-    PROGRAMADA = 'programada',
     PONTUAL = 'pontual',
+    PERIODICA = 'periodica',
 }
+
+/** Máquina de estados central (RF-OT-001 §3.1). */
+export const OT_TRANSICOES: Record<OTEstado, OTEstado[]> = {
+    [OTEstado.REGISTADA]: [OTEstado.PROGRAMADA],
+    [OTEstado.PROGRAMADA]: [OTEstado.CONFIRMADA, OTEstado.ADIADA],
+    [OTEstado.ADIADA]: [OTEstado.PROGRAMADA],
+    [OTEstado.CONFIRMADA]: [OTEstado.EM_EXECUCAO, OTEstado.ADIADA],
+    [OTEstado.EM_EXECUCAO]: [OTEstado.FINALIZADA],
+    [OTEstado.FINALIZADA]: [],
+};
 
 @Entity('ordens_trabalho')
 export class OrdemTrabalho {
@@ -23,6 +35,9 @@ export class OrdemTrabalho {
 
     @Column({ type: 'enum', enum: OTTipo, default: OTTipo.PONTUAL })
     tipo: OTTipo;
+
+    @Column({ name: 'assinada_cliente', type: 'boolean', default: false })
+    assinadaCliente: boolean;
 
     @ManyToOne(() => Cliente, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'cliente_id' })
@@ -79,7 +94,7 @@ export class OrdemTrabalho {
     @Column({ name: 'data_encerramento', type: 'date', nullable: true })
     dataEncerramento: string;
 
-    @Column({ type: 'enum', enum: OTEstado, default: OTEstado.PROGRAMADO })
+    @Column({ type: 'enum', enum: OTEstado, default: OTEstado.REGISTADA })
     estado: OTEstado;
 
     @OneToMany(() => OtMaoObra, (m) => m.ordemTrabalho, { cascade: true })

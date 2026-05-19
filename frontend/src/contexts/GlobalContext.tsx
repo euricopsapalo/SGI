@@ -66,8 +66,34 @@ export interface PlanoManutencao {
 }
 
 // ── Work Orders ────────────────────────────────────────────
-export type OTEstado = 'Programado' | 'Em curso' | 'Terminado' | 'Encerrado';
-export type OTTipo = 'programada' | 'pontual';
+export type OTEstado = 'Registada' | 'Programada' | 'Adiada' | 'Confirmada' | 'Em execução' | 'Finalizada';
+export type OTTipo = 'pontual' | 'periodica';
+
+export const OT_ESTADOS: OTEstado[] = ['Registada', 'Programada', 'Adiada', 'Confirmada', 'Em execução', 'Finalizada'];
+
+/** Transições permitidas (espelho da máquina backend RF-OT-001 §3.1). Usado como fallback. */
+export const OT_TRANSICOES: Record<OTEstado, OTEstado[]> = {
+    'Registada': ['Programada'],
+    'Programada': ['Confirmada', 'Adiada'],
+    'Adiada': ['Programada'],
+    'Confirmada': ['Em execução', 'Adiada'],
+    'Em execução': ['Finalizada'],
+    'Finalizada': [],
+};
+
+/** Buckets para listagens/contagens legadas. */
+export const otAberta     = (e: OTEstado) => e === 'Registada' || e === 'Programada' || e === 'Adiada' || e === 'Confirmada';
+export const otEmExecucao = (e: OTEstado) => e === 'Em execução';
+export const otConcluida  = (e: OTEstado) => e === 'Finalizada';
+
+export const OT_ESTADO_COR: Record<OTEstado, string> = {
+    'Registada': '#6b7280',
+    'Programada': '#2563eb',
+    'Adiada': '#f97316',
+    'Confirmada': '#7c3aed',
+    'Em execução': '#eab308',
+    'Finalizada': '#16a34a',
+};
 export interface OTMaoObra { funcao: string; custo: number; hora: string; }
 export interface OTArtigo { artigoId: string; descricao: string; quantidade: number; preco: number; codigoIva?: string; taxaIva?: number; }
 export interface OTReprogramacao { id: string; dataAnterior?: string; novaData?: string; motivo: string; criadoEm: string; usuario?: string; }
@@ -82,6 +108,8 @@ export interface OrdemTrabalho {
     dataEmissao?: string; dataInicio?: string;
     dataFim?: string; dataEncerramento?: string;
     estado: OTEstado;
+    assinadaCliente?: boolean;
+    transicoesPossiveis?: OTEstado[];
     reprogramacoes: OTReprogramacao[];
 }
 
@@ -256,6 +284,17 @@ const normPlano = (p: any): PlanoManutencao => ({
     artigos: (p.artigos ?? []).map((a: any) => ({ artigoId: a.artigoId?.toString() ?? '', quantidade: Number(a.quantidade), preco: Number(a.preco) })),
 });
 
+/** Mapeia estados legados (modelo de 4 estados) para a máquina de 6 estados. */
+const normEstado = (e: any): OTEstado => {
+    switch (e) {
+        case 'Programado': return 'Programada';
+        case 'Em curso':   return 'Em execução';
+        case 'Terminado':
+        case 'Encerrado':  return 'Finalizada';
+        default:           return (OT_ESTADOS.includes(e) ? e : 'Registada') as OTEstado;
+    }
+};
+
 const normOrdem = (o: any): OrdemTrabalho => ({
     id: o.id?.toString(), tipo: o.tipo, clienteId: o.cliente?.id?.toString() ?? o.clienteId?.toString() ?? '',
     equipInstaladoId: o.equipInstaladoId?.toString() ?? '', descricao: o.descricao,
@@ -266,7 +305,9 @@ const normOrdem = (o: any): OrdemTrabalho => ({
     orgao: o.orgao, sintoma: o.sintoma, causa: o.causa,
     dataProgInicio: o.dataProgInicio, dataProgFim: o.dataProgFim,
     dataEmissao: o.dataEmissao, dataInicio: o.dataInicio, dataFim: o.dataFim, dataEncerramento: o.dataEncerramento,
-    estado: o.estado,
+    estado: normEstado(o.estado),
+    assinadaCliente: !!o.assinadaCliente,
+    transicoesPossiveis: o.transicoesPossiveis ?? OT_TRANSICOES[normEstado(o.estado)] ?? [],
     reprogramacoes: (o.reprogramacoes ?? []).map((r: any) => ({
         id: r.id?.toString(), dataAnterior: r.dataAnterior, novaData: r.novaData,
         motivo: r.motivo ?? '', criadoEm: r.criadoEm ?? '', usuario: r.usuario,
@@ -413,11 +454,12 @@ interface GlobalContextType {
     planos: PlanoManutencao[]; addPlano: (p: Omit<PlanoManutencao, 'id'>) => PlanoManutencao; updatePlano: (id: string, p: Partial<PlanoManutencao>) => void; removePlano: (id: string) => void;
     // Work Orders
     ordens: OrdemTrabalho[]; addOrdem: (o: Omit<OrdemTrabalho, 'id'>) => Promise<OrdemTrabalho>; updateOrdem: (id: string, o: Partial<OrdemTrabalho>) => void; removeOrdem: (id: string) => void;
-    emitirOT: (id: string, dataEmissao?: string, dataInicio?: string) => void;
-    terminarOT: (id: string, dataFim?: string) => void;
-    encerrarOT: (id: string, dataEncerramento?: string) => void;
+    agendarOT: (id: string, dataProgInicio?: string, dataProgFim?: string) => Promise<void>;
+    confirmarOT: (id: string) => Promise<void>;
+    adiarOT: (id: string, motivo?: string) => Promise<void>;
+    iniciarOT: (id: string, dataInicio?: string) => Promise<void>;
+    finalizarOT: (id: string, dataFim?: string) => Promise<void>;
     reprogramarOT: (id: string, novaData: string, dataAnterior?: string, motivo?: string) => Promise<void>;
-    reverterOT: (id: string) => Promise<void>;
     // Warehouse
     armazens: Armazem[]; addArmazem: (a: Omit<Armazem, 'id'>) => Armazem; updateArmazem: (id: string, a: Partial<Armazem>) => void;
     // Stock
@@ -1049,40 +1091,51 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } catch (e) { throw e; }
     };
 
-    const emitirOT = async (id: string, dataEmissao?: string, dataInicio?: string) => {
-        try {
-            // Backend handles state validation and stock deduction
-            const usuario = currentUserRef.current?.email ?? 'sistema';
-            const { data: emittedRaw } = await api.put(`/ordens/${id}/emitir`, { dataEmissao, dataInicio, usuario });
-            const emitted = normOrdem(emittedRaw);
-            setOrdens(p => p.map(x => x.id === id ? emitted : x));
-            log('Ordens de Trabalho', 'OT emitida', `ID: ${id}`);
-
-            // Refresh artigos and movimentos to reflect backend stock changes
-            const [artigosRes, movRes] = await Promise.all([
-                api.get(`/artigos`),
-                api.get(`/movimentos-stock`),
-            ]);
-            setArtigos(artigosRes.data.map(normArtigo));
-            setMovimentosStock(movRes.data.map(normMovimento));
-        } catch (e) { throw e; }
+    // ── Máquina de estados RF-OT-001 ─────────────────────────────────
+    const refreshStock = async () => {
+        const [artigosRes, movRes] = await Promise.all([
+            api.get(`/artigos`),
+            api.get(`/movimentos-stock`),
+        ]);
+        setArtigos(artigosRes.data.map(normArtigo));
+        setMovimentosStock(movRes.data.map(normMovimento));
     };
 
-    const terminarOT = async (id: string, dataFim?: string) => {
-        try {
-            await api.put(`/ordens/${id}/terminar`, { dataFim });
-            const { data: all } = await api.get(`/ordens`);
-            setOrdens(all.map(normOrdem));
-            log('Ordens de Trabalho', 'OT terminada', `ID: ${id}`);
-        } catch (e) { throw e; }
+    const agendarOT = async (id: string, dataProgInicio?: string, dataProgFim?: string) => {
+        const usuario = currentUserRef.current?.email ?? 'sistema';
+        const { data } = await api.put(`/ordens/${id}/agendar`, { dataProgInicio, dataProgFim, usuario });
+        setOrdens(p => p.map(x => x.id === id ? normOrdem(data) : x));
+        log('Ordens de Trabalho', 'OT agendada', `ID: ${id} → Programada`);
     };
 
-    const encerrarOT = async (id: string, dataEncerramento?: string) => {
-        try {
-            await api.put(`/ordens/${id}/encerrar`, { dataEncerramento });
-            setOrdens(p => p.map(x => x.id === id ? { ...x, estado: 'Encerrado', dataEncerramento: dataEncerramento ?? today() } : x));
-            log('Ordens de Trabalho', 'OT encerrada', `ID: ${id}`);
-        } catch (e) { throw e; }
+    const confirmarOT = async (id: string) => {
+        const usuario = currentUserRef.current?.email ?? 'sistema';
+        const { data } = await api.put(`/ordens/${id}/confirmar`, { usuario });
+        setOrdens(p => p.map(x => x.id === id ? normOrdem(data) : x));
+        log('Ordens de Trabalho', 'OT confirmada', `ID: ${id}`);
+    };
+
+    const adiarOT = async (id: string, motivo?: string) => {
+        const usuario = currentUserRef.current?.email ?? 'sistema';
+        const { data } = await api.put(`/ordens/${id}/adiar`, { motivo, usuario });
+        setOrdens(p => p.map(x => x.id === id ? normOrdem(data) : x));
+        log('Ordens de Trabalho', 'OT adiada', `ID: ${id}; Motivo: ${motivo ?? ''}`, 'warning');
+    };
+
+    const iniciarOT = async (id: string, dataInicio?: string) => {
+        const usuario = currentUserRef.current?.email ?? 'sistema';
+        const { data } = await api.put(`/ordens/${id}/iniciar`, { dataInicio, usuario });
+        setOrdens(p => p.map(x => x.id === id ? normOrdem(data) : x));
+        log('Ordens de Trabalho', 'OT iniciada', `ID: ${id} → Em execução`);
+        await refreshStock();
+    };
+
+    const finalizarOT = async (id: string, dataFim?: string) => {
+        const usuario = currentUserRef.current?.email ?? 'sistema';
+        await api.put(`/ordens/${id}/finalizar`, { dataFim, usuario });
+        const { data: all } = await api.get(`/ordens`);
+        setOrdens(all.map(normOrdem));
+        log('Ordens de Trabalho', 'OT finalizada', `ID: ${id}`);
     };
 
     const updateEmpresaConfig = async (c: Partial<EmpresaConfig>) => {
@@ -1114,30 +1167,6 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } catch (e) { throw e; }
     };
 
-    const reverterOT = async (id: string) => {
-        try {
-            const usuario = currentUserRef.current?.email ?? 'sistema';
-            const { data } = await api.put(`/ordens/${id}/reverter`, { usuario });
-            const updated = normOrdem(data);
-            setOrdens(p => p.map(x => x.id === id ? updated : x));
-            // If a child OT was deleted (reverting Terminado), refresh all OTs
-            const prev = ordens.find(o => o.id === id);
-            if (prev?.estado === 'Terminado') {
-                const { data: all } = await api.get(`/ordens`);
-                setOrdens(all.map(normOrdem));
-            }
-            // If reverting Em curso → Programado, refresh artigos (stock restored by backend)
-            if (prev?.estado === 'Em curso') {
-                const [artigosRes, movRes] = await Promise.all([
-                    api.get(`/artigos`),
-                    api.get(`/movimentos-stock`),
-                ]);
-                setArtigos(artigosRes.data.map(normArtigo));
-                setMovimentosStock(movRes.data.map(normMovimento));
-            }
-            log('Ordens de Trabalho', 'OT revertida', `ID: ${id} → ${updated.estado}`, 'warning');
-        } catch (e) { throw e; }
-    };
 
     /* ── Warehouse ──────────────────────────────────────────── */
     const addArmazem = (a: Omit<Armazem, 'id'>): Armazem => {
@@ -1297,7 +1326,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     /* ── Compute stockReservado dynamically from Programado OTs ── */
     const artigosComReserva = useMemo(() => {
         const reservaMap: Record<string, number> = {};
-        ordens.filter(o => o.estado === 'Programado').forEach(o => {
+        ordens.filter(o => o.estado !== 'Em execução' && o.estado !== 'Finalizada').forEach(o => {
             (o.artigos ?? []).forEach(a => {
                 if (a.artigoId && a.quantidade > 0) {
                     const k = String(a.artigoId);
@@ -1378,7 +1407,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             modelosEquipamento, addModelo, updateModelo,
             equipInstalados, addEquipInstalado, updateEquipInstalado,
             planos, addPlano, updatePlano, removePlano,
-            ordens, addOrdem, updateOrdem, removeOrdem, emitirOT, terminarOT, encerrarOT, reprogramarOT, reverterOT,
+            ordens, addOrdem, updateOrdem, removeOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, finalizarOT, reprogramarOT,
             armazens, addArmazem, updateArmazem,
             artigos: artigosComReserva, addArtigo, updateArtigo, adjustExistencia, adjustReservado,
             stockArmazem, upsertStockArmazem, removeStockArmazem,

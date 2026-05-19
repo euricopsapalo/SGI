@@ -30,10 +30,12 @@ const isCorretivo = (ot: OrdemTrabalho) =>
     ot.tipo === 'pontual' && ot.tipoTrabalho.toLowerCase().includes('corretiv');
 
 const OT_ESTADO_COLOR: Record<string, string> = {
-    'Programado': 'var(--blue)',
-    'Em curso': '#f97316',
-    'Terminado': 'var(--green)',
-    'Encerrado': 'var(--text-secondary)',
+    'Registada': 'var(--text-secondary)',
+    'Programada': 'var(--blue)',
+    'Adiada': '#f97316',
+    'Confirmada': '#7c3aed',
+    'Em execução': '#eab308',
+    'Finalizada': 'var(--green)',
 };
 
 /** Gera número de série único: AQ-{TYPE}-{YEAR}{HEX4} */
@@ -153,7 +155,7 @@ function buildHistoricoEquipHtml(
             <td style="font-family:monospace">${o.id}</td>
             <td>${o.tipo === 'pontual' ? 'Pontual' : 'Programada'}</td>
             <td>${o.tipoTrabalho}${isCorretivo(o) ? ' <span class="corr">●</span>' : ''}</td>
-            <td style="color:${o.estado === 'Encerrado' ? '#6b7280' : o.estado === 'Terminado' ? '#16a34a' : o.estado === 'Em curso' ? '#f97316' : '#2563eb'};font-weight:600">${o.estado}</td>
+            <td style="color:${o.estado === 'Finalizada' ? '#16a34a' : o.estado === 'Em execução' ? '#eab308' : o.estado === 'Adiada' ? '#f97316' : o.estado === 'Confirmada' ? '#7c3aed' : o.estado === 'Registada' ? '#6b7280' : '#2563eb'};font-weight:600">${o.estado}</td>
             <td>${fD(o.dataProgInicio || o.dataProgFim)}</td>
             <td>${fD(o.dataFim || o.dataEncerramento)}</td>
             <td>${o.descricao || '—'}</td>
@@ -227,7 +229,7 @@ function buildHistoricoGeralHtml(
             <td style="font-family:monospace">${o.id}</td>
             <td>${o.tipo === 'pontual' ? 'Pontual' : 'Programada'}</td>
             <td>${o.tipoTrabalho}${isCorretivo(o) ? ' <span class="corr">●</span>' : ''}</td>
-            <td style="color:${o.estado === 'Encerrado' ? '#6b7280' : o.estado === 'Terminado' ? '#16a34a' : o.estado === 'Em curso' ? '#f97316' : '#2563eb'};font-weight:600">${o.estado}</td>
+            <td style="color:${o.estado === 'Finalizada' ? '#16a34a' : o.estado === 'Em execução' ? '#eab308' : o.estado === 'Adiada' ? '#f97316' : o.estado === 'Confirmada' ? '#7c3aed' : o.estado === 'Registada' ? '#6b7280' : '#2563eb'};font-weight:600">${o.estado}</td>
             <td>${fD(refDate(o))}</td>
             <td>${fD(o.dataFim || o.dataEncerramento)}</td>
             <td>${o.descricao || '—'}</td>
@@ -294,8 +296,8 @@ function buildEstadoParqueHtml(
 
     const stats = equipInstalados.map(eq => {
         const eqOts  = ordens.filter(o => String(o.equipInstaladoId) === String(eq.id));
-        const open   = eqOts.filter(o => o.estado === 'Programado' || o.estado === 'Em curso');
-        const closed = eqOts.filter(o => o.estado === 'Terminado'  || o.estado === 'Encerrado');
+        const open   = eqOts.filter(o => o.estado !== 'Finalizada');
+        const closed = eqOts.filter(o => o.estado === 'Finalizada');
         const finDates  = closed.map(o => o.dataFim || o.dataEncerramento || o.dataProgFim).filter(Boolean) as string[];
         const openDates = open.map(o => o.dataProgFim || o.dataProgInicio).filter(Boolean) as string[];
         const ultimaMt  = finDates.length  > 0 ? [...finDates].sort().at(-1)  : undefined;
@@ -687,18 +689,18 @@ const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
 
     // Computed maintenance dates from OTs
     const finDates = ots
-        .filter(o => o.estado === 'Terminado' || o.estado === 'Encerrado')
+        .filter(o => o.estado === 'Finalizada')
         .map(o => o.dataFim || o.dataEncerramento || o.dataProgFim)
         .filter(Boolean) as string[];
     const ultimaManutencao = finDates.length > 0 ? [...finDates].sort().at(-1) : undefined;
 
     const openDates = ots
-        .filter(o => o.estado === 'Programado' || o.estado === 'Em curso')
+        .filter(o => o.estado !== 'Finalizada')
         .map(o => o.dataProgFim || o.dataProgInicio)
         .filter(Boolean) as string[];
     const proximaManutencao = openDates.length > 0 ? [...openDates].sort()[0] : undefined;
 
-    const openCorretivos = ots.filter(o => isCorretivo(o) && (o.estado === 'Programado' || o.estado === 'Em curso'));
+    const openCorretivos = ots.filter(o => isCorretivo(o) && (o.estado !== 'Finalizada'));
     const effectiveEstado: EstadoEquip = eq.estado === 'inativo' ? 'inativo'
         : openCorretivos.length > 0 ? 'com_problema'
         : eq.estado;
@@ -806,7 +808,7 @@ const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
                                     <tbody>
                                         {ots.map(o => {
                                             const corretivo = isCorretivo(o);
-                                            const aberta = o.estado === 'Programado' || o.estado === 'Em curso';
+                                            const aberta = o.estado !== 'Finalizada';
                                             return (
                                                 <tr key={o.id} style={{ background: corretivo && aberta ? 'rgba(249,115,22,0.04)' : undefined }}>
                                                     <td style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{o.id}</td>
@@ -895,8 +897,8 @@ const ParquePage: React.FC = () => {
         const map = new Map<string, { ultimaManutencao?: string; proximaManutencao?: string; hasOpenCorretivo: boolean; effectiveEstado: EstadoEquip }>();
         for (const eq of equipInstalados) {
             const eqOts = ordens.filter(o => String(o.equipInstaladoId) === String(eq.id));
-            const finished = eqOts.filter(o => o.estado === 'Terminado' || o.estado === 'Encerrado');
-            const open = eqOts.filter(o => o.estado === 'Programado' || o.estado === 'Em curso');
+            const finished = eqOts.filter(o => o.estado === 'Finalizada');
+            const open = eqOts.filter(o => o.estado !== 'Finalizada');
             const finDates = finished.map(o => o.dataFim || o.dataEncerramento || o.dataProgFim).filter(Boolean) as string[];
             const openDates = open.map(o => o.dataProgFim || o.dataProgInicio).filter(Boolean) as string[];
             const hasOpenCorretivo = open.some(isCorretivo);
@@ -962,7 +964,7 @@ const ParquePage: React.FC = () => {
                 previsaoTempo: 4, tipoTrabalho: 'Montagem / Instalação', responsavel: '—',
                 maosDeObra: [], artigos: [],
                 dataProgInicio: data.dataInstalacao, dataProgFim: data.dataInstalacao,
-                estado: 'Programado',
+                estado: 'Registada',
             } as any).catch(e => console.error('Erro ao criar OT de Montagem', e));
             showToast(`${eq.id} registado. OT de Montagem criada automaticamente.`);
         }
