@@ -4,6 +4,24 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### ux(ot): reorganizar formulário de OT em 5 abas semânticas (closes #71)
+
+Reorganiza o modal de criação/edição de OT (`OrdensPage.tsx`) em abas alinhadas com o **ciclo de vida da OT** (#54 + #55). Apenas UI — sem alterações ao backend, DTOs ou contratos.
+
+**Antes**: Origem · Mão de Obra · Artigos · Diagnóstico · Gestão (todos os campos de identificação, cliente, máquina, natureza e agendamento amontoados em "Origem").
+
+**Depois**:
+1. **Identificação** — Nº (read-only), Tipo de OT, Natureza, Prioridade, Descrição, Tipo de Trabalho.
+2. **Cliente e Máquina** — Cliente, Equipamento (filtrado pelo cliente), banner de Plano de Manutenção (periódicas).
+3. **Agendamento** — Técnico de Campo, Responsável, Previsão de Tempo, Periodicidade, Data Prog. Início/Fim (ou Data Programada para pontuais).
+4. **Execução** — três sub-secções num único scroll (Mão de Obra · Artigos · Diagnóstico).
+5. **Gestão** — datas operacionais (Emitida/Início/Fim/Encerramento), acções da máquina de estados, histórico de reprogramações.
+
+**Mudanças adicionais**
+- `validate()` devolve agora as keys com erro; `handleOk` salta para a primeira aba que contenha um erro (resolve race-condition com `setErrors` async).
+- Estado inicial do tab passa a `identificacao`.
+- Todas as funcionalidades preservadas (mesmos campos, mesma validação, mesma serialização em `buildOT()`).
+
 ### feat(tecnicos): destravar criação de Técnico — auto-cria utilizador (closes #68)
 
 Resolve o deadlock introduzido pelo #65: a UI exigia técnico para criar utilizador `Técnico Campo`, mas o backend exigia utilizador para criar técnico.
