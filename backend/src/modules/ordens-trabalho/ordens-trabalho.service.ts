@@ -12,6 +12,8 @@ import { OtArtigo } from './ot-artigo.entity';
 import { OtReprogramacao } from './ot-reprogramacao.entity';
 import { ArtigosService } from '../artigos/artigos.service';
 import { SysLogsService } from '../sys-logs/sys-logs.service';
+import { Tecnico } from '../tecnicos/tecnico.entity';
+import { EquipInstalado } from '../parque/equip-instalado.entity';
 
 export function calcNextDate(fromDate: string, periodicidade: string): string {
     const d = new Date(fromDate);
@@ -36,6 +38,10 @@ export class OrdensTrabalhoService {
         private readonly artigoRepo: Repository<OtArtigo>,
         @InjectRepository(OtReprogramacao)
         private readonly repRepo: Repository<OtReprogramacao>,
+        @InjectRepository(Tecnico)
+        private readonly tecnicoRepo: Repository<Tecnico>,
+        @InjectRepository(EquipInstalado)
+        private readonly equipRepo: Repository<EquipInstalado>,
         private readonly artigosService: ArtigosService,
         private readonly sysLogs: SysLogsService,
     ) {}
@@ -88,23 +94,124 @@ export class OrdensTrabalhoService {
         return ot;
     }
 
-    async findAll() {
-        const ots = await this.repo.find({ relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes'] });
+    /**
+     * RF-OT-002 §5.3 — filtros suportados:
+     * `?mine=true` (executados pelo técnico do utilizador autenticado),
+     * `?registadoPorId=`, `?executadoPorId=`, `?naturezaIntervencao=`, `?prioridade=`.
+     */
+    async findAll(query: any = {}) {
+        const where: any = {};
+        if (query.registadoPorId) where.registadoPorId = Number(query.registadoPorId);
+        if (query.executadoPorId) where.executadoPorId = Number(query.executadoPorId);
+        if (query.naturezaIntervencao) where.naturezaIntervencao = query.naturezaIntervencao;
+        if (query.prioridade) where.prioridade = query.prioridade;
+
+        // ?mine=true → técnico do user autenticado executa
+        if (String(query.mine) === 'true') {
+            const tecnicoId = query._currentUser?.tecnicoId;
+            if (!tecnicoId) {
+                // user não é técnico → devolve vazio (semantica: sem OTs "minhas" para executar)
+                return [];
+            }
+            where.executadoPorId = Number(tecnicoId);
+        }
+
+        const ots = await this.repo.find({
+            where: Object.keys(where).length ? where : undefined,
+            relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes', 'registadoPor', 'executadoPor'],
+        });
         return ots.map(o => this.withTransicoes(o));
     }
 
     async findOne(id: number) {
-        const ot = await this.repo.findOne({ where: { id }, relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes'] });
+        const ot = await this.repo.findOne({
+            where: { id },
+            relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes', 'registadoPor', 'executadoPor'],
+        });
         return this.withTransicoes(ot);
     }
 
-    async create(body: any) {
+    /**
+     * RF-OT-002 (#55) — Cria OT no estado Registada.
+     * - Auto-preenche `registadoPorId` com o id do utilizador autenticado.
+     * - Deriva `cliente_id` de `equip_instalado.cliente_id`.
+     * - Valida periódica → exige `periodicidade`; técnico de campo `ativo=true`.
+     * - Gera `numero` (OT-NNNNNN) e `dataRegisto` (hoje, se omitido).
+     */
+    async create(body: any, currentUser?: { id?: number; sub?: number }) {
         const { maosDeObra, maosObra, artigos, ...rest } = body;
+
+        // 1. registadoPorId — auto-preencher se omitido
+        const registadoPorId = rest.registadoPorId ?? currentUser?.id ?? currentUser?.sub;
+
+        // 2. validar equipInstalado e derivar cliente
+        let clienteId = rest.clienteId ? Number(rest.clienteId) : undefined;
+        if (rest.equipInstaladoId) {
+            const equip = await this.equipRepo.findOne({
+                where: { id: Number(rest.equipInstaladoId) },
+            });
+            if (!equip) {
+                throw new BadRequestException(
+                    `Máquina instalada #${rest.equipInstaladoId} não existe.`,
+                );
+            }
+            const equipClienteId = (equip as any).clienteId ?? (equip as any).cliente?.id;
+            if (equipClienteId) {
+                if (clienteId && Number(clienteId) !== Number(equipClienteId)) {
+                    throw new BadRequestException(
+                        'Cliente enviado não coincide com o cliente da máquina instalada.',
+                    );
+                }
+                clienteId = Number(equipClienteId);
+            }
+        }
+
+        // 3. periódica exige periodicidade
+        if (rest.tipo === OTTipo.PERIODICA && !rest.periodicidade) {
+            throw new BadRequestException('Periodicidade obrigatória para OT periódica');
+        }
+
+        // 4. técnico de campo (executadoPor) — se fornecido, validar
+        if (rest.executadoPorId) {
+            const tec = await this.tecnicoRepo.findOne({
+                where: { id: Number(rest.executadoPorId) },
+            });
+            if (!tec) {
+                throw new BadRequestException('Técnico de campo não encontrado.');
+            }
+            if (!tec.ativo) {
+                throw new BadRequestException('Técnico inativo não pode ser atribuído.');
+            }
+        }
+
+        // 5. defaults
+        const today = new Date().toISOString().split('T')[0];
+        const dataRegisto = rest.dataRegisto ?? today;
+        const prioridade = rest.prioridade ?? 'Normal';
+
         const entity = this.repo.create({
             ...rest,
-            cliente: rest.clienteId ? { id: Number(rest.clienteId) } : undefined,
+            cliente: clienteId ? { id: clienteId } : undefined,
+            registadoPorId,
+            dataRegisto,
+            prioridade,
         });
         const saved = (await this.repo.save(entity)) as unknown as OrdemTrabalho;
+
+        // 6. gerar numero (OT-NNNNNN) — após save para conhecer o id
+        if (!saved.numero) {
+            const numero = `OT-${String(saved.id).padStart(6, '0')}`;
+            await this.repo.update(saved.id, { numero });
+            saved.numero = numero;
+        }
+
+        // 7. log OT_REGISTADA
+        await this.sysLogs.create({
+            usuario: String(currentUser?.id ?? currentUser?.sub ?? 'sistema'),
+            modulo: 'OT',
+            acao: 'OT_REGISTADA',
+            detalhes: `#${saved.id} (${saved.numero}) registada por user ${registadoPorId ?? '—'}`,
+        });
 
         const maosRaw: any[] = maosDeObra ?? maosObra ?? [];
         const artsRaw: any[] = artigos ?? [];

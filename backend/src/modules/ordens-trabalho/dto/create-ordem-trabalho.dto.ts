@@ -18,7 +18,14 @@ export class OtArtigoDto {
 
 export class CreateOrdemTrabalhoDto {
   @IsOptional() @IsEnum(['pontual', 'periodica']) tipo?: string;
-  @IsOptional() @IsNumber() clienteId?: number;
+  // RF-OT-002 §3.1 — novos campos
+  @IsOptional() @IsEnum(['Manutenção','Substituição de filtro','Reparação de avaria','Inspeção'])
+  naturezaIntervencao?: string;
+  @IsOptional() @IsEnum(['Normal','Alta','Urgente']) prioridade?: string;
+  @IsOptional() @IsString() dataRegisto?: string;
+  @IsOptional() @IsNumber() registadoPorId?: number;   // auto-preenchido pelo backend se omitido
+  @IsOptional() @IsNumber() executadoPorId?: number;   // técnico de campo (opcional na marcação)
+  @IsOptional() @IsNumber() clienteId?: number;        // derivado do equipInstalado se omitido
   @IsOptional() @IsNumber() equipInstaladoId?: number;
   @IsOptional() @IsNumber() planoId?: number;
   @IsOptional() @IsString() tipoTrabalho?: string;

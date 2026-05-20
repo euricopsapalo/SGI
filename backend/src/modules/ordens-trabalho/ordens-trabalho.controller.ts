@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe, GoneException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe, GoneException, Query, Request } from '@nestjs/common';
 import { OrdensTrabalhoService } from './ordens-trabalho.service';
 import { CreateOrdemTrabalhoDto } from './dto/create-ordem-trabalho.dto';
 import { UpdateOrdemTrabalhoDto } from './dto/update-ordem-trabalho.dto';
@@ -16,13 +16,17 @@ export class OrdensTrabalhoController {
     constructor(private readonly service: OrdensTrabalhoService) {}
 
     @Get()
-    findAll() { return this.service.findAll(); }
+    findAll(@Query() query: any, @Request() req: any) {
+        return this.service.findAll({ ...query, _currentUser: req?.user });
+    }
 
     @Get(':id')
     findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOne(id); }
 
     @Post()
-    create(@Body() dto: CreateOrdemTrabalhoDto) { return this.service.create(dto); }
+    create(@Body() dto: CreateOrdemTrabalhoDto, @Request() req: any) {
+        return this.service.create(dto, req?.user);
+    }
 
     @Put(':id')
     update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateOrdemTrabalhoDto) { return this.service.update(id, dto); }

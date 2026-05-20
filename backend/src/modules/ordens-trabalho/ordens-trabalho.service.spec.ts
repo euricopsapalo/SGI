@@ -14,6 +14,8 @@ import { OtReprogramacao } from './ot-reprogramacao.entity';
 import { ArtigosService } from '../artigos/artigos.service';
 import { SysLogsService } from '../sys-logs/sys-logs.service';
 import { OTEstado } from './ordem-trabalho.entity';
+import { Tecnico } from '../tecnicos/tecnico.entity';
+import { EquipInstalado } from '../parque/equip-instalado.entity';
 import { UnprocessableEntityException } from '@nestjs/common';
 
 describe('OrdensTrabalhoService (regression #15)', () => {
@@ -63,6 +65,8 @@ describe('OrdensTrabalhoService (regression #15)', () => {
                 { provide: getRepositoryToken(OtMaoObra), useValue: maoRepo },
                 { provide: getRepositoryToken(OtArtigo), useValue: artigoRepo },
                 { provide: getRepositoryToken(OtReprogramacao), useValue: reprogramacaoRepo },
+                { provide: getRepositoryToken(Tecnico), useValue: { findOne: jest.fn(async () => ({ id: 1, ativo: true })) } },
+                { provide: getRepositoryToken(EquipInstalado), useValue: { findOne: jest.fn(async ({ where }: any) => ({ id: where.id, clienteId: 99 })) } },
                 { provide: ArtigosService, useValue: artigosServiceMock },
                 { provide: SysLogsService, useValue: sysLogsMock },
             ],
@@ -130,6 +134,7 @@ describe('OrdensTrabalhoService (regression #15)', () => {
         await service.create({
             descricao: 'OT com IVA por linha',
             tipo: 'periodica',
+            periodicidade: 'Mensal',
             clienteId: 1,
             artigos: [
                 { artigoId: 5, descricao: 'Filtro 10"', quantidade: 2, preco: 2500, codigoIva: 'I14', taxaIva: 14 },

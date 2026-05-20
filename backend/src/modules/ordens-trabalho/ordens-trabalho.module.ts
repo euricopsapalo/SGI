@@ -8,10 +8,12 @@ import { OrdensTrabalhoService } from './ordens-trabalho.service';
 import { OrdensTrabalhoController } from './ordens-trabalho.controller';
 import { ArtigosModule } from '../artigos/artigos.module';
 import { SysLogsModule } from '../sys-logs/sys-logs.module';
+import { Tecnico } from '../tecnicos/tecnico.entity';
+import { EquipInstalado } from '../parque/equip-instalado.entity';
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([OrdemTrabalho, OtMaoObra, OtArtigo, OtReprogramacao]),
+        TypeOrmModule.forFeature([OrdemTrabalho, OtMaoObra, OtArtigo, OtReprogramacao, Tecnico, EquipInstalado]),
         ArtigosModule,
         SysLogsModule,
     ],

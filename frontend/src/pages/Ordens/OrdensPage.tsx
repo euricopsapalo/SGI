@@ -5,6 +5,7 @@ import SearchableSelect from '../../components/SearchableSelect';
 import {
     useGlobal, OrdemTrabalho, OTEstado, OTTipo, OTMaoObra, OTArtigo,
     EquipInstalado, ModeloEquipamento, Cliente,
+    NaturezaIntervencao, OTPrioridade, NATUREZAS_INTERVENCAO, OT_PRIORIDADES,
 } from '../../contexts/GlobalContext';
 import {
     Search, Plus, Filter, Eye, X, AlertCircle, Check, Printer,
@@ -465,6 +466,10 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
     const [tipoTrab, setTipoTrab]   = useState(ot?.tipoTrabalho ?? '');
     const [tipoOT, setTipoOT]       = useState(ot?.tipoOT ?? '');
     const [responsavel, setResp]    = useState(ot?.responsavel ?? (!ot && isTecnicoCampo ? (currentUser?.tecnicoNome ?? currentUser?.nome ?? '') : ''));
+    // RF-OT-002 §3.1 — novos campos da marcação
+    const [naturezaIntervencao, setNatureza] = useState<NaturezaIntervencao | ''>((ot?.naturezaIntervencao ?? '') as any);
+    const [prioridade, setPrioridade]        = useState<OTPrioridade>(ot?.prioridade ?? 'Normal');
+    const [executadoPorId, setExecutadoPorId] = useState(ot?.executadoPorId ?? '');
 
     // Mão de obra
     const [maos, setMaos] = useState<OTMaoObra[]>(ot?.maosDeObra ?? []);
@@ -507,11 +512,16 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     // Derived
-    const equipOpts = equipInstalados.map(e => {
-        const cli = clientes.find(c => c.id === e.clienteId)?.nome ?? '—';
-        const mod = modelosEquipamento.find(m => m.id === e.modeloId)?.nome ?? '—';
-        return { value: e.id, label: `${e.id} — ${mod}`, sub: `${cli} · ${e.nrSerie}` };
-    });
+    // RF-OT-002 §6 CA: máquinas filtradas pelo cliente seleccionado
+    const equipOpts = equipInstalados
+        .filter(e => !clienteId || String(e.clienteId) === String(clienteId))
+        .map(e => {
+            const cli = clientes.find(c => c.id === e.clienteId)?.nome ?? '—';
+            const mod = modelosEquipamento.find(m => m.id === e.modeloId)?.nome ?? '—';
+            return { value: e.id, label: `${e.id} — ${mod}`, sub: `${cli} · ${e.nrSerie}` };
+        });
+    const clienteOpts = clientes.map(c => ({ value: c.id, label: c.nome, sub: c.nif }));
+    const tecCampoFkOpts = tecnicos.filter(t => t.ativo).map(t => ({ value: t.id, label: t.nome, sub: funcoesTecnico.find(f => f.id === t.funcaoId)?.descricao }));
     const tecCampoOpts = tecnicos.filter(t => t.ativo).map(t => ({ value: t.nome, label: t.nome, sub: funcoesTecnico.find(f => f.id === t.funcaoId)?.descricao }));
     const planoOpts = planos.filter(p => p.equipInstaladoId === equipId).map(p => ({ value: p.id, label: p.descricao, sub: `${p.periodicidade} · ${p.previsaoTempo}h` }));
     const catalogOpts = catalog.filter(a => !a.inativo).map(a => {
@@ -600,6 +610,10 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
         dataFim: dFi || undefined, dataEncerramento: dEn || undefined,
         estado: ot?.estado ?? 'Registada',
         reprogramacoes: [],
+        // RF-OT-002 §3.1
+        naturezaIntervencao: naturezaIntervencao || undefined,
+        prioridade,
+        executadoPorId: executadoPorId || undefined,
     });
 
     const handleOk = (ev: React.FormEvent) => {
@@ -684,10 +698,44 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                                         {errors.tipoOT && <span className="form-error"><AlertCircle size={11} /> {errors.tipoOT}</span>}
                                     </div>
                                     <div className="form-group">
-                                        <label className="form-label req">Equipamento</label>
+                                        <label className="form-label">Cliente</label>
+                                        <SearchableSelect options={clienteOpts} value={clienteId} onChange={(v) => { setClienteId(v); setEquipId(''); }} placeholder="Seleccionar cliente..." />
+                                    </div>
+                                </div>
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="form-label req">Equipamento (filtrado pelo cliente)</label>
                                         <SearchableSelect options={equipOpts} value={equipId} onChange={onEquipChange} placeholder="Seleccionar equipamento..." />
                                         {errors.equip && <span className="form-error"><AlertCircle size={11} /> {errors.equip}</span>}
                                     </div>
+                                </div>
+                                {/* RF-OT-002 §3.1 — Natureza, Prioridade, Técnico de Campo */}
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="form-label">Natureza da Intervenção</label>
+                                        <select className="form-select" value={naturezaIntervencao} onChange={e => setNatureza(e.target.value as any)}>
+                                            <option value="">Seleccionar...</option>
+                                            {NATUREZAS_INTERVENCAO.map(n => <option key={n} value={n}>{n}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Prioridade</label>
+                                        <select className="form-select" value={prioridade} onChange={e => setPrioridade(e.target.value as OTPrioridade)}>
+                                            {OT_PRIORIDADES.map(p => <option key={p} value={p}>{p}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="form-label">Técnico de Campo (executante)</label>
+                                        <SearchableSelect options={tecCampoFkOpts} value={executadoPorId} onChange={setExecutadoPorId} placeholder="Por atribuir..." />
+                                    </div>
+                                    {ot?.numero && (
+                                        <div className="form-group">
+                                            <label className="form-label" style={{ color: 'var(--text-muted)' }}>Nº da Ordem</label>
+                                            <input type="text" className="form-input" value={ot.numero} disabled />
+                                        </div>
+                                    )}
                                 </div>
 
                                 {tipo === 'periodica' && equipId && planoOpts.length > 0 && (
@@ -1124,10 +1172,13 @@ const OrdensPage: React.FC = () => {
                                 <tr>
                                     <th style={{ width: 28 }} />
                                     <th>OT</th>
+                                    <th>Nº</th>
                                     <th>Tipo</th>
+                                    <th>Natureza</th>
+                                    <th>Prioridade</th>
                                     <th>Equipamento</th>
                                     <th>Cliente</th>
-                                    <th>Responsável</th>
+                                    <th>Téc. Campo</th>
                                     <th>D.Prog.Início</th>
                                     <th>D.Prog.Fim</th>
                                     <th>Emitida</th>
@@ -1140,7 +1191,7 @@ const OrdensPage: React.FC = () => {
                             </thead>
                             <tbody>
                                 {filtered.length === 0 && (
-                                    <tr><td colSpan={14}><div className="empty-state">Nenhuma OT encontrada.</div></td></tr>
+                                    <tr><td colSpan={17}><div className="empty-state">Nenhuma OT encontrada.</div></td></tr>
                                 )}
                                 {filtered.map(o => {
                                     const { equip, cliente } = getLabel(o);
@@ -1160,10 +1211,21 @@ const OrdensPage: React.FC = () => {
                                                     )}
                                                 </div>
                                             </td>
+                                            <td style={{ fontSize: '0.75rem', fontFamily: 'monospace' }}>{o.numero ?? '—'}</td>
                                             <td>{o.tipoOT ? <span className="tbadge tbadge-suporte">{o.tipoOT}</span> : <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>—</span>}</td>
+                                            <td style={{ fontSize: '0.75rem' }}>{o.naturezaIntervencao ?? '—'}</td>
+                                            <td style={{ fontSize: '0.75rem' }}>
+                                                {o.prioridade && (
+                                                    <span style={{
+                                                        padding: '2px 6px', borderRadius: 3, fontSize: '0.7rem', fontWeight: 600,
+                                                        background: o.prioridade === 'Urgente' ? '#fee2e2' : o.prioridade === 'Alta' ? '#fef3c7' : '#e0e7ff',
+                                                        color: o.prioridade === 'Urgente' ? '#991b1b' : o.prioridade === 'Alta' ? '#92400e' : '#3730a3',
+                                                    }}>{o.prioridade}</span>
+                                                )}
+                                            </td>
                                             <td style={{ fontSize: '0.78rem' }}>{equip}</td>
                                             <td style={{ fontSize: '0.8rem', fontWeight: 600 }}>{cliente}</td>
-                                            <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{o.responsavel}</td>
+                                            <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{o.executadoPorNome ?? o.responsavel ?? '—'}</td>
                                             <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataProgInicio) || '—'}</td>
                                             <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataProgFim)    || '—'}</td>
                                             <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataEmissao)    || '—'}</td>
