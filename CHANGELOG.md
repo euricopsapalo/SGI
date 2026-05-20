@@ -21,6 +21,32 @@ Resolve o deadlock introduzido pelo #65: a UI exigia técnico para criar utiliza
 - `tecnicos.service.spec.ts`: 5 novos cenários para auto-criação (caminho feliz, sem email, sem password, mismatch confirmação, email duplicado).
 - Backend: 211 unit + 49 e2e green.
 
+### RF-OT-002 — Registo da OT e formulário de marcação (closes #55)
+
+**Backend**
+- Novos campos em `OrdemTrabalho`: `numero` (UNIQUE, `OT-NNNNNN`), `naturezaIntervencao`, `prioridade` (default `Normal`), `dataRegisto`, `registadoPorId` (FK → **users**, decisão #65), `executadoPorId` (FK → tecnicos).
+- Enums `NaturezaIntervencao` (Manutenção · Substituição de filtro · Reparação de avaria · Inspeção) e `OTPrioridade` (Normal/Alta/Urgente).
+- `OrdensTrabalhoService.create()`:
+  - Auto-preenche `registadoPorId` com o utilizador autenticado (`req.user.id`).
+  - Valida `equipInstaladoId` e deriva `cliente_id` no servidor (rejeita cliente divergente).
+  - Periódica sem `periodicidade` → `400`.
+  - Técnico de campo (`executadoPorId`) inativo ou inexistente → `400`.
+  - Gera `numero` único após persistência; regista `sys_logs` `OT_REGISTADA`.
+- `OrdensTrabalhoService.findAll(query)`: filtros `?registadoPorId`, `?executadoPorId`, `?naturezaIntervencao`, `?prioridade`, `?mine=true` (usa `req.user.tecnicoId`).
+- Controller passa `req.user` ao service via `@Request()`.
+- Migration `RegistoMarcacaoOT` (up/down): colunas + FKs + CHECKs + UNIQUE `numero` + índices; backfill `numero` a partir do id, `data_registo` a partir de `data_prog_inicio`.
+- `init.sql` actualizado (colunas + CHECKs + índices).
+
+**Frontend**
+- `GlobalContext`: novos tipos `NaturezaIntervencao`, `OTPrioridade`, constantes `NATUREZAS_INTERVENCAO`/`OT_PRIORIDADES`; `OrdemTrabalho` ganha `numero`, `naturezaIntervencao`, `prioridade`, `dataRegisto`, `registadoPor{Id,Nome}`, `executadoPor{Id,Nome}`.
+- `normOrdem` mapeia os novos campos do backend (incl. relações `registadoPor`/`executadoPor`).
+- `OrdensPage` modal: cliente selector (filtra equipamentos); equipamento mostra-se filtrado pelo cliente escolhido; novos campos Natureza + Prioridade + Técnico de Campo; mostra `Nº` quando edição.
+- `OrdensPage` tabela: novas colunas Nº, Natureza, Prioridade, Téc. Campo (com badge de cor para prioridade).
+
+**Testes**
+- E2E novo `ot-registo.e2e.spec.ts`: 7 cenários cobrindo CA-1..CA-7 (auto-preencher registadoPor, derivar cliente, periódica sem periodicidade, técnico inativo, equip inexistente, filtro `registadoPorId`, `mine=true`).
+- Backend: 206 unit + 57 e2e green. Frontend: 121 tests green.
+
 ### feat(auth+users): vínculo Tecnico↔User obrigatório + papel Coordenador (closes #65)
 
 Pré-requisito do #55 (RF-OT-002).

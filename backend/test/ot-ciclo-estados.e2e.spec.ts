@@ -11,6 +11,8 @@ import { OtArtigo } from '../src/modules/ordens-trabalho/ot-artigo.entity';
 import { OtReprogramacao } from '../src/modules/ordens-trabalho/ot-reprogramacao.entity';
 import { ArtigosService } from '../src/modules/artigos/artigos.service';
 import { SysLogsService } from '../src/modules/sys-logs/sys-logs.service';
+import { Tecnico } from '../src/modules/tecnicos/tecnico.entity';
+import { EquipInstalado } from '../src/modules/parque/equip-instalado.entity';
 
 /**
  * RF-OT-001 — E2E da máquina de estados.
@@ -45,6 +47,8 @@ describe('OT Ciclo de Estados (RF-OT-001) E2E', () => {
                 { provide: getRepositoryToken(OtMaoObra), useValue: noopRepo },
                 { provide: getRepositoryToken(OtArtigo), useValue: noopRepo },
                 { provide: getRepositoryToken(OtReprogramacao), useValue: noopRepo },
+                { provide: getRepositoryToken(Tecnico), useValue: { findOne: jest.fn(async () => ({ id: 1, ativo: true })) } },
+                { provide: getRepositoryToken(EquipInstalado), useValue: { findOne: jest.fn(async ({ where }: any) => ({ id: where.id, clienteId: 99 })) } },
                 { provide: ArtigosService, useValue: { ajusteExistencia: jest.fn(), createMovimento: jest.fn() } },
                 { provide: SysLogsService, useValue: { create: jest.fn(async (b: any) => { sysLogs.push(b); return b; }) } },
             ],

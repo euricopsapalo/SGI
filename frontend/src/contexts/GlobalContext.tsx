@@ -97,6 +97,14 @@ export const OT_ESTADO_COR: Record<OTEstado, string> = {
 export interface OTMaoObra { funcao: string; custo: number; hora: string; }
 export interface OTArtigo { artigoId: string; descricao: string; quantidade: number; preco: number; codigoIva?: string; taxaIva?: number; }
 export interface OTReprogramacao { id: string; dataAnterior?: string; novaData?: string; motivo: string; criadoEm: string; usuario?: string; }
+/** RF-OT-002 §3.1 — natureza da intervenção. */
+export type NaturezaIntervencao = 'Manutenção' | 'Substituição de filtro' | 'Reparação de avaria' | 'Inspeção';
+export const NATUREZAS_INTERVENCAO: NaturezaIntervencao[] = ['Manutenção', 'Substituição de filtro', 'Reparação de avaria', 'Inspeção'];
+
+/** RF-OT-002 §3.1 — prioridade. */
+export type OTPrioridade = 'Normal' | 'Alta' | 'Urgente';
+export const OT_PRIORIDADES: OTPrioridade[] = ['Normal', 'Alta', 'Urgente'];
+
 export interface OrdemTrabalho {
     id: string; tipo: OTTipo; equipInstaladoId: string; clienteId: string;
     descricao: string; previsaoTempo: number; periodicidade?: string;
@@ -111,6 +119,15 @@ export interface OrdemTrabalho {
     assinadaCliente?: boolean;
     transicoesPossiveis?: OTEstado[];
     reprogramacoes: OTReprogramacao[];
+    // RF-OT-002 §3.1
+    numero?: string;
+    naturezaIntervencao?: NaturezaIntervencao;
+    prioridade?: OTPrioridade;
+    dataRegisto?: string;
+    registadoPorId?: string;
+    registadoPorNome?: string;
+    executadoPorId?: string;
+    executadoPorNome?: string;
 }
 
 // ── Warehouse ──────────────────────────────────────────────
@@ -308,6 +325,15 @@ const normOrdem = (o: any): OrdemTrabalho => ({
     estado: normEstado(o.estado),
     assinadaCliente: !!o.assinadaCliente,
     transicoesPossiveis: o.transicoesPossiveis ?? OT_TRANSICOES[normEstado(o.estado)] ?? [],
+    // RF-OT-002
+    numero: o.numero,
+    naturezaIntervencao: o.naturezaIntervencao,
+    prioridade: o.prioridade,
+    dataRegisto: o.dataRegisto,
+    registadoPorId: o.registadoPorId?.toString() ?? o.registadoPor?.id?.toString(),
+    registadoPorNome: o.registadoPor?.nome,
+    executadoPorId: o.executadoPorId?.toString() ?? o.executadoPor?.id?.toString(),
+    executadoPorNome: o.executadoPor?.nome,
     reprogramacoes: (o.reprogramacoes ?? []).map((r: any) => ({
         id: r.id?.toString(), dataAnterior: r.dataAnterior, novaData: r.novaData,
         motivo: r.motivo ?? '', criadoEm: r.criadoEm ?? '', usuario: r.usuario,

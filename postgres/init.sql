@@ -369,11 +369,21 @@ CREATE TABLE plano_artigos (
 -- Alinhado com OrdemTrabalho entity (inclui tipo_ot e reprogramacoes)
 -- ============================================================
 CREATE TABLE ordens_trabalho (
-    id                 SERIAL       PRIMARY KEY,
-    tipo               VARCHAR(20)  NOT NULL DEFAULT 'pontual',
-    assinada_cliente   BOOLEAN      NOT NULL DEFAULT false,
-    cliente_id         INTEGER      REFERENCES clientes(id) ON DELETE RESTRICT,
-    equip_instalado_id INTEGER      REFERENCES equip_instalados(id) ON DELETE SET NULL,
+    id                   SERIAL       PRIMARY KEY,
+    -- RF-OT-002
+    numero               VARCHAR(30)  UNIQUE,
+    tipo                 VARCHAR(20)  NOT NULL DEFAULT 'pontual',
+    assinada_cliente     BOOLEAN      NOT NULL DEFAULT false,
+    natureza_intervencao VARCHAR(40)
+        CONSTRAINT chk_ot_natureza CHECK (natureza_intervencao IS NULL OR natureza_intervencao IN
+            ('Manutenção','Substituição de filtro','Reparação de avaria','Inspeção')),
+    prioridade           VARCHAR(10)  NOT NULL DEFAULT 'Normal'
+        CONSTRAINT chk_ot_prioridade CHECK (prioridade IN ('Normal','Alta','Urgente')),
+    data_registo         DATE         NOT NULL DEFAULT CURRENT_DATE,
+    registado_por_id     INTEGER      REFERENCES users(id) ON DELETE SET NULL,
+    executado_por_id     INTEGER      REFERENCES tecnicos(id) ON DELETE SET NULL,
+    cliente_id           INTEGER      REFERENCES clientes(id) ON DELETE RESTRICT,
+    equip_instalado_id   INTEGER      REFERENCES equip_instalados(id) ON DELETE SET NULL,
     plano_id           INTEGER      REFERENCES planos_manutencao(id) ON DELETE SET NULL,
     tipo_trabalho      VARCHAR(100),
     tipo_ot            VARCHAR(100),
@@ -618,6 +628,10 @@ CREATE INDEX IF NOT EXISTS idx_equip_instalados_cliente  ON equip_instalados(cli
 CREATE INDEX IF NOT EXISTS idx_equip_instalados_estado   ON equip_instalados(estado);
 CREATE INDEX IF NOT EXISTS idx_ordens_trabalho_cliente   ON ordens_trabalho(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_ordens_trabalho_estado    ON ordens_trabalho(estado);
+CREATE INDEX IF NOT EXISTS idx_ot_registado_por          ON ordens_trabalho(registado_por_id);
+CREATE INDEX IF NOT EXISTS idx_ot_executado_por          ON ordens_trabalho(executado_por_id);
+CREATE INDEX IF NOT EXISTS idx_ot_natureza               ON ordens_trabalho(natureza_intervencao);
+CREATE INDEX IF NOT EXISTS idx_ot_prioridade             ON ordens_trabalho(prioridade);
 CREATE INDEX IF NOT EXISTS idx_ordens_trabalho_equip     ON ordens_trabalho(equip_instalado_id);
 CREATE INDEX IF NOT EXISTS idx_ordens_trabalho_prog      ON ordens_trabalho(data_prog_inicio);
 CREATE INDEX IF NOT EXISTS idx_ot_artigos_ot             ON ot_artigos(ot_id);
