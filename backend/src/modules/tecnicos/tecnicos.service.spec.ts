@@ -20,15 +20,33 @@ describe('TecnicosService', () => {
     let service: TecnicosService;
     let repo: ReturnType<typeof makeRepo>;
     let userRepo: ReturnType<typeof makeRepo>;
-    let ds: { query: jest.Mock };
+    let ds: { query: jest.Mock; transaction: jest.Mock };
 
     const userCampo: Partial<User> = { id: 10, role: UserRole.CAMPO, nome: 'João Silva', email: 'joao@aquatex.ao' };
     const mockTecnico = { id: 1, nome: 'João Silva', funcaoId: 2, userId: 10 };
 
+    let txUserRepo: ReturnType<typeof makeRepo>;
+    let txTecRepo: ReturnType<typeof makeRepo>;
+
     beforeEach(async () => {
         repo = makeRepo();
         userRepo = makeRepo();
-        ds = { query: jest.fn() };
+        txUserRepo = makeRepo();
+        txTecRepo = makeRepo();
+        // DataSource.transaction((mgr) => ...) — chamamos o callback com um mgr
+        // cujo getRepository devolve os repos fakeados, e save devolve a entidade
+        // com id.
+        const mgr = {
+            getRepository: jest.fn((target: any) => {
+                if (target?.name === 'User') return txUserRepo;
+                if (target?.name === 'Tecnico') return txTecRepo;
+                return makeRepo();
+            }),
+        };
+        ds = {
+            query: jest.fn(),
+            transaction: jest.fn(async (fn: any) => fn(mgr)),
+        } as any;
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -82,6 +100,55 @@ describe('TecnicosService', () => {
             userRepo.findOne.mockResolvedValue(userCampo);
             repo.findOne.mockResolvedValue({ id: 7, userId: 10 } as any);
             await expect(service.create({ nome: 'João', userId: 10 })).rejects.toBeInstanceOf(ConflictException);
+        });
+    });
+
+    // ─── create (Issue #68 — auto-criação do User) ───────────────────────
+    describe('create — autocriação do User (sem userId)', () => {
+        it('cria User + Tecnico atomicamente quando recebe email+password', async () => {
+            userRepo.findOne.mockResolvedValue(null); // email livre
+            txUserRepo.save.mockImplementation(async (u: any) => ({ ...u, id: 50 }));
+            txTecRepo.save.mockImplementation(async (t: any) => ({ ...t, id: 20 }));
+
+            const result = await service.create({
+                nome: 'Bruno Jose',
+                email: 'bj@aquatex.ao',
+                password: 'es302420',
+                passwordConfirm: 'es302420',
+            } as any);
+
+            expect(ds.transaction).toHaveBeenCalled();
+            expect(txUserRepo.save).toHaveBeenCalled();
+            expect(txTecRepo.save).toHaveBeenCalled();
+            const savedUser = (txUserRepo.save as jest.Mock).mock.calls[0][0];
+            expect(savedUser.role).toBe('campo');
+            expect(savedUser.passwordHash).toMatch(/^\$2[ab]\$/);
+            expect(result).toMatchObject({ id: 20, userId: 50 });
+            expect(result.user).toMatchObject({ id: 50, email: 'bj@aquatex.ao' });
+            expect((result.user as any).passwordHash).toBeUndefined();
+        });
+
+        it('rejeita sem email (BadRequest)', async () => {
+            await expect(service.create({ nome: 'X', password: 'abcdef' } as any))
+                .rejects.toBeInstanceOf(BadRequestException);
+        });
+
+        it('rejeita sem password (BadRequest)', async () => {
+            await expect(service.create({ nome: 'X', email: 'x@a.com' } as any))
+                .rejects.toBeInstanceOf(BadRequestException);
+        });
+
+        it('rejeita password ≠ passwordConfirm (BadRequest)', async () => {
+            await expect(service.create({
+                nome: 'X', email: 'x@a.com', password: 'abcdef', passwordConfirm: 'outra1',
+            } as any)).rejects.toBeInstanceOf(BadRequestException);
+        });
+
+        it('rejeita email já existente (Conflict)', async () => {
+            userRepo.findOne.mockResolvedValue({ id: 99, email: 'existe@aquatex.ao' });
+            await expect(service.create({
+                nome: 'X', email: 'existe@aquatex.ao', password: 'abcdef',
+            } as any)).rejects.toBeInstanceOf(ConflictException);
         });
     });
 

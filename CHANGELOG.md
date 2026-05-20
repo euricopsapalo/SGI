@@ -4,6 +4,23 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(tecnicos): destravar criação de Técnico — auto-cria utilizador (closes #68)
+
+Resolve o deadlock introduzido pelo #65: a UI exigia técnico para criar utilizador `Técnico Campo`, mas o backend exigia utilizador para criar técnico.
+
+**Backend**
+- `CreateTecnicoDto`: novos campos opcionais `password` (`MinLength 6`) e `passwordConfirm`.
+- `TecnicosService.create()` ganha modalidade B — quando `userId` é omitido e `email`+`password` são fornecidos, cria `User` (role `campo`, ativo) + `Tecnico` **atomicamente** numa `DataSource.transaction`. Mantém modalidade A (com `userId`) intacta. Devolve técnico com `user` sem `passwordHash`. Valida confirmação de password e unicidade de email.
+
+**Frontend**
+- `TecnicosPage` (`TecnicoModal`): novos campos password + confirmar password em modo de criação, com bloco informativo a explicar que o utilizador `Técnico Campo` é criado automaticamente. `handleSave` passa a ser `async` e propaga erro do backend via toast (corrige toast otimista).
+- `GlobalContext.addTecnico` passa a ser `async` e devolve `Promise<Tecnico>`; `updateTecnico` tipado como `Promise<void>`.
+- `UtilizadorModal`: associação a Técnico passa a ser **opcional** quando o perfil é `Técnico Campo` (mensagem informativa em vez de erro), permitindo criar utilizadores sem técnico associado e vincular depois.
+
+**Testes**
+- `tecnicos.service.spec.ts`: 5 novos cenários para auto-criação (caminho feliz, sem email, sem password, mismatch confirmação, email duplicado).
+- Backend: 211 unit + 49 e2e green.
+
 ### feat(auth+users): vínculo Tecnico↔User obrigatório + papel Coordenador (closes #65)
 
 Pré-requisito do #55 (RF-OT-002).

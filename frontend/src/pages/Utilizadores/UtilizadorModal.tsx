@@ -85,7 +85,10 @@ const UtilizadorModal: React.FC<Props> = ({ initial, tecnicos, onClose, onSave }
 
     const validate = () => {
         const e: typeof errors = {};
-        if (isTecnicoCampo && !form.tecnicoId) e.tecnicoId = 'Deve associar um técnico de campo.';
+        // Issue #68 — associação a Técnico passa a ser opcional: o utilizador
+        // Técnico Campo pode ser criado primeiro e vinculado depois (ou via
+        // criação de Técnico na página /tecnicos, que cria utilizador+técnico
+        // atomicamente).
         if (!form.nome.trim()) e.nome = 'Nome obrigatório.';
         if (!form.email.trim()) e.email = 'Email obrigatório.';
         else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = 'Email inválido.';
@@ -163,19 +166,22 @@ const UtilizadorModal: React.FC<Props> = ({ initial, tecnicos, onClose, onSave }
                         {/* Technician selector — only for Técnico Campo */}
                         {isTecnicoCampo && (
                             <div className="form-group" style={{ padding: '10px 12px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 4, marginBottom: 4 }}>
-                                <label className="form-label req" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                    <Link size={12} /> Técnico de Campo Associado
+                                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                    <Link size={12} /> Técnico de Campo Associado <span style={{ color: '#64748b', fontWeight: 400 }}>(opcional)</span>
                                 </label>
                                 <SearchableSelect
                                     options={tecOptions}
                                     value={form.tecnicoId}
                                     onChange={handleTecnicoSelect}
-                                    placeholder="Seleccionar técnico..."
+                                    placeholder="Seleccionar técnico existente (opcional)..."
                                 />
-                                {errors.tecnicoId && <span className="form-error"><AlertCircle size={11} /> {errors.tecnicoId}</span>}
-                                {form.tecnicoId && (
+                                {form.tecnicoId ? (
                                     <div style={{ marginTop: 6, fontSize: '0.75rem', color: '#1d4ed8' }}>
                                         Dados preenchidos automaticamente a partir do técnico seleccionado.
+                                    </div>
+                                ) : (
+                                    <div style={{ marginTop: 6, fontSize: '0.75rem', color: '#475569' }}>
+                                        Pode deixar em branco. Para criar técnico e utilizador de uma só vez use a página <strong>Técnicos → Novo</strong>.
                                     </div>
                                 )}
                             </div>

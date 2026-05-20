@@ -1,6 +1,7 @@
 import { Injectable, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import * as bcrypt from 'bcryptjs';
 import { Tecnico } from './tecnico.entity';
 import { User, UserRole } from '../users/user.entity';
 
@@ -50,11 +51,64 @@ export class TecnicosService {
         return user;
     }
 
-    async create(body: Partial<Tecnico> & { userId?: number }) {
-        const userId = body.userId ?? (body as any).user?.id;
-        await this.assertUserParaTecnico(userId);
-        const entity = this.repo.create({ ...body, userId });
-        return this.repo.save(entity);
+    /**
+     * Issue #68 — Cria o Tecnico em duas modalidades:
+     *  (A) Com `userId` → comportamento do #66: valida e liga a um User existente.
+     *  (B) Sem `userId` → cria o User automaticamente (role 'campo', ativo)
+     *      a partir de `email` + `password` e liga numa única transação.
+     *      Devolve técnico + user (sem passwordHash).
+     */
+    async create(
+        body: Partial<Tecnico> & { userId?: number; password?: string; passwordConfirm?: string },
+    ) {
+        const { password, passwordConfirm, ...resto } = body;
+        const userId = resto.userId ?? (resto as any).user?.id;
+
+        // (A) userId fornecido — valida e cria só o tecnico
+        if (userId) {
+            await this.assertUserParaTecnico(userId);
+            const entity = this.repo.create({ ...resto, userId });
+            return this.repo.save(entity);
+        }
+
+        // (B) sem userId — auto-criação do User dentro de transação
+        if (!resto.email) {
+            throw new BadRequestException('Email é obrigatório quando o utilizador é criado automaticamente.');
+        }
+        if (!password) {
+            throw new BadRequestException('Password é obrigatória para criar o utilizador do técnico.');
+        }
+        if (passwordConfirm !== undefined && password !== passwordConfirm) {
+            throw new BadRequestException('Password e confirmação não coincidem.');
+        }
+        // Email único na tabela users
+        const existente = await this.userRepo.findOne({ where: { email: resto.email.toLowerCase() } });
+        if (existente) {
+            throw new ConflictException(`Já existe um utilizador com o email ${resto.email}.`);
+        }
+
+        const passwordHash = await bcrypt.hash(password, 10);
+
+        return this.dataSource.transaction(async (mgr) => {
+            const userRepo = mgr.getRepository(User);
+            const tecRepo  = mgr.getRepository(Tecnico);
+
+            const user = userRepo.create({
+                nome: resto.nome,
+                email: resto.email!.toLowerCase(),
+                passwordHash,
+                role: UserRole.CAMPO,
+                ativo: true,
+            });
+            const savedUser = await userRepo.save(user);
+
+            const tec = tecRepo.create({ ...resto, userId: savedUser.id });
+            const savedTec = await tecRepo.save(tec);
+
+            // Devolve técnico com user (sem passwordHash)
+            const { passwordHash: _h, ...userSafe } = savedUser as any;
+            return { ...savedTec, user: userSafe };
+        });
     }
 
     async update(id: number, body: Partial<Tecnico> & { userId?: number }) {

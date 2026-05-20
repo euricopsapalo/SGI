@@ -548,10 +548,11 @@ interface TecnicoModalProps {
     tecnico?: Tecnico;
     funcoes: FuncaoTecnico[];
     onClose: () => void;
-    onSave: (t: Omit<Tecnico, 'id'>) => void;
+    onSave: (t: Omit<Tecnico, 'id'> & { password?: string; passwordConfirm?: string }) => void;
 }
 const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, onSave }) => {
     const { simboloMoeda, provincias, municipios } = useGlobal();
+    const isNew = !tecnico;
     const [nome, setNome]           = useState(tecnico?.nome       ?? '');
     const [telefone, setTelefone]   = useState(tecnico?.telefone   ?? '');
     const [email, setEmail]         = useState(tecnico?.email      ?? '');
@@ -560,6 +561,9 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
     const [ativo, setAtivo]         = useState(tecnico?.ativo      ?? true);
     const [provinciaId, setProvId]  = useState(tecnico?.provinciaId ? String(tecnico.provinciaId) : '');
     const [municipioId, setMunId]   = useState(tecnico?.municipioId ? String(tecnico.municipioId) : '');
+    // Issue #68 — credenciais do User criado automaticamente
+    const [password, setPassword]               = useState('');
+    const [passwordConfirm, setPasswordConfirm] = useState('');
     const [errors, setErrors]       = useState<Record<string, string>>({});
 
     const munsFiltrados = municipios.filter(m => m.provinciaId === provinciaId);
@@ -569,6 +573,12 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
         if (!nome.trim())    e.nome    = 'Obrigatório';
         if (!funcaoId)       e.funcao  = 'Obrigatório';
         if (!custoHora || isNaN(Number(custoHora))) e.custo = 'Valor inválido';
+        // Issue #68: na criação, email + password são obrigatórios (vão gerar User)
+        if (isNew) {
+            if (!email.trim())                e.email = 'Obrigatório — será o login do utilizador';
+            if (!password || password.length < 6) e.password = 'Mínimo 6 caracteres';
+            if (password !== passwordConfirm) e.passwordConfirm = 'As passwords não coincidem';
+        }
         setErrors(e);
         return Object.keys(e).length === 0;
     };
@@ -576,7 +586,11 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
     const handleSave = (ev: React.FormEvent) => {
         ev.preventDefault();
         if (!validate()) return;
-        onSave({ nome, telefone, email, funcaoId, custoHora: Number(custoHora), ativo, provinciaId: provinciaId || undefined, municipioId: municipioId || undefined });
+        onSave({
+            nome, telefone, email, funcaoId, custoHora: Number(custoHora), ativo,
+            provinciaId: provinciaId || undefined, municipioId: municipioId || undefined,
+            ...(isNew ? { password, passwordConfirm } : {}),
+        });
     };
 
     return (
@@ -601,11 +615,37 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
                                     onChange={e => setTelefone(e.target.value)} placeholder="9XX XXX XXX" />
                             </div>
                             <div className="form-group">
-                                <label className="form-label">Email</label>
-                                <input type="email" className="form-input" value={email}
+                                <label className={`form-label${isNew ? ' req' : ''}`}>Email</label>
+                                <input type="email" className={`form-input${errors.email ? ' err' : ''}`} value={email}
                                     onChange={e => setEmail(e.target.value)} placeholder="nome@aquatex.ao" />
+                                {errors.email && <span className="form-error"><AlertCircle size={11} /> {errors.email}</span>}
                             </div>
                         </div>
+                        {/* Issue #68 — credenciais de acesso (criação automática do User) */}
+                        {isNew && (
+                            <div style={{ padding: '8px 12px', background: '#eff6ff', border: '1px solid #BFDBFE', borderRadius: 4, marginBottom: 8 }}>
+                                <div style={{ fontSize: '0.75rem', color: '#1d4ed8', marginBottom: 6 }}>
+                                    Será criado automaticamente um utilizador com perfil <strong>Técnico Campo</strong>.
+                                    O email acima será o login.
+                                </div>
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="form-label req">Password</label>
+                                        <input type="password" className={`form-input${errors.password ? ' err' : ''}`}
+                                            value={password} onChange={e => setPassword(e.target.value)}
+                                            placeholder="Mínimo 6 caracteres" autoComplete="new-password" />
+                                        {errors.password && <span className="form-error"><AlertCircle size={11} /> {errors.password}</span>}
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label req">Confirmar password</label>
+                                        <input type="password" className={`form-input${errors.passwordConfirm ? ' err' : ''}`}
+                                            value={passwordConfirm} onChange={e => setPasswordConfirm(e.target.value)}
+                                            autoComplete="new-password" />
+                                        {errors.passwordConfirm && <span className="form-error"><AlertCircle size={11} /> {errors.passwordConfirm}</span>}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         <div className="form-group">
                             <label className="form-label req">Função</label>
                             <select className={`form-select${errors.funcao ? ' err' : ''}`} value={funcaoId}
@@ -711,15 +751,20 @@ const TecnicosPage: React.FC = () => {
     const editTarget = typeof modal === 'string' && modal !== 'new' ? tecnicos.find(t => t.id === modal) : undefined;
     const viewTarget = viewId ? tecnicos.find(t => t.id === viewId) : undefined;
 
-    const handleSave = (data: Omit<Tecnico, 'id'>) => {
-        if (typeof modal === 'string' && modal !== 'new') {
-            updateTecnico(modal, data);
-            showToast('Técnico actualizado.');
-        } else {
-            const t = addTecnico(data);
-            showToast(`Técnico ${t.id} registado.`);
+    const handleSave = async (data: Omit<Tecnico, 'id'> & { password?: string; passwordConfirm?: string }) => {
+        try {
+            if (typeof modal === 'string' && modal !== 'new') {
+                await updateTecnico(modal, data);
+                showToast('Técnico actualizado.');
+            } else {
+                const t = await addTecnico(data);
+                showToast(`Técnico ${t.id} registado.`);
+            }
+            setModal(null);
+        } catch (e: any) {
+            const msg = e?.response?.data?.message;
+            showErr(Array.isArray(msg) ? msg.join(' · ') : (msg ?? 'Erro ao guardar técnico.'));
         }
-        setModal(null);
     };
 
     const EXPORT_COLS: ExportCol[] = [
