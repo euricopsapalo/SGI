@@ -445,7 +445,7 @@ interface GlobalContextType {
     logs: SysLog[]; addLog: (l: Omit<SysLog, 'id' | 'timestamp'>) => void;
     // Entities
     clientes: Cliente[]; addCliente: (c: Omit<Cliente, 'id'>) => Cliente; updateCliente: (id: string, c: Partial<Cliente>) => void; removeCliente: (id: string) => Promise<void>;
-    tecnicos: Tecnico[]; addTecnico: (t: Omit<Tecnico, 'id'>) => Tecnico; updateTecnico: (id: string, t: Partial<Tecnico>) => void; removeTecnico: (id: string) => Promise<void>;
+    tecnicos: Tecnico[]; addTecnico: (t: Omit<Tecnico, 'id'> & { password?: string; passwordConfirm?: string }) => Promise<Tecnico>; updateTecnico: (id: string, t: Partial<Tecnico>) => Promise<void>; removeTecnico: (id: string) => Promise<void>;
     fornecedores: Fornecedor[]; addFornecedor: (f: Omit<Fornecedor, 'id'>) => Fornecedor; updateFornecedor: (id: string, f: Partial<Fornecedor>) => void; removeFornecedor: (id: string) => Promise<void>;
     // Equipment
     modelosEquipamento: ModeloEquipamento[]; addModelo: (m: Omit<ModeloEquipamento, 'id'>) => ModeloEquipamento; updateModelo: (id: string, m: Partial<ModeloEquipamento>) => void;
@@ -960,16 +960,13 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         log('Clientes', 'Cliente eliminado', `Nome: ${nome}`, 'warning');
     };
 
-    const addTecnico = (t: Omit<Tecnico, 'id'>): Tecnico => {
-        const placeholder: Tecnico = { ...t, id: '' };
-        api.post(`/tecnicos`, t)
-            .then(({ data }) => {
-                const n = norm(data) as Tecnico;
-                setTecnicos(p => [...p, n]);
-                log('Técnicos', 'Técnico criado', `Nome: ${t.nome}`);
-            })
-            .catch(() => {});
-        return placeholder;
+    // Issue #68: await + propaga erro; sem toast otimista.
+    const addTecnico = async (t: Omit<Tecnico, 'id'> & { password?: string; passwordConfirm?: string }): Promise<Tecnico> => {
+        const { data } = await api.post(`/tecnicos`, t);
+        const n = norm(data) as Tecnico;
+        setTecnicos(p => [...p, n]);
+        log('Técnicos', 'Técnico criado', `Nome: ${t.nome}`);
+        return n;
     };
     const updateTecnico = async (id: string, t: Partial<Tecnico>) => {
         try {

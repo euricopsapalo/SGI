@@ -1,4 +1,4 @@
-import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateTecnicoDto {
   @IsString()
@@ -40,4 +40,15 @@ export class CreateTecnicoDto {
   @IsOptional()
   @IsNumber()
   userId?: number;
+
+  // Issue #68 — auto-criação do User associado quando userId é omitido.
+  // Se userId vier, password/passwordConfirm são ignorados (relink de user existente).
+  @IsOptional()
+  @IsString()
+  @MinLength(6, { message: 'Password tem de ter pelo menos 6 caracteres.' })
+  password?: string;
+
+  @IsOptional()
+  @IsString()
+  passwordConfirm?: string;
 }
