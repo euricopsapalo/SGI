@@ -453,7 +453,9 @@ interface OTFormProps {
 const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly }) => {
     const { equipInstalados, clientes, modelosEquipamento, planos, tiposTrabalho, tiposOT, funcoesTecnico, artigos: catalog, tecnicos, currentUser, taxasIva, fmtMoney, fmtDate, fmt, simboloMoeda, empresaConfig } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
-    const [tab, setTab] = useState<'origem' | 'maos' | 'artigos' | 'diagnostico' | 'gestao'>('origem');
+    // Issue #71 — 5 abas semânticas alinhadas com o ciclo de vida da OT.
+    type TabId = 'identificacao' | 'cliente' | 'agendamento' | 'execucao' | 'gestao';
+    const [tab, setTab] = useState<TabId>('identificacao');
 
     // Origem
     const [tipo, setTipo]           = useState<OTTipo>(ot?.tipo ?? 'pontual');
@@ -588,7 +590,8 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
     };
     const updateArtQtd = (i: number, v: string) => setArts(p => p.map((x, idx) => idx !== i ? x : { ...x, quantidade: Math.max(1, Number(v) || 1) }));
 
-    const validate = () => {
+    // Issue #71 — devolve as keys com erro para o caller saltar para a aba certa.
+    const validate = (): string[] => {
         const e: Record<string, string> = {};
         if (!tipoOT)           e.tipoOT = 'Obrigatório';
         if (!equipId)          e.equip  = 'Obrigatório';
@@ -596,7 +599,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
         if (!tipoTrab)         e.tipo   = 'Obrigatório';
         if (!responsavel)      e.resp   = 'Obrigatório';
         setErrors(e);
-        return Object.keys(e).length === 0;
+        return Object.keys(e);
     };
 
     const buildOT = (): Omit<OrdemTrabalho, 'id'> => ({
@@ -616,19 +619,35 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
         executadoPorId: executadoPorId || undefined,
     });
 
+    // Issue #71 — mapeia cada campo validado à sua aba para podermos saltar para
+    // a primeira aba que tenha erro depois de submeter.
+    const FIELD_TAB: Record<string, TabId> = {
+        tipoOT: 'identificacao',
+        desc:   'identificacao',
+        tipo:   'identificacao',
+        equip:  'cliente',
+        resp:   'agendamento',
+    };
+
     const handleOk = (ev: React.FormEvent) => {
         ev.preventDefault();
-        if (!validate()) { setTab('origem'); return; }
+        const errKeys = validate();
+        if (errKeys.length > 0) {
+            const order: TabId[] = ['identificacao', 'cliente', 'agendamento', 'execucao', 'gestao'];
+            const firstTab = order.find(t => errKeys.some(k => FIELD_TAB[k] === t)) ?? 'identificacao';
+            setTab(firstTab);
+            return;
+        }
         onSave(buildOT());
     };
 
-    const TABS = [
-        { id: 'origem',      label: 'Origem'       },
-        { id: 'maos',        label: 'Mão de Obra'  },
-        { id: 'artigos',     label: 'Artigos'      },
-        { id: 'diagnostico', label: 'Diagnóstico'  },
-        { id: 'gestao',      label: 'Gestão'       },
-    ] as const;
+    const TABS: { id: TabId; label: string }[] = [
+        { id: 'identificacao', label: 'Identificação'      },
+        { id: 'cliente',       label: 'Cliente e Máquina'  },
+        { id: 'agendamento',   label: 'Agendamento'        },
+        { id: 'execucao',      label: 'Execução'           },
+        { id: 'gestao',        label: 'Gestão'             },
+    ];
 
     const estado = ot?.estado;
 
@@ -685,10 +704,16 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                 <form onSubmit={handleOk} noValidate>
                     <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
 
-                        {/* ── ORIGEM ── */}
-                        {tab === 'origem' && (
+                        {/* ── 1. IDENTIFICAÇÃO ── */}
+                        {tab === 'identificacao' && (
                             <>
                                 <div className="form-row">
+                                    {ot?.numero && (
+                                        <div className="form-group">
+                                            <label className="form-label" style={{ color: 'var(--text-muted)' }}>Nº da Ordem</label>
+                                            <input type="text" className="form-input" value={ot.numero} disabled />
+                                        </div>
+                                    )}
                                     <div className="form-group">
                                         <label className="form-label req">Tipo de OT</label>
                                         <select className={`form-select${errors.tipoOT ? ' err' : ''}`} value={tipoOT} onChange={e => { const v = e.target.value; setTipoOT(v); setTipo(v.toLowerCase().includes('pontual') ? 'pontual' : 'periodica'); }}>
@@ -697,19 +722,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                                         </select>
                                         {errors.tipoOT && <span className="form-error"><AlertCircle size={11} /> {errors.tipoOT}</span>}
                                     </div>
-                                    <div className="form-group">
-                                        <label className="form-label">Cliente</label>
-                                        <SearchableSelect options={clienteOpts} value={clienteId} onChange={(v) => { setClienteId(v); setEquipId(''); }} placeholder="Seleccionar cliente..." />
-                                    </div>
                                 </div>
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label className="form-label req">Equipamento (filtrado pelo cliente)</label>
-                                        <SearchableSelect options={equipOpts} value={equipId} onChange={onEquipChange} placeholder="Seleccionar equipamento..." />
-                                        {errors.equip && <span className="form-error"><AlertCircle size={11} /> {errors.equip}</span>}
-                                    </div>
-                                </div>
-                                {/* RF-OT-002 §3.1 — Natureza, Prioridade, Técnico de Campo */}
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label className="form-label">Natureza da Intervenção</label>
@@ -725,36 +738,12 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                                         </select>
                                     </div>
                                 </div>
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label className="form-label">Técnico de Campo (executante)</label>
-                                        <SearchableSelect options={tecCampoFkOpts} value={executadoPorId} onChange={setExecutadoPorId} placeholder="Por atribuir..." />
-                                    </div>
-                                    {ot?.numero && (
-                                        <div className="form-group">
-                                            <label className="form-label" style={{ color: 'var(--text-muted)' }}>Nº da Ordem</label>
-                                            <input type="text" className="form-input" value={ot.numero} disabled />
-                                        </div>
-                                    )}
-                                </div>
-
-                                {tipo === 'periodica' && equipId && planoOpts.length > 0 && (
-                                    <div className="form-group" style={{ padding: '8px 12px', background: 'var(--blue-light,#eff6ff)', border: '1px solid #BFDBFE', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
-                                        <span style={{ fontSize: '0.8rem', flex: 1 }}>Carregar a partir de um plano de manutenção:</span>
-                                        <select className="form-select" style={{ width: 'auto', flex: 2 }} value={planoId} onChange={e => loadPlano(e.target.value)}>
-                                            <option value="">Seleccionar plano...</option>
-                                            {planoOpts.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                                        </select>
-                                    </div>
-                                )}
-
                                 <div className="form-group" style={{ marginTop: 8 }}>
                                     <label className="form-label req">Descrição</label>
                                     <textarea className={`form-textarea${errors.desc ? ' err' : ''}`} value={descricao}
                                         onChange={e => setDesc(e.target.value)} placeholder="Descreva o trabalho a realizar..." style={{ minHeight: 70 }} />
                                     {errors.desc && <span className="form-error"><AlertCircle size={11} /> {errors.desc}</span>}
                                 </div>
-
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label className="form-label req">Tipo de Trabalho</label>
@@ -765,14 +754,47 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                                         {errors.tipo && <span className="form-error"><AlertCircle size={11} /> {errors.tipo}</span>}
                                     </div>
                                 </div>
+                            </>
+                        )}
+
+                        {/* ── 2. CLIENTE E MÁQUINA ── */}
+                        {tab === 'cliente' && (
+                            <>
+                                <div className="form-group">
+                                    <label className="form-label">Cliente</label>
+                                    <SearchableSelect options={clienteOpts} value={clienteId} onChange={(v) => { setClienteId(v); setEquipId(''); }} placeholder="Seleccionar cliente..." />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label req">Equipamento (filtrado pelo cliente)</label>
+                                    <SearchableSelect options={equipOpts} value={equipId} onChange={onEquipChange} placeholder="Seleccionar equipamento..." />
+                                    {errors.equip && <span className="form-error"><AlertCircle size={11} /> {errors.equip}</span>}
+                                </div>
+                                {tipo === 'periodica' && equipId && planoOpts.length > 0 && (
+                                    <div className="form-group" style={{ padding: '8px 12px', background: 'var(--blue-light,#eff6ff)', border: '1px solid #BFDBFE', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                        <span style={{ fontSize: '0.8rem', flex: 1 }}>Carregar a partir de um plano de manutenção:</span>
+                                        <select className="form-select" style={{ width: 'auto', flex: 2 }} value={planoId} onChange={e => loadPlano(e.target.value)}>
+                                            <option value="">Seleccionar plano...</option>
+                                            {planoOpts.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                                        </select>
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        {/* ── 3. AGENDAMENTO ── */}
+                        {tab === 'agendamento' && (
+                            <>
                                 <div className="form-row">
+                                    <div className="form-group">
+                                        <label className="form-label">Técnico de Campo (executante)</label>
+                                        <SearchableSelect options={tecCampoFkOpts} value={executadoPorId} onChange={setExecutadoPorId} placeholder="Por atribuir..." />
+                                    </div>
                                     <div className="form-group">
                                         <label className="form-label req">Responsável</label>
                                         <SearchableSelect options={tecCampoOpts} value={responsavel} onChange={handleRespChange} placeholder="Técnico de campo..." />
                                         {errors.resp && <span className="form-error"><AlertCircle size={11} /> {errors.resp}</span>}
                                     </div>
                                 </div>
-
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label className="form-label">Previsão de Tempo (h)</label>
@@ -788,119 +810,6 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                                         </div>
                                     )}
                                 </div>
-                            </>
-                        )}
-
-                        {/* ── MÃO DE OBRA ── */}
-                        {tab === 'maos' && (
-                            <>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                                    <button type="button" className="abtn abtn-secondary" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={addMao}><Plus size={11} /> Adicionar</button>
-                                </div>
-                                {maos.length === 0 ? (
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sem mão de obra definida.</div>
-                                ) : maos.map((m, i) => (
-                                    <div key={i} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) 110px 90px 28px', gap: 6, marginBottom: 6, alignItems: 'start', minWidth: 320, overflowX: 'auto' }}>
-                                        <select className="form-select" value={m.funcao} onChange={e => updateMaoFuncao(i, e.target.value)}>
-                                            <option value="">Seleccionar função...</option>
-                                            {funcoesTecnico.map(f => <option key={f.id}>{f.descricao}</option>)}
-                                        </select>
-                                        <div className="form-input" style={{ color: 'var(--text-muted)', background: 'var(--bg-secondary)', fontSize: '0.78rem' }}>
-                                            {m.custo.toLocaleString('pt-PT')} Kz/h
-                                        </div>
-                                        <input type="time" className="form-input" value={m.hora} onChange={e => updateMaoHora(i, e.target.value)} />
-                                        <button type="button" className="icon-btn" style={{ color: 'var(--red)', marginTop: 3 }} onClick={() => removeMao(i)}><Trash2 size={12} /></button>
-                                    </div>
-                                ))}
-                            </>
-                        )}
-
-                        {/* ── ARTIGOS ── */}
-                        {tab === 'artigos' && (
-                            <>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                                    <button type="button" className="abtn abtn-secondary" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={addArt}><Plus size={11} /> Adicionar</button>
-                                </div>
-                                {arts.length === 0 ? (
-                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sem artigos definidos.</div>
-                                ) : arts.map((a, i) => {
-                                    const catItem = catalog.find(x => x.id === a.artigoId);
-                                    const semStock = catItem && catItem.existencia <= 0;
-                                    return (
-                                        <div key={i} style={{ marginBottom: 6 }}>
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) 70px 110px 28px', gap: 6, alignItems: 'start', minWidth: 320, overflowX: 'auto' }}>
-                                                <SearchableSelect options={catalogOpts} value={a.artigoId} onChange={v => updateArtId(i, v)} placeholder="Seleccionar artigo..." />
-                                                <input type="number" min={1} className="form-input" value={a.quantidade} onChange={e => updateArtQtd(i, e.target.value)} placeholder="Qtd" />
-                                                <div className="form-input" style={{ color: 'var(--text-muted)', background: 'var(--bg-secondary)', fontSize: '0.78rem' }}>
-                                                    {a.preco.toLocaleString('pt-PT')} Kz
-                                                </div>
-                                                <button type="button" className="icon-btn" style={{ color: 'var(--red)', marginTop: 3 }} onClick={() => removeArt(i)}><Trash2 size={12} /></button>
-                                            </div>
-                                            {semStock && (
-                                                <div style={{ fontSize: '0.72rem', color: 'var(--orange,#f97316)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                    <AlertCircle size={10} /> Sem stock disponível — será registado stock negativo
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                                {arts.length > 0 && (() => {
-                                    const subtotal = arts.reduce((s, a) => s + a.quantidade * a.preco, 0);
-
-                                    // IVA breakdown: group by rate — only articles with a codigoIva contribute
-                                    const ivaMap: Record<string, { label: string; valor: number }> = {};
-                                    arts.forEach(a => {
-                                        if (!a.codigoIva || a.taxaIva == null) return;
-                                        const descIva = taxasIva.find(t => t.codigo === a.codigoIva)?.descricao ?? a.codigoIva;
-                                        const label = descIva;
-                                        if (!ivaMap[label]) ivaMap[label] = { label, valor: 0 };
-                                        ivaMap[label].valor += a.quantidade * a.preco * (a.taxaIva / 100);
-                                    });
-                                    const totalIva = Object.values(ivaMap).reduce((s, x) => s + x.valor, 0);
-                                    const total = subtotal + totalIva;
-                                    return (
-                                        <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 3, fontSize: '0.8rem' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 3 }}>
-                                                <span>Subtotal</span>
-                                                <span>{fmtMoney(subtotal)}</span>
-                                            </div>
-                                            {Object.values(ivaMap).map(iv => (
-                                                <div key={iv.label} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 3 }}>
-                                                    <span>{iv.label}</span>
-                                                    <span>{fmtMoney(iv.valor)}</span>
-                                                </div>
-                                            ))}
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '0.85rem', borderTop: '1px solid var(--border)', paddingTop: 5 }}>
-                                                <span>Total</span>
-                                                <strong>{fmtMoney(total)}</strong>
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
-                            </>
-                        )}
-
-                        {/* ── DIAGNÓSTICO ── */}
-                        {tab === 'diagnostico' && (
-                            <>
-                                <div className="form-group">
-                                    <label className="form-label">Órgão</label>
-                                    <input className="form-input" value={orgao} onChange={e => setOrgao(e.target.value)} placeholder="Ex: Bomba de Alta Pressão" />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Sintoma</label>
-                                    <input className="form-input" value={sintoma} onChange={e => setSin(e.target.value)} placeholder="Ex: Baixa pressão" />
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Causa</label>
-                                    <input className="form-input" value={causa} onChange={e => setCausa(e.target.value)} placeholder="Ex: Desgaste da bomba" />
-                                </div>
-                            </>
-                        )}
-
-                        {/* ── GESTÃO ── */}
-                        {tab === 'gestao' && (
-                            <>
                                 {tipo === 'periodica' && (
                                     <div className="form-row">
                                         <div className="form-group">
@@ -934,6 +843,123 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                                         <input type="date" className="form-input" value={dpI} onChange={e => { setDpI(e.target.value); setDpF(e.target.value); }} />
                                     </div>
                                 )}
+                            </>
+                        )}
+
+                        {/* ── 4. EXECUÇÃO (Mão de Obra · Artigos · Diagnóstico) ── */}
+                        {tab === 'execucao' && (
+                            <>
+                                {/* — Mão de Obra — */}
+                                <div style={{ marginBottom: 18 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingBottom: 4, borderBottom: '1px solid var(--border)' }}>
+                                        <h4 style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>Mão de Obra</h4>
+                                        <button type="button" className="abtn abtn-secondary" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={addMao}><Plus size={11} /> Adicionar</button>
+                                    </div>
+                                    {maos.length === 0 ? (
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sem mão de obra definida.</div>
+                                    ) : maos.map((m, i) => (
+                                        <div key={i} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) 110px 90px 28px', gap: 6, marginBottom: 6, alignItems: 'start', minWidth: 320, overflowX: 'auto' }}>
+                                            <select className="form-select" value={m.funcao} onChange={e => updateMaoFuncao(i, e.target.value)}>
+                                                <option value="">Seleccionar função...</option>
+                                                {funcoesTecnico.map(f => <option key={f.id}>{f.descricao}</option>)}
+                                            </select>
+                                            <div className="form-input" style={{ color: 'var(--text-muted)', background: 'var(--bg-secondary)', fontSize: '0.78rem' }}>
+                                                {m.custo.toLocaleString('pt-PT')} Kz/h
+                                            </div>
+                                            <input type="time" className="form-input" value={m.hora} onChange={e => updateMaoHora(i, e.target.value)} />
+                                            <button type="button" className="icon-btn" style={{ color: 'var(--red)', marginTop: 3 }} onClick={() => removeMao(i)}><Trash2 size={12} /></button>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* — Artigos — */}
+                                <div style={{ marginBottom: 18 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingBottom: 4, borderBottom: '1px solid var(--border)' }}>
+                                        <h4 style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>Artigos</h4>
+                                        <button type="button" className="abtn abtn-secondary" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={addArt}><Plus size={11} /> Adicionar</button>
+                                    </div>
+                                    {arts.length === 0 ? (
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sem artigos definidos.</div>
+                                    ) : arts.map((a, i) => {
+                                    const catItem = catalog.find(x => x.id === a.artigoId);
+                                    const semStock = catItem && catItem.existencia <= 0;
+                                    return (
+                                        <div key={i} style={{ marginBottom: 6 }}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) 70px 110px 28px', gap: 6, alignItems: 'start', minWidth: 320, overflowX: 'auto' }}>
+                                                <SearchableSelect options={catalogOpts} value={a.artigoId} onChange={v => updateArtId(i, v)} placeholder="Seleccionar artigo..." />
+                                                <input type="number" min={1} className="form-input" value={a.quantidade} onChange={e => updateArtQtd(i, e.target.value)} placeholder="Qtd" />
+                                                <div className="form-input" style={{ color: 'var(--text-muted)', background: 'var(--bg-secondary)', fontSize: '0.78rem' }}>
+                                                    {a.preco.toLocaleString('pt-PT')} Kz
+                                                </div>
+                                                <button type="button" className="icon-btn" style={{ color: 'var(--red)', marginTop: 3 }} onClick={() => removeArt(i)}><Trash2 size={12} /></button>
+                                            </div>
+                                            {semStock && (
+                                                <div style={{ fontSize: '0.72rem', color: 'var(--orange,#f97316)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                    <AlertCircle size={10} /> Sem stock disponível — será registado stock negativo
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                                    {arts.length > 0 && (() => {
+                                        const subtotal = arts.reduce((s, a) => s + a.quantidade * a.preco, 0);
+
+                                        // IVA breakdown: group by rate — only articles with a codigoIva contribute
+                                        const ivaMap: Record<string, { label: string; valor: number }> = {};
+                                        arts.forEach(a => {
+                                            if (!a.codigoIva || a.taxaIva == null) return;
+                                            const descIva = taxasIva.find(t => t.codigo === a.codigoIva)?.descricao ?? a.codigoIva;
+                                            const label = descIva;
+                                            if (!ivaMap[label]) ivaMap[label] = { label, valor: 0 };
+                                            ivaMap[label].valor += a.quantidade * a.preco * (a.taxaIva / 100);
+                                        });
+                                        const totalIva = Object.values(ivaMap).reduce((s, x) => s + x.valor, 0);
+                                        const total = subtotal + totalIva;
+                                        return (
+                                            <div style={{ marginTop: 8, padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 3, fontSize: '0.8rem' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 3 }}>
+                                                    <span>Subtotal</span>
+                                                    <span>{fmtMoney(subtotal)}</span>
+                                                </div>
+                                                {Object.values(ivaMap).map(iv => (
+                                                    <div key={iv.label} style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 3 }}>
+                                                        <span>{iv.label}</span>
+                                                        <span>{fmtMoney(iv.valor)}</span>
+                                                    </div>
+                                                ))}
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '0.85rem', borderTop: '1px solid var(--border)', paddingTop: 5 }}>
+                                                    <span>Total</span>
+                                                    <strong>{fmtMoney(total)}</strong>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+
+                                {/* — Diagnóstico — */}
+                                <div>
+                                    <div style={{ marginBottom: 8, paddingBottom: 4, borderBottom: '1px solid var(--border)' }}>
+                                        <h4 style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>Diagnóstico</h4>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Órgão</label>
+                                        <input className="form-input" value={orgao} onChange={e => setOrgao(e.target.value)} placeholder="Ex: Bomba de Alta Pressão" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Sintoma</label>
+                                        <input className="form-input" value={sintoma} onChange={e => setSin(e.target.value)} placeholder="Ex: Baixa pressão" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Causa</label>
+                                        <input className="form-input" value={causa} onChange={e => setCausa(e.target.value)} placeholder="Ex: Desgaste da bomba" />
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {/* ── 5. GESTÃO ── */}
+                        {tab === 'gestao' && (
+                            <>
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label className="form-label" style={{ color: 'var(--text-muted)' }}>Emitida</label>
