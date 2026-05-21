@@ -134,6 +134,33 @@ export class OrdemTrabalho {
     @Column({ name: 'data_prog_fim', type: 'date', nullable: true })
     dataProgFim: string;
 
+    /** RF-OT-003 §4 — data agendada actual (substitui semanticamente data_prog_inicio). */
+    @Column({ name: 'data_agendada', type: 'date', nullable: true })
+    dataAgendada: string;
+
+    /** RF-OT-003 §3.2 — data definida ao confirmar (executar a OT). */
+    @Column({ name: 'data_execucao', type: 'date', nullable: true })
+    dataExecucao: string;
+
+    /** RF-OT-003 §3.3 — contador de adiamentos. */
+    @Column({ name: 'adiamentos', type: 'int', default: 0 })
+    adiamentos: number;
+
+    /** RF-OT-003 §3.1 — limite superior da janela de programação (default: data_registo + 6m). */
+    @Column({ name: 'janela_fim', type: 'date', nullable: true })
+    janelaFim: string;
+
+    /**
+     * RF-OT-003 §3.3.1 — utilizador que aprovou o adiamento que ultrapassou o
+     * limite (FK para users). NULL quando não foi necessária aprovação.
+     */
+    @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'aprovado_por_id' })
+    aprovadoPor: User;
+
+    @Column({ name: 'aprovado_por_id', nullable: true })
+    aprovadoPorId: number;
+
     @Column({ name: 'data_emissao', type: 'date', nullable: true })
     dataEmissao: string;
 

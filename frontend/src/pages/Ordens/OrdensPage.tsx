@@ -1038,7 +1038,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
 
 /* ══ Main Page ═══════════════════════════════════════════ */
 const OrdensPage: React.FC = () => {
-    const { ordens, addOrdem, updateOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, finalizarOT, equipInstalados, clientes, modelosEquipamento, currentUser, tiposOT, fmtDate, empresaConfig, simboloMoeda } = useGlobal();
+    const { ordens, addOrdem, updateOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, finalizarOT, equipInstalados, clientes, modelosEquipamento, currentUser, tiposOT, fmtDate, empresaConfig, simboloMoeda, tecnicos } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
 
     const [search, setSearch]         = useState('');
@@ -1049,6 +1049,8 @@ const OrdensPage: React.FC = () => {
     const [showExport, setShowExport]       = useState(false);
     const [showRelatorio, setShowRelatorio] = useState(false);
     const [ctx, setCtx]               = useState<{ id: string; x: number; y: number } | null>(null);
+    // RF-OT-003 — modal partilhada para Confirmar/Adiar com input de data + motivo + aprovação
+    const [transicaoModal, setTransicaoModal] = useState<{ tipo: 'confirmar' | 'adiar'; ot: OrdemTrabalho } | null>(null);
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
@@ -1102,20 +1104,23 @@ const OrdensPage: React.FC = () => {
         }
     };
 
-    /** Ações da máquina de estados RF-OT-001 — uma entrada por transição possível. */
-    type TransicaoAcao = { target: OTEstado; label: string; run: (id: string) => Promise<void> };
+    /** Ações da máquina de estados RF-OT-001 — uma entrada por transição possível.
+     *  RF-OT-003: Confirmar e Adiar abrem modal para recolher dados extra
+     *  (data execução + técnico em Confirmar; nova data + motivo + aprovação em Adiar).
+     */
+    type TransicaoAcao = { target: OTEstado; label: string; run: (ot: OrdemTrabalho) => void | Promise<void> };
     const ACOES_POR_ESTADO: Record<OTEstado, TransicaoAcao[]> = {
-        'Registada':   [{ target: 'Programada',  label: 'Agendar',   run: id => agendarOT(id, today()) }],
+        'Registada':   [{ target: 'Programada',  label: 'Agendar',   run: ot => agendarOT(ot.id, today()) }],
         'Programada':  [
-            { target: 'Confirmada', label: 'Confirmar', run: id => confirmarOT(id) },
-            { target: 'Adiada',     label: 'Adiar',     run: id => adiarOT(id) },
+            { target: 'Confirmada', label: 'Confirmar', run: ot => setTransicaoModal({ tipo: 'confirmar', ot }) },
+            { target: 'Adiada',     label: 'Adiar',     run: ot => setTransicaoModal({ tipo: 'adiar', ot }) },
         ],
-        'Adiada':      [{ target: 'Programada',  label: 'Reagendar', run: id => agendarOT(id, today()) }],
+        'Adiada':      [{ target: 'Programada',  label: 'Reagendar', run: ot => agendarOT(ot.id, today()) }],
         'Confirmada':  [
-            { target: 'Em execução', label: 'Iniciar', run: id => iniciarOT(id, today()) },
-            { target: 'Adiada',      label: 'Adiar',   run: id => adiarOT(id) },
+            { target: 'Em execução', label: 'Iniciar', run: ot => iniciarOT(ot.id, today()) },
+            { target: 'Adiada',      label: 'Adiar',   run: ot => setTransicaoModal({ tipo: 'adiar', ot }) },
         ],
-        'Em execução': [{ target: 'Finalizada',  label: 'Finalizar', run: id => finalizarOT(id, today()) }],
+        'Em execução': [{ target: 'Finalizada',  label: 'Finalizar', run: ot => finalizarOT(ot.id, today()) }],
         'Finalizada':  [],
     };
 
@@ -1126,9 +1131,13 @@ const OrdensPage: React.FC = () => {
 
     const executarTransicao = async (ot: OrdemTrabalho, acao: TransicaoAcao) => {
         try {
-            await acao.run(ot.id);
-            setModal(null);
-            showToast(`OT ${ot.id}: ${acao.label} → ${acao.target}.`);
+            const result = acao.run(ot);
+            // Acções com modal (confirmar/adiar) retornam void; outras retornam Promise.
+            if (result instanceof Promise) {
+                await result;
+                setModal(null);
+                showToast(`OT ${ot.id}: ${acao.label} → ${acao.target}.`);
+            }
         } catch (e: any) {
             showToast(e?.response?.data?.message ?? `Erro: ${acao.label} OT ${ot.id}.`);
         }
@@ -1323,6 +1332,32 @@ const OrdensPage: React.FC = () => {
                 />
             )}
 
+            {/* RF-OT-003 — Modal Confirmar/Adiar */}
+            {transicaoModal && (
+                <TransicaoModal
+                    tipo={transicaoModal.tipo}
+                    ot={transicaoModal.ot}
+                    tecnicos={tecnicos}
+                    currentUser={currentUser}
+                    onClose={() => setTransicaoModal(null)}
+                    onSubmit={async (payload) => {
+                        try {
+                            if (transicaoModal.tipo === 'confirmar') {
+                                await confirmarOT(transicaoModal.ot.id, payload as any);
+                                showToast(`OT ${transicaoModal.ot.id} confirmada.`);
+                            } else {
+                                await adiarOT(transicaoModal.ot.id, payload as any);
+                                showToast(`OT ${transicaoModal.ot.id} adiada.`);
+                            }
+                            setTransicaoModal(null);
+                            setModal(null);
+                        } catch (e: any) {
+                            showToast(e?.response?.data?.message ?? 'Erro na transição.');
+                        }
+                    }}
+                />
+            )}
+
             {toast && (
                 <div className="toast" role="status">
                     <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
@@ -1330,6 +1365,124 @@ const OrdensPage: React.FC = () => {
                 </div>
             )}
         </AppLayout>
+    );
+};
+
+/* ══ TransicaoModal — Confirmar/Adiar (RF-OT-003) ═══════════ */
+type TransicaoModalProps = {
+    tipo: 'confirmar' | 'adiar';
+    ot: OrdemTrabalho;
+    tecnicos: ReturnType<typeof useGlobal>['tecnicos'];
+    currentUser: ReturnType<typeof useGlobal>['currentUser'];
+    onClose: () => void;
+    onSubmit: (payload: any) => Promise<void>;
+};
+const TransicaoModal: React.FC<TransicaoModalProps> = ({ tipo, ot, tecnicos, currentUser, onClose, onSubmit }) => {
+    const today = () => new Date().toISOString().split('T')[0];
+    const isConfirmar = tipo === 'confirmar';
+    const [data, setData] = useState<string>(today());
+    const [executadoPorId, setExecutadoPorId] = useState<string>(ot.executadoPorId ?? '');
+    const [motivo, setMotivo] = useState('');
+    const [aprovadoPor, setAprovadoPor] = useState<string>('');
+    const [aprovacaoMotivo, setAprovacaoMotivo] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+
+    const requerAprovacao = !isConfirmar && !!ot.requerAprovacaoAdiar;
+    const podeAprovar = currentUser?.role === 'admin';
+
+    const handleSubmit = async (ev: React.FormEvent) => {
+        ev.preventDefault();
+        setSubmitting(true);
+        try {
+            if (isConfirmar) {
+                await onSubmit({ dataExecucao: data, executadoPorId: executadoPorId || undefined });
+            } else {
+                const payload: any = { novaData: data, motivo };
+                if (requerAprovacao) {
+                    payload.aprovadoPor = aprovadoPor;
+                    payload.aprovacaoMotivo = aprovacaoMotivo;
+                }
+                await onSubmit(payload);
+            }
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="modal" style={{ maxWidth: 480 }}>
+                <div className="modal-header">
+                    <h3 className="modal-title">
+                        {isConfirmar ? `Confirmar OT ${ot.id}` : `Adiar OT ${ot.id}`}
+                    </h3>
+                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                </div>
+                <form onSubmit={handleSubmit}>
+                    <div className="modal-body">
+                        {ot.janelaFim && (
+                            <div style={{ marginBottom: 10, padding: '6px 10px', fontSize: '0.78rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 4 }}>
+                                Janela de programação até <strong>{ot.janelaFim}</strong>
+                                {typeof ot.adiamentos === 'number' && <span> · Adiamentos: <strong>{ot.adiamentos}</strong></span>}
+                            </div>
+                        )}
+
+                        <div className="form-group">
+                            <label className="form-label req">
+                                {isConfirmar ? 'Data de execução' : 'Nova data'}
+                            </label>
+                            <input type="date" className="form-input" value={data} onChange={e => setData(e.target.value)} required />
+                        </div>
+
+                        {isConfirmar && (
+                            <div className="form-group">
+                                <label className="form-label req">Técnico de campo</label>
+                                <select className="form-select" value={executadoPorId} onChange={e => setExecutadoPorId(e.target.value)} required>
+                                    <option value="">Seleccionar...</option>
+                                    {tecnicos.filter(t => t.ativo).map(t => (
+                                        <option key={t.id} value={t.id}>{t.nome}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        {!isConfirmar && (
+                            <div className="form-group">
+                                <label className="form-label req">Motivo do adiamento (mín. 5 caracteres)</label>
+                                <textarea className="form-textarea" value={motivo} onChange={e => setMotivo(e.target.value)} required minLength={5} placeholder="Ex: Cliente ausente" />
+                            </div>
+                        )}
+
+                        {requerAprovacao && (
+                            <div style={{ padding: '10px 12px', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 4, marginTop: 8 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, marginBottom: 6, color: '#92400e' }}>
+                                    <AlertCircle size={13} /> Limite de adiamentos atingido — requer aprovação de administrador
+                                </div>
+                                {!podeAprovar && (
+                                    <div style={{ fontSize: '0.78rem', color: '#92400e', marginBottom: 6 }}>
+                                        Não tem permissão para aprovar este adiamento. Solicite a um administrador.
+                                    </div>
+                                )}
+                                <div className="form-group" style={{ marginBottom: 6 }}>
+                                    <label className="form-label req">ID do aprovador (admin)</label>
+                                    <input type="number" className="form-input" value={aprovadoPor} onChange={e => setAprovadoPor(e.target.value)} required={requerAprovacao} />
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label req">Motivo da aprovação (mín. 5 caracteres)</label>
+                                    <textarea className="form-textarea" value={aprovacaoMotivo} onChange={e => setAprovacaoMotivo(e.target.value)} required={requerAprovacao} minLength={5} placeholder="Justifique a excepção" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    <div className="modal-footer">
+                        <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
+                        <button type="submit" className="abtn abtn-primary" disabled={submitting}>
+                            <Check size={12} /> {isConfirmar ? 'Confirmar' : 'Adiar'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     );
 };
 

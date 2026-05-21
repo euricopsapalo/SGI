@@ -10,10 +10,12 @@ import { ArtigosModule } from '../artigos/artigos.module';
 import { SysLogsModule } from '../sys-logs/sys-logs.module';
 import { Tecnico } from '../tecnicos/tecnico.entity';
 import { EquipInstalado } from '../parque/equip-instalado.entity';
+import { User } from '../users/user.entity';
+import { ConfiguracaoEmpresa } from '../configuracao/configuracao-empresa.entity';
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([OrdemTrabalho, OtMaoObra, OtArtigo, OtReprogramacao, Tecnico, EquipInstalado]),
+        TypeOrmModule.forFeature([OrdemTrabalho, OtMaoObra, OtArtigo, OtReprogramacao, Tecnico, EquipInstalado, User, ConfiguracaoEmpresa]),
         ArtigosModule,
         SysLogsModule,
     ],

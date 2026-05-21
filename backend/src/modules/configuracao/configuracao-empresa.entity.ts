@@ -78,6 +78,13 @@ export class ConfiguracaoEmpresa {
     @Column({ name: 'taxa_iva', type: 'numeric', precision: 5, scale: 2, default: 14 })
     taxaIva: number;
 
+    /**
+     * RF-OT-003 §3.3.1 — limite de adiamentos consecutivos. A partir do
+     * `limite + 1`-ésimo adiamento é exigida aprovação de um administrador.
+     */
+    @Column({ name: 'limite_adiamentos', type: 'int', default: 3 })
+    limiteAdiamentos: number;
+
     /** Número de casas decimais para formatação de valores monetários (ex: 2) */
     @Column({ name: 'casas_decimais', type: 'int', default: 2 })
     casasDecimais: number;

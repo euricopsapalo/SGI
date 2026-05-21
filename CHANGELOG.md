@@ -4,6 +4,37 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(ot): RF-OT-003 — Programação: confirmar/adiar + janela de 6 meses (closes #56)
+
+Formaliza o ponto de decisão **confirmar/adiar** dentro de uma janela fixa de 6 meses, com contador de adiamentos e limite (default 3) que exige aprovação de **administrador** acima do limite.
+
+**Backend**
+- `ordens_trabalho` ganha colunas `data_agendada`, `data_execucao`, `adiamentos` (default 0), `janela_fim`, `aprovado_por_id` (FK → users · `ON DELETE SET NULL`).
+- `configuracao_empresa` ganha `limite_adiamentos` (default 3) — gerível via UI no futuro (RD-2 da spec).
+- `OrdensTrabalhoService.create()` calcula `janela_fim = data_registo + 6m` e espelha `data_agendada ← data_prog_inicio`.
+- `OrdensTrabalhoService.agendar()` exige `dataAgendada` dentro da janela; rejeita 422 caso contrário.
+- `OrdensTrabalhoService.confirmar()` agora exige `dataExecucao` (dentro da janela, não no passado) e `executadoPorId` (técnico ativo); regista `OT_CONFIRMADA`. Disparo de reserva de stock fica como **TODO RF-OT-004**.
+- `OrdensTrabalhoService.adiar()` exige `novaData` + `motivo` (≥5 chars); incrementa `adiamentos`; regista entrada em `ot_reprogramacoes` e `OT_ADIADA`. Acima do limite exige `aprovadoPor` (role `admin`) + `aprovacaoMotivo` (≥5 chars); aprovação **estende `janela_fim` em +6m** a partir da nova data e regista `OT_ADIAMENTO_APROVADO`. Adiar OT `Confirmada` marca `dataExecucao = null` (libertação de reservas fica como **TODO RF-OT-004**).
+- `POST /reprogramar` passa a ser **alias** que delega em `adiar` (mantém compatibilidade com o drag-and-drop da Agenda); estados em que `adiar` não é válido caem no fallback antigo.
+- GET de OT expõe `requerAprovacaoAdiar` (boolean derivado) + `aprovadoPor` + relations populadas.
+- Migration `ConfirmarAdiarJanelaOT` (up/down) com backfill: `data_agendada ← data_prog_inicio`, `janela_fim ← data_registo + 6m`; índices sobre `data_agendada`, `janela_fim`, `aprovado_por_id`.
+- `init.sql` actualizado.
+
+**Frontend**
+- `GlobalContext.OrdemTrabalho` ganha `dataAgendada`, `dataExecucao`, `adiamentos`, `janelaFim`, `requerAprovacaoAdiar`, `aprovadoPor{Id,Nome}`.
+- Métodos: `agendarOT(id, dataAgendada?, dataProgFim?)`, `confirmarOT(id, { dataExecucao, executadoPorId })`, `adiarOT(id, { novaData, motivo, aprovadoPor?, aprovacaoMotivo? })`.
+- `OrdensPage`: nova `TransicaoModal` (Confirmar/Adiar) com input de data, técnico (Confirmar) ou motivo (Adiar) e bloco condicional de **aprovação** quando `requerAprovacaoAdiar = true` (avisa quando o utilizador actual não é admin).
+- Banner informativo dentro da modal mostrando a janela actual e o contador de adiamentos.
+
+**Testes**
+- E2E novo `ot-confirmar-adiar.e2e.spec.ts` cobre CA-1..CA-8 + extras (alias `/reprogramar`, rejeição de aprovador não-admin, data fora da janela em `/agendar`).
+- E2E existentes (`ot-ciclo-estados`, `ot-registo`) actualizados para novas dependências (User, ConfiguracaoEmpresa) e novas assinaturas dos endpoints.
+- Service spec actualizado para nova API; 211 unit + 68 e2e green.
+
+**Pendente (out-of-scope deste PR)**
+- Integração com stock (reserva ao confirmar, libertação ao adiar) — dependente do **RF-OT-004**, marcado como TODO.
+- UI de gestão do `limite_adiamentos` em `/configuracoes` (a coluna já existe).
+
 ### ux(ot): reorganizar formulário de OT em 5 abas semânticas (closes #71)
 
 Reorganiza o modal de criação/edição de OT (`OrdensPage.tsx`) em abas alinhadas com o **ciclo de vida da OT** (#54 + #55). Apenas UI — sem alterações ao backend, DTOs ou contratos.
