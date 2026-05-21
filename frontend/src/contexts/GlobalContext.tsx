@@ -128,6 +128,14 @@ export interface OrdemTrabalho {
     registadoPorNome?: string;
     executadoPorId?: string;
     executadoPorNome?: string;
+    // RF-OT-003 §4 — ciclo confirmar/adiar + janela 6 meses
+    dataAgendada?: string;
+    dataExecucao?: string;
+    adiamentos?: number;
+    janelaFim?: string;
+    requerAprovacaoAdiar?: boolean;
+    aprovadoPorId?: string;
+    aprovadoPorNome?: string;
 }
 
 // ── Warehouse ──────────────────────────────────────────────
@@ -334,6 +342,14 @@ const normOrdem = (o: any): OrdemTrabalho => ({
     registadoPorNome: o.registadoPor?.nome,
     executadoPorId: o.executadoPorId?.toString() ?? o.executadoPor?.id?.toString(),
     executadoPorNome: o.executadoPor?.nome,
+    // RF-OT-003
+    dataAgendada: o.dataAgendada,
+    dataExecucao: o.dataExecucao,
+    adiamentos: typeof o.adiamentos === 'number' ? o.adiamentos : Number(o.adiamentos ?? 0),
+    janelaFim: o.janelaFim,
+    requerAprovacaoAdiar: !!o.requerAprovacaoAdiar,
+    aprovadoPorId: o.aprovadoPorId?.toString() ?? o.aprovadoPor?.id?.toString(),
+    aprovadoPorNome: o.aprovadoPor?.nome,
     reprogramacoes: (o.reprogramacoes ?? []).map((r: any) => ({
         id: r.id?.toString(), dataAnterior: r.dataAnterior, novaData: r.novaData,
         motivo: r.motivo ?? '', criadoEm: r.criadoEm ?? '', usuario: r.usuario,
@@ -480,9 +496,9 @@ interface GlobalContextType {
     planos: PlanoManutencao[]; addPlano: (p: Omit<PlanoManutencao, 'id'>) => PlanoManutencao; updatePlano: (id: string, p: Partial<PlanoManutencao>) => void; removePlano: (id: string) => void;
     // Work Orders
     ordens: OrdemTrabalho[]; addOrdem: (o: Omit<OrdemTrabalho, 'id'>) => Promise<OrdemTrabalho>; updateOrdem: (id: string, o: Partial<OrdemTrabalho>) => void; removeOrdem: (id: string) => void;
-    agendarOT: (id: string, dataProgInicio?: string, dataProgFim?: string) => Promise<void>;
-    confirmarOT: (id: string) => Promise<void>;
-    adiarOT: (id: string, motivo?: string) => Promise<void>;
+    agendarOT: (id: string, dataAgendada?: string, dataProgFim?: string) => Promise<void>;
+    confirmarOT: (id: string, opts?: { dataExecucao: string; executadoPorId?: string }) => Promise<void>;
+    adiarOT: (id: string, opts?: { novaData: string; motivo: string; aprovadoPor?: string; aprovacaoMotivo?: string }) => Promise<void>;
     iniciarOT: (id: string, dataInicio?: string) => Promise<void>;
     finalizarOT: (id: string, dataFim?: string) => Promise<void>;
     reprogramarOT: (id: string, novaData: string, dataAnterior?: string, motivo?: string) => Promise<void>;
@@ -1130,25 +1146,36 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setMovimentosStock(movRes.data.map(normMovimento));
     };
 
-    const agendarOT = async (id: string, dataProgInicio?: string, dataProgFim?: string) => {
+    // RF-OT-003 §3.4 — Registada/Adiada → Programada
+    const agendarOT = async (id: string, dataAgendada?: string, dataProgFim?: string) => {
         const usuario = currentUserRef.current?.email ?? 'sistema';
-        const { data } = await api.put(`/ordens/${id}/agendar`, { dataProgInicio, dataProgFim, usuario });
+        const { data } = await api.put(`/ordens/${id}/agendar`, { dataAgendada, dataProgFim, usuario });
         setOrdens(p => p.map(x => x.id === id ? normOrdem(data) : x));
-        log('Ordens de Trabalho', 'OT agendada', `ID: ${id} → Programada`);
+        log('Ordens de Trabalho', 'OT agendada', `ID: ${id} → Programada${dataAgendada ? ` (${dataAgendada})` : ''}`);
     };
 
-    const confirmarOT = async (id: string) => {
+    // RF-OT-003 §3.2 — Programada → Confirmada
+    const confirmarOT = async (id: string, opts?: { dataExecucao: string; executadoPorId?: string }) => {
         const usuario = currentUserRef.current?.email ?? 'sistema';
-        const { data } = await api.put(`/ordens/${id}/confirmar`, { usuario });
+        const body: any = { usuario };
+        if (opts?.dataExecucao) body.dataExecucao = opts.dataExecucao;
+        if (opts?.executadoPorId) body.executadoPorId = Number(opts.executadoPorId);
+        const { data } = await api.put(`/ordens/${id}/confirmar`, body);
         setOrdens(p => p.map(x => x.id === id ? normOrdem(data) : x));
-        log('Ordens de Trabalho', 'OT confirmada', `ID: ${id}`);
+        log('Ordens de Trabalho', 'OT confirmada', `ID: ${id}${opts?.dataExecucao ? ` (execução: ${opts.dataExecucao})` : ''}`);
     };
 
-    const adiarOT = async (id: string, motivo?: string) => {
+    // RF-OT-003 §3.3 — Programada/Confirmada → Adiada
+    const adiarOT = async (id: string, opts?: { novaData: string; motivo: string; aprovadoPor?: string; aprovacaoMotivo?: string }) => {
         const usuario = currentUserRef.current?.email ?? 'sistema';
-        const { data } = await api.put(`/ordens/${id}/adiar`, { motivo, usuario });
+        const body: any = { usuario };
+        if (opts?.novaData) body.novaData = opts.novaData;
+        if (opts?.motivo) body.motivo = opts.motivo;
+        if (opts?.aprovadoPor) body.aprovadoPor = Number(opts.aprovadoPor);
+        if (opts?.aprovacaoMotivo) body.aprovacaoMotivo = opts.aprovacaoMotivo;
+        const { data } = await api.put(`/ordens/${id}/adiar`, body);
         setOrdens(p => p.map(x => x.id === id ? normOrdem(data) : x));
-        log('Ordens de Trabalho', 'OT adiada', `ID: ${id}; Motivo: ${motivo ?? ''}`, 'warning');
+        log('Ordens de Trabalho', 'OT adiada', `ID: ${id} → ${opts?.novaData ?? ''}; Motivo: ${opts?.motivo ?? ''}`, 'warning');
     };
 
     const iniciarOT = async (id: string, dataInicio?: string) => {

@@ -38,17 +38,32 @@ export class OrdensTrabalhoController {
 
     @Put(':id/agendar')
     agendar(@Param('id', ParseIntPipe) id: number, @Body() dto: AgendarOtDto) {
-        return this.service.agendar(id, dto.dataProgInicio, dto.dataProgFim, dto.usuario);
+        return this.service.agendar(id, {
+            dataAgendada: dto.dataAgendada,
+            dataProgInicio: dto.dataProgInicio,
+            dataProgFim: dto.dataProgFim,
+            usuario: dto.usuario,
+        });
     }
 
     @Put(':id/confirmar')
     confirmar(@Param('id', ParseIntPipe) id: number, @Body() dto: ConfirmarOtDto) {
-        return this.service.confirmar(id, dto.usuario);
+        return this.service.confirmar(id, {
+            dataExecucao: dto.dataExecucao,
+            executadoPorId: dto.executadoPorId,
+            usuario: dto.usuario,
+        });
     }
 
     @Put(':id/adiar')
     adiar(@Param('id', ParseIntPipe) id: number, @Body() dto: AdiarOtDto) {
-        return this.service.adiar(id, dto.motivo, dto.usuario);
+        return this.service.adiar(id, {
+            novaData: dto.novaData,
+            motivo: dto.motivo,
+            aprovadoPor: dto.aprovadoPor,
+            aprovacaoMotivo: dto.aprovacaoMotivo,
+            usuario: dto.usuario,
+        });
     }
 
     @Put(':id/iniciar')

@@ -1,6 +1,7 @@
 import {
     Injectable,
     BadRequestException,
+    ForbiddenException,
     NotFoundException,
     UnprocessableEntityException,
 } from '@nestjs/common';
@@ -14,6 +15,8 @@ import { ArtigosService } from '../artigos/artigos.service';
 import { SysLogsService } from '../sys-logs/sys-logs.service';
 import { Tecnico } from '../tecnicos/tecnico.entity';
 import { EquipInstalado } from '../parque/equip-instalado.entity';
+import { User, UserRole } from '../users/user.entity';
+import { ConfiguracaoEmpresa } from '../configuracao/configuracao-empresa.entity';
 
 export function calcNextDate(fromDate: string, periodicidade: string): string {
     const d = new Date(fromDate);
@@ -26,6 +29,16 @@ export function calcNextDate(fromDate: string, periodicidade: string): string {
     }
     return d.toISOString().split('T')[0];
 }
+
+/** RF-OT-003 §3.1 — devolve data + n meses em formato ISO (YYYY-MM-DD). */
+export function addMonthsISO(fromDate: string, months: number): string {
+    const d = new Date(fromDate);
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString().split('T')[0];
+}
+
+/** RF-OT-003 — fallback se a configuração não for legível ou estiver vazia. */
+export const LIMITE_ADIAMENTOS_DEFAULT = 3;
 
 @Injectable()
 export class OrdensTrabalhoService {
@@ -42,9 +55,53 @@ export class OrdensTrabalhoService {
         private readonly tecnicoRepo: Repository<Tecnico>,
         @InjectRepository(EquipInstalado)
         private readonly equipRepo: Repository<EquipInstalado>,
+        @InjectRepository(User)
+        private readonly userRepo: Repository<User>,
+        @InjectRepository(ConfiguracaoEmpresa)
+        private readonly configRepo: Repository<ConfiguracaoEmpresa>,
         private readonly artigosService: ArtigosService,
         private readonly sysLogs: SysLogsService,
     ) {}
+
+    /** RF-OT-003 §3.3.1 — lê o limite de adiamentos (com fallback). */
+    private async getLimiteAdiamentos(): Promise<number> {
+        try {
+            const cfg = await this.configRepo.find({ take: 1 });
+            return cfg[0]?.limiteAdiamentos ?? LIMITE_ADIAMENTOS_DEFAULT;
+        } catch {
+            return LIMITE_ADIAMENTOS_DEFAULT;
+        }
+    }
+
+    /**
+     * RF-OT-003 §3.1 — valida que `data` está em [data_registo, janela_fim].
+     * Lança 422 se fora da janela. Se `janela_fim` não estiver definido,
+     * calcula-o a partir de `data_registo + 6 meses` (compatibilidade com
+     * registos antigos).
+     */
+    private assertDataDentroJanela(ot: OrdemTrabalho, data: string, label = 'Data'): void {
+        if (!data) return;
+        const limite = ot.janelaFim ?? (ot.dataRegisto ? addMonthsISO(ot.dataRegisto, 6) : undefined);
+        if (!limite) return;
+        if (data > limite) {
+            throw new UnprocessableEntityException(
+                `${label} fora da janela de programação de 6 meses (limite: ${limite})`,
+            );
+        }
+        if (ot.dataRegisto && data < ot.dataRegisto) {
+            throw new UnprocessableEntityException(
+                `${label} (${data}) não pode ser anterior à data de registo (${ot.dataRegisto}).`,
+            );
+        }
+    }
+
+    /** Anexa `requerAprovacaoAdiar` ao GET. */
+    private async withDerivados(ot: OrdemTrabalho | null): Promise<OrdemTrabalho | null> {
+        if (!ot) return ot;
+        const limite = await this.getLimiteAdiamentos();
+        (ot as any).requerAprovacaoAdiar = (ot.adiamentos ?? 0) >= limite;
+        return ot;
+    }
 
     /**
      * Guarda central da máquina de estados (RF-OT-001 §5.1).
@@ -118,17 +175,23 @@ export class OrdensTrabalhoService {
 
         const ots = await this.repo.find({
             where: Object.keys(where).length ? where : undefined,
-            relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes', 'registadoPor', 'executadoPor'],
+            relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes', 'registadoPor', 'executadoPor', 'aprovadoPor'],
         });
-        return ots.map(o => this.withTransicoes(o));
+        const limite = await this.getLimiteAdiamentos();
+        return ots.map(o => {
+            this.withTransicoes(o);
+            (o as any).requerAprovacaoAdiar = (o.adiamentos ?? 0) >= limite;
+            return o;
+        });
     }
 
     async findOne(id: number) {
         const ot = await this.repo.findOne({
             where: { id },
-            relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes', 'registadoPor', 'executadoPor'],
+            relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes', 'registadoPor', 'executadoPor', 'aprovadoPor'],
         });
-        return this.withTransicoes(ot);
+        this.withTransicoes(ot);
+        return this.withDerivados(ot);
     }
 
     /**
@@ -188,6 +251,10 @@ export class OrdensTrabalhoService {
         const today = new Date().toISOString().split('T')[0];
         const dataRegisto = rest.dataRegisto ?? today;
         const prioridade = rest.prioridade ?? 'Normal';
+        // RF-OT-003 §3.1 — janela_fim = data_registo + 6 meses;
+        // data_agendada espelha dataProgInicio se vier no payload.
+        const janelaFim = rest.janelaFim ?? addMonthsISO(dataRegisto, 6);
+        const dataAgendada = rest.dataAgendada ?? rest.dataProgInicio ?? null;
 
         const entity = this.repo.create({
             ...rest,
@@ -195,6 +262,8 @@ export class OrdensTrabalhoService {
             registadoPorId,
             dataRegisto,
             prioridade,
+            janelaFim,
+            dataAgendada,
         });
         const saved = (await this.repo.save(entity)) as unknown as OrdemTrabalho;
 
@@ -284,50 +353,183 @@ export class OrdensTrabalhoService {
         return this.repo.delete(id);
     }
 
-    /** Registada/Adiada → Programada (RF-OT-003). Define a data programada. */
-    async agendar(id: number, dataProgInicio?: string, dataProgFim?: string, usuario?: string) {
+    /**
+     * RF-OT-003 §3.4 — Registada/Adiada → Programada.
+     * Define `data_agendada` (e replica em `data_prog_inicio` por compat).
+     * Valida que a data cai dentro da janela de 6 meses (§3.1).
+     */
+    async agendar(id: number, opts: { dataAgendada?: string; dataProgInicio?: string; dataProgFim?: string; usuario?: string } = {}) {
         const ot = await this.findOrFail(id);
         this.assertTransicao(ot, OTEstado.PROGRAMADA);
 
-        const extra: Record<string, unknown> = {};
-        if (dataProgInicio) extra.dataProgInicio = dataProgInicio;
-        if (dataProgFim) extra.dataProgFim = dataProgFim;
-        if (!ot.dataProgInicio && !dataProgInicio) {
-            throw new BadRequestException('Data programada de início é obrigatória ao agendar');
+        const dataAgendada = opts.dataAgendada ?? opts.dataProgInicio ?? ot.dataAgendada ?? ot.dataProgInicio;
+        if (!dataAgendada) {
+            throw new BadRequestException('Data agendada é obrigatória ao agendar.');
         }
+        this.assertDataDentroJanela(ot, dataAgendada, 'Data agendada');
 
-        await this.transitar(id, ot.estado, OTEstado.PROGRAMADA, extra, usuario);
+        const extra: Record<string, unknown> = {
+            dataAgendada,
+            dataProgInicio: dataAgendada,
+        };
+        if (opts.dataProgFim) extra.dataProgFim = opts.dataProgFim;
+
+        await this.transitar(id, ot.estado, OTEstado.PROGRAMADA, extra, opts.usuario);
         return this.findOne(id);
     }
 
-    /** Programada → Confirmada (RF-OT-003/RF-OT-004). */
-    async confirmar(id: number, usuario?: string) {
+    /**
+     * RF-OT-003 §3.2 — Programada → Confirmada.
+     * Exige `dataExecucao` (dentro da janela, não no passado) e técnico de campo.
+     * Dispara a reserva de stock — **integração com RF-OT-004 fica como TODO**
+     * até esse RF estar implementado (chamada futura: `stockService.reservar(otId)`).
+     */
+    async confirmar(id: number, opts: { dataExecucao?: string; executadoPorId?: number; usuario?: string } = {}) {
         const ot = await this.findOrFail(id);
         this.assertTransicao(ot, OTEstado.CONFIRMADA);
 
+        const dataExecucao = opts.dataExecucao;
+        if (!dataExecucao) {
+            throw new BadRequestException('Data de execução é obrigatória para confirmar a OT.');
+        }
+        this.assertDataDentroJanela(ot, dataExecucao, 'Data de execução');
+        const hoje = new Date().toISOString().split('T')[0];
+        if (dataExecucao < hoje) {
+            throw new BadRequestException('Data de execução não pode ser anterior a hoje.');
+        }
+
+        // Técnico de campo: substitui o atribuído se vier no payload.
+        const executadoPorId = opts.executadoPorId ?? ot.executadoPorId;
+        if (!executadoPorId) {
+            throw new BadRequestException('Técnico de campo (executadoPorId) é obrigatório ao confirmar.');
+        }
+        const tec = await this.tecnicoRepo.findOne({ where: { id: Number(executadoPorId) } });
+        if (!tec) throw new BadRequestException(`Técnico #${executadoPorId} não existe.`);
+        if (!tec.ativo) throw new BadRequestException(`Técnico #${executadoPorId} está inativo.`);
+
         const erros: string[] = [];
-        if (!ot.responsavel) erros.push('Responsável não atribuído');
         if (!ot.descricao) erros.push('Descrição em falta');
-        if (!ot.dataProgInicio) erros.push('Data programada de início em falta');
         if (erros.length > 0) {
             throw new BadRequestException(`Não é possível confirmar a OT ${id}: ${erros.join('; ')}`);
         }
 
-        await this.transitar(id, ot.estado, OTEstado.CONFIRMADA, {}, usuario);
+        await this.transitar(id, ot.estado, OTEstado.CONFIRMADA, {
+            dataExecucao,
+            executadoPorId,
+        }, opts.usuario);
+
+        await this.sysLogs.create({
+            usuario: opts.usuario ?? 'sistema',
+            modulo: 'OT',
+            acao: 'OT_CONFIRMADA',
+            detalhes: `#${id} confirmada para ${dataExecucao}, técnico ${executadoPorId}`,
+        });
+
+        // RF-OT-004 (TODO): disparar reserva de stock para a OT.
+        // await this.stockService.reservar(id);
+
         return this.findOne(id);
     }
 
-    /** Programada/Confirmada → Adiada (RF-OT-003). */
-    async adiar(id: number, motivo?: string, usuario?: string) {
+    /**
+     * RF-OT-003 §3.3 — Programada/Confirmada → Adiada.
+     * - Exige `motivo` (≥5 chars, já validado pelo DTO) e `novaData`.
+     * - Verifica janela de 6 meses (excepto quando o adiamento vem com aprovação:
+     *   nesse caso a janela é **estendida** para `novaData + 6 meses`).
+     * - Incrementa `adiamentos`; regista em `ot_reprogramacoes`.
+     * - Se `adiamentos >= limite`, exige `aprovadoPor` (admin) + `aprovacaoMotivo`.
+     * - Se a OT estava Confirmada, **liberta as reservas de stock** (RF-OT-004 — TODO).
+     */
+    async adiar(id: number, opts: {
+        novaData?: string;
+        motivo?: string;
+        aprovadoPor?: number;
+        aprovacaoMotivo?: string;
+        usuario?: string;
+    } = {}) {
         const ot = await this.findOrFail(id);
         this.assertTransicao(ot, OTEstado.ADIADA);
-        await this.transitar(id, ot.estado, OTEstado.ADIADA, {}, usuario);
+
+        const { novaData, motivo, aprovadoPor, aprovacaoMotivo, usuario } = opts;
+        if (!novaData) throw new BadRequestException('Nova data é obrigatória ao adiar a OT.');
+        if (!motivo || motivo.trim().length < 5) {
+            throw new BadRequestException('Motivo do adiamento é obrigatório (mín. 5 caracteres).');
+        }
+
+        const limite = await this.getLimiteAdiamentos();
+        const adiamentosAtuais = ot.adiamentos ?? 0;
+        const precisaAprovacao = adiamentosAtuais >= limite;
+
+        let novaJanelaFim = ot.janelaFim;
+        let aprovadoPorId: number | undefined;
+
+        if (precisaAprovacao) {
+            if (!aprovadoPor || !aprovacaoMotivo || aprovacaoMotivo.trim().length < 5) {
+                throw new ForbiddenException(
+                    `Limite de adiamentos atingido (${limite}). Requer aprovação de um responsável (campo aprovadoPor + aprovacaoMotivo).`,
+                );
+            }
+            const aprovador = await this.userRepo.findOne({ where: { id: Number(aprovadoPor) } });
+            if (!aprovador) {
+                throw new BadRequestException(`Aprovador #${aprovadoPor} não existe.`);
+            }
+            if (aprovador.role !== UserRole.ADMIN) {
+                throw new ForbiddenException(
+                    `Apenas utilizadores com role 'admin' podem aprovar adiamentos acima do limite (recebido: '${aprovador.role}').`,
+                );
+            }
+            aprovadoPorId = aprovador.id;
+            // Aprovação estende a janela em +6m a partir da nova data.
+            novaJanelaFim = addMonthsISO(novaData, 6);
+        } else {
+            // Sem aprovação → tem de respeitar a janela.
+            this.assertDataDentroJanela(ot, novaData, 'Nova data de adiamento');
+        }
+
+        const dataAnterior = ot.dataExecucao ?? ot.dataAgendada ?? ot.dataProgInicio ?? null;
+        const eraConfirmada = ot.estado === OTEstado.CONFIRMADA;
+
+        // Histórico em ot_reprogramacoes (reaproveitada).
+        await this.repRepo.save(this.repRepo.create({
+            ordemTrabalho: { id } as OrdemTrabalho,
+            dataAnterior,
+            novaData,
+            motivo,
+            usuario: usuario ?? 'sistema',
+        }));
+
+        const extra: Record<string, unknown> = {
+            adiamentos: adiamentosAtuais + 1,
+            dataAgendada: novaData,
+            dataProgInicio: novaData,
+            dataExecucao: null,
+            janelaFim: novaJanelaFim,
+        };
+        if (aprovadoPorId) extra.aprovadoPorId = aprovadoPorId;
+
+        await this.transitar(id, ot.estado, OTEstado.ADIADA, extra, usuario);
+
         await this.sysLogs.create({
             usuario: usuario ?? 'sistema',
             modulo: 'OT',
             acao: 'OT_ADIADA',
-            detalhes: `#${id} adiada. Motivo: ${motivo ?? '—'}`,
+            detalhes: `#${id} adiada para ${novaData}. Motivo: ${motivo}. Adiamentos: ${adiamentosAtuais + 1}.`,
         });
+
+        if (precisaAprovacao && aprovadoPorId) {
+            await this.sysLogs.create({
+                usuario: String(aprovadoPorId),
+                modulo: 'OT',
+                acao: 'OT_ADIAMENTO_APROVADO',
+                detalhes: `#${id} adiamento ${adiamentosAtuais + 1} aprovado por user ${aprovadoPorId}. Motivo: ${aprovacaoMotivo}. Janela estendida até ${novaJanelaFim}.`,
+            });
+        }
+
+        if (eraConfirmada) {
+            // RF-OT-004 (TODO): libertar reservas de stock.
+            // await this.stockService.libertarReserva(id);
+        }
+
         return this.findOne(id);
     }
 
@@ -438,17 +640,34 @@ export class OrdensTrabalhoService {
         return this.findAll();
     }
 
+    /**
+     * RF-OT-003 §5 — alias do endpoint legado `POST /reprogramar` (drag-and-drop
+     * da Agenda). Delega em `adiar` para garantir uma única política. Se a OT
+     * estiver em estado em que `adiar` não é válido (ex.: Registada), aplica
+     * a antiga semântica de actualizar a data programada (compat estreita).
+     */
     async reprogramar(id: number, novaData: string, dataAnterior?: string, motivo?: string, usuario?: string) {
-        const rep = this.repRepo.create({
+        const ot = await this.findOrFail(id);
+
+        const adiarOk = OT_TRANSICOES[ot.estado]?.includes(OTEstado.ADIADA);
+        if (adiarOk) {
+            return this.adiar(id, {
+                novaData,
+                motivo: motivo && motivo.length >= 5 ? motivo : 'Reprogramação via Agenda',
+                usuario,
+            });
+        }
+
+        // Compat: estados onde adiar não é transição válida (ex.: Registada).
+        // Mantém a semântica antiga de registar em histórico e mover a data.
+        await this.repRepo.save(this.repRepo.create({
             ordemTrabalho: { id } as OrdemTrabalho,
             dataAnterior: dataAnterior ?? null,
             novaData,
             motivo: motivo ?? '',
             usuario: usuario ?? 'sistema',
-        });
-        await this.repRepo.save(rep);
-        // Update the OT's dataProgInicio
-        await this.repo.update(id, { dataProgInicio: novaData });
+        }));
+        await this.repo.update(id, { dataProgInicio: novaData, dataAgendada: novaData });
         return this.findOne(id);
     }
 }

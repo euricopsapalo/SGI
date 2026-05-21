@@ -11,6 +11,8 @@ import { OtArtigo } from '../src/modules/ordens-trabalho/ot-artigo.entity';
 import { OtReprogramacao } from '../src/modules/ordens-trabalho/ot-reprogramacao.entity';
 import { Tecnico } from '../src/modules/tecnicos/tecnico.entity';
 import { EquipInstalado } from '../src/modules/parque/equip-instalado.entity';
+import { User } from '../src/modules/users/user.entity';
+import { ConfiguracaoEmpresa } from '../src/modules/configuracao/configuracao-empresa.entity';
 import { ArtigosService } from '../src/modules/artigos/artigos.service';
 import { SysLogsService } from '../src/modules/sys-logs/sys-logs.service';
 
@@ -68,6 +70,8 @@ describe('OT Registo e Marcação (RF-OT-002) E2E', () => {
                 { provide: getRepositoryToken(OtReprogramacao), useValue: noopRepo },
                 { provide: getRepositoryToken(Tecnico), useValue: { findOne: jest.fn(async ({ where }: any) => tecnicos[where.id] ?? null) } },
                 { provide: getRepositoryToken(EquipInstalado), useValue: { findOne: jest.fn(async ({ where }: any) => equipInstalados[where.id] ?? null) } },
+                { provide: getRepositoryToken(User), useValue: { findOne: jest.fn(async ({ where }: any) => ({ id: where.id, role: 'admin' })) } },
+                { provide: getRepositoryToken(ConfiguracaoEmpresa), useValue: { find: jest.fn(async () => [{ limiteAdiamentos: 3 }]) } },
                 { provide: ArtigosService, useValue: { ajusteExistencia: jest.fn(), createMovimento: jest.fn() } },
                 { provide: SysLogsService, useValue: { create: jest.fn(async (b: any) => { sysLogs.push(b); return b; }) } },
             ],

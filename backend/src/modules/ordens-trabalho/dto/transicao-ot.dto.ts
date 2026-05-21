@@ -1,19 +1,35 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsInt, IsOptional, IsString, MinLength } from 'class-validator';
 
-/** DTOs das transições da máquina de estados da OT (RF-OT-001). */
+/** DTOs das transições da máquina de estados da OT (RF-OT-001 + RF-OT-003). */
 
 export class AgendarOtDto {
+  /** RF-OT-003: nova nomenclatura — usa `dataAgendada` (alias de `dataProgInicio`). */
+  @IsOptional() @IsString() dataAgendada?: string;
   @IsOptional() @IsString() dataProgInicio?: string;
   @IsOptional() @IsString() dataProgFim?: string;
   @IsOptional() @IsString() usuario?: string;
 }
 
+/**
+ * RF-OT-003 §3.2 — confirmar passa a aceitar `dataExecucao` e `executadoPorId`.
+ * Os campos antigos continuam aceites para compatibilidade.
+ */
 export class ConfirmarOtDto {
+  @IsOptional() @IsString() dataExecucao?: string;
+  @IsOptional() @IsInt()    executadoPorId?: number;
   @IsOptional() @IsString() usuario?: string;
 }
 
+/**
+ * RF-OT-003 §3.3 — adiar exige `motivo` (≥5 chars) e `novaData`.
+ * `aprovadoPor` + `aprovacaoMotivo` são exigidos a partir do limite (§3.3.1).
+ */
 export class AdiarOtDto {
-  @IsOptional() @IsString() motivo?: string;
+  @IsOptional() @IsString() novaData?: string;
+  @IsOptional() @IsString() @MinLength(5, { message: 'Motivo tem de ter pelo menos 5 caracteres.' })
+  motivo?: string;
+  @IsOptional() @IsInt()    aprovadoPor?: number;
+  @IsOptional() @IsString() aprovacaoMotivo?: string;
   @IsOptional() @IsString() usuario?: string;
 }
 

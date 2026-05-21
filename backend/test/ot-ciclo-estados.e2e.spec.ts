@@ -13,6 +13,8 @@ import { ArtigosService } from '../src/modules/artigos/artigos.service';
 import { SysLogsService } from '../src/modules/sys-logs/sys-logs.service';
 import { Tecnico } from '../src/modules/tecnicos/tecnico.entity';
 import { EquipInstalado } from '../src/modules/parque/equip-instalado.entity';
+import { User } from '../src/modules/users/user.entity';
+import { ConfiguracaoEmpresa } from '../src/modules/configuracao/configuracao-empresa.entity';
 
 /**
  * RF-OT-001 — E2E da máquina de estados.
@@ -26,7 +28,9 @@ describe('OT Ciclo de Estados (RF-OT-001) E2E', () => {
 
     beforeAll(async () => {
         store = {
-            1: { id: 1, estado: OTEstado.REGISTADA, descricao: 'OT', responsavel: 'r', dataProgInicio: '2026-06-01', artigos: [], tipo: 'pontual' },
+            1: { id: 1, estado: OTEstado.REGISTADA, descricao: 'OT', responsavel: 'r',
+                 dataRegisto: '2026-05-01', dataProgInicio: '2026-06-01', dataAgendada: '2026-06-01',
+                 janelaFim: '2026-11-01', adiamentos: 0, executadoPorId: 1, artigos: [], tipo: 'pontual' },
         };
 
         const repo = {
@@ -49,6 +53,8 @@ describe('OT Ciclo de Estados (RF-OT-001) E2E', () => {
                 { provide: getRepositoryToken(OtReprogramacao), useValue: noopRepo },
                 { provide: getRepositoryToken(Tecnico), useValue: { findOne: jest.fn(async () => ({ id: 1, ativo: true })) } },
                 { provide: getRepositoryToken(EquipInstalado), useValue: { findOne: jest.fn(async ({ where }: any) => ({ id: where.id, clienteId: 99 })) } },
+                { provide: getRepositoryToken(User), useValue: { findOne: jest.fn(async ({ where }: any) => ({ id: where.id, role: 'admin' })) } },
+                { provide: getRepositoryToken(ConfiguracaoEmpresa), useValue: { find: jest.fn(async () => [{ limiteAdiamentos: 3 }]) } },
                 { provide: ArtigosService, useValue: { ajusteExistencia: jest.fn(), createMovimento: jest.fn() } },
                 { provide: SysLogsService, useValue: { create: jest.fn(async (b: any) => { sysLogs.push(b); return b; }) } },
             ],
@@ -70,9 +76,9 @@ describe('OT Ciclo de Estados (RF-OT-001) E2E', () => {
     });
 
     it('fluxo feliz Registada → … → Finalizada (cada passo 200)', async () => {
-        await request(srv()).put('/ordens/1/agendar').send({ dataProgInicio: '2026-06-01' }).expect(200);
+        await request(srv()).put('/ordens/1/agendar').send({ dataAgendada: '2026-06-01' }).expect(200);
         expect(store[1].estado).toBe('Programada');
-        await request(srv()).put('/ordens/1/confirmar').send({}).expect(200);
+        await request(srv()).put('/ordens/1/confirmar').send({ dataExecucao: '2026-06-01', executadoPorId: 1 }).expect(200);
         expect(store[1].estado).toBe('Confirmada');
         await request(srv()).put('/ordens/1/iniciar').send({}).expect(200);
         expect(store[1].estado).toBe('Em execução');

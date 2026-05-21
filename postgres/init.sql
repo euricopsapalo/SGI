@@ -132,6 +132,8 @@ CREATE TABLE configuracao_empresa (
     moeda                       VARCHAR(10)   NOT NULL DEFAULT 'AOA',
     fuso_horario                VARCHAR(50)   NOT NULL DEFAULT 'Africa/Luanda',
     taxa_iva                    NUMERIC(5,2)  NOT NULL DEFAULT 14,
+    -- RF-OT-003 §3.3.1
+    limite_adiamentos           INTEGER       NOT NULL DEFAULT 3,
     latitude                    NUMERIC(10,6),
     longitude                   NUMERIC(10,6),
     updated_at                  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
@@ -396,6 +398,12 @@ CREATE TABLE ordens_trabalho (
     causa              TEXT,
     data_prog_inicio   DATE,
     data_prog_fim      DATE,
+    -- RF-OT-003 (ciclo confirmar/adiar + janela de 6 meses)
+    data_agendada      DATE,
+    data_execucao      DATE,
+    adiamentos         INTEGER      NOT NULL DEFAULT 0,
+    janela_fim         DATE,
+    aprovado_por_id    INTEGER      REFERENCES users(id) ON DELETE SET NULL,
     data_emissao       DATE,
     data_inicio        DATE,
     data_fim           DATE,
