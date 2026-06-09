@@ -64,7 +64,7 @@ const ReprogramarModal: React.FC<ReprogramarProps> = ({ ot, novaData: initialDat
                 </div>
                 <div className="modal-body">
                     <div style={{ padding: '10px 12px', background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: 4, marginBottom: 14, fontSize: '0.8rem' }}>
-                        <div style={{ fontWeight: 700, color: 'var(--blue)' }}>{ot.id} — {ot.tipoTrabalho}</div>
+                        <div style={{ fontWeight: 700, color: 'var(--blue)' }}>{ot.id} — {ot.naturezaIntervencao}</div>
                         <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
                             Data actual: <strong>{fmtDt(ot.dataAgendada)}</strong>
                             {ot.responsavel && ot.responsavel !== '—' && <> · Responsável: {ot.responsavel}</>}
@@ -108,7 +108,7 @@ const OTCard: React.FC<OTCardProps> = ({ ot, nomeCliente, onClick, onDragStart, 
             draggable={canDrag}
             onDragStart={canDrag ? onDragStart : undefined}
             onClick={onClick}
-            title={`${ot.id} — ${ot.tipoTrabalho}\n${nomeCliente}${canDrag ? '\n(Arrastar para reprogramar)' : ''}`}
+            title={`${ot.id} — ${ot.naturezaIntervencao ?? "—"}\n${nomeCliente}${canDrag ? '\n(Arrastar para reprogramar)' : ''}`}
             style={{
                 padding: '3px 6px', borderRadius: 3, fontSize: '0.7rem', cursor: canDrag ? 'grab' : 'pointer',
                 background: ec.bg, color: ec.color, border: `1px solid ${ec.border}`,
@@ -130,7 +130,7 @@ const OTDetail: React.FC<{ ot: OrdemTrabalho; nomeCliente: string; nomeEquip: st
             <div className="modal" style={{ maxWidth: 460 }}>
                 <div className="modal-header">
                     <div>
-                        <h3 className="modal-title">{ot.id} — {ot.tipoTrabalho}</h3>
+                        <h3 className="modal-title">{ot.id} — {ot.naturezaIntervencao}</h3>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                             <span className={`dot ${ESTADO_DOT[ot.estado]}`} />
                             <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: 10, fontWeight: 700, background: ec.bg, color: ec.color }}>
@@ -330,7 +330,7 @@ const AgendaPage: React.FC = () => {
                     const otsT = (byDateW[ds] ?? []).filter(o => o.responsavel === tec);
                     if (otsT.length === 0) return `<td class="cell-empty"></td>`;
                     return `<td class="cell">${otsT.map(ot =>
-                        `<div class="ot-card ${estadoClass(ot.estado)}"><span class="ot-id">${ot.id}</span><span class="ot-tipo">${ot.tipoTrabalho || '—'}</span><span class="ot-cliente">${getClienteNome(ot.clienteId)}</span></div>`
+                        `<div class="ot-card ${estadoClass(ot.estado)}"><span class="ot-id">${ot.id}</span><span class="ot-tipo">${ot.naturezaIntervencao || '—'}</span><span class="ot-cliente">${getClienteNome(ot.clienteId)}</span></div>`
                     ).join('')}</td>`;
                 }).join('');
                 return `<tr><td class="tec-name">${tec}</td>${cells}</tr>`;
@@ -477,7 +477,7 @@ ${legend}
                                     <div key={ot.id} onClick={() => setDetalheOT(ot)}
                                         style={{ padding: '6px 10px', borderRadius: 4, cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start', ...(() => { const ec = ESTADO_COLOR[ot.estado]; return { background: ec.bg, border: `1px solid ${ec.border}`, color: ec.color }; })() }}>
                                         <div style={{ flex: 1 }}>
-                                            <div style={{ fontWeight: 700, fontSize: '0.8rem' }}>{ot.id} · {ot.tipoTrabalho}</div>
+                                            <div style={{ fontWeight: 700, fontSize: '0.8rem' }}>{ot.id} · {ot.naturezaIntervencao}</div>
                                             <div style={{ fontSize: '0.76rem' }}>{getClienteNome(ot.clienteId)}</div>
                                             <div style={{ fontSize: '0.72rem', marginTop: 2 }}>{ot.descricao}</div>
                                         </div>

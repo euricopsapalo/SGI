@@ -144,7 +144,7 @@ function buildOTAtrasoHtml(tecnicos: Tecnico[], ordens: OrdemTrabalho[], funcoes
         const rows = tOTs.map(o => {
             const diasAtraso = o.dataProgFim ? Math.ceil((today.getTime() - new Date(o.dataProgFim).getTime()) / 86400000) : 0;
             return `<tr><td>${o.id}</td><td>${o.descricao?.substring(0,50) ?? '—'}</td>
-                <td>${o.tipoTrabalho || '—'}</td><td>${fRT(o.dataProgFim)}</td>
+                <td>${o.naturezaIntervencao || '—'}</td><td>${fRT(o.dataProgFim)}</td>
                 <td style="text-align:center;font-weight:700;color:#991b1b">${diasAtraso}d</td>
                 <td><span class="badge ${otBadgeClass(o.estado)}">${o.estado}</span></td></tr>`;
         }).join('');
@@ -202,7 +202,7 @@ function buildAgendaHtml(
             <td style="font-size:9px;color:#555">${enderecoStr}</td>
             <td style="text-align:center">${fRT(o.dataAgendada)}</td>
             <td style="text-align:center">${fRT(o.dataProgFim)}</td>
-            <td>${tipoLabel}<br><small style="color:#666">${o.tipoTrabalho || '—'}</small></td>
+            <td>${tipoLabel}<br><small style="color:#666">${o.naturezaIntervencao || '—'}</small></td>
             <td style="text-align:center"><span class="badge ${otBadgeClass(o.estado)}">${o.estado}</span></td>
         </tr>`;
     }).join('');

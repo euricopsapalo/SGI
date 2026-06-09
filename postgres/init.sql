@@ -378,7 +378,7 @@ CREATE TABLE ordens_trabalho (
     assinada_cliente     BOOLEAN      NOT NULL DEFAULT false,
     natureza_intervencao VARCHAR(40)
         CONSTRAINT chk_ot_natureza CHECK (natureza_intervencao IS NULL OR natureza_intervencao IN
-            ('Manutenção','Substituição de filtro','Reparação de avaria','Inspeção')),
+            ('Manutenção','Substituição de filtro','Reparação de avaria','Inspeção','Montagem / Instalação')),
     prioridade           VARCHAR(10)  NOT NULL DEFAULT 'Normal'
         CONSTRAINT chk_ot_prioridade CHECK (prioridade IN ('Normal','Alta','Urgente')),
     data_registo         DATE         NOT NULL DEFAULT CURRENT_DATE,
@@ -387,8 +387,6 @@ CREATE TABLE ordens_trabalho (
     cliente_id           INTEGER      REFERENCES clientes(id) ON DELETE RESTRICT,
     equip_instalado_id   INTEGER      REFERENCES equip_instalados(id) ON DELETE SET NULL,
     plano_id           INTEGER      REFERENCES planos_manutencao(id) ON DELETE SET NULL,
-    tipo_trabalho      VARCHAR(100),
-    tipo_ot            VARCHAR(100),
     descricao          TEXT         NOT NULL DEFAULT '',
     previsao_tempo     NUMERIC(5,2) NOT NULL DEFAULT 1,
     periodicidade      VARCHAR(50),

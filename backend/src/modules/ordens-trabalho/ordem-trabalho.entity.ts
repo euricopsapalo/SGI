@@ -6,12 +6,17 @@ import { OtMaoObra } from './ot-mao-obra.entity';
 import { OtArtigo } from './ot-artigo.entity';
 import { OtReprogramacao } from './ot-reprogramacao.entity';
 
-/** RF-OT-002 §3.1 — natureza da intervenção pedida. */
+/**
+ * RF-OT-002 §3.1 — natureza da intervenção pedida.
+ * #75: classificação única da OT (funde os antigos `tipoTrabalho`/`tipoOT`).
+ * `MONTAGEM` cobre as OTs auto-criadas no Parque; `REPARACAO_AVARIA` é a corretiva.
+ */
 export enum NaturezaIntervencao {
     MANUTENCAO = 'Manutenção',
     SUBSTITUICAO_FILTRO = 'Substituição de filtro',
     REPARACAO_AVARIA = 'Reparação de avaria',
     INSPECAO = 'Inspeção',
+    MONTAGEM = 'Montagem / Instalação',
 }
 
 /** RF-OT-002 §3.1 — prioridade da OT. */
@@ -100,12 +105,6 @@ export class OrdemTrabalho {
 
     @Column({ name: 'plano_id', nullable: true })
     planoId: number;
-
-    @Column({ name: 'tipo_trabalho', nullable: true, length: 100 })
-    tipoTrabalho: string;
-
-    @Column({ name: 'tipo_ot', nullable: true, length: 100 })
-    tipoOT: string;
 
     @Column({ type: 'text' })
     descricao: string;

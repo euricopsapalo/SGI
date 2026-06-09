@@ -97,9 +97,9 @@ export const OT_ESTADO_COR: Record<OTEstado, string> = {
 export interface OTMaoObra { funcao: string; custo: number; hora: string; }
 export interface OTArtigo { artigoId: string; descricao: string; quantidade: number; preco: number; codigoIva?: string; taxaIva?: number; }
 export interface OTReprogramacao { id: string; dataAnterior?: string; novaData?: string; motivo: string; criadoEm: string; usuario?: string; }
-/** RF-OT-002 §3.1 — natureza da intervenção. */
-export type NaturezaIntervencao = 'Manutenção' | 'Substituição de filtro' | 'Reparação de avaria' | 'Inspeção';
-export const NATUREZAS_INTERVENCAO: NaturezaIntervencao[] = ['Manutenção', 'Substituição de filtro', 'Reparação de avaria', 'Inspeção'];
+/** RF-OT-002 §3.1 + #75 — natureza da intervenção (classificação única da OT). */
+export type NaturezaIntervencao = 'Manutenção' | 'Substituição de filtro' | 'Reparação de avaria' | 'Inspeção' | 'Montagem / Instalação';
+export const NATUREZAS_INTERVENCAO: NaturezaIntervencao[] = ['Manutenção', 'Substituição de filtro', 'Reparação de avaria', 'Inspeção', 'Montagem / Instalação'];
 
 /** RF-OT-002 §3.1 — prioridade. */
 export type OTPrioridade = 'Normal' | 'Alta' | 'Urgente';
@@ -108,7 +108,7 @@ export const OT_PRIORIDADES: OTPrioridade[] = ['Normal', 'Alta', 'Urgente'];
 export interface OrdemTrabalho {
     id: string; tipo: OTTipo; equipInstaladoId: string; clienteId: string;
     descricao: string; previsaoTempo: number; periodicidade?: string;
-    planoId?: string; tipoTrabalho: string; tipoOT?: string; responsavel: string;
+    planoId?: string; responsavel: string;
     maosDeObra: OTMaoObra[];
     artigos: OTArtigo[];
     orgao?: string; sintoma?: string; causa?: string;
@@ -324,7 +324,7 @@ const normOrdem = (o: any): OrdemTrabalho => ({
     id: o.id?.toString(), tipo: o.tipo, clienteId: o.cliente?.id?.toString() ?? o.clienteId?.toString() ?? '',
     equipInstaladoId: o.equipInstaladoId?.toString() ?? '', descricao: o.descricao,
     previsaoTempo: Number(o.previsaoTempo), periodicidade: o.periodicidade,
-    planoId: o.planoId?.toString(), tipoTrabalho: o.tipoTrabalho ?? '', tipoOT: o.tipoOT ?? '',
+    planoId: o.planoId?.toString(),
     responsavel: o.responsavel ?? '', maosDeObra: (o.maosObra ?? []).map((m: any) => ({ funcao: m.funcao, custo: Number(m.custo), hora: m.hora })),
     artigos: (o.artigos ?? []).map((a: any) => ({ artigoId: a.artigoId?.toString() ?? '', descricao: a.descricao, quantidade: Number(a.quantidade), preco: Number(a.preco), codigoIva: a.codigoIva ?? undefined, taxaIva: a.taxaIva != null ? Number(a.taxaIva) : undefined })),
     orgao: o.orgao, sintoma: o.sintoma, causa: o.causa,
