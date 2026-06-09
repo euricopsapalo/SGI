@@ -49,12 +49,12 @@ const COLS_OT: ExportCol[] = [
     { key: 'responsavel',    label: 'Responsável' },
     { key: 'dataAgendada',   label: 'Data Agendada' },
     { key: 'estado',         label: 'Estado' },
-    { key: 'tipoTrabalho',   label: 'Tipo Trabalho' },
+    { key: 'naturezaIntervencao', label: 'Natureza' },
 ];
 
 /* ── Intervenções print helpers ── */
 const isCorretivo = (ot: OrdemTrabalho) =>
-    ot.tipo === 'pontual' && ot.tipoTrabalho.toLowerCase().includes('corretiv');
+    ot.naturezaIntervencao === 'Reparação de avaria';
 
 const INTERV_CSS = `
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
@@ -127,7 +127,7 @@ function buildHistoricoGeralHtml(
         const rows = eqOts.map(o => `<tr>
             <td style="font-family:monospace">${o.id}</td>
             <td>${o.tipo === 'pontual' ? 'Pontual' : 'Programada'}</td>
-            <td>${o.tipoTrabalho}${isCorretivo(o) ? ' <span class="corr">●</span>' : ''}</td>
+            <td>${o.naturezaIntervencao ?? '—'}${isCorretivo(o) ? ' <span class="corr">●</span>' : ''}</td>
             <td style="color:${otEstadoCor(o.estado)};font-weight:600">${o.estado}</td>
             <td>${fDInterv(refDate(o))}</td>
             <td>${fDInterv(o.dataFim)}</td>
@@ -391,7 +391,7 @@ ${rows}${summaryRows}
 </div>
 <h3 class="sec-title">Identificação</h3>
 <table class="info-table">
-<tr><td>Tipo</td><td>${ot.tipo === 'periodica' ? 'Programada' : 'Pontual'} — ${ot.tipoTrabalho}</td></tr>
+<tr><td>Tipo</td><td>${ot.tipo === 'periodica' ? 'Programada' : 'Pontual'} — ${ot.naturezaIntervencao ?? '—'}</td></tr>
 <tr><td>Equipamento</td><td>${equip?.id ?? '—'} — ${mod} <span style="color:#888">(${equip?.nrSerie ?? '—'})</span></td></tr>
 <tr><td>Cliente</td><td>${cli}</td></tr>
 <tr><td>Responsável</td><td>${ot.responsavel}</td></tr>
@@ -450,7 +450,7 @@ interface OTFormProps {
 }
 
 const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly }) => {
-    const { equipInstalados, clientes, modelosEquipamento, planos, tiposTrabalho, tiposOT, funcoesTecnico, artigos: catalog, tecnicos, currentUser, taxasIva, fmtMoney, fmtDate, fmt, simboloMoeda, empresaConfig } = useGlobal();
+    const { equipInstalados, clientes, modelosEquipamento, planos, funcoesTecnico, artigos: catalog, tecnicos, currentUser, taxasIva, fmtMoney, fmtDate, fmt, simboloMoeda, empresaConfig } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
     // Issue #71 — 5 abas semânticas alinhadas com o ciclo de vida da OT.
     type TabId = 'identificacao' | 'cliente' | 'agendamento' | 'execucao' | 'gestao';
@@ -464,8 +464,6 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
     const [previsao, setPrevisao]   = useState(String(ot?.previsaoTempo ?? ''));
     const [periodo, setPeriodo]     = useState(ot?.periodicidade ?? 'Mensal');
     const [planoId, setPlanoId]     = useState(ot?.planoId ?? '');
-    const [tipoTrab, setTipoTrab]   = useState(ot?.tipoTrabalho ?? '');
-    const [tipoOT, setTipoOT]       = useState(ot?.tipoOT ?? '');
     const [responsavel, setResp]    = useState(ot?.responsavel ?? (!ot && isTecnicoCampo ? (currentUser?.tecnicoNome ?? currentUser?.nome ?? '') : ''));
     // RF-OT-002 §3.1 — novos campos da marcação
     const [naturezaIntervencao, setNatureza] = useState<NaturezaIntervencao | ''>((ot?.naturezaIntervencao ?? '') as any);
@@ -546,8 +544,6 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
         setDesc(p.descricao);
         setPrevisao(String(p.previsaoTempo));
         setPeriodo(p.periodicidade);
-        const tt = tiposTrabalho.find(t => t.id === p.tipoTrabalhoId);
-        if (tt) setTipoTrab(tt.descricao);
         setMaos(p.maosDeObra.map(m => {
             const f = funcoesTecnico.find(x => x.id === m.funcaoId);
             return { funcao: f?.descricao ?? m.funcaoId, custo: m.custo, hora: '08:00' };
@@ -590,10 +586,9 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
     // Issue #71 — devolve as keys com erro para o caller saltar para a aba certa.
     const validate = (): string[] => {
         const e: Record<string, string> = {};
-        if (!tipoOT)           e.tipoOT = 'Obrigatório';
+        if (!naturezaIntervencao) e.natureza = 'Obrigatório';
         if (!equipId)          e.equip  = 'Obrigatório';
         if (!descricao.trim()) e.desc   = 'Obrigatório';
-        if (!tipoTrab)         e.tipo   = 'Obrigatório';
         if (!responsavel)      e.resp   = 'Obrigatório';
         setErrors(e);
         return Object.keys(e);
@@ -602,7 +597,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
     const buildOT = (): Omit<OrdemTrabalho, 'id'> => ({
         tipo, equipInstaladoId: equipId, clienteId,
         descricao, previsaoTempo: Number(previsao) || 0, periodicidade: tipo === 'periodica' ? periodo : undefined,
-        planoId: planoId || undefined, tipoTrabalho: tipoTrab, tipoOT: tipoOT || undefined, responsavel,
+        planoId: planoId || undefined, responsavel,
         maosDeObra: maos, artigos: arts,
         orgao: orgao || undefined, sintoma: sintoma || undefined, causa: causa || undefined,
         dataAgendada: dpI || undefined, dataProgFim: dpF || undefined,
@@ -618,11 +613,10 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
     // Issue #71 — mapeia cada campo validado à sua aba para podermos saltar para
     // a primeira aba que tenha erro depois de submeter.
     const FIELD_TAB: Record<string, TabId> = {
-        tipoOT: 'identificacao',
-        desc:   'identificacao',
-        tipo:   'identificacao',
-        equip:  'cliente',
-        resp:   'agendamento',
+        natureza: 'identificacao',
+        desc:     'identificacao',
+        equip:    'cliente',
+        resp:     'agendamento',
     };
 
     const handleOk = (ev: React.FormEvent) => {
@@ -712,20 +706,20 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                                     )}
                                     <div className="form-group">
                                         <label className="form-label req">Tipo de OT</label>
-                                        <select className={`form-select${errors.tipoOT ? ' err' : ''}`} value={tipoOT} onChange={e => { const v = e.target.value; setTipoOT(v); setTipo(v.toLowerCase().includes('pontual') ? 'pontual' : 'periodica'); }}>
-                                            <option value="">Seleccionar...</option>
-                                            {tiposOT.map(t => <option key={t.id} value={t.descricao}>{t.descricao}</option>)}
+                                        <select className="form-select" value={tipo} onChange={e => setTipo(e.target.value as OTTipo)}>
+                                            <option value="pontual">Pontual</option>
+                                            <option value="periodica">Periódica</option>
                                         </select>
-                                        {errors.tipoOT && <span className="form-error"><AlertCircle size={11} /> {errors.tipoOT}</span>}
                                     </div>
                                 </div>
                                 <div className="form-row">
                                     <div className="form-group">
-                                        <label className="form-label">Natureza da Intervenção</label>
-                                        <select className="form-select" value={naturezaIntervencao} onChange={e => setNatureza(e.target.value as any)}>
+                                        <label className="form-label req">Natureza da Intervenção</label>
+                                        <select className={`form-select${errors.natureza ? ' err' : ''}`} value={naturezaIntervencao} onChange={e => setNatureza(e.target.value as any)}>
                                             <option value="">Seleccionar...</option>
                                             {NATUREZAS_INTERVENCAO.map(n => <option key={n} value={n}>{n}</option>)}
                                         </select>
+                                        {errors.natureza && <span className="form-error"><AlertCircle size={11} /> {errors.natureza}</span>}
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label">Prioridade</label>
@@ -739,16 +733,6 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                                     <textarea className={`form-textarea${errors.desc ? ' err' : ''}`} value={descricao}
                                         onChange={e => setDesc(e.target.value)} placeholder="Descreva o trabalho a realizar..." style={{ minHeight: 70 }} />
                                     {errors.desc && <span className="form-error"><AlertCircle size={11} /> {errors.desc}</span>}
-                                </div>
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label className="form-label req">Tipo de Trabalho</label>
-                                        <select className={`form-select${errors.tipo ? ' err' : ''}`} value={tipoTrab} onChange={e => setTipoTrab(e.target.value)}>
-                                            <option value="">Seleccionar...</option>
-                                            {tiposTrabalho.map(t => <option key={t.id}>{t.descricao}</option>)}
-                                        </select>
-                                        {errors.tipo && <span className="form-error"><AlertCircle size={11} /> {errors.tipo}</span>}
-                                    </div>
                                 </div>
                             </>
                         )}
@@ -1024,7 +1008,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
 
 /* ══ Main Page ═══════════════════════════════════════════ */
 const OrdensPage: React.FC = () => {
-    const { ordens, addOrdem, updateOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, finalizarOT, equipInstalados, clientes, modelosEquipamento, currentUser, tiposOT, fmtDate, empresaConfig, simboloMoeda, tecnicos } = useGlobal();
+    const { ordens, addOrdem, updateOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, finalizarOT, equipInstalados, clientes, modelosEquipamento, currentUser, fmtDate, empresaConfig, simboloMoeda, tecnicos } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
 
     const [search, setSearch]         = useState('');
@@ -1052,7 +1036,7 @@ const OrdensPage: React.FC = () => {
         const { equip, cliente } = getLabel(o);
         return (!q || o.id.toLowerCase().includes(q) || equip.toLowerCase().includes(q) || cliente.toLowerCase().includes(q) || o.descricao.toLowerCase().includes(q))
             && (!filterEstado || o.estado === filterEstado)
-            && (!filterTipo   || o.tipoOT === filterTipo)
+            && (!filterTipo   || o.naturezaIntervencao === filterTipo)
             && (!isTecnicoCampo || o.responsavel === (currentUser?.tecnicoNome ?? currentUser?.nome));
     }), [ordens, search, filterEstado, filterTipo, isTecnicoCampo, currentUser]);
 
@@ -1176,8 +1160,8 @@ const OrdensPage: React.FC = () => {
                         <option value="Encerrado">Encerrado</option>
                     </select>
                     <select className="filter-select" value={filterTipo} onChange={e => setFiltTipo(e.target.value)}>
-                        <option value="">Todos os tipos</option>
-                        {tiposOT.map(t => <option key={t.id} value={t.descricao}>{t.descricao}</option>)}
+                        <option value="">Todas as naturezas</option>
+                        {NATUREZAS_INTERVENCAO.map(n => <option key={n} value={n}>{n}</option>)}
                     </select>
                     {(search || filterEstado || filterTipo) && (
                         <button className="abtn abtn-secondary" type="button" onClick={() => { setSearch(''); setFiltEst(''); setFiltTipo(''); }}>
@@ -1231,7 +1215,7 @@ const OrdensPage: React.FC = () => {
                                                 </div>
                                             </td>
                                             <td style={{ fontSize: '0.75rem', fontFamily: 'monospace' }}>{o.numero ?? '—'}</td>
-                                            <td>{o.tipoOT ? <span className="tbadge tbadge-suporte">{o.tipoOT}</span> : <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>—</span>}</td>
+                                            <td><span className="tbadge tbadge-suporte">{o.tipo === 'periodica' ? 'Periódica' : 'Pontual'}</span></td>
                                             <td style={{ fontSize: '0.75rem' }}>{o.naturezaIntervencao ?? '—'}</td>
                                             <td style={{ fontSize: '0.75rem' }}>
                                                 {o.prioridade && (

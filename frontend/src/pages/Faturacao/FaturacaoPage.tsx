@@ -46,7 +46,7 @@ const EmitirDocumentoModal: React.FC<EmitirModalProps> = ({ onClose, onSave }) =
         .filter(o => o.estado === 'Finalizada')
         .map(o => {
             const cli = clientes.find(c => c.id === o.clienteId);
-            return { value: o.id, label: `${o.id} — ${cli?.nome ?? o.clienteId}`, sub: o.tipoTrabalho };
+            return { value: o.id, label: `${o.id} — ${cli?.nome ?? o.clienteId}`, sub: o.naturezaIntervencao };
         });
 
     const clienteOpts = clientes.filter(c => c.ativo).map(c => ({ value: c.id, label: c.nome, sub: c.nif }));
@@ -163,7 +163,7 @@ const EmitirDocumentoModal: React.FC<EmitirModalProps> = ({ onClose, onSave }) =
 
                             {otSelected && (
                                 <div style={{ padding: '8px 12px', background: '#f8f9fa', border: '1px solid var(--border)', borderRadius: 3, fontSize: '0.81rem', marginBottom: 8 }}>
-                                    <strong>{clientes.find(c => c.id === otSelected.clienteId)?.nome}</strong> · {otSelected.tipoTrabalho} · {otSelected.descricao}
+                                    <strong>{clientes.find(c => c.id === otSelected.clienteId)?.nome}</strong> · {otSelected.naturezaIntervencao} · {otSelected.descricao}
                                 </div>
                             )}
 
@@ -574,7 +574,7 @@ const FaturacaoPage: React.FC = () => {
     const getOTDesc      = (otId: string) => {
         if (otId === 'N/A') return '';
         const ot = ordens.find(o => o.id === otId);
-        return ot ? `${ot.tipoTrabalho} · ${ot.descricao}` : '';
+        return ot ? `${ot.naturezaIntervencao ?? "—"} · ${ot.descricao}` : '';
     };
 
     const handleEmitir = (f: Omit<Fatura, 'id'>) => {

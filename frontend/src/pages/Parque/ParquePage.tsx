@@ -27,7 +27,7 @@ const diffDays = (d?: string) => {
     return Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
 };
 const isCorretivo = (ot: OrdemTrabalho) =>
-    ot.tipo === 'pontual' && ot.tipoTrabalho.toLowerCase().includes('corretiv');
+    ot.naturezaIntervencao === 'Reparação de avaria';
 
 const OT_ESTADO_COLOR: Record<string, string> = {
     'Registada': 'var(--text-secondary)',
@@ -154,7 +154,7 @@ function buildHistoricoEquipHtml(
         .map(o => `<tr>
             <td style="font-family:monospace">${o.id}</td>
             <td>${o.tipo === 'pontual' ? 'Pontual' : 'Programada'}</td>
-            <td>${o.tipoTrabalho}${isCorretivo(o) ? ' <span class="corr">●</span>' : ''}</td>
+            <td>${o.naturezaIntervencao ?? "—"}${isCorretivo(o) ? ' <span class="corr">●</span>' : ''}</td>
             <td style="color:${o.estado === 'Finalizada' ? '#16a34a' : o.estado === 'Em execução' ? '#eab308' : o.estado === 'Adiada' ? '#f97316' : o.estado === 'Confirmada' ? '#7c3aed' : o.estado === 'Registada' ? '#6b7280' : '#2563eb'};font-weight:600">${o.estado}</td>
             <td>${fD(o.dataAgendada || o.dataProgFim)}</td>
             <td>${fD(o.dataFim)}</td>
@@ -228,7 +228,7 @@ function buildHistoricoGeralHtml(
         const rows = eqOts.map(o => `<tr>
             <td style="font-family:monospace">${o.id}</td>
             <td>${o.tipo === 'pontual' ? 'Pontual' : 'Programada'}</td>
-            <td>${o.tipoTrabalho}${isCorretivo(o) ? ' <span class="corr">●</span>' : ''}</td>
+            <td>${o.naturezaIntervencao ?? "—"}${isCorretivo(o) ? ' <span class="corr">●</span>' : ''}</td>
             <td style="color:${o.estado === 'Finalizada' ? '#16a34a' : o.estado === 'Em execução' ? '#eab308' : o.estado === 'Adiada' ? '#f97316' : o.estado === 'Confirmada' ? '#7c3aed' : o.estado === 'Registada' ? '#6b7280' : '#2563eb'};font-weight:600">${o.estado}</td>
             <td>${fD(refDate(o))}</td>
             <td>${fD(o.dataFim)}</td>
@@ -292,7 +292,7 @@ function buildEstadoParqueHtml(
 ): string {
     const now = Date.now();
     const isCorr = (o: OrdemTrabalho) =>
-        o.tipo === 'pontual' && o.tipoTrabalho.toLowerCase().includes('corretiv');
+        o.naturezaIntervencao === 'Reparação de avaria';
 
     const stats = equipInstalados.map(eq => {
         const eqOts  = ordens.filter(o => String(o.equipInstaladoId) === String(eq.id));
@@ -325,7 +325,7 @@ function buildEstadoParqueHtml(
     const semManutencao = stats.filter(s => s.effective === 'ativo' && !s.proximaMt);
 
     const trOT = (s: typeof stats[0]) =>
-        s.corretivas.map(o => `<span style="font-size:0.68rem;color:#f97316">OT ${o.id} — ${o.tipoTrabalho} (${o.estado})</span>`).join('<br>');
+        s.corretivas.map(o => `<span style="font-size:0.68rem;color:#f97316">OT ${o.id} — ${o.naturezaIntervencao ?? "—"} (${o.estado})</span>`).join('<br>');
 
     const diasCor = (d: number | null) =>
         d === null ? '—' : d < 0 ? `<span style="color:#dc2626;font-weight:700">Atrasada ${Math.abs(d)}d</span>`
@@ -818,7 +818,7 @@ const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
                                                         </span>
                                                     </td>
                                                     <td style={{ fontSize: '0.78rem' }}>
-                                                        {o.tipoTrabalho}
+                                                        {o.naturezaIntervencao}
                                                         {corretivo && (
                                                             <span style={{ marginLeft: 4, fontSize: '0.68rem', color: '#f97316', fontWeight: 700 }}>●</span>
                                                         )}
@@ -961,7 +961,7 @@ const ParquePage: React.FC = () => {
             addOrdem({
                 id: '', tipo: 'pontual', equipInstaladoId: eq.id, clienteId: data.clienteId,
                 descricao: `Montagem e comissionamento — ${mod?.nome ?? 'equipamento'}`,
-                previsaoTempo: 4, tipoTrabalho: 'Montagem / Instalação', responsavel: '—',
+                previsaoTempo: 4, naturezaIntervencao: 'Montagem / Instalação', responsavel: '—',
                 maosDeObra: [], artigos: [],
                 dataAgendada: data.dataInstalacao, dataProgFim: data.dataInstalacao,
                 estado: 'Registada',

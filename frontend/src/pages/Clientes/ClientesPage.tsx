@@ -565,7 +565,7 @@ function buildFichaClienteHtml(
     const otRows = cliOTs.slice(0, 20).map(o => `<tr>
       <td style="font-family:monospace">${o.id}</td>
       <td>${o.tipo === 'pontual' ? 'Pontual' : 'Programada'}</td>
-      <td>${o.tipoTrabalho}</td>
+      <td>${o.naturezaIntervencao ?? "—"}</td>
       <td style="color:${otCorRC(o.estado)};font-weight:600">${o.estado}</td>
       <td>${fRC(o.dataAgendada || o.dataProgFim)}</td>
       <td>${fRC(o.dataFim)}</td>
@@ -805,7 +805,7 @@ function buildHistoricoIntervClienteHtml(
               <td style="font-family:monospace">${o.id}</td>
               <td>${mod?.nome ?? '—'}</td>
               <td>${o.tipo === 'pontual' ? 'Pontual' : 'Programada'}</td>
-              <td>${o.tipoTrabalho}</td>
+              <td>${o.naturezaIntervencao ?? "—"}</td>
               <td style="color:${otCorRC(o.estado)};font-weight:600">${o.estado}</td>
               <td>${fRC(refDate(o))}</td>
               <td>${fRC(o.dataFim)}</td>

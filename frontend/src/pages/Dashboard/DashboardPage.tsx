@@ -36,7 +36,7 @@ const DashboardPage: React.FC = () => {
     const encAbertas    = encomendas.filter(e => e.estado === 'Aberta' || e.estado === 'Parcial').length;
 
     const alertas: { msg: string; tipo: 'error' | 'warning' | 'info' }[] = [
-        ...otAtrasadas.map(o => ({ msg: `OT ${o.id} (${o.tipoTrabalho}) — data programada já passou`, tipo: 'error' as const })),
+        ...otAtrasadas.map(o => ({ msg: `OT ${o.id} (${o.naturezaIntervencao ?? "—"}) — data programada já passou`, tipo: 'error' as const })),
         ...(!isTecnicoCampo ? artigosAbaixo.map(a => ({ msg: `Stock crítico: ${a.descricao} (${a.existencia} / ${a.stockSeguranca})`, tipo: 'error' as const })) : []),
         ...(!isTecnicoCampo ? semStock.map(a => ({ msg: `Sem stock: ${a.descricao}`, tipo: 'warning' as const })) : []),
         ...(manutUrgente > 0 ? [{ msg: `${manutUrgente} equipamento(s) com manutenção urgente (≤7 dias)`, tipo: 'warning' as const }] : []),
@@ -142,7 +142,7 @@ const DashboardPage: React.FC = () => {
                                         <tr key={ot.id}>
                                             <td style={{ paddingLeft: 10 }}><span className={`dot ${DOT[ot.estado] ?? 'dot-gray'}`} /></td>
                                             <td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--blue)', fontWeight: 600 }}>{ot.id}</span></td>
-                                            <td style={{ fontSize: '0.78rem' }}>{ot.tipoTrabalho}</td>
+                                            <td style={{ fontSize: '0.78rem' }}>{ot.naturezaIntervencao}</td>
                                             <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{getClienteNome(ot.clienteId)}</td>
                                             <td style={{ fontSize: '0.76rem' }}>{ot.estado}</td>
                                         </tr>

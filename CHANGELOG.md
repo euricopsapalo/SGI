@@ -4,6 +4,25 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### chore(ot): fundir `tipoTrabalho`/`tipoOT` em `naturezaIntervencao` (closes #75)
+
+Elimina dois campos de classificação redundantes da OT, consolidando tudo na enum tipada `naturezaIntervencao`, que passa a ser a **classificação única** da OT.
+
+- `tipoTrabalho` (texto livre) e `tipoOT` (texto livre) removidos; `tipoOT` era apenas um proxy textual do `tipo` (pontual/periódica).
+- Enum `naturezaIntervencao` estendida com **`Montagem / Instalação`** (cobre as OTs auto-criadas no Parque). `Reparação de avaria` passa a ser a corretiva (`isCorretivo`).
+
+**Backend**
+- Entidade `OrdemTrabalho` e `CreateOrdemTrabalhoDto` deixam de expor `tipoTrabalho`/`tipoOT`; clonagem periódica em `finalizar` copia agora `naturezaIntervencao` + `prioridade`.
+- Migration `FundirTipoTrabalhoNatureza` (up/down): backfill por palavra-chave `tipo_trabalho → natureza_intervencao` (corretiv/avaria→Reparação, filtro→Substituição, inspe→Inspeção, montagem/instala→Montagem, preventiv/manuten→Manutenção) quando a natureza está nula; estende o CHECK; dropa as colunas.
+- `init.sql`: CHECK de natureza estendido; colunas removidas.
+
+**Frontend**
+- `GlobalContext`: `NaturezaIntervencao`/`NATUREZAS_INTERVENCAO` ganham `Montagem / Instalação`; `OrdemTrabalho` e `normOrdem` deixam de mapear `tipoTrabalho`/`tipoOT`.
+- `OrdensPage`: campo "Tipo de OT" passa a seletor direto **Pontual/Periódica** (`tipo`); "Natureza da Intervenção" passa a **obrigatória**; campo livre "Tipo de Trabalho" removido; filtro e coluna por natureza; `isCorretivo` por `Reparação de avaria`.
+- `ParquePage` (incl. auto-OT de Montagem), `RelatoriosPage` (buckets montagem/preventiva/corretiva por natureza), `Dashboard`, `Tecnicos`, `Faturacao`, `Clientes`, `Agenda`: rótulos migrados de `tipoTrabalho` → `naturezaIntervencao`.
+
+**Nota:** `PlanoManutencao.tipoTrabalhoId` (FK própria do plano) mantém-se — é de outra entidade. Restantes redundâncias em #76/#77.
+
 ### chore(ot): remover colunas de data vestigiais de `ordens_trabalho` (closes #74)
 
 Limpeza de débito técnico acumulado nas iterações RF-OT-001→003. Remove três colunas redundantes da OT, cujo valor já era coberto por colunas canónicas:

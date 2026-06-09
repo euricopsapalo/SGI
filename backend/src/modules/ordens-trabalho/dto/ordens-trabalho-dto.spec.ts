@@ -18,7 +18,7 @@ describe('Ordens-Trabalho DTOs', () => {
         tipo: 'periodica',
         clienteId: 1,
         descricao: 'Manutenção preventiva',
-        tipoTrabalho: 'preventiva',
+        naturezaIntervencao: 'Manutenção',
         previsaoTempo: 2.5,
         periodicidade: 'Mensal',
         estado: 'Programada',

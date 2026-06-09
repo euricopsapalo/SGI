@@ -19,7 +19,7 @@ export class OtArtigoDto {
 export class CreateOrdemTrabalhoDto {
   @IsOptional() @IsEnum(['pontual', 'periodica']) tipo?: string;
   // RF-OT-002 §3.1 — novos campos
-  @IsOptional() @IsEnum(['Manutenção','Substituição de filtro','Reparação de avaria','Inspeção'])
+  @IsOptional() @IsEnum(['Manutenção','Substituição de filtro','Reparação de avaria','Inspeção','Montagem / Instalação'])
   naturezaIntervencao?: string;
   @IsOptional() @IsEnum(['Normal','Alta','Urgente']) prioridade?: string;
   @IsOptional() @IsString() dataRegisto?: string;
@@ -28,8 +28,6 @@ export class CreateOrdemTrabalhoDto {
   @IsOptional() @IsNumber() clienteId?: number;        // derivado do equipInstalado se omitido
   @IsOptional() @IsNumber() equipInstaladoId?: number;
   @IsOptional() @IsNumber() planoId?: number;
-  @IsOptional() @IsString() tipoTrabalho?: string;
-  @IsOptional() @IsString() tipoOT?: string;
   @IsString() @IsNotEmpty() descricao: string;
   @IsOptional() @IsNumber() previsaoTempo?: number;
   @IsOptional() @IsString() periodicidade?: string;
