@@ -21,6 +21,14 @@ import { ConfiguracaoEmpresa } from '../src/modules/configuracao/configuracao-em
  * Usa um repositório em memória (sem BD) para validar os códigos HTTP
  * das transições e dos aliases descontinuados.
  */
+
+/** #79 — datas relativas a hoje (evita fragilidade de datas fixas no passado). */
+const isoDate = (d: Date) => d.toISOString().split('T')[0];
+const offsetDays = (n: number) => isoDate(new Date(Date.now() + n * 86400000));
+const DATA_REGISTO  = offsetDays(-30);  // OT registada há 30 dias
+const DATA_AGENDADA = offsetDays(15);   // dentro da janela e ≥ hoje (válida para confirmar)
+const JANELA_FIM    = offsetDays(150);  // ~5 meses (< 6m)
+
 describe('OT Ciclo de Estados (RF-OT-001) E2E', () => {
     let app: INestApplication;
     let store: Record<number, any>;
@@ -29,8 +37,8 @@ describe('OT Ciclo de Estados (RF-OT-001) E2E', () => {
     beforeAll(async () => {
         store = {
             1: { id: 1, estado: OTEstado.REGISTADA, descricao: 'OT', responsavel: 'r',
-                 dataRegisto: '2026-05-01', dataProgInicio: '2026-06-01', dataAgendada: '2026-06-01',
-                 janelaFim: '2026-11-01', adiamentos: 0, executadoPorId: 1, artigos: [], tipo: 'pontual' },
+                 dataRegisto: DATA_REGISTO, dataProgInicio: DATA_AGENDADA, dataAgendada: DATA_AGENDADA,
+                 janelaFim: JANELA_FIM, adiamentos: 0, executadoPorId: 1, artigos: [], tipo: 'pontual' },
         };
 
         const repo = {
@@ -76,9 +84,9 @@ describe('OT Ciclo de Estados (RF-OT-001) E2E', () => {
     });
 
     it('fluxo feliz Registada → … → Finalizada (cada passo 200)', async () => {
-        await request(srv()).put('/ordens/1/agendar').send({ dataAgendada: '2026-06-01' }).expect(200);
+        await request(srv()).put('/ordens/1/agendar').send({ dataAgendada: DATA_AGENDADA }).expect(200);
         expect(store[1].estado).toBe('Programada');
-        await request(srv()).put('/ordens/1/confirmar').send({ dataExecucao: '2026-06-01', executadoPorId: 1 }).expect(200);
+        await request(srv()).put('/ordens/1/confirmar').send({ dataExecucao: DATA_AGENDADA, executadoPorId: 1 }).expect(200);
         expect(store[1].estado).toBe('Confirmada');
         await request(srv()).put('/ordens/1/iniciar').send({}).expect(200);
         expect(store[1].estado).toBe('Em execução');
@@ -94,7 +102,7 @@ describe('OT Ciclo de Estados (RF-OT-001) E2E', () => {
     });
 
     it('transição inválida (Finalizada → qualquer) devolve 422', async () => {
-        await request(srv()).put('/ordens/1/agendar').send({ dataProgInicio: '2026-07-01' }).expect(422);
+        await request(srv()).put('/ordens/1/agendar').send({ dataAgendada: offsetDays(20) }).expect(422);
         expect(store[1].estado).toBe('Finalizada');
     });
 
