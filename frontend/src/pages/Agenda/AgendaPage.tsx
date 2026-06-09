@@ -31,7 +31,7 @@ const fmtDateShort= (d: Date) => d.toLocaleDateString('pt-PT', { day: '2-digit',
 const fmtDateLong = (d: Date) => d.toLocaleDateString('pt-PT', { weekday: 'short', day: '2-digit', month: 'short' });
 const fmtMonth    = (d: Date) => d.toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' });
 const fmtWeek     = (s: Date) => `${fmtDateShort(s)} – ${fmtDateShort(addDays(s, 6))}`;
-const otDate      = (ot: OrdemTrabalho) => ot.dataProgInicio ?? null;
+const otDate      = (ot: OrdemTrabalho) => ot.dataAgendada ?? null;
 const startOfWeek = (d: Date) => { const r = new Date(d); r.setDate(r.getDate() - ((r.getDay() + 6) % 7)); return r; };
 const startOfMonth= (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
 
@@ -66,7 +66,7 @@ const ReprogramarModal: React.FC<ReprogramarProps> = ({ ot, novaData: initialDat
                     <div style={{ padding: '10px 12px', background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: 4, marginBottom: 14, fontSize: '0.8rem' }}>
                         <div style={{ fontWeight: 700, color: 'var(--blue)' }}>{ot.id} — {ot.tipoTrabalho}</div>
                         <div style={{ color: 'var(--text-secondary)', marginTop: 2 }}>
-                            Data actual: <strong>{fmtDt(ot.dataProgInicio)}</strong>
+                            Data actual: <strong>{fmtDt(ot.dataAgendada)}</strong>
                             {ot.responsavel && ot.responsavel !== '—' && <> · Responsável: {ot.responsavel}</>}
                         </div>
                     </div>
@@ -146,7 +146,7 @@ const OTDetail: React.FC<{ ot: OrdemTrabalho; nomeCliente: string; nomeEquip: st
                         { label: 'Equipamento',       value: nomeEquip || '—' },
                         { label: 'Responsável',       value: ot.responsavel || '—' },
                         { label: 'Descrição',         value: ot.descricao || '—' },
-                        { label: 'Data Prog. Início', value: fmtDt(ot.dataProgInicio) },
+                        { label: 'Data Agendada',     value: fmtDt(ot.dataAgendada) },
                         { label: 'Data Prog. Fim',    value: fmtDt(ot.dataProgFim) },
                         { label: 'Previsão (h)',      value: ot.previsaoTempo ? `${ot.previsaoTempo}h` : '—' },
                     ].map(row => (
@@ -214,7 +214,7 @@ const AgendaPage: React.FC = () => {
 
     const ordemsFiltradas = useMemo(() =>
         ordens.filter(o => {
-            if (!o.dataProgInicio) return false;
+            if (!o.dataAgendada) return false;
             if (filterTec && o.responsavel !== filterTec) return false;
             if (isTecnicoCampo && o.responsavel !== meuTecnicoNome) return false;
             return true;
@@ -259,7 +259,7 @@ const AgendaPage: React.FC = () => {
     const handleDrop      = (e: React.DragEvent, dateStr: string) => {
         e.preventDefault();
         setDropOver(null);
-        if (isTecnicoCampo || !dragOT || dateStr === dragOT.dataProgInicio) { setDragOT(null); return; }
+        if (isTecnicoCampo || !dragOT || dateStr === dragOT.dataAgendada) { setDragOT(null); return; }
         setDropTarget({ ot: dragOT, date: dateStr });
         setDragOT(null);
     };
@@ -267,7 +267,7 @@ const AgendaPage: React.FC = () => {
     const handleReprogramar = async (novaData: string, motivo: string) => {
         if (!dropTarget) return;
         const ot = dropTarget.ot;
-        const oldStart = ot.dataProgInicio ?? '';
+        const oldStart = ot.dataAgendada ?? '';
         const delta    = oldStart ? Math.round((new Date(novaData).getTime() - new Date(oldStart).getTime()) / 86400000) : 0;
         const newFim   = ot.dataProgFim && delta !== 0
             ? isoDate(addDays(new Date(ot.dataProgFim), delta))

@@ -251,10 +251,9 @@ export class OrdensTrabalhoService {
         const today = new Date().toISOString().split('T')[0];
         const dataRegisto = rest.dataRegisto ?? today;
         const prioridade = rest.prioridade ?? 'Normal';
-        // RF-OT-003 §3.1 — janela_fim = data_registo + 6 meses;
-        // data_agendada espelha dataProgInicio se vier no payload.
+        // RF-OT-003 §3.1 — janela_fim = data_registo + 6 meses.
         const janelaFim = rest.janelaFim ?? addMonthsISO(dataRegisto, 6);
-        const dataAgendada = rest.dataAgendada ?? rest.dataProgInicio ?? null;
+        const dataAgendada = rest.dataAgendada ?? null;
 
         const entity = this.repo.create({
             ...rest,
@@ -355,14 +354,13 @@ export class OrdensTrabalhoService {
 
     /**
      * RF-OT-003 §3.4 — Registada/Adiada → Programada.
-     * Define `data_agendada` (e replica em `data_prog_inicio` por compat).
-     * Valida que a data cai dentro da janela de 6 meses (§3.1).
+     * Define `data_agendada`. Valida que a data cai dentro da janela de 6 meses (§3.1).
      */
-    async agendar(id: number, opts: { dataAgendada?: string; dataProgInicio?: string; dataProgFim?: string; usuario?: string } = {}) {
+    async agendar(id: number, opts: { dataAgendada?: string; dataProgFim?: string; usuario?: string } = {}) {
         const ot = await this.findOrFail(id);
         this.assertTransicao(ot, OTEstado.PROGRAMADA);
 
-        const dataAgendada = opts.dataAgendada ?? opts.dataProgInicio ?? ot.dataAgendada ?? ot.dataProgInicio;
+        const dataAgendada = opts.dataAgendada ?? ot.dataAgendada;
         if (!dataAgendada) {
             throw new BadRequestException('Data agendada é obrigatória ao agendar.');
         }
@@ -370,7 +368,6 @@ export class OrdensTrabalhoService {
 
         const extra: Record<string, unknown> = {
             dataAgendada,
-            dataProgInicio: dataAgendada,
         };
         if (opts.dataProgFim) extra.dataProgFim = opts.dataProgFim;
 
@@ -486,7 +483,7 @@ export class OrdensTrabalhoService {
             this.assertDataDentroJanela(ot, novaData, 'Nova data de adiamento');
         }
 
-        const dataAnterior = ot.dataExecucao ?? ot.dataAgendada ?? ot.dataProgInicio ?? null;
+        const dataAnterior = ot.dataExecucao ?? ot.dataAgendada ?? null;
         const eraConfirmada = ot.estado === OTEstado.CONFIRMADA;
 
         // Histórico em ot_reprogramacoes (reaproveitada).
@@ -501,7 +498,6 @@ export class OrdensTrabalhoService {
         const extra: Record<string, unknown> = {
             adiamentos: adiamentosAtuais + 1,
             dataAgendada: novaData,
-            dataProgInicio: novaData,
             dataExecucao: null,
             janelaFim: novaJanelaFim,
         };
@@ -540,7 +536,6 @@ export class OrdensTrabalhoService {
 
         const today = new Date().toISOString().split('T')[0];
         await this.transitar(id, ot.estado, OTEstado.EM_EXECUCAO, {
-            dataEmissao: ot.dataEmissao ?? today,
             dataInicio: dataInicio ?? today,
         }, usuario);
 
@@ -607,7 +602,7 @@ export class OrdensTrabalhoService {
                 sintoma: updated.sintoma,
                 causa: updated.causa,
                 estado: OTEstado.PROGRAMADA,
-                dataProgInicio: nextStart,
+                dataAgendada: nextStart,
                 dataProgFim: nextEnd,
             }));
 
@@ -667,7 +662,7 @@ export class OrdensTrabalhoService {
             motivo: motivo ?? '',
             usuario: usuario ?? 'sistema',
         }));
-        await this.repo.update(id, { dataProgInicio: novaData, dataAgendada: novaData });
+        await this.repo.update(id, { dataAgendada: novaData });
         return this.findOne(id);
     }
 }

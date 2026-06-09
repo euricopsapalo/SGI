@@ -4,6 +4,24 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### chore(ot): remover colunas de data vestigiais de `ordens_trabalho` (closes #74)
+
+Limpeza de débito técnico acumulado nas iterações RF-OT-001→003. Remove três colunas redundantes da OT, cujo valor já era coberto por colunas canónicas:
+- `data_prog_inicio` → substituída por `data_agendada` (RF-OT-003); o serviço escrevia ambas com o mesmo valor.
+- `data_emissao` → resquício do fluxo legado *emitir* (410 Gone); `data_inicio` cobre o início efectivo.
+- `data_encerramento` → resquício do fluxo legado *encerrar* (410 Gone); `data_fim` cobre o fecho.
+
+**Backend**
+- Entidade `OrdemTrabalho`, `CreateOrdemTrabalhoDto` e `AgendarOtDto` deixam de expor os três campos; `agendar`/`adiar`/`reprogramar` escrevem apenas `data_agendada`; `iniciar` deixa de escrever `data_emissao`; a clonagem periódica em `finalizar` usa `data_agendada`.
+- Migration `RemoverDatasVestigiaisOT` (up/down): backfill defensivo `data_agendada ← data_prog_inicio` antes de dropar; `down` recria as colunas e restaura `data_prog_inicio ← data_agendada`.
+- `init.sql` actualizado; índice de programação passa a indexar `data_agendada`.
+
+**Frontend**
+- `GlobalContext.OrdemTrabalho` e `normOrdem` deixam de mapear os três campos.
+- `OrdensPage`, `AgendaPage`, `DashboardPage`, `ClientesPage`, `ParquePage`, `TecnicosPage`: leituras/ordenações/impressões migradas de `dataProgInicio` para `dataAgendada`; fallbacks para `dataEmissao`/`dataEncerramento` removidos.
+
+**Nota:** `cliente_id` mantém-se (denormalização justificada de `equip_instalado`). Demais redundâncias tratadas em #75/#76/#77.
+
 ### feat(ot): RF-OT-003 — Programação: confirmar/adiar + janela de 6 meses (closes #56)
 
 Formaliza o ponto de decisão **confirmar/adiar** dentro de uma janela fixa de 6 meses, com contador de adiamentos e limite (default 3) que exige aprovação de **administrador** acima do limite.

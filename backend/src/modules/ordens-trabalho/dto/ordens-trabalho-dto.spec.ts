@@ -22,7 +22,7 @@ describe('Ordens-Trabalho DTOs', () => {
         previsaoTempo: 2.5,
         periodicidade: 'Mensal',
         estado: 'Programada',
-        dataProgInicio: '2026-04-10',
+        dataAgendada: '2026-04-10',
         dataProgFim: '2026-04-10',
         maosObra: [{ funcao: 'Técnico', custo: 5000 }],
         artigos: [{ descricao: 'Filtro', quantidade: 2, preco: 1500 }],
