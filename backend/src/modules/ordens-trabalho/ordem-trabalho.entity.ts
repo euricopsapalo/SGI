@@ -128,13 +128,10 @@ export class OrdemTrabalho {
     @Column({ nullable: true, type: 'text' })
     causa: string;
 
-    @Column({ name: 'data_prog_inicio', type: 'date', nullable: true })
-    dataProgInicio: string;
-
     @Column({ name: 'data_prog_fim', type: 'date', nullable: true })
     dataProgFim: string;
 
-    /** RF-OT-003 §4 — data agendada actual (substitui semanticamente data_prog_inicio). */
+    /** RF-OT-003 §4 — data agendada actual da OT (antiga data_prog_inicio, #74). */
     @Column({ name: 'data_agendada', type: 'date', nullable: true })
     dataAgendada: string;
 
@@ -161,17 +158,11 @@ export class OrdemTrabalho {
     @Column({ name: 'aprovado_por_id', nullable: true })
     aprovadoPorId: number;
 
-    @Column({ name: 'data_emissao', type: 'date', nullable: true })
-    dataEmissao: string;
-
     @Column({ name: 'data_inicio', type: 'date', nullable: true })
     dataInicio: string;
 
     @Column({ name: 'data_fim', type: 'date', nullable: true })
     dataFim: string;
-
-    @Column({ name: 'data_encerramento', type: 'date', nullable: true })
-    dataEncerramento: string;
 
     @Column({ type: 'enum', enum: OTEstado, default: OTEstado.REGISTADA })
     estado: OTEstado;

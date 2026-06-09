@@ -40,7 +40,6 @@ export class OrdensTrabalhoController {
     agendar(@Param('id', ParseIntPipe) id: number, @Body() dto: AgendarOtDto) {
         return this.service.agendar(id, {
             dataAgendada: dto.dataAgendada,
-            dataProgInicio: dto.dataProgInicio,
             dataProgFim: dto.dataProgFim,
             usuario: dto.usuario,
         });

@@ -3,9 +3,8 @@ import { IsInt, IsOptional, IsString, MinLength } from 'class-validator';
 /** DTOs das transições da máquina de estados da OT (RF-OT-001 + RF-OT-003). */
 
 export class AgendarOtDto {
-  /** RF-OT-003: nova nomenclatura — usa `dataAgendada` (alias de `dataProgInicio`). */
+  /** RF-OT-003 — data agendada da OT (antiga `dataProgInicio`, removida em #74). */
   @IsOptional() @IsString() dataAgendada?: string;
-  @IsOptional() @IsString() dataProgInicio?: string;
   @IsOptional() @IsString() dataProgFim?: string;
   @IsOptional() @IsString() usuario?: string;
 }

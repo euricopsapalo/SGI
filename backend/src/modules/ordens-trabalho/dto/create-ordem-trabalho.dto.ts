@@ -37,12 +37,10 @@ export class CreateOrdemTrabalhoDto {
   @IsOptional() @IsString() orgao?: string;
   @IsOptional() @IsString() sintoma?: string;
   @IsOptional() @IsString() causa?: string;
-  @IsOptional() @IsString() dataProgInicio?: string;
+  @IsOptional() @IsString() dataAgendada?: string;
   @IsOptional() @IsString() dataProgFim?: string;
-  @IsOptional() @IsString() dataEmissao?: string;
   @IsOptional() @IsString() dataInicio?: string;
   @IsOptional() @IsString() dataFim?: string;
-  @IsOptional() @IsString() dataEncerramento?: string;
   @IsOptional() @IsEnum(['Registada', 'Programada', 'Adiada', 'Confirmada', 'Em execução', 'Finalizada']) estado?: string;
   @IsOptional() @IsBoolean() assinadaCliente?: boolean;
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => OtMaoObraDto) maosObra?: OtMaoObraDto[];

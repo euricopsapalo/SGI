@@ -112,9 +112,9 @@ export interface OrdemTrabalho {
     maosDeObra: OTMaoObra[];
     artigos: OTArtigo[];
     orgao?: string; sintoma?: string; causa?: string;
-    dataProgInicio?: string; dataProgFim?: string;
-    dataEmissao?: string; dataInicio?: string;
-    dataFim?: string; dataEncerramento?: string;
+    dataProgFim?: string;
+    dataInicio?: string;
+    dataFim?: string;
     estado: OTEstado;
     assinadaCliente?: boolean;
     transicoesPossiveis?: OTEstado[];
@@ -328,8 +328,8 @@ const normOrdem = (o: any): OrdemTrabalho => ({
     responsavel: o.responsavel ?? '', maosDeObra: (o.maosObra ?? []).map((m: any) => ({ funcao: m.funcao, custo: Number(m.custo), hora: m.hora })),
     artigos: (o.artigos ?? []).map((a: any) => ({ artigoId: a.artigoId?.toString() ?? '', descricao: a.descricao, quantidade: Number(a.quantidade), preco: Number(a.preco), codigoIva: a.codigoIva ?? undefined, taxaIva: a.taxaIva != null ? Number(a.taxaIva) : undefined })),
     orgao: o.orgao, sintoma: o.sintoma, causa: o.causa,
-    dataProgInicio: o.dataProgInicio, dataProgFim: o.dataProgFim,
-    dataEmissao: o.dataEmissao, dataInicio: o.dataInicio, dataFim: o.dataFim, dataEncerramento: o.dataEncerramento,
+    dataProgFim: o.dataProgFim,
+    dataInicio: o.dataInicio, dataFim: o.dataFim,
     estado: normEstado(o.estado),
     assinadaCliente: !!o.assinadaCliente,
     transicoesPossiveis: o.transicoesPossiveis ?? OT_TRANSICOES[normEstado(o.estado)] ?? [],

@@ -31,7 +31,7 @@ const DashboardPage: React.FC = () => {
     // Alertas
     const artigosAbaixo = artigos.filter(a => a.critico && a.existencia <= a.stockSeguranca);
     const semStock      = artigos.filter(a => a.existencia === 0);
-    const otAtrasadas   = minhasOrdens.filter(o => (o.estado === 'Programada' || o.estado === 'Confirmada') && o.dataProgInicio && o.dataProgInicio < today);
+    const otAtrasadas   = minhasOrdens.filter(o => (o.estado === 'Programada' || o.estado === 'Confirmada') && o.dataAgendada && o.dataAgendada < today);
     const fatPendentes  = faturas.filter(f => f.estado === 'Pendente').length;
     const encAbertas    = encomendas.filter(e => e.estado === 'Aberta' || e.estado === 'Parcial').length;
 
@@ -45,7 +45,7 @@ const DashboardPage: React.FC = () => {
     ].slice(0, 8);
 
     const otRecentes = [...minhasOrdens]
-        .sort((a, b) => (b.dataEmissao ?? b.dataProgInicio ?? '').localeCompare(a.dataEmissao ?? a.dataProgInicio ?? ''))
+        .sort((a, b) => (b.dataAgendada ?? '').localeCompare(a.dataAgendada ?? ''))
         .slice(0, 6);
 
     const DOT: Record<string, string> = {
@@ -57,7 +57,7 @@ const DashboardPage: React.FC = () => {
     const campoTecs = isTecnicoCampo
         ? tecnicos.filter(t => t.ativo && t.id === currentUser?.tecnicoId)
         : tecnicos.filter(t => t.ativo);
-    const otHoje = minhasOrdens.filter(o => o.dataProgInicio === today);
+    const otHoje = minhasOrdens.filter(o => o.dataAgendada === today);
 
     const totalFaturado   = faturas.filter(f => f.dataEmissao.startsWith(thisMonth)).reduce((s, f) => s + f.valorTotal, 0);
     const totalFatPagas   = faturas.filter(f => f.estado === 'Paga' && f.dataEmissao.startsWith(thisMonth)).reduce((s, f) => s + f.valorTotal, 0);

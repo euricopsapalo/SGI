@@ -396,7 +396,6 @@ CREATE TABLE ordens_trabalho (
     orgao              VARCHAR(150),
     sintoma            TEXT,
     causa              TEXT,
-    data_prog_inicio   DATE,
     data_prog_fim      DATE,
     -- RF-OT-003 (ciclo confirmar/adiar + janela de 6 meses)
     data_agendada      DATE,
@@ -404,10 +403,8 @@ CREATE TABLE ordens_trabalho (
     adiamentos         INTEGER      NOT NULL DEFAULT 0,
     janela_fim         DATE,
     aprovado_por_id    INTEGER      REFERENCES users(id) ON DELETE SET NULL,
-    data_emissao       DATE,
     data_inicio        DATE,
     data_fim           DATE,
-    data_encerramento  DATE,
     estado             VARCHAR(20)  NOT NULL DEFAULT 'Registada',
     CONSTRAINT chk_ot_estado CHECK (estado IN
         ('Registada','Programada','Adiada','Confirmada','Em execução','Finalizada'))
@@ -641,7 +638,7 @@ CREATE INDEX IF NOT EXISTS idx_ot_executado_por          ON ordens_trabalho(exec
 CREATE INDEX IF NOT EXISTS idx_ot_natureza               ON ordens_trabalho(natureza_intervencao);
 CREATE INDEX IF NOT EXISTS idx_ot_prioridade             ON ordens_trabalho(prioridade);
 CREATE INDEX IF NOT EXISTS idx_ordens_trabalho_equip     ON ordens_trabalho(equip_instalado_id);
-CREATE INDEX IF NOT EXISTS idx_ordens_trabalho_prog      ON ordens_trabalho(data_prog_inicio);
+CREATE INDEX IF NOT EXISTS idx_ordens_trabalho_prog      ON ordens_trabalho(data_agendada);
 CREATE INDEX IF NOT EXISTS idx_ot_artigos_ot             ON ot_artigos(ot_id);
 CREATE INDEX IF NOT EXISTS idx_ot_maos_obra_ot           ON ot_maos_obra(ot_id);
 CREATE INDEX IF NOT EXISTS idx_ot_reprogramacoes_ot      ON ot_reprogramacoes(ordem_trabalho_id);

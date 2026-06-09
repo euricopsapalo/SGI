@@ -44,7 +44,6 @@ describe('OT Confirmar/Adiar + Janela (RF-OT-003) E2E', () => {
         // janela = hoje + 6 meses
         janelaFim: offsetDays(180),
         dataAgendada: offsetDays(30),
-        dataProgInicio: offsetDays(30),
         adiamentos: 0,
         executadoPorId: 17,
         ...overrides,

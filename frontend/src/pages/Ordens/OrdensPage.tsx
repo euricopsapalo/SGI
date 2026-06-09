@@ -47,7 +47,7 @@ const COLS_OT: ExportCol[] = [
     { key: 'equipamento',    label: 'Equipamento' },
     { key: 'clienteNome',    label: 'Cliente' },
     { key: 'responsavel',    label: 'Responsável' },
-    { key: 'dataProgInicio', label: 'Data Prog. Início' },
+    { key: 'dataAgendada',   label: 'Data Agendada' },
     { key: 'estado',         label: 'Estado' },
     { key: 'tipoTrabalho',   label: 'Tipo Trabalho' },
 ];
@@ -105,7 +105,7 @@ function buildHistoricoGeralHtml(
     equipIds: string[],
     empresa: string,
 ): string {
-    const refDate = (o: OrdemTrabalho) => o.dataProgInicio || o.dataProgFim || o.dataEmissao || '';
+    const refDate = (o: OrdemTrabalho) => o.dataAgendada || o.dataProgFim || '';
     const filtrado = ots.filter(o => {
         const d = refDate(o);
         const equipMatch = equipIds.length === 0 || equipIds.includes(String(o.equipInstaladoId));
@@ -130,7 +130,7 @@ function buildHistoricoGeralHtml(
             <td>${o.tipoTrabalho}${isCorretivo(o) ? ' <span class="corr">●</span>' : ''}</td>
             <td style="color:${otEstadoCor(o.estado)};font-weight:600">${o.estado}</td>
             <td>${fDInterv(refDate(o))}</td>
-            <td>${fDInterv(o.dataFim || o.dataEncerramento)}</td>
+            <td>${fDInterv(o.dataFim)}</td>
             <td>${o.descricao || '—'}</td>
         </tr>`).join('');
         body += `<div class="eq-group">
@@ -401,12 +401,11 @@ ${ot.previsaoTempo  ? `<tr><td>Previsão Tempo</td><td>${ot.previsaoTempo}h</td>
 </table>
 <h3 class="sec-title">Datas</h3>
 <table class="info-table">
-${ot.dataProgInicio  ? `<tr><td>Data Prog. Início</td><td>${fmtDate(ot.dataProgInicio)}</td></tr>` : ''}
+${ot.dataAgendada    ? `<tr><td>Data Agendada</td><td>${fmtDate(ot.dataAgendada)}</td></tr>` : ''}
 ${ot.dataProgFim     ? `<tr><td>Data Prog. Fim</td><td>${fmtDate(ot.dataProgFim)}</td></tr>` : ''}
-${ot.dataEmissao     ? `<tr><td>Emitida</td><td>${fmtDate(ot.dataEmissao)}</td></tr>` : ''}
+${ot.dataExecucao    ? `<tr><td>Data de Execução</td><td>${fmtDate(ot.dataExecucao)}</td></tr>` : ''}
 ${ot.dataInicio      ? `<tr><td>Início Efectivo</td><td>${fmtDate(ot.dataInicio)}</td></tr>` : ''}
 ${ot.dataFim         ? `<tr><td>Fim Efectivo</td><td>${fmtDate(ot.dataFim)}</td></tr>` : ''}
-${ot.dataEncerramento? `<tr><td>Encerramento</td><td>${fmtDate(ot.dataEncerramento)}</td></tr>` : ''}
 </table>
 ${artsHtml}${diagHtml}
 <div class="sign-grid">
@@ -503,12 +502,10 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
     const [causa, setCausa]   = useState(ot?.causa    ?? '');
 
     // Gestão
-    const [dpI, setDpI] = useState(ot?.dataProgInicio ?? '');
+    const [dpI, setDpI] = useState(ot?.dataAgendada   ?? '');
     const [dpF, setDpF] = useState(ot?.dataProgFim    ?? '');
-    const [dEm, setDEm] = useState(ot?.dataEmissao    ?? '');
     const [dIn, setDIn] = useState(ot?.dataInicio     ?? '');
     const [dFi, setDFi] = useState(ot?.dataFim        ?? '');
-    const [dEn, setDEn] = useState(ot?.dataEncerramento ?? '');
 
 
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -608,9 +605,8 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
         planoId: planoId || undefined, tipoTrabalho: tipoTrab, tipoOT: tipoOT || undefined, responsavel,
         maosDeObra: maos, artigos: arts,
         orgao: orgao || undefined, sintoma: sintoma || undefined, causa: causa || undefined,
-        dataProgInicio: dpI || undefined, dataProgFim: dpF || undefined,
-        dataEmissao: dEm || undefined, dataInicio: dIn || undefined,
-        dataFim: dFi || undefined, dataEncerramento: dEn || undefined,
+        dataAgendada: dpI || undefined, dataProgFim: dpF || undefined,
+        dataInicio: dIn || undefined, dataFim: dFi || undefined,
         estado: ot?.estado ?? 'Registada',
         reprogramacoes: [],
         // RF-OT-002 §3.1
@@ -813,7 +809,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                                 {tipo === 'periodica' && (
                                     <div className="form-row">
                                         <div className="form-group">
-                                            <label className="form-label">Data Prog. Início</label>
+                                            <label className="form-label">Data Agendada</label>
                                             <input type="date" className="form-input" value={dpI} onChange={e => {
                                                 const inicio = e.target.value;
                                                 setDpI(inicio);
@@ -962,22 +958,12 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                             <>
                                 <div className="form-row">
                                     <div className="form-group">
-                                        <label className="form-label" style={{ color: 'var(--text-muted)' }}>Emitida</label>
-                                        <input type="date" className="form-input" value={dEm} onChange={e => setDEm(e.target.value)} disabled={!ot || (ot.estado !== 'Em execução' && ot.estado !== 'Finalizada')} />
-                                    </div>
-                                    <div className="form-group">
                                         <label className="form-label" style={{ color: 'var(--text-muted)' }}>Início</label>
                                         <input type="date" className="form-input" value={dIn} onChange={e => setDIn(e.target.value)} disabled={!ot || (ot.estado !== 'Em execução' && ot.estado !== 'Finalizada')} />
                                     </div>
-                                </div>
-                                <div className="form-row">
                                     <div className="form-group">
                                         <label className="form-label" style={{ color: 'var(--text-muted)' }}>Fim</label>
                                         <input type="date" className="form-input" value={dFi} onChange={e => setDFi(e.target.value)} disabled={!ot || ot.estado !== 'Finalizada'} />
-                                    </div>
-                                    <div className="form-group">
-                                        <label className="form-label" style={{ color: 'var(--text-muted)' }}>Encerramento</label>
-                                        <input type="date" className="form-input" value={dEn} onChange={e => setDEn(e.target.value)} disabled={!ot || ot.estado !== 'Finalizada'} />
                                     </div>
                                 </div>
 
@@ -1084,7 +1070,7 @@ const OrdensPage: React.FC = () => {
 
     const exportData = filtered.map(o => {
         const { equip, cliente } = getLabel(o);
-        return { ...o, equipamento: equip, clienteNome: cliente, dataProgInicio: fmtDate(o.dataProgInicio) };
+        return { ...o, equipamento: equip, clienteNome: cliente, dataAgendada: fmtDate(o.dataAgendada) };
     });
 
     const editOT = typeof modal === 'string' && modal !== 'new' ? ordens.find(o => o.id === modal) : undefined;
@@ -1214,12 +1200,10 @@ const OrdensPage: React.FC = () => {
                                     <th>Equipamento</th>
                                     <th>Cliente</th>
                                     <th>Téc. Campo</th>
-                                    <th>D.Prog.Início</th>
+                                    <th>D.Agendada</th>
                                     <th>D.Prog.Fim</th>
-                                    <th>Emitida</th>
                                     <th>Início</th>
                                     <th>Fim</th>
-                                    <th>Encerramento</th>
                                     <th>Estado</th>
                                     <th style={{ width: 50 }} />
                                 </tr>
@@ -1261,12 +1245,10 @@ const OrdensPage: React.FC = () => {
                                             <td style={{ fontSize: '0.78rem' }}>{equip}</td>
                                             <td style={{ fontSize: '0.8rem', fontWeight: 600 }}>{cliente}</td>
                                             <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{o.executadoPorNome ?? o.responsavel ?? '—'}</td>
-                                            <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataProgInicio) || '—'}</td>
+                                            <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataAgendada)   || '—'}</td>
                                             <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataProgFim)    || '—'}</td>
-                                            <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataEmissao)    || '—'}</td>
                                             <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataInicio)     || '—'}</td>
                                             <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataFim)        || '—'}</td>
-                                            <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataEncerramento) || '—'}</td>
                                             <td>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.78rem' }}>
                                                     <span className={`dot ${cfg.dot}`} />

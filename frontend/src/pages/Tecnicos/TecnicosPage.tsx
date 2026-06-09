@@ -65,7 +65,7 @@ function buildOTPorTecnicoHtml(tecnicos: Tecnico[], ordens: OrdemTrabalho[], fun
     else if (periodo === 'mes') { fromDate = new Date(now.getFullYear(), now.getMonth(), 1); }
     else if (periodo === 'trimestre') { fromDate = new Date(now); fromDate.setMonth(now.getMonth() - 3); }
     else if (periodo === 'ano') { fromDate = new Date(now.getFullYear(), 0, 1); }
-    const filtOT = fromDate ? ordens.filter(o => o.dataProgInicio && new Date(o.dataProgInicio) >= fromDate!) : ordens;
+    const filtOT = fromDate ? ordens.filter(o => o.dataAgendada && new Date(o.dataAgendada) >= fromDate!) : ordens;
     const periodoLabel: Record<string, string> = { semana: 'Última Semana', mes: 'Mês Actual', trimestre: 'Último Trimestre', ano: 'Ano Actual', total: 'Todo o Período' };
     const rows = tecnicos.filter(t => t.ativo).map(t => {
         const tOTs = filtOT.filter(o => o.responsavel === t.nome);
@@ -172,14 +172,14 @@ function buildAgendaHtml(
             if (o.responsavel !== tecnico.nome) return false;
             if (estados.length > 0 && !estados.includes(o.estado)) return false;
             if (from || to) {
-                const oStart = o.dataProgInicio ? new Date(o.dataProgInicio) : null;
+                const oStart = o.dataAgendada ? new Date(o.dataAgendada) : null;
                 const oEnd   = o.dataProgFim    ? new Date(o.dataProgFim + 'T23:59:59') : null;
                 if (from && oEnd   && oEnd   < from) return false;
                 if (to   && oStart && oStart > to  ) return false;
             }
             return true;
         })
-        .sort((a, b) => (a.dataProgInicio ?? '').localeCompare(b.dataProgInicio ?? ''));
+        .sort((a, b) => (a.dataAgendada ?? '').localeCompare(b.dataAgendada ?? ''));
 
     const funcao = funcoes.find(f => String(f.id) === String(tecnico.funcaoId))?.descricao ?? '—';
     const periodStr = (from || to)
@@ -200,7 +200,7 @@ function buildAgendaHtml(
             <td>${equipStr}</td>
             <td style="font-weight:600">${clienteStr}</td>
             <td style="font-size:9px;color:#555">${enderecoStr}</td>
-            <td style="text-align:center">${fRT(o.dataProgInicio)}</td>
+            <td style="text-align:center">${fRT(o.dataAgendada)}</td>
             <td style="text-align:center">${fRT(o.dataProgFim)}</td>
             <td>${tipoLabel}<br><small style="color:#666">${o.tipoTrabalho || '—'}</small></td>
             <td style="text-align:center"><span class="badge ${otBadgeClass(o.estado)}">${o.estado}</span></td>
@@ -261,7 +261,7 @@ function buildDisponibilidadeHtml(tecnicos: Tecnico[], ordens: OrdemTrabalho[], 
         const tOTs = ordens.filter(o => {
             if (o.responsavel !== t.nome) return false;
             if (o.estado === 'Finalizada') return false;
-            const oStart = o.dataProgInicio ? new Date(o.dataProgInicio) : null;
+            const oStart = o.dataAgendada ? new Date(o.dataAgendada) : null;
             const oEnd   = o.dataProgFim   ? new Date(o.dataProgFim)   : null;
             if (from && oEnd   && oEnd   < from) return false;
             if (to   && oStart && oStart > to  ) return false;
