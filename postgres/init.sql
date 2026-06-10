@@ -394,7 +394,6 @@ CREATE TABLE ordens_trabalho (
     orgao              VARCHAR(150),
     sintoma            TEXT,
     causa              TEXT,
-    data_prog_fim      DATE,
     -- RF-OT-003 (ciclo confirmar/adiar + janela de 6 meses)
     data_agendada      DATE,
     data_execucao      DATE,

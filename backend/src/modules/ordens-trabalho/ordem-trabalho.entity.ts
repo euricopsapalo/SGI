@@ -127,9 +127,6 @@ export class OrdemTrabalho {
     @Column({ nullable: true, type: 'text' })
     causa: string;
 
-    @Column({ name: 'data_prog_fim', type: 'date', nullable: true })
-    dataProgFim: string;
-
     /** RF-OT-003 §4 — data agendada actual da OT (antiga data_prog_inicio, #74). */
     @Column({ name: 'data_agendada', type: 'date', nullable: true })
     dataAgendada: string;

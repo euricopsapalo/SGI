@@ -5,7 +5,6 @@ import { IsInt, IsOptional, IsString, MinLength } from 'class-validator';
 export class AgendarOtDto {
   /** RF-OT-003 — data agendada da OT (antiga `dataProgInicio`, removida em #74). */
   @IsOptional() @IsString() dataAgendada?: string;
-  @IsOptional() @IsString() dataProgFim?: string;
   @IsOptional() @IsString() usuario?: string;
 }
 

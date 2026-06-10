@@ -4,6 +4,18 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### chore(ot): remover coluna vestigial `data_prog_fim` de `ordens_trabalho` (closes #82)
+
+Seguimento do #74. Pelo modelo canónico do ciclo de vida da OT (RF-OT-001 / RF-OT-003), uma OT representa uma intervenção única — não um intervalo planeado — por isso `data_prog_fim` não tem momento de preenchimento no ciclo. A "duração prevista" já está coberta por `previsao_tempo` (horas). As datas canónicas mantêm-se: `data_registo`, `janela_fim`, `data_agendada`, `data_execucao`, `data_inicio`, `data_fim`.
+
+**Backend**
+- Coluna `dataProgFim` removida da entidade `OrdemTrabalho`; `CreateOrdemTrabalhoDto` e `AgendarOtDto` deixam de a aceitar; `agendar()` deixa de a escrever.
+- Clonagem periódica em `finalizar()` deixa de calcular/gravar `nextEnd` — a OT seguinte nasce só com `dataAgendada`.
+- Migration `RemoverDataProgFimOT` (up: `DROP COLUMN IF EXISTS data_prog_fim`; down: recria a coluna, sem backfill recuperável).
+- `init.sql`: coluna removida.
+
+**Nota:** os usos de `dataProgFim` no frontend (fallbacks de exibição/ordenação) foram migrados em #83.
+
 ### chore(ot/frontend): migrar usos de `dataProgFim` para `dataAgendada`/`dataFim` (closes #83)
 
 Acompanha o #82 (remoção da coluna `data_prog_fim` no backend). Remove `dataProgFim` do frontend, migrando os fallbacks de exibição/ordenação para as datas canónicas: data prevista → `dataAgendada`; data de conclusão → `dataFim`.
