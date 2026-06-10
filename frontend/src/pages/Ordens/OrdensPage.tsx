@@ -105,7 +105,7 @@ function buildHistoricoGeralHtml(
     equipIds: string[],
     empresa: string,
 ): string {
-    const refDate = (o: OrdemTrabalho) => o.dataAgendada || o.dataProgFim || '';
+    const refDate = (o: OrdemTrabalho) => o.dataAgendada || '';
     const filtrado = ots.filter(o => {
         const d = refDate(o);
         const equipMatch = equipIds.length === 0 || equipIds.includes(String(o.equipInstaladoId));
@@ -136,7 +136,7 @@ function buildHistoricoGeralHtml(
         body += `<div class="eq-group">
   <div class="sec">Equip. ${eqId} — ${mod?.nome ?? '—'} &nbsp;|&nbsp; Cliente: ${cli?.nome ?? '—'} &nbsp;|&nbsp; Série: ${eq?.nrSerie ?? '—'}</div>
   <table>
-    <thead><tr><th>ID OT</th><th>Tipo OT</th><th>Tipo Trabalho</th><th>Estado</th><th>Data Prog.</th><th>Data Fim</th><th>Descrição</th></tr></thead>
+    <thead><tr><th>ID OT</th><th>Tipo OT</th><th>Tipo Trabalho</th><th>Estado</th><th>Agendada</th><th>Data Fim</th><th>Descrição</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
 </div>`;
@@ -402,7 +402,6 @@ ${ot.previsaoTempo  ? `<tr><td>Previsão Tempo</td><td>${ot.previsaoTempo}h</td>
 <h3 class="sec-title">Datas</h3>
 <table class="info-table">
 ${ot.dataAgendada    ? `<tr><td>Data Agendada</td><td>${fmtDate(ot.dataAgendada)}</td></tr>` : ''}
-${ot.dataProgFim     ? `<tr><td>Data Prog. Fim</td><td>${fmtDate(ot.dataProgFim)}</td></tr>` : ''}
 ${ot.dataExecucao    ? `<tr><td>Data de Execução</td><td>${fmtDate(ot.dataExecucao)}</td></tr>` : ''}
 ${ot.dataInicio      ? `<tr><td>Início Efectivo</td><td>${fmtDate(ot.dataInicio)}</td></tr>` : ''}
 ${ot.dataFim         ? `<tr><td>Fim Efectivo</td><td>${fmtDate(ot.dataFim)}</td></tr>` : ''}
@@ -501,7 +500,6 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
 
     // Gestão
     const [dpI, setDpI] = useState(ot?.dataAgendada   ?? '');
-    const [dpF, setDpF] = useState(ot?.dataProgFim    ?? '');
     const [dIn, setDIn] = useState(ot?.dataInicio     ?? '');
     const [dFi, setDFi] = useState(ot?.dataFim        ?? '');
 
@@ -600,7 +598,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
         planoId: planoId || undefined, responsavel,
         maosDeObra: maos, artigos: arts,
         orgao: orgao || undefined, sintoma: sintoma || undefined, causa: causa || undefined,
-        dataAgendada: dpI || undefined, dataProgFim: dpF || undefined,
+        dataAgendada: dpI || undefined,
         dataInicio: dIn || undefined, dataFim: dFi || undefined,
         estado: ot?.estado ?? 'Registada',
         reprogramacoes: [],
@@ -794,33 +792,14 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                                     <div className="form-row">
                                         <div className="form-group">
                                             <label className="form-label">Data Agendada</label>
-                                            <input type="date" className="form-input" value={dpI} onChange={e => {
-                                                const inicio = e.target.value;
-                                                setDpI(inicio);
-                                                if (inicio) {
-                                                    const d = new Date(inicio);
-                                                    switch (periodo) {
-                                                        case 'Mensal':     d.setMonth(d.getMonth() + 1);       break;
-                                                        case 'Trimestral': d.setMonth(d.getMonth() + 3);       break;
-                                                        case 'Semestral':  d.setMonth(d.getMonth() + 6);       break;
-                                                        case 'Anual':      d.setFullYear(d.getFullYear() + 1); break;
-                                                        default:           d.setMonth(d.getMonth() + 1);
-                                                    }
-                                                    d.setDate(d.getDate() - 7);
-                                                    setDpF(d.toISOString().split('T')[0]);
-                                                }
-                                            }} />
-                                        </div>
-                                        <div className="form-group">
-                                            <label className="form-label">Data Prog. Fim</label>
-                                            <input type="date" className="form-input" value={dpF} onChange={e => setDpF(e.target.value)} />
+                                            <input type="date" className="form-input" value={dpI} onChange={e => setDpI(e.target.value)} />
                                         </div>
                                     </div>
                                 )}
                                 {tipo === 'pontual' && (
                                     <div className="form-group">
                                         <label className="form-label">Data Programada</label>
-                                        <input type="date" className="form-input" value={dpI} onChange={e => { setDpI(e.target.value); setDpF(e.target.value); }} />
+                                        <input type="date" className="form-input" value={dpI} onChange={e => setDpI(e.target.value)} />
                                     </div>
                                 )}
                             </>
@@ -1185,7 +1164,6 @@ const OrdensPage: React.FC = () => {
                                     <th>Cliente</th>
                                     <th>Téc. Campo</th>
                                     <th>D.Agendada</th>
-                                    <th>D.Prog.Fim</th>
                                     <th>Início</th>
                                     <th>Fim</th>
                                     <th>Estado</th>
@@ -1230,7 +1208,6 @@ const OrdensPage: React.FC = () => {
                                             <td style={{ fontSize: '0.8rem', fontWeight: 600 }}>{cliente}</td>
                                             <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{o.executadoPorNome ?? o.responsavel ?? '—'}</td>
                                             <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataAgendada)   || '—'}</td>
-                                            <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataProgFim)    || '—'}</td>
                                             <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataInicio)     || '—'}</td>
                                             <td style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataFim)        || '—'}</td>
                                             <td>

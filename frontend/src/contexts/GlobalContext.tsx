@@ -112,7 +112,6 @@ export interface OrdemTrabalho {
     maosDeObra: OTMaoObra[];
     artigos: OTArtigo[];
     orgao?: string; sintoma?: string; causa?: string;
-    dataProgFim?: string;
     dataInicio?: string;
     dataFim?: string;
     estado: OTEstado;
@@ -328,7 +327,6 @@ const normOrdem = (o: any): OrdemTrabalho => ({
     responsavel: o.responsavel ?? '', maosDeObra: (o.maosObra ?? []).map((m: any) => ({ funcao: m.funcao, custo: Number(m.custo), hora: m.hora })),
     artigos: (o.artigos ?? []).map((a: any) => ({ artigoId: a.artigoId?.toString() ?? '', descricao: a.descricao, quantidade: Number(a.quantidade), preco: Number(a.preco), codigoIva: a.codigoIva ?? undefined, taxaIva: a.taxaIva != null ? Number(a.taxaIva) : undefined })),
     orgao: o.orgao, sintoma: o.sintoma, causa: o.causa,
-    dataProgFim: o.dataProgFim,
     dataInicio: o.dataInicio, dataFim: o.dataFim,
     estado: normEstado(o.estado),
     assinadaCliente: !!o.assinadaCliente,
@@ -496,7 +494,7 @@ interface GlobalContextType {
     planos: PlanoManutencao[]; addPlano: (p: Omit<PlanoManutencao, 'id'>) => PlanoManutencao; updatePlano: (id: string, p: Partial<PlanoManutencao>) => void; removePlano: (id: string) => void;
     // Work Orders
     ordens: OrdemTrabalho[]; addOrdem: (o: Omit<OrdemTrabalho, 'id'>) => Promise<OrdemTrabalho>; updateOrdem: (id: string, o: Partial<OrdemTrabalho>) => void; removeOrdem: (id: string) => void;
-    agendarOT: (id: string, dataAgendada?: string, dataProgFim?: string) => Promise<void>;
+    agendarOT: (id: string, dataAgendada?: string) => Promise<void>;
     confirmarOT: (id: string, opts?: { dataExecucao: string; executadoPorId?: string }) => Promise<void>;
     adiarOT: (id: string, opts?: { novaData: string; motivo: string; aprovadoPor?: string; aprovacaoMotivo?: string }) => Promise<void>;
     iniciarOT: (id: string, dataInicio?: string) => Promise<void>;
@@ -1147,9 +1145,9 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     // RF-OT-003 §3.4 — Registada/Adiada → Programada
-    const agendarOT = async (id: string, dataAgendada?: string, dataProgFim?: string) => {
+    const agendarOT = async (id: string, dataAgendada?: string) => {
         const usuario = currentUserRef.current?.email ?? 'sistema';
-        const { data } = await api.put(`/ordens/${id}/agendar`, { dataAgendada, dataProgFim, usuario });
+        const { data } = await api.put(`/ordens/${id}/agendar`, { dataAgendada, usuario });
         setOrdens(p => p.map(x => x.id === id ? normOrdem(data) : x));
         log('Ordens de Trabalho', 'OT agendada', `ID: ${id} → Programada${dataAgendada ? ` (${dataAgendada})` : ''}`);
     };

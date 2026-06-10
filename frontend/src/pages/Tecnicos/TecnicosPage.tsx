@@ -135,21 +135,21 @@ function buildOTAtrasoHtml(tecnicos: Tecnico[], ordens: OrdemTrabalho[], funcoes
     const today = new Date(); today.setHours(0,0,0,0);
     const atrasadas = ordens.filter(o =>
         o.estado !== 'Finalizada' &&
-        o.dataProgFim && new Date(o.dataProgFim) < today
+        o.dataAgendada && new Date(o.dataAgendada) < today
     );
     const sections = tecnicos.filter(t => t.ativo).map(t => {
         const tOTs = atrasadas.filter(o => o.responsavel === t.nome);
         if (tOTs.length === 0) return '';
         const funcao = funcoes.find(f => String(f.id) === String(t.funcaoId))?.descricao ?? '—';
         const rows = tOTs.map(o => {
-            const diasAtraso = o.dataProgFim ? Math.ceil((today.getTime() - new Date(o.dataProgFim).getTime()) / 86400000) : 0;
+            const diasAtraso = o.dataAgendada ? Math.ceil((today.getTime() - new Date(o.dataAgendada).getTime()) / 86400000) : 0;
             return `<tr><td>${o.id}</td><td>${o.descricao?.substring(0,50) ?? '—'}</td>
-                <td>${o.naturezaIntervencao || '—'}</td><td>${fRT(o.dataProgFim)}</td>
+                <td>${o.naturezaIntervencao || '—'}</td><td>${fRT(o.dataAgendada)}</td>
                 <td style="text-align:center;font-weight:700;color:#991b1b">${diasAtraso}d</td>
                 <td><span class="badge ${otBadgeClass(o.estado)}">${o.estado}</span></td></tr>`;
         }).join('');
         return `<h3>${t.nome} — ${funcao} (${tOTs.length} OT em atraso)</h3>
-            <table><thead><tr><th>ID</th><th>Descrição</th><th>Tipo</th><th>Data Prog. Fim</th><th>Atraso</th><th>Estado</th></tr></thead>
+            <table><thead><tr><th>ID</th><th>Descrição</th><th>Tipo</th><th>Data Agendada</th><th>Atraso</th><th>Estado</th></tr></thead>
             <tbody>${rows}</tbody></table>`;
     }).filter(Boolean).join('');
     return hdrT('OT em Atraso por Técnico', `Total: ${atrasadas.length} OT atrasadas`, empresa) +
@@ -172,10 +172,9 @@ function buildAgendaHtml(
             if (o.responsavel !== tecnico.nome) return false;
             if (estados.length > 0 && !estados.includes(o.estado)) return false;
             if (from || to) {
-                const oStart = o.dataAgendada ? new Date(o.dataAgendada) : null;
-                const oEnd   = o.dataProgFim    ? new Date(o.dataProgFim + 'T23:59:59') : null;
-                if (from && oEnd   && oEnd   < from) return false;
-                if (to   && oStart && oStart > to  ) return false;
+                const oData = o.dataAgendada ? new Date(o.dataAgendada) : null;
+                if (from && oData && oData < from) return false;
+                if (to   && oData && oData > to  ) return false;
             }
             return true;
         })
@@ -201,7 +200,6 @@ function buildAgendaHtml(
             <td style="font-weight:600">${clienteStr}</td>
             <td style="font-size:9px;color:#555">${enderecoStr}</td>
             <td style="text-align:center">${fRT(o.dataAgendada)}</td>
-            <td style="text-align:center">${fRT(o.dataProgFim)}</td>
             <td>${tipoLabel}<br><small style="color:#666">${o.naturezaIntervencao || '—'}</small></td>
             <td style="text-align:center"><span class="badge ${otBadgeClass(o.estado)}">${o.estado}</span></td>
         </tr>`;
@@ -210,9 +208,9 @@ function buildAgendaHtml(
     const table = `<table>
         <thead><tr>
             <th>ID</th><th>Equipamento</th><th>Cliente</th><th>Endereço</th>
-            <th>Início Prog.</th><th>Fim Prog.</th><th>Tipo OT</th><th>Estado</th>
+            <th>Data Agendada</th><th>Tipo OT</th><th>Estado</th>
         </tr></thead>
-        <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:#999">Sem OT para o período seleccionado.</td></tr>'}</tbody>
+        <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:#999">Sem OT para o período seleccionado.</td></tr>'}</tbody>
     </table>`;
 
     return hdrT(`Agenda — ${tecnico.nome}`, `${funcao} · Período: ${periodStr} · ${estadosStr} · ${tOTs.length} OT`, empresa) + table;
@@ -261,10 +259,9 @@ function buildDisponibilidadeHtml(tecnicos: Tecnico[], ordens: OrdemTrabalho[], 
         const tOTs = ordens.filter(o => {
             if (o.responsavel !== t.nome) return false;
             if (o.estado === 'Finalizada') return false;
-            const oStart = o.dataAgendada ? new Date(o.dataAgendada) : null;
-            const oEnd   = o.dataProgFim   ? new Date(o.dataProgFim)   : null;
-            if (from && oEnd   && oEnd   < from) return false;
-            if (to   && oStart && oStart > to  ) return false;
+            const oData = o.dataAgendada ? new Date(o.dataAgendada) : null;
+            if (from && oData && oData < from) return false;
+            if (to   && oData && oData > to  ) return false;
             return true;
         });
         const funcao = funcoes.find(f => String(f.id) === String(t.funcaoId))?.descricao ?? '—';

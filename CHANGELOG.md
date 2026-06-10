@@ -4,6 +4,16 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### chore(ot/frontend): migrar usos de `dataProgFim` para `dataAgendada`/`dataFim` (closes #83)
+
+Acompanha o #82 (remoção da coluna `data_prog_fim` no backend). Remove `dataProgFim` do frontend, migrando os fallbacks de exibição/ordenação para as datas canónicas: data prevista → `dataAgendada`; data de conclusão → `dataFim`.
+
+- `GlobalContext`: `OrdemTrabalho` e `normOrdem` deixam de mapear `dataProgFim`; `agendarOT` passa a `(id, dataAgendada?)` (perde o 3.º argumento).
+- `OrdensPage`: removido o campo "Data Prog. Fim" do formulário (incl. derivação automática a partir da periodicidade) e o `setDpF` espelhado no caso pontual; coluna "D.Prog.Fim" da tabela e linha da ficha de impressão removidas; `refDate` usa só `dataAgendada`.
+- `AgendaPage`: removido o campo "Data Prog. Fim" da modal e o ajuste de `newFim` no drag-and-drop (o reagendamento move apenas `dataAgendada`).
+- `ParquePage`, `ClientesPage`: fallbacks `dataFim || dataProgFim` → `dataFim`; `dataProgFim || dataAgendada` (e variantes) → `dataAgendada`; auto-OT de Montagem deixa de definir `dataProgFim`.
+- `TecnicosPage`: relatório "OTs em atraso" passa a usar `dataAgendada` como prazo; filtros de intervalo (Agenda do técnico, Disponibilidade) deixam de tratar a OT como `[dataAgendada, dataProgFim]` e passam a tratá-la como evento de dia único em `dataAgendada`; colunas "Fim Prog."/"Data Prog. Fim" removidas.
+
 ### chore(ot): fundir `tipoTrabalho`/`tipoOT` em `naturezaIntervencao` (closes #75)
 
 Elimina dois campos de classificação redundantes da OT, consolidando tudo na enum tipada `naturezaIntervencao`, que passa a ser a **classificação única** da OT.

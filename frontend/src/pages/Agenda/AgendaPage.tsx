@@ -147,7 +147,6 @@ const OTDetail: React.FC<{ ot: OrdemTrabalho; nomeCliente: string; nomeEquip: st
                         { label: 'Responsável',       value: ot.responsavel || '—' },
                         { label: 'Descrição',         value: ot.descricao || '—' },
                         { label: 'Data Agendada',     value: fmtDt(ot.dataAgendada) },
-                        { label: 'Data Prog. Fim',    value: fmtDt(ot.dataProgFim) },
                         { label: 'Previsão (h)',      value: ot.previsaoTempo ? `${ot.previsaoTempo}h` : '—' },
                     ].map(row => (
                         <div key={row.label} className="form-group">
@@ -170,7 +169,7 @@ const OTDetail: React.FC<{ ot: OrdemTrabalho; nomeCliente: string; nomeEquip: st
 type Vista = 'mes' | 'semana' | 'dia';
 
 const AgendaPage: React.FC = () => {
-    const { ordens, updateOrdem, reprogramarOT, clientes, equipInstalados, modelosEquipamento, tecnicos, currentUser } = useGlobal();
+    const { ordens, reprogramarOT, clientes, equipInstalados, modelosEquipamento, tecnicos, currentUser } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
     const meuTecnicoNome = currentUser?.tecnicoNome ?? currentUser?.nome;
 
@@ -268,15 +267,8 @@ const AgendaPage: React.FC = () => {
         if (!dropTarget) return;
         const ot = dropTarget.ot;
         const oldStart = ot.dataAgendada ?? '';
-        const delta    = oldStart ? Math.round((new Date(novaData).getTime() - new Date(oldStart).getTime()) / 86400000) : 0;
-        const newFim   = ot.dataProgFim && delta !== 0
-            ? isoDate(addDays(new Date(ot.dataProgFim), delta))
-            : ot.dataProgFim;
         try {
             await reprogramarOT(ot.id, novaData, oldStart || undefined, motivo);
-            if (newFim !== ot.dataProgFim) {
-                updateOrdem(ot.id, { dataProgFim: newFim });
-            }
         } catch (e) { console.error(e); }
         showToast(`OT ${ot.id} reprogramada para ${new Date(novaData).toLocaleDateString('pt-PT')}. Motivo: ${motivo}`);
         setDropTarget(null);
