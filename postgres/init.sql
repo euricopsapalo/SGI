@@ -370,17 +370,31 @@ CREATE TABLE plano_artigos (
 -- ORDENS DE TRABALHO
 -- Alinhado com OrdemTrabalho entity (inclui tipo_ot e reprogramacoes)
 -- ============================================================
+-- Enums nativos — espelham os tipos que o TypeORM (`type: 'enum'`) gera via
+-- synchronize. Mantém a forma da BD criada de raiz igual à BD viva (#87).
+DO $$ BEGIN
+    CREATE TYPE ordens_trabalho_tipo_enum AS ENUM ('pontual','periodica');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    CREATE TYPE ordens_trabalho_natureza_intervencao_enum AS ENUM
+        ('Manutenção','Substituição de filtro','Reparação de avaria','Inspeção','Montagem / Instalação');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    CREATE TYPE ordens_trabalho_prioridade_enum AS ENUM ('Normal','Alta','Urgente');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+    CREATE TYPE ordens_trabalho_estado_enum AS ENUM
+        ('Registada','Programada','Adiada','Confirmada','Em execução','Finalizada');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 CREATE TABLE ordens_trabalho (
     id                   SERIAL       PRIMARY KEY,
     -- RF-OT-002
     numero               VARCHAR(30)  UNIQUE,
-    tipo                 VARCHAR(20)  NOT NULL DEFAULT 'pontual',
+    tipo                 ordens_trabalho_tipo_enum NOT NULL DEFAULT 'pontual',
     assinada_cliente     BOOLEAN      NOT NULL DEFAULT false,
-    natureza_intervencao VARCHAR(40)
-        CONSTRAINT chk_ot_natureza CHECK (natureza_intervencao IS NULL OR natureza_intervencao IN
-            ('Manutenção','Substituição de filtro','Reparação de avaria','Inspeção','Montagem / Instalação')),
-    prioridade           VARCHAR(10)  NOT NULL DEFAULT 'Normal'
-        CONSTRAINT chk_ot_prioridade CHECK (prioridade IN ('Normal','Alta','Urgente')),
+    natureza_intervencao ordens_trabalho_natureza_intervencao_enum,
+    prioridade           ordens_trabalho_prioridade_enum NOT NULL DEFAULT 'Normal',
     data_registo         DATE         NOT NULL DEFAULT CURRENT_DATE,
     registado_por_id     INTEGER      REFERENCES users(id) ON DELETE SET NULL,
     executado_por_id     INTEGER      REFERENCES tecnicos(id) ON DELETE SET NULL,
@@ -402,9 +416,7 @@ CREATE TABLE ordens_trabalho (
     aprovado_por_id    INTEGER      REFERENCES users(id) ON DELETE SET NULL,
     data_inicio        DATE,
     data_fim           DATE,
-    estado             VARCHAR(20)  NOT NULL DEFAULT 'Registada',
-    CONSTRAINT chk_ot_estado CHECK (estado IN
-        ('Registada','Programada','Adiada','Confirmada','Em execução','Finalizada'))
+    estado             ordens_trabalho_estado_enum NOT NULL DEFAULT 'Registada'
 );
 
 CREATE TABLE ot_maos_obra (
