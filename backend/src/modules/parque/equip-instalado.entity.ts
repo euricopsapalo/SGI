@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn, Check } from 'typeorm';
 import { Cliente } from '../clientes/cliente.entity';
 import { ModeloEquipamento } from './modelo-equipamento.entity';
 import { EquipHistorico } from './equip-historico.entity';
@@ -10,6 +10,7 @@ export enum EstadoEquip {
 }
 
 @Entity('equip_instalados')
+@Check('chk_equip_inst_estado', `"estado" IN ('ativo','com_problema','inativo')`)
 export class EquipInstalado {
     @PrimaryGeneratedColumn()
     id: number;
@@ -28,7 +29,7 @@ export class EquipInstalado {
     @Column({ name: 'data_instalacao', type: 'date' })
     dataInstalacao: string;
 
-    @Column({ type: 'enum', enum: EstadoEquip, default: EstadoEquip.ATIVO })
+    @Column({ type: 'varchar', length: 30, default: EstadoEquip.ATIVO })
     estado: EstadoEquip;
 
     @Column({ name: 'data_ultima_manutencao', type: 'date', nullable: true })

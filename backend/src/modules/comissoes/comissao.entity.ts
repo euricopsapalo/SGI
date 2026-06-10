@@ -5,6 +5,7 @@ import {
     ManyToOne,
     JoinColumn,
     CreateDateColumn,
+    Check,
 } from 'typeorm';
 import { OrdemDeServico } from '../ordens-servico/ordem-de-servico.entity';
 import { Tecnico } from '../tecnicos/tecnico.entity';
@@ -16,6 +17,7 @@ export enum TipoComissao {
 }
 
 @Entity('comissoes')
+@Check('chk_comissoes_tipo', `"tipo" IN ('tecnico','vendedor')`)
 export class Comissao {
     @PrimaryGeneratedColumn()
     id: number;
@@ -41,7 +43,7 @@ export class Comissao {
     @JoinColumn({ name: 'id_vendedor' })
     vendedor: Vendedor;
 
-    @Column({ type: 'enum', enum: TipoComissao })
+    @Column({ type: 'varchar', length: 30 })
     tipo: TipoComissao;
 
     @Column({ type: 'numeric', precision: 10, scale: 2 })

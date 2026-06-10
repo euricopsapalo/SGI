@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn, Check } from 'typeorm';
 import { Cliente } from '../clientes/cliente.entity';
 import { FaturaLinha } from './fatura-linha.entity';
 
@@ -10,6 +10,7 @@ export enum EstadoFaturaNova {
 }
 
 @Entity('faturas_v2')
+@Check('chk_faturas_v2_estado', `"estado" IN ('Pendente','Paga','Anulada','Emitido')`)
 export class FaturaNew {
     @PrimaryGeneratedColumn()
     id: number;
@@ -45,7 +46,7 @@ export class FaturaNew {
     @Column({ length: 10, default: 'AOA' })
     moeda: string;
 
-    @Column({ type: 'enum', enum: EstadoFaturaNova, default: EstadoFaturaNova.PENDENTE })
+    @Column({ type: 'varchar', length: 30, default: EstadoFaturaNova.PENDENTE })
     estado: EstadoFaturaNova;
 
     @Column({ nullable: true, type: 'text' })

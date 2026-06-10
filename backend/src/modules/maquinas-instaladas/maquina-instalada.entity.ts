@@ -5,6 +5,7 @@ import {
     ManyToOne,
     OneToMany,
     JoinColumn,
+    Check,
 } from 'typeorm';
 import { Cliente } from '../clientes/cliente.entity';
 import { Equipamento } from '../equipamentos/equipamento.entity';
@@ -18,6 +19,7 @@ export enum EstadoMaquina {
 }
 
 @Entity('maquinas_instaladas')
+@Check('chk_maquinas_inst_estado', `"estado" IN ('ativa','com_problema','desativada')`)
 export class MaquinaInstalada {
     @PrimaryGeneratedColumn()
     id: number;
@@ -42,7 +44,7 @@ export class MaquinaInstalada {
     @Column({ name: 'data_proxima_manutencao', type: 'date', nullable: true })
     dataProximaManutencao: Date;
 
-    @Column({ type: 'enum', enum: EstadoMaquina, default: EstadoMaquina.ATIVA })
+    @Column({ type: 'varchar', length: 30, default: EstadoMaquina.ATIVA })
     estado: EstadoMaquina;
 
     @OneToMany(() => OrdemDeServico, (os) => os.maquinaInstalada)

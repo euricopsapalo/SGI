@@ -4,6 +4,7 @@ import {
     Column,
     ManyToOne,
     JoinColumn,
+    Check,
 } from 'typeorm';
 import { MaquinaInstalada } from './maquina-instalada.entity';
 
@@ -20,6 +21,8 @@ export enum EstadoHistorico {
 }
 
 @Entity('maquina_historico')
+@Check('chk_maq_hist_tipo', `"tipo" IN ('montagem','preventiva','corretiva','remota')`)
+@Check('chk_maq_hist_estado', `"estado" IN ('concluida','cancelada')`)
 export class MaquinaHistorico {
     @PrimaryGeneratedColumn()
     id: number;
@@ -34,7 +37,7 @@ export class MaquinaHistorico {
     @Column({ type: 'date' })
     data: Date;
 
-    @Column({ type: 'enum', enum: TipoHistorico })
+    @Column({ type: 'varchar', length: 30 })
     tipo: TipoHistorico;
 
     @Column({ type: 'text' })
@@ -44,7 +47,7 @@ export class MaquinaHistorico {
     @Column({ length: 150, nullable: true })
     tecnico: string;
 
-    @Column({ type: 'enum', enum: EstadoHistorico, default: EstadoHistorico.CONCLUIDA })
+    @Column({ type: 'varchar', length: 30, default: EstadoHistorico.CONCLUIDA })
     estado: EstadoHistorico;
 
     @Column({ type: 'text', nullable: true })

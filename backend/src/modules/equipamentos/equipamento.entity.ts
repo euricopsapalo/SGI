@@ -3,6 +3,7 @@ import {
     PrimaryGeneratedColumn,
     Column,
     OneToMany,
+    Check,
 } from 'typeorm';
 import { MaquinaInstalada } from '../maquinas-instaladas/maquina-instalada.entity';
 import { OsPeca } from '../ordens-servico/os-peca.entity';
@@ -15,6 +16,7 @@ export enum TipoEquipamento {
 }
 
 @Entity('equipamentos')
+@Check('chk_equipamentos_tipo', `"tipo" IN ('maquina','filtro','peca','filtro_maquina')`)
 export class Equipamento {
     @PrimaryGeneratedColumn()
     id: number;
@@ -22,7 +24,7 @@ export class Equipamento {
     @Column({ length: 200 })
     nome: string;
 
-    @Column({ type: 'enum', enum: TipoEquipamento })
+    @Column({ type: 'varchar', length: 30 })
     tipo: TipoEquipamento;
 
     @Column({ nullable: true, length: 100 })

@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Check } from 'typeorm';
 import { Artigo } from './artigo.entity';
 
 export enum TipoMovimento {
@@ -10,6 +10,7 @@ export enum TipoMovimento {
 }
 
 @Entity('movimentos_stock')
+@Check('chk_mov_stock_tipo', `"tipo" IN ('entrada','saida','ajuste','transferencia','devolucao')`)
 export class MovimentoStock {
     @PrimaryGeneratedColumn()
     id: number;
@@ -18,7 +19,7 @@ export class MovimentoStock {
     @JoinColumn({ name: 'artigo_id' })
     artigo: Artigo;
 
-    @Column({ type: 'enum', enum: TipoMovimento })
+    @Column({ type: 'varchar', length: 30 })
     tipo: TipoMovimento;
 
     @Column({ type: 'numeric', precision: 12, scale: 3 })

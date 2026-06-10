@@ -4,6 +4,7 @@ import {
     Column,
     CreateDateColumn,
     OneToMany,
+    Check,
 } from 'typeorm';
 import { MaquinaInstalada } from '../maquinas-instaladas/maquina-instalada.entity';
 import { OrdemDeServico } from '../ordens-servico/ordem-de-servico.entity';
@@ -16,11 +17,12 @@ export enum TipoCliente {
 }
 
 @Entity('clientes')
+@Check('chk_clientes_tipo', `"tipo" IN ('empresa','particular')`)
 export class Cliente {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Column({ type: 'enum', enum: TipoCliente, default: TipoCliente.EMPRESA })
+    @Column({ type: 'varchar', length: 30, default: TipoCliente.EMPRESA })
     tipo: TipoCliente;
 
     @Column({ length: 200 })

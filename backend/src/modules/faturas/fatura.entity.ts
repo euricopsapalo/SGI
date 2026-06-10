@@ -5,6 +5,7 @@ import {
     ManyToOne,
     JoinColumn,
     CreateDateColumn,
+    Check,
 } from 'typeorm';
 import { OrdemDeServico } from '../ordens-servico/ordem-de-servico.entity';
 import { Cliente } from '../clientes/cliente.entity';
@@ -15,6 +16,7 @@ export enum EstadoFatura {
 }
 
 @Entity('faturas')
+@Check('chk_faturas_estado', `"estado" IN ('pendente','paga')`)
 export class Fatura {
     @PrimaryGeneratedColumn()
     id: number;
@@ -36,7 +38,7 @@ export class Fatura {
     @Column({ name: 'valor_total', type: 'numeric', precision: 10, scale: 2 })
     valorTotal: number;
 
-    @Column({ type: 'enum', enum: EstadoFatura, default: EstadoFatura.PENDENTE })
+    @Column({ type: 'varchar', length: 30, default: EstadoFatura.PENDENTE })
     estado: EstadoFatura;
 
     @Column({ type: 'text', nullable: true })

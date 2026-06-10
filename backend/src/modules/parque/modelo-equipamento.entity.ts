@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Check } from 'typeorm';
 import { EquipInstalado } from './equip-instalado.entity';
 
 export enum TipoModelo {
@@ -7,6 +7,7 @@ export enum TipoModelo {
 }
 
 @Entity('modelos_equipamento')
+@Check('chk_modelos_tipo', `"tipo" IN ('maquina','filtro')`)
 export class ModeloEquipamento {
     @PrimaryGeneratedColumn()
     id: number;
@@ -17,7 +18,7 @@ export class ModeloEquipamento {
     @Column({ length: 100 })
     marca: string;
 
-    @Column({ type: 'enum', enum: TipoModelo, default: TipoModelo.MAQUINA })
+    @Column({ type: 'varchar', length: 30, default: TipoModelo.MAQUINA })
     tipo: TipoModelo;
 
     @OneToMany(() => EquipInstalado, (e) => e.modelo)

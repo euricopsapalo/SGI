@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn, Check } from 'typeorm';
 import { Cliente } from '../clientes/cliente.entity';
 import { Tecnico } from '../tecnicos/tecnico.entity';
 import { User } from '../users/user.entity';
@@ -51,6 +51,11 @@ export const OT_TRANSICOES: Record<OTEstado, OTEstado[]> = {
 };
 
 @Entity('ordens_trabalho')
+// #89 — CHECKs espelham o init.sql; mantidos pelo synchronize via @Check.
+@Check('chk_ot_tipo', `"tipo" IN ('pontual','periodica')`)
+@Check('chk_ot_natureza', `"natureza_intervencao" IS NULL OR "natureza_intervencao" IN ('Manutenção','Substituição de filtro','Reparação de avaria','Inspeção','Montagem / Instalação')`)
+@Check('chk_ot_prioridade', `"prioridade" IN ('Normal','Alta','Urgente')`)
+@Check('chk_ot_estado', `"estado" IN ('Registada','Programada','Adiada','Confirmada','Em execução','Finalizada')`)
 export class OrdemTrabalho {
     @PrimaryGeneratedColumn()
     id: number;
@@ -59,18 +64,18 @@ export class OrdemTrabalho {
     @Column({ nullable: true, length: 30, unique: true })
     numero: string;
 
-    @Column({ type: 'enum', enum: OTTipo, default: OTTipo.PONTUAL })
+    @Column({ type: 'varchar', length: 30, default: OTTipo.PONTUAL })
     tipo: OTTipo;
 
     @Column({ name: 'assinada_cliente', type: 'boolean', default: false })
     assinadaCliente: boolean;
 
     /** RF-OT-002 §3.1 — natureza da intervenção pedida. */
-    @Column({ name: 'natureza_intervencao', type: 'enum', enum: NaturezaIntervencao, nullable: true })
+    @Column({ name: 'natureza_intervencao', type: 'varchar', length: 30, nullable: true })
     naturezaIntervencao: NaturezaIntervencao;
 
     /** RF-OT-002 §3.1 — prioridade (default Normal). */
-    @Column({ type: 'enum', enum: OTPrioridade, default: OTPrioridade.NORMAL })
+    @Column({ type: 'varchar', length: 30, default: OTPrioridade.NORMAL })
     prioridade: OTPrioridade;
 
     /** RF-OT-002 §3.1 — data de registo (preenchida ao criar). */
@@ -160,7 +165,7 @@ export class OrdemTrabalho {
     @Column({ name: 'data_fim', type: 'date', nullable: true })
     dataFim: string;
 
-    @Column({ type: 'enum', enum: OTEstado, default: OTEstado.REGISTADA })
+    @Column({ type: 'varchar', length: 30, default: OTEstado.REGISTADA })
     estado: OTEstado;
 
     @OneToMany(() => OtMaoObra, (m) => m.ordemTrabalho, { cascade: true })
