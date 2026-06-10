@@ -6,6 +6,7 @@ import {
     OneToMany,
     JoinColumn,
     CreateDateColumn,
+    Check,
 } from 'typeorm';
 import { Cliente } from '../clientes/cliente.entity';
 import { MaquinaInstalada } from '../maquinas-instaladas/maquina-instalada.entity';
@@ -31,11 +32,13 @@ export enum EstadoOS {
 }
 
 @Entity('ordens_servico')
+@Check('chk_ordens_servico_tipo', `"tipo" IN ('montagem','preventiva','corretiva','remota')`)
+@Check('chk_ordens_servico_estado', `"estado" IN ('aberta','em_execucao','concluida','cancelada','resolvida_remotamente')`)
 export class OrdemDeServico {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @Column({ type: 'enum', enum: TipoOS })
+    @Column({ type: 'varchar', length: 30 })
     tipo: TipoOS;
 
     @ManyToOne(() => Cliente, (c) => c.ordensServico, { onDelete: 'RESTRICT' })
@@ -90,7 +93,7 @@ export class OrdemDeServico {
     @Column({ name: 'data_conclusao', type: 'timestamp', nullable: true })
     dataConclusao: Date;
 
-    @Column({ type: 'enum', enum: EstadoOS, default: EstadoOS.ABERTA })
+    @Column({ type: 'varchar', length: 30, default: EstadoOS.ABERTA })
     estado: EstadoOS;
 
     @Column({ name: 'anomalia_descricao', type: 'text', nullable: true })

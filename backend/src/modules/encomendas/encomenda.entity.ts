@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn, Check } from 'typeorm';
 import { Fornecedor } from '../fornecedores/fornecedor.entity';
 import { EncomendaLinha } from './encomenda-linha.entity';
 import { Rececao } from './rececao.entity';
@@ -13,6 +13,7 @@ export enum EstadoEncomenda {
 }
 
 @Entity('encomendas')
+@Check('chk_encomendas_estado', `"estado" IN ('Aberta','Aprovada','Parcial','Recebida','Cancelada','Faturada')`)
 export class Encomenda {
     @PrimaryGeneratedColumn()
     id: number;
@@ -45,7 +46,7 @@ export class Encomenda {
     @Column({ nullable: true, type: 'text' })
     observacoes: string;
 
-    @Column({ type: 'enum', enum: EstadoEncomenda, default: EstadoEncomenda.ABERTA })
+    @Column({ type: 'varchar', length: 30, default: EstadoEncomenda.ABERTA })
     estado: EstadoEncomenda;
 
     @OneToMany(() => EncomendaLinha, (l) => l.encomenda, { cascade: true })

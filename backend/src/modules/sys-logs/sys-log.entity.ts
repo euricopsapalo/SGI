@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Check } from 'typeorm';
 
 export enum TipoSysLog {
     INFO = 'info',
@@ -7,6 +7,7 @@ export enum TipoSysLog {
 }
 
 @Entity('sys_logs')
+@Check('chk_sys_logs_tipo', `"tipo" IN ('info','warning','error')`)
 export class SysLog {
     @PrimaryGeneratedColumn()
     id: number;
@@ -23,7 +24,7 @@ export class SysLog {
     @Column({ type: 'text', nullable: true })
     detalhes: string;
 
-    @Column({ type: 'enum', enum: TipoSysLog, default: TipoSysLog.INFO })
+    @Column({ type: 'varchar', length: 30, default: TipoSysLog.INFO })
     tipo: TipoSysLog;
 
     @CreateDateColumn({ name: 'timestamp' })

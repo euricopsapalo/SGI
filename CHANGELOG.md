@@ -4,6 +4,17 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### chore(db): padronizar enums do schema para `varchar` + `CHECK` (closes #89)
+
+Decisão **Opção B** da #89: substituir os enums nativos do Postgres por `varchar(30)` + `CHECK` em todo o schema. Motivo: os enums do domínio evoluem com frequência (natureza estendida em #75, estados reformulados em RF-OT-001) e `varchar+CHECK` evolui com um simples `DROP/ADD CONSTRAINT`, ao contrário do `ALTER TYPE` rígido. Resolve a divergência sistémica entre `init.sql` (varchar) e entidades (enum nativo). **Reverte o #88** (que alinhara a OT na direção oposta).
+
+- **Entidades (20 colunas, 15 entidades):** `@Column({ type: 'enum' })` → `@Column({ type: 'varchar', length: 30 })`, mantendo o tipo TS na propriedade.
+- **CHECKs via `@Check` decorators (nomeados):** garantem que as constraints são **mantidas pelo `synchronize`** (que de outra forma removeria os CHECK do `init.sql`) — constraints consistentes em dev **e** produção. A validação de valores continua também na app (class-validator nos DTOs).
+- **`init.sql`:** OT revertida para varchar+CHECK; CHECKs adicionados a todas as colunas enum (clientes, encomendas, faturas_v2, comissões, sys_logs, equip_instalados, modelos_equipamento, movimentos_stock, users). 13 CHECKs no schema base.
+- **Migration `EnumColumnsToVarchar`:** converte colunas enum nativas → `varchar(30)` (`USING ::text`, dropando o default antes do cast), reaplica defaults + CHECKs (guardado por `to_regclass`), e dropa os 20 tipos enum nativos. `down` documentado como no-op (estado-alvo é varchar).
+
+**Validação:** `tsc` limpo; 211 unit tests verdes; `init.sql` corre exit=0 contra BD limpa (colunas varchar, 13 CHECKs); migration validada contra clone do schema real (20 colunas enum → 0, 20 tipos → 0); BD de dev recriada → synchronize cria 20 CHECKs; CHECK rejeita valor inválido e aceita válido; API autenticada operacional (`/api/ordens`, `/api/users` 200).
+
 ### chore(ot): remover coluna vestigial `data_prog_fim` de `ordens_trabalho` (closes #82)
 
 Seguimento do #74. Pelo modelo canónico do ciclo de vida da OT (RF-OT-001 / RF-OT-003), uma OT representa uma intervenção única — não um intervalo planeado — por isso `data_prog_fim` não tem momento de preenchimento no ciclo. A "duração prevista" já está coberta por `previsao_tempo` (horas). As datas canónicas mantêm-se: `data_registo`, `janela_fim`, `data_agendada`, `data_execucao`, `data_inicio`, `data_fim`.

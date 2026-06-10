@@ -154,7 +154,7 @@ CREATE TABLE users (
     nome               VARCHAR(150) NOT NULL,
     email              VARCHAR(200) NOT NULL UNIQUE,
     password_hash      VARCHAR(255) NOT NULL,
-    role               VARCHAR(20)  NOT NULL DEFAULT 'campo'
+    role               VARCHAR(30)  NOT NULL DEFAULT 'campo'
         CONSTRAINT chk_users_role CHECK (role IN ('admin','suporte','coordenador','campo','vendedor')),
     ativo              BOOLEAN      NOT NULL DEFAULT TRUE,
     telefone           VARCHAR(30),
@@ -174,7 +174,8 @@ SELECT setval('users_id_seq', 4);
 -- ============================================================
 CREATE TABLE clientes (
     id         SERIAL       PRIMARY KEY,
-    tipo       VARCHAR(20)  NOT NULL DEFAULT 'empresa',
+    tipo       VARCHAR(30)  NOT NULL DEFAULT 'empresa'
+        CONSTRAINT chk_clientes_tipo CHECK (tipo IN ('empresa','particular')),
     nome       VARCHAR(200) NOT NULL,
     nif        VARCHAR(20),
     email      VARCHAR(200),
@@ -240,7 +241,8 @@ CREATE TABLE modelos_equipamento (
     id    SERIAL       PRIMARY KEY,
     nome  VARCHAR(200) NOT NULL,
     marca VARCHAR(100),
-    tipo  VARCHAR(20)  NOT NULL DEFAULT 'maquina'
+    tipo  VARCHAR(30)  NOT NULL DEFAULT 'maquina'
+        CONSTRAINT chk_modelos_tipo CHECK (tipo IN ('maquina','filtro'))
 );
 
 -- ============================================================
@@ -252,7 +254,8 @@ CREATE TABLE equip_instalados (
     modelo_id               INTEGER      NOT NULL REFERENCES modelos_equipamento(id) ON DELETE RESTRICT,
     nr_serie                VARCHAR(100) UNIQUE,
     data_instalacao         DATE         NOT NULL,
-    estado                  VARCHAR(20)  NOT NULL DEFAULT 'ativo',
+    estado                  VARCHAR(30)  NOT NULL DEFAULT 'ativo'
+        CONSTRAINT chk_equip_inst_estado CHECK (estado IN ('ativo','com_problema','inativo')),
     data_ultima_manutencao  DATE,
     data_proxima_manutencao DATE,
     localizacao             VARCHAR(200)
@@ -328,7 +331,8 @@ CREATE TABLE artigos (
 CREATE TABLE movimentos_stock (
     id                 SERIAL        PRIMARY KEY,
     artigo_id          INTEGER       REFERENCES artigos(id) ON DELETE RESTRICT,
-    tipo               VARCHAR(20)   NOT NULL,
+    tipo               VARCHAR(30)   NOT NULL
+        CONSTRAINT chk_mov_stock_tipo CHECK (tipo IN ('entrada','saida','ajuste','transferencia','devolucao')),
     quantidade         NUMERIC(12,3) NOT NULL,
     armazem_id         VARCHAR(20),
     armazem_destino_id VARCHAR(20),
@@ -370,31 +374,20 @@ CREATE TABLE plano_artigos (
 -- ORDENS DE TRABALHO
 -- Alinhado com OrdemTrabalho entity (inclui tipo_ot e reprogramacoes)
 -- ============================================================
--- Enums nativos — espelham os tipos que o TypeORM (`type: 'enum'`) gera via
--- synchronize. Mantém a forma da BD criada de raiz igual à BD viva (#87).
-DO $$ BEGIN
-    CREATE TYPE ordens_trabalho_tipo_enum AS ENUM ('pontual','periodica');
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN
-    CREATE TYPE ordens_trabalho_natureza_intervencao_enum AS ENUM
-        ('Manutenção','Substituição de filtro','Reparação de avaria','Inspeção','Montagem / Instalação');
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN
-    CREATE TYPE ordens_trabalho_prioridade_enum AS ENUM ('Normal','Alta','Urgente');
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN
-    CREATE TYPE ordens_trabalho_estado_enum AS ENUM
-        ('Registada','Programada','Adiada','Confirmada','Em execução','Finalizada');
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
+-- Colunas enum usam VARCHAR(30) + CHECK (validação ao nível da app via
+-- class-validator; CHECK garante integridade na BD). Ver decisão #89.
 CREATE TABLE ordens_trabalho (
     id                   SERIAL       PRIMARY KEY,
     -- RF-OT-002
     numero               VARCHAR(30)  UNIQUE,
-    tipo                 ordens_trabalho_tipo_enum NOT NULL DEFAULT 'pontual',
+    tipo                 VARCHAR(30)  NOT NULL DEFAULT 'pontual'
+        CONSTRAINT chk_ot_tipo CHECK (tipo IN ('pontual','periodica')),
     assinada_cliente     BOOLEAN      NOT NULL DEFAULT false,
-    natureza_intervencao ordens_trabalho_natureza_intervencao_enum,
-    prioridade           ordens_trabalho_prioridade_enum NOT NULL DEFAULT 'Normal',
+    natureza_intervencao VARCHAR(30)
+        CONSTRAINT chk_ot_natureza CHECK (natureza_intervencao IS NULL OR natureza_intervencao IN
+            ('Manutenção','Substituição de filtro','Reparação de avaria','Inspeção','Montagem / Instalação')),
+    prioridade           VARCHAR(30)  NOT NULL DEFAULT 'Normal'
+        CONSTRAINT chk_ot_prioridade CHECK (prioridade IN ('Normal','Alta','Urgente')),
     data_registo         DATE         NOT NULL DEFAULT CURRENT_DATE,
     registado_por_id     INTEGER      REFERENCES users(id) ON DELETE SET NULL,
     executado_por_id     INTEGER      REFERENCES tecnicos(id) ON DELETE SET NULL,
@@ -416,7 +409,9 @@ CREATE TABLE ordens_trabalho (
     aprovado_por_id    INTEGER      REFERENCES users(id) ON DELETE SET NULL,
     data_inicio        DATE,
     data_fim           DATE,
-    estado             ordens_trabalho_estado_enum NOT NULL DEFAULT 'Registada'
+    estado             VARCHAR(30)  NOT NULL DEFAULT 'Registada'
+        CONSTRAINT chk_ot_estado CHECK (estado IN
+            ('Registada','Programada','Adiada','Confirmada','Em execução','Finalizada'))
 );
 
 CREATE TABLE ot_maos_obra (
@@ -463,7 +458,9 @@ CREATE TABLE encomendas (
     moeda               VARCHAR(10)  NOT NULL DEFAULT 'AOA',
     descricao           TEXT,
     observacoes         TEXT,
-    estado              VARCHAR(20)  NOT NULL DEFAULT 'Aberta'
+    estado              VARCHAR(30)  NOT NULL DEFAULT 'Aberta'
+        CONSTRAINT chk_encomendas_estado CHECK (estado IN
+            ('Aberta','Aprovada','Parcial','Recebida','Cancelada','Faturada'))
 );
 
 CREATE TABLE encomenda_linhas (
@@ -494,7 +491,8 @@ CREATE TABLE faturas_v2 (
     valor_iva       NUMERIC(12,2) NOT NULL DEFAULT 0,
     valor_total     NUMERIC(12,2) NOT NULL DEFAULT 0,
     moeda           VARCHAR(10)   NOT NULL DEFAULT 'AOA',
-    estado          VARCHAR(20)   NOT NULL DEFAULT 'Pendente',
+    estado          VARCHAR(30)   NOT NULL DEFAULT 'Pendente'
+        CONSTRAINT chk_faturas_v2_estado CHECK (estado IN ('Pendente','Paga','Anulada','Emitido')),
     observacoes     TEXT,
     data_pagamento  DATE,
     motivo_anulacao TEXT,
@@ -518,7 +516,8 @@ CREATE TABLE comissoes (
     ot_id       INTEGER       REFERENCES ordens_trabalho(id) ON DELETE SET NULL,
     tecnico_id  INTEGER       REFERENCES tecnicos(id) ON DELETE SET NULL,
     vendedor_id INTEGER       REFERENCES vendedores(id) ON DELETE SET NULL,
-    tipo        VARCHAR(20)   NOT NULL,
+    tipo        VARCHAR(30)   NOT NULL
+        CONSTRAINT chk_comissoes_tipo CHECK (tipo IN ('tecnico','vendedor')),
     valor       NUMERIC(12,2) NOT NULL DEFAULT 0,
     data        TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
 );
@@ -533,7 +532,8 @@ CREATE TABLE sys_logs (
     modulo    VARCHAR(100),
     acao      VARCHAR(200),
     detalhes  TEXT,
-    tipo      VARCHAR(20)  NOT NULL DEFAULT 'info'
+    tipo      VARCHAR(30)  NOT NULL DEFAULT 'info'
+        CONSTRAINT chk_sys_logs_tipo CHECK (tipo IN ('info','warning','error'))
 );
 
 -- ============================================================

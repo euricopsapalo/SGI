@@ -5,6 +5,7 @@ import {
     CreateDateColumn,
     UpdateDateColumn,
     OneToOne,
+    Check,
 } from 'typeorm';
 
 export enum UserRole {
@@ -16,6 +17,7 @@ export enum UserRole {
 }
 
 @Entity('users')
+@Check('chk_users_role', `"role" IN ('admin','suporte','coordenador','campo','vendedor')`)
 export class User {
     @PrimaryGeneratedColumn()
     id: number;
@@ -29,7 +31,7 @@ export class User {
     @Column({ name: 'password_hash', length: 255 })
     passwordHash: string;
 
-    @Column({ type: 'enum', enum: UserRole, default: UserRole.CAMPO })
+    @Column({ type: 'varchar', length: 30, default: UserRole.CAMPO })
     role: UserRole;
 
     @Column({ default: true })
