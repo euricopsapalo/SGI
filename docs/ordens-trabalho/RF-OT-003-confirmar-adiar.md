@@ -124,8 +124,9 @@ A tabela `ot_reprogramacoes` (já existente: `data_anterior`, `nova_data`, `moti
 adiamentos. Limite default em `configuracao_empresa` (nova chave `limite_adiamentos`,
 default 3) ou constante de serviço se a tabela não for tocada neste RF (RD-2).
 
-> `data_prog_inicio`/`data_prog_fim` legados mantidos por compatibilidade; novas operações
-> usam `data_agendada`/`data_execucao`.
+> As operações usam `data_agendada`/`data_execucao`. As colunas legadas `data_prog_inicio`
+> (#74) e `data_prog_fim` (#82) foram entretanto removidas — uma OT representa uma intervenção
+> única, não um intervalo planeado.
 
 ## 5. Impacto de API
 
