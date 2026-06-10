@@ -356,7 +356,7 @@ export class OrdensTrabalhoService {
      * RF-OT-003 §3.4 — Registada/Adiada → Programada.
      * Define `data_agendada`. Valida que a data cai dentro da janela de 6 meses (§3.1).
      */
-    async agendar(id: number, opts: { dataAgendada?: string; dataProgFim?: string; usuario?: string } = {}) {
+    async agendar(id: number, opts: { dataAgendada?: string; usuario?: string } = {}) {
         const ot = await this.findOrFail(id);
         this.assertTransicao(ot, OTEstado.PROGRAMADA);
 
@@ -366,12 +366,7 @@ export class OrdensTrabalhoService {
         }
         this.assertDataDentroJanela(ot, dataAgendada, 'Data agendada');
 
-        const extra: Record<string, unknown> = {
-            dataAgendada,
-        };
-        if (opts.dataProgFim) extra.dataProgFim = opts.dataProgFim;
-
-        await this.transitar(id, ot.estado, OTEstado.PROGRAMADA, extra, opts.usuario);
+        await this.transitar(id, ot.estado, OTEstado.PROGRAMADA, { dataAgendada }, opts.usuario);
         return this.findOne(id);
     }
 
@@ -584,7 +579,6 @@ export class OrdensTrabalhoService {
             updated.periodicidade !== 'Única'
         ) {
             const nextStart = calcNextDate(fim, updated.periodicidade);
-            const nextEnd   = calcNextDate(nextStart, updated.periodicidade);
 
             // Save new OT first (without children) to get its ID
             const newOt = await this.repo.save(this.repo.create({
@@ -603,7 +597,6 @@ export class OrdensTrabalhoService {
                 causa: updated.causa,
                 estado: OTEstado.PROGRAMADA,
                 dataAgendada: nextStart,
-                dataProgFim: nextEnd,
             }));
 
             // Explicitly save children so they are linked to the new OT

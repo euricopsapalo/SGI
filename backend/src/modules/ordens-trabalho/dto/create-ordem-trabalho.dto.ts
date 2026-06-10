@@ -36,7 +36,6 @@ export class CreateOrdemTrabalhoDto {
   @IsOptional() @IsString() sintoma?: string;
   @IsOptional() @IsString() causa?: string;
   @IsOptional() @IsString() dataAgendada?: string;
-  @IsOptional() @IsString() dataProgFim?: string;
   @IsOptional() @IsString() dataInicio?: string;
   @IsOptional() @IsString() dataFim?: string;
   @IsOptional() @IsEnum(['Registada', 'Programada', 'Adiada', 'Confirmada', 'Em execução', 'Finalizada']) estado?: string;
