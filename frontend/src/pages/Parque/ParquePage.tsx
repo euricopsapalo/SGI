@@ -150,13 +150,13 @@ function buildHistoricoEquipHtml(
     mod: ModeloEquipamento | undefined,
     empresa: string,
 ): string {
-    const rows = [...ots].sort((a, b) => (b.dataAgendada || b.dataProgFim || '').localeCompare(a.dataAgendada || a.dataProgFim || ''))
+    const rows = [...ots].sort((a, b) => (b.dataAgendada || '').localeCompare(a.dataAgendada || ''))
         .map(o => `<tr>
             <td style="font-family:monospace">${o.id}</td>
             <td>${o.tipo === 'pontual' ? 'Pontual' : 'Programada'}</td>
             <td>${o.naturezaIntervencao ?? "—"}${isCorretivo(o) ? ' <span class="corr">●</span>' : ''}</td>
             <td style="color:${o.estado === 'Finalizada' ? '#16a34a' : o.estado === 'Em execução' ? '#eab308' : o.estado === 'Adiada' ? '#f97316' : o.estado === 'Confirmada' ? '#7c3aed' : o.estado === 'Registada' ? '#6b7280' : '#2563eb'};font-weight:600">${o.estado}</td>
-            <td>${fD(o.dataAgendada || o.dataProgFim)}</td>
+            <td>${fD(o.dataAgendada)}</td>
             <td>${fD(o.dataFim)}</td>
             <td>${o.descricao || '—'}</td>
         </tr>`).join('');
@@ -203,7 +203,7 @@ function buildHistoricoGeralHtml(
     equipId: string,
     empresa: string,
 ): string {
-    const refDate = (o: OrdemTrabalho) => o.dataAgendada || o.dataProgFim || '';
+    const refDate = (o: OrdemTrabalho) => o.dataAgendada || '';
     const filtrado = ots
         .filter(o => {
             const d = refDate(o);
@@ -298,8 +298,8 @@ function buildEstadoParqueHtml(
         const eqOts  = ordens.filter(o => String(o.equipInstaladoId) === String(eq.id));
         const open   = eqOts.filter(o => o.estado !== 'Finalizada');
         const closed = eqOts.filter(o => o.estado === 'Finalizada');
-        const finDates  = closed.map(o => o.dataFim || o.dataProgFim).filter(Boolean) as string[];
-        const openDates = open.map(o => o.dataProgFim || o.dataAgendada).filter(Boolean) as string[];
+        const finDates  = closed.map(o => o.dataFim).filter(Boolean) as string[];
+        const openDates = open.map(o => o.dataAgendada).filter(Boolean) as string[];
         const ultimaMt  = finDates.length  > 0 ? [...finDates].sort().at(-1)  : undefined;
         const proximaMt = openDates.length > 0 ? [...openDates].sort()[0]     : undefined;
         const hasCorr   = open.some(isCorr);
@@ -690,13 +690,13 @@ const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
     // Computed maintenance dates from OTs
     const finDates = ots
         .filter(o => o.estado === 'Finalizada')
-        .map(o => o.dataFim || o.dataProgFim)
+        .map(o => o.dataFim)
         .filter(Boolean) as string[];
     const ultimaManutencao = finDates.length > 0 ? [...finDates].sort().at(-1) : undefined;
 
     const openDates = ots
         .filter(o => o.estado !== 'Finalizada')
-        .map(o => o.dataProgFim || o.dataAgendada)
+        .map(o => o.dataAgendada)
         .filter(Boolean) as string[];
     const proximaManutencao = openDates.length > 0 ? [...openDates].sort()[0] : undefined;
 
@@ -828,7 +828,7 @@ const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
                                                             {o.estado}
                                                         </span>
                                                     </td>
-                                                    <td style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataAgendada || o.dataProgFim)}</td>
+                                                    <td style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataAgendada)}</td>
                                                     <td style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>{fmtDate(o.dataFim)}</td>
                                                     <td style={{ fontSize: '0.76rem', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={o.descricao}>{o.descricao}</td>
                                                 </tr>
@@ -899,8 +899,8 @@ const ParquePage: React.FC = () => {
             const eqOts = ordens.filter(o => String(o.equipInstaladoId) === String(eq.id));
             const finished = eqOts.filter(o => o.estado === 'Finalizada');
             const open = eqOts.filter(o => o.estado !== 'Finalizada');
-            const finDates = finished.map(o => o.dataFim || o.dataProgFim).filter(Boolean) as string[];
-            const openDates = open.map(o => o.dataProgFim || o.dataAgendada).filter(Boolean) as string[];
+            const finDates = finished.map(o => o.dataFim).filter(Boolean) as string[];
+            const openDates = open.map(o => o.dataAgendada).filter(Boolean) as string[];
             const hasOpenCorretivo = open.some(isCorretivo);
             const effectiveEstado: EstadoEquip = eq.estado === 'inativo' ? 'inativo'
                 : hasOpenCorretivo ? 'com_problema'
@@ -963,7 +963,7 @@ const ParquePage: React.FC = () => {
                 descricao: `Montagem e comissionamento — ${mod?.nome ?? 'equipamento'}`,
                 previsaoTempo: 4, naturezaIntervencao: 'Montagem / Instalação', responsavel: '—',
                 maosDeObra: [], artigos: [],
-                dataAgendada: data.dataInstalacao, dataProgFim: data.dataInstalacao,
+                dataAgendada: data.dataInstalacao,
                 estado: 'Registada',
             } as any).catch(e => console.error('Erro ao criar OT de Montagem', e));
             showToast(`${eq.id} registado. OT de Montagem criada automaticamente.`);

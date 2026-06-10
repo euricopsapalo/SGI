@@ -515,7 +515,7 @@ function otCorRC(estado: string) {
 function proxManutRC(equipId: string, ordens: OrdemTrabalho[]) {
     const dates = ordens
         .filter(o => String(o.equipInstaladoId) === String(equipId) && o.estado !== 'Finalizada')
-        .map(o => o.dataProgFim || o.dataAgendada).filter(Boolean) as string[];
+        .map(o => o.dataAgendada).filter(Boolean) as string[];
     return dates.length > 0 ? [...dates].sort()[0] : undefined;
 }
 function ultimaIntRC(clienteId: string | number, ordens: OrdemTrabalho[]) {
@@ -567,7 +567,7 @@ function buildFichaClienteHtml(
       <td>${o.tipo === 'pontual' ? 'Pontual' : 'Programada'}</td>
       <td>${o.naturezaIntervencao ?? "—"}</td>
       <td style="color:${otCorRC(o.estado)};font-weight:600">${o.estado}</td>
-      <td>${fRC(o.dataAgendada || o.dataProgFim)}</td>
+      <td>${fRC(o.dataAgendada)}</td>
       <td>${fRC(o.dataFim)}</td>
       <td>${o.responsavel || '—'}</td>
     </tr>`).join('');
@@ -788,7 +788,7 @@ function buildHistoricoIntervClienteHtml(
     dateTo: string,
     empresa: string,
 ): string {
-    const refDate = (o: OrdemTrabalho) => o.dataAgendada || o.dataProgFim || '';
+    const refDate = (o: OrdemTrabalho) => o.dataAgendada || '';
     const filtOTs = ordens.filter(o => {
         const d = refDate(o);
         return (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo);
