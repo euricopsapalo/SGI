@@ -1477,7 +1477,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao,
             faturas, addFatura, updateFatura,
             faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC,
-            reloadData, refreshClientes,
+            reloadData,
         }}>
             {children}
         </GlobalContext.Provider>
