@@ -575,7 +575,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ equip, onClose, onSave })
     const [estado, setEstado]           = useState<EstadoEquip>(equip?.estado ?? 'ativo');
     const [errors, setErrors]           = useState<Record<string, string>>({});
 
-    const clienteOpts = clientes.filter(c => c.ativo).map(c => ({ value: c.id, label: c.nome, sub: `NIF: ${c.nif}` }));
+    const clienteOpts = clientes.filter(c => c.ativo !== false).map(c => ({ value: c.id, label: c.nome, sub: `NIF: ${c.nif}` }));
     const modeloOpts  = modelosEquipamento.map(m => ({ value: m.id, label: m.nome, sub: `${m.marca} · ${m.tipo === 'maquina' ? 'Máquina' : 'Filtro'}` }));
 
     const handleGerarSerie = () => {
@@ -610,8 +610,16 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ equip, onClose, onSave })
                     <div className="modal-body">
                         <div className="form-group">
                             <label className="form-label req">Cliente</label>
-                            <SearchableSelect options={clienteOpts} value={clienteId} onChange={setClienteId}
-                                placeholder="Seleccionar cliente..." />
+                            {clienteOpts.length === 0 ? (
+                                <div style={{ padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 4, fontSize: '0.8rem', color: 'var(--text-muted)', background: 'var(--bg-subtle,#f8f9fa)' }}>
+                                    <AlertCircle size={11} style={{ marginRight: 5, color: '#f97316' }} />
+                                    Nenhum cliente registado.{' '}
+                                    <a href="/clientes" style={{ color: 'var(--blue)', textDecoration: 'underline' }}>Criar em Entidades &gt; Clientes</a>
+                                </div>
+                            ) : (
+                                <SearchableSelect options={clienteOpts} value={clienteId} onChange={setClienteId}
+                                    placeholder="Seleccionar cliente..." />
+                            )}
                             {errors.cliente && <span className="form-error"><AlertCircle size={11} /> {errors.cliente}</span>}
                         </div>
                         <div className="form-group">

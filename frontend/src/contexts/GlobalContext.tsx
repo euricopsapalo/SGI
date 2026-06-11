@@ -516,6 +516,7 @@ interface GlobalContextType {
     faturasFornecedor: FaturaFornecedor[]; addFaturaFornecedor: (f: Omit<FaturaFornecedor, 'id'> & { faturasAssociadasIds?: string[] }) => Promise<FaturaFornecedor>; updateFaturaFornecedor: (id: string, f: Partial<FaturaFornecedor>) => void; updateEstadoVNC: (id: string, estado: string, usuario?: string) => Promise<void>;
     // Reload
     reloadData: () => Promise<void>;
+    refreshClientes: () => Promise<void>;
 }
 
 const GlobalContext = createContext<GlobalContextType | null>(null);
@@ -973,6 +974,13 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             } catch {}
         }
     };
+
+    const refreshClientes = React.useCallback(async () => {
+        try {
+            const { data } = await api.get(`/clientes`);
+            setClientes(data.map(normCliente));
+        } catch {}
+    }, []);
 
     /* ── Entities ───────────────────────────────────────────── */
     const addCliente = (c: Omit<Cliente, 'id'>): Cliente => {
@@ -1455,7 +1463,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             documentosCompra, addDocumentoCompra, updateDocumentoCompra, removeDocumentoCompra,
             condicoesPagamento, addCondicaoPagamento, updateCondicaoPagamento, removeCondicaoPagamento,
             modosPagamento, addModoPagamento, updateModoPagamento, removeModoPagamento,
-            clientes, addCliente, updateCliente, removeCliente,
+            clientes, addCliente, updateCliente, removeCliente, refreshClientes,
             tecnicos, addTecnico, updateTecnico, removeTecnico,
             fornecedores, addFornecedor, updateFornecedor, removeFornecedor,
             modelosEquipamento, addModelo, updateModelo,
@@ -1469,7 +1477,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao,
             faturas, addFatura, updateFatura,
             faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC,
-            reloadData,
+            reloadData, refreshClientes,
         }}>
             {children}
         </GlobalContext.Provider>

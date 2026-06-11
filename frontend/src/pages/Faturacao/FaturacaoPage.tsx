@@ -49,7 +49,7 @@ const EmitirDocumentoModal: React.FC<EmitirModalProps> = ({ onClose, onSave }) =
             return { value: o.id, label: `${o.id} — ${cli?.nome ?? o.clienteId}`, sub: o.naturezaIntervencao };
         });
 
-    const clienteOpts = clientes.filter(c => c.ativo).map(c => ({ value: c.id, label: c.nome, sub: c.nif }));
+    const clienteOpts = clientes.filter(c => c.ativo !== false).map(c => ({ value: c.id, label: c.nome, sub: c.nif }));
     const artigoOpts  = artigos.filter(a => !a.inativo && a.existencia > 0).map(a => ({
         value: a.id, label: a.descricao, sub: `${a.codigo} · Stock: ${a.existencia}`,
     }));

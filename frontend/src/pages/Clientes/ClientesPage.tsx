@@ -1095,7 +1095,7 @@ const RelatoriosClienteModal: React.FC<RelatoriosClienteModalProps> = ({ cliente
    MAIN PAGE
 ══════════════════════════════════════════ */
 const ClientesPage: React.FC = () => {
-    const { equipInstalados, ordens, addLog, currentUser } = useGlobal();
+    const { equipInstalados, ordens, addLog, currentUser, refreshClientes } = useGlobal();
     const [clientes, setClientes] = useState<Cliente[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch]     = useState('');
@@ -1117,6 +1117,7 @@ const ClientesPage: React.FC = () => {
             showToast(`Cliente "${nome}" eliminado.`);
             addLog({ usuario: currentUser?.email ?? 'sistema', modulo: 'Clientes', acao: 'Cliente eliminado', detalhes: `Nome: ${nome}`, tipo: 'warning' });
             loadClientes();
+            refreshClientes();
         } catch (e: any) {
             showErr(e?.response?.data?.message ?? 'Erro ao eliminar cliente.');
         }
@@ -1149,6 +1150,7 @@ const ClientesPage: React.FC = () => {
                 showToast('Cliente criado com sucesso.');
             }
             await loadClientes();
+            refreshClientes();
         } catch (e) {
             console.error('Erro ao guardar cliente', e);
             showToast('Erro ao guardar cliente.');
