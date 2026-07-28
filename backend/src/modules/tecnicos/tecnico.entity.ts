@@ -4,10 +4,8 @@ import {
     Column,
     OneToOne,
     JoinColumn,
-    OneToMany,
 } from 'typeorm';
 import { User } from '../users/user.entity';
-import { Comissao } from '../comissoes/comissao.entity';
 
 @Entity('tecnicos')
 export class Tecnico {
@@ -57,7 +55,4 @@ export class Tecnico {
 
     @Column({ name: 'id_user' })
     userId: number;
-
-    @OneToMany(() => Comissao, (c) => c.tecnico)
-    comissoes: Comissao[];
 }
