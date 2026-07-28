@@ -6,13 +6,8 @@ import { DatabaseModule } from './database/database.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { UsersModule } from './modules/users/users.module';
 import { ClientesModule } from './modules/clientes/clientes.module';
-import { EquipamentosModule } from './modules/equipamentos/equipamentos.module';
-import { MaquinasInstaladasModule } from './modules/maquinas-instaladas/maquinas-instaladas.module';
 import { TecnicosModule } from './modules/tecnicos/tecnicos.module';
-import { VendedoresModule } from './modules/vendedores/vendedores.module';
-import { OrdensServicoModule } from './modules/ordens-servico/ordens-servico.module';
 import { FaturasModule } from './modules/faturas/faturas.module';
-import { ComissoesModule } from './modules/comissoes/comissoes.module';
 import { ConfiguracaoModule } from './modules/configuracao/configuracao.module';
 // New modules
 import { TabelasSistemaModule } from './modules/tabelas-sistema/tabelas-sistema.module';
@@ -49,13 +44,8 @@ import { HealthModule } from './modules/health/health.module';
     MessagesModule,
     UsersModule,
     ClientesModule,
-    EquipamentosModule,
-    MaquinasInstaladasModule,
     TecnicosModule,
-    VendedoresModule,
-    OrdensServicoModule,
     FaturasModule,
-    ComissoesModule,
     ConfiguracaoModule,
     // New modules
     TabelasSistemaModule,
