@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ModeloEquipamento } from './modelo-equipamento.entity';
@@ -22,7 +22,15 @@ export class ParqueService {
         await this.modelosRepo.update(id, body);
         return this.findOneModelo(id);
     }
-    removeModelo(id: number) { return this.modelosRepo.delete(id); }
+    async removeModelo(id: number) {
+        try {
+            const res = await this.modelosRepo.delete(id);
+            if (!res.affected) throw new NotFoundException('Modelo não encontrado.');
+            return res;
+        } catch (err) {
+            throw this.mapFkConflict(err, 'Não é possível eliminar: existem equipamentos associados a este modelo.');
+        }
+    }
 
     // EquipInstalado
     findAllEquip() { return this.equipRepo.find({ relations: ['cliente', 'modelo', 'historico'] }); }
@@ -45,5 +53,20 @@ export class ParqueService {
         });
         return this.findOneEquip(id);
     }
-    removeEquip(id: number) { return this.equipRepo.delete(id); }
+    async removeEquip(id: number) {
+        try {
+            const res = await this.equipRepo.delete(id);
+            if (!res.affected) throw new NotFoundException('Equipamento não encontrado.');
+            return res;
+        } catch (err) {
+            throw this.mapFkConflict(err, 'Não é possível eliminar: existem OTs ou planos associados a este equipamento.');
+        }
+    }
+
+    /** Traduz a violação de FK (Postgres 23503) num 409 legível (#95). */
+    private mapFkConflict(err: any, message: string): any {
+        if (err instanceof NotFoundException) return err;
+        if (err?.code === '23503') return new ConflictException(message);
+        return err;
+    }
 }

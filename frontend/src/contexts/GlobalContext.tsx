@@ -488,8 +488,8 @@ interface GlobalContextType {
     tecnicos: Tecnico[]; addTecnico: (t: Omit<Tecnico, 'id'> & { password?: string; passwordConfirm?: string }) => Promise<Tecnico>; updateTecnico: (id: string, t: Partial<Tecnico>) => Promise<void>; removeTecnico: (id: string) => Promise<void>;
     fornecedores: Fornecedor[]; addFornecedor: (f: Omit<Fornecedor, 'id'>) => Fornecedor; updateFornecedor: (id: string, f: Partial<Fornecedor>) => void; removeFornecedor: (id: string) => Promise<void>;
     // Equipment
-    modelosEquipamento: ModeloEquipamento[]; addModelo: (m: Omit<ModeloEquipamento, 'id'>) => ModeloEquipamento; updateModelo: (id: string, m: Partial<ModeloEquipamento>) => void;
-    equipInstalados: EquipInstalado[]; addEquipInstalado: (e: Omit<EquipInstalado, 'id'>) => EquipInstalado; updateEquipInstalado: (id: string, e: Partial<EquipInstalado>) => void;
+    modelosEquipamento: ModeloEquipamento[]; addModelo: (m: Omit<ModeloEquipamento, 'id'>) => ModeloEquipamento; updateModelo: (id: string, m: Partial<ModeloEquipamento>) => void; removeModelo: (id: string) => Promise<void>;
+    equipInstalados: EquipInstalado[]; addEquipInstalado: (e: Omit<EquipInstalado, 'id'>) => EquipInstalado; updateEquipInstalado: (id: string, e: Partial<EquipInstalado>) => void; removeEquipInstalado: (id: string) => Promise<void>;
     // Plans
     planos: PlanoManutencao[]; addPlano: (p: Omit<PlanoManutencao, 'id'>) => PlanoManutencao; updatePlano: (id: string, p: Partial<PlanoManutencao>) => void; removePlano: (id: string) => void;
     // Work Orders
@@ -1072,6 +1072,12 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             setModelosEquipamento(p => p.map(x => x.id === id ? { ...x, ...m } : x));
         } catch (e) { throw e; }
     };
+    const removeModelo = async (id: string) => {
+        const nome = modelosEquipamento.find(x => x.id === id)?.nome ?? id;
+        await api.delete(`/modelos-equipamento/${id}`);
+        setModelosEquipamento(p => p.filter(x => x.id !== id));
+        log('Parque', 'Modelo eliminado', `Nome: ${nome}`, 'warning');
+    };
 
     const addEquipInstalado = (e: Omit<EquipInstalado, 'id'>): EquipInstalado => {
         const placeholder: EquipInstalado = { ...e, id: '' };
@@ -1088,6 +1094,12 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             await api.put(`/equip-instalados/${id}`, e);
             setEquipInstalados(p => p.map(x => x.id === id ? { ...x, ...e } : x));
         } catch (e) { throw e; }
+    };
+    const removeEquipInstalado = async (id: string) => {
+        const nrSerie = equipInstalados.find(x => x.id === id)?.nrSerie ?? id;
+        await api.delete(`/equip-instalados/${id}`);
+        setEquipInstalados(p => p.filter(x => x.id !== id));
+        log('Parque', 'Equipamento eliminado', `Nº série: ${nrSerie}`, 'warning');
     };
 
     /* ── Plans ──────────────────────────────────────────────── */
@@ -1466,8 +1478,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             clientes, addCliente, updateCliente, removeCliente, refreshClientes,
             tecnicos, addTecnico, updateTecnico, removeTecnico,
             fornecedores, addFornecedor, updateFornecedor, removeFornecedor,
-            modelosEquipamento, addModelo, updateModelo,
-            equipInstalados, addEquipInstalado, updateEquipInstalado,
+            modelosEquipamento, addModelo, updateModelo, removeModelo,
+            equipInstalados, addEquipInstalado, updateEquipInstalado, removeEquipInstalado,
             planos, addPlano, updatePlano, removePlano,
             ordens, addOrdem, updateOrdem, removeOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, finalizarOT, reprogramarOT,
             armazens, addArmazem, updateArmazem,

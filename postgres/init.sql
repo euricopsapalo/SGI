@@ -240,7 +240,7 @@ CREATE TABLE vendedores (
 CREATE TABLE modelos_equipamento (
     id    SERIAL       PRIMARY KEY,
     nome  VARCHAR(200) NOT NULL,
-    marca VARCHAR(100),
+    marca VARCHAR(100) NOT NULL,
     tipo  VARCHAR(30)  NOT NULL DEFAULT 'maquina'
         CONSTRAINT chk_modelos_tipo CHECK (tipo IN ('maquina','filtro'))
 );

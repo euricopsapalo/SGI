@@ -8,8 +8,9 @@ import {
 } from '../../contexts/GlobalContext';
 import {
     Search, Plus, Edit2, X, AlertCircle, Check, MapPin,
-    Eye, AlertTriangle, RefreshCw, Package, Printer, Download,
+    Eye, AlertTriangle, RefreshCw, Package, Printer, Download, Trash2,
 } from 'lucide-react';
+import { extractErrorMessage } from '../../utils/errorHandler';
 
 const ESTADO_DOT: Record<EstadoEquip, string> = {
     ativo:         'dot-green',
@@ -540,7 +541,7 @@ const ModeloModal: React.FC<ModeloModalProps> = ({ modelo, onClose, onSave }) =>
                                 {errors.marca && <span className="form-error"><AlertCircle size={11} /> {errors.marca}</span>}
                             </div>
                             <div className="form-group">
-                                <label className="form-label req">Tipo</label>
+                                <label className="form-label">Tipo</label>
                                 <select className="form-select" value={tipo} onChange={e => setTipo(e.target.value as 'maquina' | 'filtro')}>
                                     <option value="maquina">Máquina</option>
                                     <option value="filtro">Filtro</option>
@@ -895,8 +896,8 @@ type PageView = 'equipamentos' | 'modelos';
 
 const ParquePage: React.FC = () => {
     const {
-        equipInstalados, addEquipInstalado, updateEquipInstalado,
-        modelosEquipamento, addModelo, updateModelo,
+        equipInstalados, addEquipInstalado, updateEquipInstalado, removeEquipInstalado,
+        modelosEquipamento, addModelo, updateModelo, removeModelo,
         clientes, addOrdem, ordens, fmtDate, empresaConfig,
     } = useGlobal();
 
@@ -941,6 +942,8 @@ const ParquePage: React.FC = () => {
     const [previewHtml,   setPreviewHtml]   = useState('');
     const [toast, setToast] = useState('');
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
+    const [toastErr, setToastErr] = useState('');
+    const showErr = (msg: string) => { setToastErr(msg); setTimeout(() => setToastErr(''), 5000); };
 
     const getCliente = (id: string) => clientes.find(c => c.id === id)?.nome ?? '—';
     const getModelo  = (id: string) => modelosEquipamento.find(m => m.id === id);
@@ -977,6 +980,16 @@ const ParquePage: React.FC = () => {
             showToast(`${eq.id} registado. OT de Montagem criada automaticamente.`);
         }
         setModal(null); setEditId(null);
+    };
+
+    const handleDeleteEquip = async (id: string, nrSerie: string) => {
+        if (!window.confirm(`Eliminar o equipamento "${nrSerie}"? Esta acção não pode ser desfeita.`)) return;
+        try {
+            await removeEquipInstalado(id);
+            showToast(`Equipamento "${nrSerie}" eliminado.`);
+        } catch (e) {
+            showErr(extractErrorMessage(e));
+        }
     };
 
     /* ── Modelos ── */
@@ -1034,6 +1047,16 @@ const ParquePage: React.FC = () => {
             showToast(`Modelo ${m.id} criado.`);
         }
         setMModal(null);
+    };
+
+    const handleDeleteModelo = async (id: string, nome: string) => {
+        if (!window.confirm(`Eliminar o modelo "${nome}"? Esta acção não pode ser desfeita.`)) return;
+        try {
+            await removeModelo(id);
+            showToast(`Modelo "${nome}" eliminado.`);
+        } catch (e) {
+            showErr(extractErrorMessage(e));
+        }
     };
 
     const editEquip = equipInstalados.find(e => e.id === editId);
@@ -1168,6 +1191,16 @@ const ParquePage: React.FC = () => {
                                                         <div className="row-actions">
                                                             <button className="icon-btn" title="Detalhe" onClick={() => setDetalheId(e.id)}><Eye size={12} /></button>
                                                             <button className="icon-btn" title="Editar" onClick={() => { setEditId(e.id); setModal('edit'); }}><Edit2 size={12} /></button>
+                                                            {(() => {
+                                                                const temOts = ordens.some(o => String(o.equipInstaladoId) === String(e.id));
+                                                                return (
+                                                                    <button className="icon-btn" disabled={temOts}
+                                                                        title={temOts ? 'Não é possível eliminar: tem OTs associadas' : 'Eliminar'}
+                                                                        onClick={() => handleDeleteEquip(e.id, e.nrSerie)}>
+                                                                        <Trash2 size={12} style={{ color: temOts ? undefined : 'var(--red)' }} />
+                                                                    </button>
+                                                                );
+                                                            })()}
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -1225,6 +1258,11 @@ const ParquePage: React.FC = () => {
                                                     <td>
                                                         <div className="row-actions">
                                                             <button className="icon-btn" title="Editar" onClick={() => setMModal(m.id)}><Edit2 size={12} /></button>
+                                                            <button className="icon-btn" disabled={count > 0}
+                                                                title={count > 0 ? 'Não é possível eliminar: tem equipamentos associados' : 'Eliminar'}
+                                                                onClick={() => handleDeleteModelo(m.id, m.nome)}>
+                                                                <Trash2 size={12} style={{ color: count > 0 ? undefined : 'var(--red)' }} />
+                                                            </button>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -1286,6 +1324,13 @@ const ParquePage: React.FC = () => {
                 <div className="toast" role="status">
                     <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
                     <span>{toast}</span>
+                </div>
+            )}
+
+            {toastErr && (
+                <div className="toast" role="alert" style={{ borderColor: 'var(--red)' }}>
+                    <AlertCircle size={14} strokeWidth={2.5} style={{ color: 'var(--red)' }} />
+                    <span>{toastErr}</span>
                 </div>
             )}
 
