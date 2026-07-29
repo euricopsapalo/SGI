@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
@@ -34,6 +35,10 @@ describe('SeedService', () => {
     }).compile();
 
     service = module.get<SeedService>(SeedService);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('onModuleInit', () => {
@@ -124,18 +129,24 @@ describe('SeedService', () => {
     });
 
     it('não deve lançar erro se o seed de utilizadores falhar', async () => {
+      // Silencia (e verifica) o Logger.error do catch — sem isto o erro
+      // esperado vaza para o output dos testes como ruído.
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
       userRepo.findOne.mockRejectedValue(new Error('BD indisponível'));
       taxaIvaRepo.count.mockResolvedValue(0);
 
       await expect(service.onModuleInit()).resolves.not.toThrow();
       expect(taxaIvaRepo.save).toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Erro ao executar seed de utilizadores'));
     });
 
     it('não deve lançar erro se o seed de taxas IVA falhar', async () => {
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
       userRepo.findOne.mockResolvedValue(null);
       taxaIvaRepo.count.mockRejectedValue(new Error('BD indisponível'));
 
       await expect(service.onModuleInit()).resolves.not.toThrow();
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Erro ao executar seed de taxas IVA'));
     });
   });
 });

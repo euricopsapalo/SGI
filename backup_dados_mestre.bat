@@ -55,7 +55,6 @@ set TABELAS=^
  --table=fornecedores ^
  --table=modelos_equipamento ^
  --table=equip_instalados ^
- --table=equip_historico ^
  --table=users
 
 REM ── Executar pg_dump ─────────────────────────────────────────
