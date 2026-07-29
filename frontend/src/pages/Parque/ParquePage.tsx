@@ -67,10 +67,19 @@ const EQUIP_CSS = `
 `;
 
 /* ── Equipment print helper ── */
+// Datas de manutenção e estado derivam sempre das OTs (mesma fonte do ecrã),
+// nunca das colunas persistidas equip_instalados.data_*_manutencao (ver #92).
+interface EquipManutencao {
+    ultimaManutencao?: string;
+    proximaManutencao?: string;
+    effectiveEstado: EstadoEquip;
+}
+
 function buildEquipHtml(
     eq: EquipInstalado,
     clientes: Cliente[],
     modelosEquipamento: ModeloEquipamento[],
+    manut: EquipManutencao,
 ): string {
     const cli = clientes.find(c => c.id === eq.clienteId);
     const mod = modelosEquipamento.find(m => m.id === eq.modeloId);
@@ -83,7 +92,7 @@ function buildEquipHtml(
     <h1>AQUATEX — Ficha de Equipamento</h1>
     <div class="sub">Nº: <strong>${eq.id}</strong> &nbsp;|&nbsp; Impresso em ${new Date().toLocaleString('pt-PT')}</div>
   </div>
-  <span class="badge">${eq.estado === 'ativo' ? 'Activo' : eq.estado === 'com_problema' ? 'Com Problema' : 'Inactivo'}</span>
+  <span class="badge">${manut.effectiveEstado === 'ativo' ? 'Activo' : manut.effectiveEstado === 'com_problema' ? 'Com Problema' : 'Inactivo'}</span>
 </div>
 
 <div class="sec">Identificação</div>
@@ -97,8 +106,8 @@ function buildEquipHtml(
 <div class="sec">Datas de Manutenção</div>
 <table>
   <tr><td class="lbl">Data de Instalação</td><td>${eq.dataInstalacao ? new Date(eq.dataInstalacao).toLocaleDateString('pt-PT') : '—'}</td></tr>
-  <tr><td class="lbl">Última Manutenção</td><td>${eq.dataUltimaManutencao ? new Date(eq.dataUltimaManutencao).toLocaleDateString('pt-PT') : '—'}</td></tr>
-  <tr><td class="lbl">Próxima Manutenção</td><td>${eq.dataProximaManutencao ? new Date(eq.dataProximaManutencao).toLocaleDateString('pt-PT') : '—'}</td></tr>
+  <tr><td class="lbl">Última Manutenção</td><td>${manut.ultimaManutencao ? new Date(manut.ultimaManutencao).toLocaleDateString('pt-PT') : '—'}</td></tr>
+  <tr><td class="lbl">Próxima Manutenção</td><td>${manut.proximaManutencao ? new Date(manut.proximaManutencao).toLocaleDateString('pt-PT') : '—'}</td></tr>
 </table>
 
 <div class="footer">AQUATEX, LDA &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
@@ -109,8 +118,9 @@ function printEquip(
     eq: EquipInstalado,
     clientes: Cliente[],
     modelosEquipamento: ModeloEquipamento[],
+    manut: EquipManutencao,
 ) {
-    const html = buildEquipHtml(eq, clientes, modelosEquipamento);
+    const html = buildEquipHtml(eq, clientes, modelosEquipamento, manut);
     const w = window.open('', '_blank', 'width=820,height=900');
     if (!w) return;
     w.document.write(html.replace('</body></html>', '<script>window.onload=()=>window.print();<\/script></body></html>'));
@@ -862,10 +872,10 @@ const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
                         </button>
                     </>) : (<>
                         <button className="abtn abtn-secondary" type="button"
-                            onClick={() => setPreviewHtml(buildEquipHtml(eq, clientes, modelosEquipamento))}>
+                            onClick={() => setPreviewHtml(buildEquipHtml(eq, clientes, modelosEquipamento, { ultimaManutencao, proximaManutencao, effectiveEstado }))}>
                             <Eye size={12} /> Pré-visualizar
                         </button>
-                        <button className="abtn abtn-secondary" type="button" onClick={() => printEquip(eq, clientes, modelosEquipamento)}>
+                        <button className="abtn abtn-secondary" type="button" onClick={() => printEquip(eq, clientes, modelosEquipamento, { ultimaManutencao, proximaManutencao, effectiveEstado })}>
                             <Printer size={12} /> Imprimir Ficha
                         </button>
                     </>)}
@@ -876,7 +886,7 @@ const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
                     <div style={{ background: 'var(--bg-primary)', borderBottom: '1px solid var(--border)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ flex: 1, fontWeight: 700, fontSize: '0.85rem' }}>Pré-visualização</span>
-                        <button type="button" className="abtn abtn-primary" onClick={() => { if (tab === 'historico') printHistoricoEquip(eq, ots, cli, mod, empresaConfig?.nome || 'AQUATEX'); else printEquip(eq, clientes, modelosEquipamento); }} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <button type="button" className="abtn abtn-primary" onClick={() => { if (tab === 'historico') printHistoricoEquip(eq, ots, cli, mod, empresaConfig?.nome || 'AQUATEX'); else printEquip(eq, clientes, modelosEquipamento, { ultimaManutencao, proximaManutencao, effectiveEstado }); }} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                             <Printer size={13} /> Imprimir
                         </button>
                         <button type="button" className="abtn abtn-secondary" onClick={() => setPreviewHtml('')}>
@@ -1007,16 +1017,20 @@ const ParquePage: React.FC = () => {
         { key: 'tipo',  label: 'Tipo'         },
         { key: 'count', label: 'Equipamentos' },
     ];
-    const exportDataEquip = filtered.map(e => ({
-        id:          e.id,
-        clienteNome: getCliente(e.clienteId),
-        modeloNome:  getModelo(e.modeloId)?.nome ?? '—',
-        tipo:        getModelo(e.modeloId)?.tipo === 'maquina' ? 'Máquina' : 'Filtro',
-        nrSerie:     e.nrSerie,
-        dataInst:    e.dataInstalacao ?? '—',
-        proxManut:   e.dataProximaManutencao ?? '—',
-        estado:      ESTADO_LABEL[e.estado],
-    }));
+    const exportDataEquip = filtered.map(e => {
+        // Mesma fonte do ecrã (OTs via equipStats), não as colunas persistidas (#92)
+        const stats = equipStats.get(e.id);
+        return {
+            id:          e.id,
+            clienteNome: getCliente(e.clienteId),
+            modeloNome:  getModelo(e.modeloId)?.nome ?? '—',
+            tipo:        getModelo(e.modeloId)?.tipo === 'maquina' ? 'Máquina' : 'Filtro',
+            nrSerie:     e.nrSerie,
+            dataInst:    e.dataInstalacao ?? '—',
+            proxManut:   stats?.proximaManutencao ? fmtDate(stats.proximaManutencao) : '—',
+            estado:      ESTADO_LABEL[stats?.effectiveEstado ?? e.estado],
+        };
+    });
     const exportDataModelos = filteredModelos.map(m => ({
         id:    m.id,
         nome:  m.nome,

@@ -23,8 +23,15 @@ const DashboardPage: React.FC = () => {
     const emCurso       = minhasOrdens.filter(o => o.estado === 'Em execução').length;
     const terminadasMes = minhasOrdens.filter(o => o.estado === 'Finalizada' && o.dataFim?.startsWith(thisMonth)).length;
     const manutUrgente  = equipInstalados.filter(e => {
-        if (!e.dataProximaManutencao) return false;
-        const diff = Math.round((new Date(e.dataProximaManutencao).getTime() - Date.now()) / 86400000);
+        // Próxima manutenção deriva das OTs em aberto (mesma fonte do ecrã Parque),
+        // não da coluna persistida dataProximaManutencao, que nunca é preenchida (#92).
+        const openDates = ordens
+            .filter(o => String(o.equipInstaladoId) === String(e.id) && o.estado !== 'Finalizada')
+            .map(o => o.dataAgendada)
+            .filter(Boolean) as string[];
+        if (openDates.length === 0) return false;
+        const prox = [...openDates].sort()[0];
+        const diff = Math.round((new Date(prox).getTime() - Date.now()) / 86400000);
         return diff <= 7 && diff >= 0;
     }).length;
 
