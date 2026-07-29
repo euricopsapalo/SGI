@@ -261,17 +261,6 @@ CREATE TABLE equip_instalados (
     localizacao             VARCHAR(200)
 );
 
-CREATE TABLE equip_historico (
-    id                 SERIAL       PRIMARY KEY,
-    equip_instalado_id INTEGER      NOT NULL REFERENCES equip_instalados(id) ON DELETE CASCADE,
-    data               DATE         NOT NULL,
-    tipo               VARCHAR(50)  NOT NULL,
-    descricao          TEXT         NOT NULL,
-    tecnico            VARCHAR(150),
-    estado             VARCHAR(50)  NOT NULL DEFAULT 'concluida',
-    observacoes        TEXT
-);
-
 -- ============================================================
 -- STOCK — ARMAZÉNS
 -- ============================================================

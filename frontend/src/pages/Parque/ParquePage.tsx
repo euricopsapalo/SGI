@@ -68,10 +68,19 @@ const EQUIP_CSS = `
 `;
 
 /* ── Equipment print helper ── */
+// Datas de manutenção e estado derivam sempre das OTs (mesma fonte do ecrã),
+// nunca das colunas persistidas equip_instalados.data_*_manutencao (ver #92).
+interface EquipManutencao {
+    ultimaManutencao?: string;
+    proximaManutencao?: string;
+    effectiveEstado: EstadoEquip;
+}
+
 function buildEquipHtml(
     eq: EquipInstalado,
     clientes: Cliente[],
     modelosEquipamento: ModeloEquipamento[],
+    manut: EquipManutencao,
 ): string {
     const cli = clientes.find(c => c.id === eq.clienteId);
     const mod = modelosEquipamento.find(m => m.id === eq.modeloId);
@@ -84,7 +93,7 @@ function buildEquipHtml(
     <h1>AQUATEX — Ficha de Equipamento</h1>
     <div class="sub">Nº: <strong>${eq.id}</strong> &nbsp;|&nbsp; Impresso em ${new Date().toLocaleString('pt-PT')}</div>
   </div>
-  <span class="badge">${eq.estado === 'ativo' ? 'Activo' : eq.estado === 'com_problema' ? 'Com Problema' : 'Inactivo'}</span>
+  <span class="badge">${manut.effectiveEstado === 'ativo' ? 'Activo' : manut.effectiveEstado === 'com_problema' ? 'Com Problema' : 'Inactivo'}</span>
 </div>
 
 <div class="sec">Identificação</div>
@@ -98,8 +107,8 @@ function buildEquipHtml(
 <div class="sec">Datas de Manutenção</div>
 <table>
   <tr><td class="lbl">Data de Instalação</td><td>${eq.dataInstalacao ? new Date(eq.dataInstalacao).toLocaleDateString('pt-PT') : '—'}</td></tr>
-  <tr><td class="lbl">Última Manutenção</td><td>${eq.dataUltimaManutencao ? new Date(eq.dataUltimaManutencao).toLocaleDateString('pt-PT') : '—'}</td></tr>
-  <tr><td class="lbl">Próxima Manutenção</td><td>${eq.dataProximaManutencao ? new Date(eq.dataProximaManutencao).toLocaleDateString('pt-PT') : '—'}</td></tr>
+  <tr><td class="lbl">Última Manutenção</td><td>${manut.ultimaManutencao ? new Date(manut.ultimaManutencao).toLocaleDateString('pt-PT') : '—'}</td></tr>
+  <tr><td class="lbl">Próxima Manutenção</td><td>${manut.proximaManutencao ? new Date(manut.proximaManutencao).toLocaleDateString('pt-PT') : '—'}</td></tr>
 </table>
 
 <div class="footer">AQUATEX, LDA &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
@@ -110,8 +119,9 @@ function printEquip(
     eq: EquipInstalado,
     clientes: Cliente[],
     modelosEquipamento: ModeloEquipamento[],
+    manut: EquipManutencao,
 ) {
-    const html = buildEquipHtml(eq, clientes, modelosEquipamento);
+    const html = buildEquipHtml(eq, clientes, modelosEquipamento, manut);
     const w = window.open('', '_blank', 'width=820,height=900');
     if (!w) return;
     w.document.write(html.replace('</body></html>', '<script>window.onload=()=>window.print();<\/script></body></html>'));
@@ -563,7 +573,7 @@ const ModeloModal: React.FC<ModeloModalProps> = ({ modelo, onClose, onSave }) =>
 interface RegisterModalProps {
     equip?: EquipInstalado;
     onClose: () => void;
-    onSave: (e: Omit<EquipInstalado, 'id'>) => void;
+    onSave: (e: Omit<EquipInstalado, 'id'>) => void | Promise<void>;
 }
 const RegisterModal: React.FC<RegisterModalProps> = ({ equip, onClose, onSave }) => {
     const { clientes, modelosEquipamento } = useGlobal();
@@ -575,6 +585,8 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ equip, onClose, onSave })
     const [dataInst, setDataInst]       = useState(equip?.dataInstalacao ?? '');
     const [estado, setEstado]           = useState<EstadoEquip>(equip?.estado ?? 'ativo');
     const [errors, setErrors]           = useState<Record<string, string>>({});
+    const [saving, setSaving]           = useState(false);
+    const [submitError, setSubmitError] = useState('');
 
     const clienteOpts = clientes.filter(c => c.ativo !== false).map(c => ({ value: c.id, label: c.nome, sub: `NIF: ${c.nif}` }));
     const modeloOpts  = modelosEquipamento.map(m => ({ value: m.id, label: m.nome, sub: `${m.marca} · ${m.tipo === 'maquina' ? 'Máquina' : 'Filtro'}` }));
@@ -594,10 +606,19 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ equip, onClose, onSave })
         return Object.keys(e).length === 0;
     };
 
-    const handleSave = (ev: React.FormEvent) => {
+    const handleSave = async (ev: React.FormEvent) => {
         ev.preventDefault();
         if (!validate()) return;
-        onSave({ clienteId, modeloId, nrSerie, localizacao, dataInstalacao: dataInst, estado });
+        setSubmitError('');
+        setSaving(true);
+        try {
+            await onSave({ clienteId, modeloId, nrSerie, localizacao, dataInstalacao: dataInst, estado });
+        } catch (err) {
+            // Ex.: nº de série duplicado (409) — mantém o modal aberto com o motivo (#93)
+            setSubmitError(extractErrorMessage(err));
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -668,9 +689,14 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ equip, onClose, onSave })
                             )}
                         </div>
                     </div>
+                    {submitError && (
+                        <div className="form-error" style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 16px 4px', padding: '8px 10px', border: '1px solid var(--red)', borderRadius: 4, background: 'rgba(220,38,38,0.06)' }}>
+                            <AlertCircle size={13} /> {submitError}
+                        </div>
+                    )}
                     <div className="modal-footer">
-                        <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
-                        <button type="submit" className="abtn abtn-primary"><Check size={12} /> {equip ? 'Actualizar' : 'Registar'}</button>
+                        <button type="button" className="abtn abtn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+                        <button type="submit" className="abtn abtn-primary" disabled={saving}><Check size={12} /> {saving ? 'A guardar…' : equip ? 'Actualizar' : 'Registar'}</button>
                     </div>
                 </form>
             </div>
@@ -863,10 +889,10 @@ const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
                         </button>
                     </>) : (<>
                         <button className="abtn abtn-secondary" type="button"
-                            onClick={() => setPreviewHtml(buildEquipHtml(eq, clientes, modelosEquipamento))}>
+                            onClick={() => setPreviewHtml(buildEquipHtml(eq, clientes, modelosEquipamento, { ultimaManutencao, proximaManutencao, effectiveEstado }))}>
                             <Eye size={12} /> Pré-visualizar
                         </button>
-                        <button className="abtn abtn-secondary" type="button" onClick={() => printEquip(eq, clientes, modelosEquipamento)}>
+                        <button className="abtn abtn-secondary" type="button" onClick={() => printEquip(eq, clientes, modelosEquipamento, { ultimaManutencao, proximaManutencao, effectiveEstado })}>
                             <Printer size={12} /> Imprimir Ficha
                         </button>
                     </>)}
@@ -877,7 +903,7 @@ const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
                     <div style={{ background: 'var(--bg-primary)', borderBottom: '1px solid var(--border)', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ flex: 1, fontWeight: 700, fontSize: '0.85rem' }}>Pré-visualização</span>
-                        <button type="button" className="abtn abtn-primary" onClick={() => { if (tab === 'historico') printHistoricoEquip(eq, ots, cli, mod, empresaConfig?.nome || 'AQUATEX'); else printEquip(eq, clientes, modelosEquipamento); }} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <button type="button" className="abtn abtn-primary" onClick={() => { if (tab === 'historico') printHistoricoEquip(eq, ots, cli, mod, empresaConfig?.nome || 'AQUATEX'); else printEquip(eq, clientes, modelosEquipamento, { ultimaManutencao, proximaManutencao, effectiveEstado }); }} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                             <Printer size={13} /> Imprimir
                         </button>
                         <button type="button" className="abtn abtn-secondary" onClick={() => setPreviewHtml('')}>
@@ -962,13 +988,15 @@ const ParquePage: React.FC = () => {
     const problemas = equipInstalados.filter(e => equipStats.get(e.id)?.effectiveEstado === 'com_problema').length;
     const urgentes  = equipInstalados.filter(e => { const d = diffDays(equipStats.get(e.id)?.proximaManutencao); return d !== null && d <= 7; }).length;
 
-    const handleSaveEquip = (data: Omit<EquipInstalado, 'id'>) => {
+    // Lança em caso de erro (ex.: nº de série duplicado) para a RegisterModal o mostrar (#93)
+    const handleSaveEquip = async (data: Omit<EquipInstalado, 'id'>) => {
         if (modal === 'edit' && editId) {
-            updateEquipInstalado(editId, data);
+            await updateEquipInstalado(editId, data);
             showToast('Equipamento actualizado.');
         } else {
-            const eq = addEquipInstalado(data);
+            const eq = await addEquipInstalado(data);
             const mod = modelosEquipamento.find(m => m.id === data.modeloId);
+            // OT de Montagem é best-effort: usa o id real do equipamento e não bloqueia o registo
             addOrdem({
                 id: '', tipo: 'pontual', equipInstaladoId: eq.id, clienteId: data.clienteId,
                 descricao: `Montagem e comissionamento — ${mod?.nome ?? 'equipamento'}`,
@@ -1020,16 +1048,20 @@ const ParquePage: React.FC = () => {
         { key: 'tipo',  label: 'Tipo'         },
         { key: 'count', label: 'Equipamentos' },
     ];
-    const exportDataEquip = filtered.map(e => ({
-        id:          e.id,
-        clienteNome: getCliente(e.clienteId),
-        modeloNome:  getModelo(e.modeloId)?.nome ?? '—',
-        tipo:        getModelo(e.modeloId)?.tipo === 'maquina' ? 'Máquina' : 'Filtro',
-        nrSerie:     e.nrSerie,
-        dataInst:    e.dataInstalacao ?? '—',
-        proxManut:   e.dataProximaManutencao ?? '—',
-        estado:      ESTADO_LABEL[e.estado],
-    }));
+    const exportDataEquip = filtered.map(e => {
+        // Mesma fonte do ecrã (OTs via equipStats), não as colunas persistidas (#92)
+        const stats = equipStats.get(e.id);
+        return {
+            id:          e.id,
+            clienteNome: getCliente(e.clienteId),
+            modeloNome:  getModelo(e.modeloId)?.nome ?? '—',
+            tipo:        getModelo(e.modeloId)?.tipo === 'maquina' ? 'Máquina' : 'Filtro',
+            nrSerie:     e.nrSerie,
+            dataInst:    e.dataInstalacao ?? '—',
+            proxManut:   stats?.proximaManutencao ? fmtDate(stats.proximaManutencao) : '—',
+            estado:      ESTADO_LABEL[stats?.effectiveEstado ?? e.estado],
+        };
+    });
     const exportDataModelos = filteredModelos.map(m => ({
         id:    m.id,
         nome:  m.nome,

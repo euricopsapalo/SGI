@@ -1,7 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, Check } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, Check } from 'typeorm';
 import { Cliente } from '../clientes/cliente.entity';
 import { ModeloEquipamento } from './modelo-equipamento.entity';
-import { EquipHistorico } from './equip-historico.entity';
 
 export enum EstadoEquip {
     ATIVO = 'ativo',
@@ -23,7 +22,7 @@ export class EquipInstalado {
     @JoinColumn({ name: 'modelo_id' })
     modelo: ModeloEquipamento;
 
-    @Column({ name: 'nr_serie', length: 100 })
+    @Column({ name: 'nr_serie', length: 100, unique: true })
     nrSerie: string;
 
     @Column({ name: 'data_instalacao', type: 'date' })
@@ -40,7 +39,4 @@ export class EquipInstalado {
 
     @Column({ nullable: true, length: 200 })
     localizacao: string;
-
-    @OneToMany(() => EquipHistorico, (h) => h.equip, { cascade: true })
-    historico: EquipHistorico[];
 }
