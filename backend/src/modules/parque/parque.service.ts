@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ModeloEquipamento } from './modelo-equipamento.entity';
@@ -33,17 +33,33 @@ export class ParqueService {
             cliente: body.clienteId ? { id: Number(body.clienteId) } : undefined,
             modelo:  body.modeloId  ? { id: Number(body.modeloId)  } : undefined,
         });
-        const result: any = await this.equipRepo.save(entity);
-        return this.findOneEquip(result.id);
+        try {
+            const result: any = await this.equipRepo.save(entity);
+            return this.findOneEquip(result.id);
+        } catch (err) {
+            throw this.mapNrSerieConflict(err);
+        }
     }
     async updateEquip(id: number, body: any) {
         const { clienteId, modeloId, ...rest } = body;
-        await this.equipRepo.update(id, {
-            ...rest,
-            ...(clienteId ? { cliente: { id: Number(clienteId) } } : {}),
-            ...(modeloId  ? { modelo:  { id: Number(modeloId)  } } : {}),
-        });
+        try {
+            await this.equipRepo.update(id, {
+                ...rest,
+                ...(clienteId ? { cliente: { id: Number(clienteId) } } : {}),
+                ...(modeloId  ? { modelo:  { id: Number(modeloId)  } } : {}),
+            });
+        } catch (err) {
+            throw this.mapNrSerieConflict(err);
+        }
         return this.findOneEquip(id);
     }
     removeEquip(id: number) { return this.equipRepo.delete(id); }
+
+    /** Traduz a violação de UNIQUE (Postgres 23505) num 409 legível (#93). */
+    private mapNrSerieConflict(err: any): any {
+        if (err?.code === '23505') {
+            return new ConflictException('Já existe um equipamento com esse nº de série.');
+        }
+        return err;
+    }
 }

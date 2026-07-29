@@ -489,7 +489,7 @@ interface GlobalContextType {
     fornecedores: Fornecedor[]; addFornecedor: (f: Omit<Fornecedor, 'id'>) => Fornecedor; updateFornecedor: (id: string, f: Partial<Fornecedor>) => void; removeFornecedor: (id: string) => Promise<void>;
     // Equipment
     modelosEquipamento: ModeloEquipamento[]; addModelo: (m: Omit<ModeloEquipamento, 'id'>) => ModeloEquipamento; updateModelo: (id: string, m: Partial<ModeloEquipamento>) => void;
-    equipInstalados: EquipInstalado[]; addEquipInstalado: (e: Omit<EquipInstalado, 'id'>) => EquipInstalado; updateEquipInstalado: (id: string, e: Partial<EquipInstalado>) => void;
+    equipInstalados: EquipInstalado[]; addEquipInstalado: (e: Omit<EquipInstalado, 'id'>) => Promise<EquipInstalado>; updateEquipInstalado: (id: string, e: Partial<EquipInstalado>) => void;
     // Plans
     planos: PlanoManutencao[]; addPlano: (p: Omit<PlanoManutencao, 'id'>) => PlanoManutencao; updatePlano: (id: string, p: Partial<PlanoManutencao>) => void; removePlano: (id: string) => void;
     // Work Orders
@@ -1073,15 +1073,13 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } catch (e) { throw e; }
     };
 
-    const addEquipInstalado = (e: Omit<EquipInstalado, 'id'>): EquipInstalado => {
-        const placeholder: EquipInstalado = { ...e, id: '' };
-        api.post(`/equip-instalados`, e)
-            .then(({ data }) => {
-                const n = normEquip(data);
-                setEquipInstalados(p => [...p, n]);
-            })
-            .catch(() => {});
-        return placeholder;
+    const addEquipInstalado = async (e: Omit<EquipInstalado, 'id'>): Promise<EquipInstalado> => {
+        // Propaga o erro (ex.: nº de série duplicado → 409) em vez de o engolir (#93),
+        // devolvendo o equipamento já com o id real do backend.
+        const { data } = await api.post(`/equip-instalados`, e);
+        const n = normEquip(data);
+        setEquipInstalados(p => [...p, n]);
+        return n;
     };
     const updateEquipInstalado = async (id: string, e: Partial<EquipInstalado>) => {
         try {

@@ -22,7 +22,7 @@ export class EquipInstalado {
     @JoinColumn({ name: 'modelo_id' })
     modelo: ModeloEquipamento;
 
-    @Column({ name: 'nr_serie', length: 100 })
+    @Column({ name: 'nr_serie', length: 100, unique: true })
     nrSerie: string;
 
     @Column({ name: 'data_instalacao', type: 'date' })
