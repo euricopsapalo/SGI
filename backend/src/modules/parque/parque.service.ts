@@ -25,8 +25,8 @@ export class ParqueService {
     removeModelo(id: number) { return this.modelosRepo.delete(id); }
 
     // EquipInstalado
-    findAllEquip() { return this.equipRepo.find({ relations: ['cliente', 'modelo', 'historico'] }); }
-    findOneEquip(id: number) { return this.equipRepo.findOne({ where: { id }, relations: ['cliente', 'modelo', 'historico'] }); }
+    findAllEquip() { return this.equipRepo.find({ relations: ['cliente', 'modelo'] }); }
+    findOneEquip(id: number) { return this.equipRepo.findOne({ where: { id }, relations: ['cliente', 'modelo'] }); }
     async createEquip(body: any): Promise<EquipInstalado | null> {
         const entity = this.equipRepo.create({
             ...body,
