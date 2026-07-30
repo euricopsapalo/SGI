@@ -5,7 +5,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import * as request from 'supertest';
 import { FaturasController } from '../src/modules/faturas/faturas.controller';
 import { FaturasService } from '../src/modules/faturas/faturas.service';
-import { FaturaNew } from '../src/modules/faturas/fatura-new.entity';
+import { Fatura } from '../src/modules/faturas/fatura.entity';
 
 /**
  * E2E — faturação a partir de uma OT (issue #39).
@@ -30,7 +30,7 @@ describe('Faturas E2E — criar a partir de OT', () => {
             controllers: [FaturasController],
             providers: [
                 FaturasService,
-                { provide: getRepositoryToken(FaturaNew), useValue: repo },
+                { provide: getRepositoryToken(Fatura), useValue: repo },
             ],
         }).compile();
 

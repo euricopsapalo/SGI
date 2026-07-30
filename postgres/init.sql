@@ -480,7 +480,7 @@ CREATE TABLE encomenda_linhas (
 -- ============================================================
 -- FATURAÇÃO
 -- ============================================================
-CREATE TABLE faturas_v2 (
+CREATE TABLE faturas (
     id              SERIAL        PRIMARY KEY,
     tipo_documento  VARCHAR(20)   NOT NULL DEFAULT 'FAT',
     ot_id           INTEGER,
@@ -493,7 +493,7 @@ CREATE TABLE faturas_v2 (
     valor_total     NUMERIC(12,2) NOT NULL DEFAULT 0,
     moeda           VARCHAR(10)   NOT NULL DEFAULT 'AOA',
     estado          VARCHAR(30)   NOT NULL DEFAULT 'Pendente'
-        CONSTRAINT chk_faturas_v2_estado CHECK (estado IN ('Pendente','Paga','Anulada','Emitido')),
+        CONSTRAINT chk_faturas_estado CHECK (estado IN ('Pendente','Paga','Anulada','Emitido')),
     observacoes     TEXT,
     data_pagamento  DATE,
     motivo_anulacao TEXT,
@@ -503,7 +503,7 @@ CREATE TABLE faturas_v2 (
 
 CREATE TABLE fatura_linhas (
     id         SERIAL        PRIMARY KEY,
-    fatura_id  INTEGER       NOT NULL REFERENCES faturas_v2(id) ON DELETE CASCADE,
+    fatura_id  INTEGER       NOT NULL REFERENCES faturas(id) ON DELETE CASCADE,
     descricao  VARCHAR(300)  NOT NULL,
     quantidade NUMERIC(12,3) NOT NULL DEFAULT 1,
     preco_unit NUMERIC(12,2) NOT NULL DEFAULT 0
@@ -652,8 +652,8 @@ CREATE INDEX IF NOT EXISTS idx_ordens_trabalho_prog      ON ordens_trabalho(data
 CREATE INDEX IF NOT EXISTS idx_ot_artigos_ot             ON ot_artigos(ot_id);
 CREATE INDEX IF NOT EXISTS idx_ot_maos_obra_ot           ON ot_maos_obra(ot_id);
 CREATE INDEX IF NOT EXISTS idx_ot_reprogramacoes_ot      ON ot_reprogramacoes(ordem_trabalho_id);
-CREATE INDEX IF NOT EXISTS idx_faturas_v2_cliente        ON faturas_v2(cliente_id);
-CREATE INDEX IF NOT EXISTS idx_faturas_v2_estado         ON faturas_v2(estado);
+CREATE INDEX IF NOT EXISTS idx_faturas_cliente ON faturas(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_faturas_estado ON faturas(estado);
 CREATE INDEX IF NOT EXISTS idx_encomenda_linhas_enc      ON encomenda_linhas(encomenda_id);
 CREATE INDEX IF NOT EXISTS idx_movimentos_stock_artigo   ON movimentos_stock(artigo_id);
 CREATE INDEX IF NOT EXISTS idx_artigos_codigo            ON artigos(codigo);

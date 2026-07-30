@@ -63,7 +63,7 @@ export class ClientesService {
             SELECT (
                 (SELECT COUNT(*) FROM equip_instalados WHERE cliente_id = $1) +
                 (SELECT COUNT(*) FROM ordens_trabalho WHERE cliente_id = $1) +
-                (SELECT COUNT(*) FROM faturas_v2 WHERE cliente_id = $1)
+                (SELECT COUNT(*) FROM faturas WHERE cliente_id = $1)
             )::int AS total
         `, [id]);
 
