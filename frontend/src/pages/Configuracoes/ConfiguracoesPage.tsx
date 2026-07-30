@@ -1,10 +1,12 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import { useGlobal } from '../../contexts/GlobalContext';
+import api from '../../services/api';
+import { extractErrorMessage } from '../../utils/errorHandler';
 import {
     Building2, DollarSign, TrendingUp, Shield, Upload, Check,
-    Table2, Plus, X, Edit2,
+    Table2, Plus, X, Edit2, Smartphone, AlertCircle,
 } from 'lucide-react';
 
 /* ── Types ── */
@@ -35,6 +37,127 @@ const initComissoes = {
 
 const initSeguranca = {
     minPassword: '8', sessionExpiry: '60', twoFactor: false, accessLog: true,
+};
+
+/* ── 2FA (TOTP) — enrolamento opt-in por utilizador (issue #100) ── */
+const TwoFactorSection: React.FC<{ allowed: boolean }> = ({ allowed }) => {
+    const [enabled, setEnabled] = useState(false);
+    const [setup, setSetup] = useState<{ secret: string; otpauthUri: string } | null>(null);
+    const [code, setCode] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [msg, setMsg] = useState<{ text: string; err: boolean } | null>(null);
+
+    const refresh = () => {
+        api.get('/auth/2fa/status')
+            .then(({ data }) => setEnabled(!!data.enabled))
+            .catch(() => {});
+    };
+    useEffect(refresh, []);
+
+    const startSetup = async () => {
+        setBusy(true); setMsg(null);
+        try {
+            const { data } = await api.post('/auth/2fa/setup');
+            setSetup({ secret: data.secret, otpauthUri: data.otpauthUri });
+        } catch (e) { setMsg({ text: extractErrorMessage(e), err: true }); }
+        finally { setBusy(false); }
+    };
+
+    const confirmEnable = async () => {
+        setBusy(true); setMsg(null);
+        try {
+            await api.post('/auth/2fa/enable', { code: code.trim() });
+            setSetup(null); setCode(''); setEnabled(true);
+            setMsg({ text: '2FA ativado com sucesso.', err: false });
+        } catch (e) { setMsg({ text: extractErrorMessage(e), err: true }); }
+        finally { setBusy(false); }
+    };
+
+    const disable = async () => {
+        if (!window.confirm('Desativar a autenticação de dois fatores nesta conta?')) return;
+        setBusy(true); setMsg(null);
+        try {
+            await api.post('/auth/2fa/disable', { code: code.trim() });
+            setCode(''); setEnabled(false);
+            setMsg({ text: '2FA desativado.', err: false });
+        } catch (e) { setMsg({ text: extractErrorMessage(e), err: true }); }
+        finally { setBusy(false); }
+    };
+
+    return (
+        <div className="settings-section">
+            <div className="settings-section-hdr">
+                <div className="settings-section-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Smartphone size={14} /> 2FA da minha conta
+                </div>
+            </div>
+            <div className="settings-section-body" style={{ gap: 'var(--sp-3)' }}>
+                {!allowed && (
+                    <div className="form-hint" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}>
+                        <AlertCircle size={13} /> Ative "Autenticação de Dois Fatores (2FA)" acima e guarde para permitir o enrolamento.
+                    </div>
+                )}
+
+                {allowed && enabled && !setup && (
+                    <>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--green)', fontSize: '0.85rem', fontWeight: 600 }}>
+                            <Check size={14} /> 2FA ativo nesta conta.
+                        </div>
+                        <div className="form-group" style={{ maxWidth: 220 }}>
+                            <label className="form-label">Código do authenticator</label>
+                            <input className="form-input" inputMode="numeric" maxLength={6} placeholder="000000"
+                                value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} />
+                        </div>
+                        <button type="button" className="abtn abtn-secondary" disabled={busy} onClick={disable}>
+                            <X size={12} /> Desativar 2FA
+                        </button>
+                    </>
+                )}
+
+                {allowed && !enabled && !setup && (
+                    <button type="button" className="abtn abtn-primary" disabled={busy} onClick={startSetup}>
+                        <Smartphone size={12} /> Ativar 2FA
+                    </button>
+                )}
+
+                {allowed && setup && (
+                    <>
+                        <div className="form-hint">
+                            Adicione a conta na sua app de autenticação (Google Authenticator, Authy…) usando a chave abaixo,
+                            e depois introduza o código de 6 dígitos para confirmar.
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Chave (introdução manual)</label>
+                            <input className="form-input" readOnly value={setup.secret} style={{ fontFamily: 'monospace' }} onFocus={e => e.currentTarget.select()} />
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">URI otpauth (para QR)</label>
+                            <input className="form-input" readOnly value={setup.otpauthUri} style={{ fontFamily: 'monospace', fontSize: '0.72rem' }} onFocus={e => e.currentTarget.select()} />
+                        </div>
+                        <div className="form-group" style={{ maxWidth: 220 }}>
+                            <label className="form-label req">Código de confirmação</label>
+                            <input className="form-input" inputMode="numeric" maxLength={6} placeholder="000000"
+                                value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <button type="button" className="abtn abtn-primary" disabled={busy || code.length !== 6} onClick={confirmEnable}>
+                                <Check size={12} /> Confirmar e ativar
+                            </button>
+                            <button type="button" className="abtn abtn-secondary" disabled={busy} onClick={() => { setSetup(null); setCode(''); }}>
+                                Cancelar
+                            </button>
+                        </div>
+                    </>
+                )}
+
+                {msg && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', color: msg.err ? 'var(--red)' : 'var(--green)' }}>
+                        {msg.err ? <AlertCircle size={13} /> : <Check size={13} />} {msg.text}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 };
 
 /* ════════════════════════════════════════════════
@@ -156,7 +279,12 @@ const ConfiguracoesPage: React.FC = () => {
         dateFormat: empresaConfig.formatoData || initMoeda.dateFormat,
     }));
     const [comissoes, setComissoes] = useState(initComissoes);
-    const [seguranca, setSeguranca] = useState(initSeguranca);
+    const [seguranca, setSeguranca] = useState({
+        minPassword: String(empresaConfig.minPasswordLength ?? 8),
+        sessionExpiry: String(empresaConfig.sessionExpiryMinutes ?? 60),
+        twoFactor: !!empresaConfig.twoFactorEnabled,
+        accessLog: empresaConfig.accessLogEnabled ?? true,
+    });
     const [dirty, setDirty] = useState(false);
     const [toast, setToast] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
@@ -189,6 +317,11 @@ const ConfiguracoesPage: React.FC = () => {
                 moeda: moeda.currency,
                 casasDecimais: Number(moeda.decimals),
                 formatoData: moeda.dateFormat,
+                // Segurança (issue #100)
+                minPasswordLength: Number(seguranca.minPassword),
+                sessionExpiryMinutes: Number(seguranca.sessionExpiry),
+                twoFactorEnabled: seguranca.twoFactor,
+                accessLogEnabled: seguranca.accessLog,
             });
         } catch (e) { console.error('Erro ao guardar empresa', e); }
         setDirty(false);
@@ -214,7 +347,13 @@ const ConfiguracoesPage: React.FC = () => {
             decimals: empresaConfig.casasDecimais !== undefined ? String(empresaConfig.casasDecimais) : initMoeda.decimals,
             dateFormat: empresaConfig.formatoData || initMoeda.dateFormat,
         });
-        setComissoes(initComissoes); setSeguranca(initSeguranca);
+        setComissoes(initComissoes);
+        setSeguranca({
+            minPassword: String(empresaConfig.minPasswordLength ?? 8),
+            sessionExpiry: String(empresaConfig.sessionExpiryMinutes ?? 60),
+            twoFactor: !!empresaConfig.twoFactorEnabled,
+            accessLog: empresaConfig.accessLogEnabled ?? true,
+        });
         setDirty(false);
     };
 
@@ -713,6 +852,8 @@ const ConfiguracoesPage: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
+
+                            <TwoFactorSection allowed={!!empresaConfig.twoFactorEnabled} />
                         </>}
 
                     </div>

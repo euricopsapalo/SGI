@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class UpdateConfiguracaoDto {
   @IsOptional() @IsString() nome?: string;
@@ -20,4 +20,9 @@ export class UpdateConfiguracaoDto {
   @IsOptional() @IsString() formatoData?: string;
   @IsOptional() @IsNumber() latitude?: number;
   @IsOptional() @IsNumber() longitude?: number;
+  // Segurança (issue #100)
+  @IsOptional() @IsNumber() @Min(4) @Max(64) minPasswordLength?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(1440) sessionExpiryMinutes?: number;
+  @IsOptional() @IsBoolean() twoFactorEnabled?: boolean;
+  @IsOptional() @IsBoolean() accessLogEnabled?: boolean;
 }

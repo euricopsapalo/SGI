@@ -136,6 +136,11 @@ CREATE TABLE configuracao_empresa (
     limite_adiamentos           INTEGER       NOT NULL DEFAULT 3,
     latitude                    NUMERIC(10,6),
     longitude                   NUMERIC(10,6),
+    -- Segurança (issue #100)
+    min_password_length         INTEGER       NOT NULL DEFAULT 8,
+    session_expiry_minutes      INTEGER       NOT NULL DEFAULT 60,
+    two_factor_enabled          BOOLEAN       NOT NULL DEFAULT FALSE,
+    access_log_enabled          BOOLEAN       NOT NULL DEFAULT TRUE,
     updated_at                  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
 );
 INSERT INTO configuracao_empresa
@@ -160,6 +165,8 @@ CREATE TABLE users (
     telefone           VARCHAR(30),
     reset_token        VARCHAR(100),
     reset_token_expiry TIMESTAMP,
+    two_factor_secret  VARCHAR(64),
+    two_factor_enabled BOOLEAN      NOT NULL DEFAULT FALSE,
     created_at         TIMESTAMP    DEFAULT CURRENT_TIMESTAMP
 );
 INSERT INTO users (id, nome, email, password_hash, role, ativo) VALUES

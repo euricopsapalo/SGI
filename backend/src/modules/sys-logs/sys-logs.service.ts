@@ -2,12 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SysLog } from './sys-log.entity';
+import { ConfiguracaoService } from '../configuracao/configuracao.service';
 
 @Injectable()
 export class SysLogsService {
     constructor(
         @InjectRepository(SysLog)
         private readonly repo: Repository<SysLog>,
+        private readonly configService: ConfiguracaoService,
     ) {}
 
     findAll(usuario?: string) {
@@ -21,7 +23,10 @@ export class SysLogsService {
         return this.repo.findOne({ where: { id } });
     }
 
-    create(body: Partial<SysLog>) {
+    async create(body: Partial<SysLog>) {
+        // Issue #100: respeitar o interruptor "Registo de Acessos"
+        const cfg = await this.configService.get();
+        if (cfg.accessLogEnabled === false) return null;
         return this.repo.save(this.repo.create(body));
     }
 

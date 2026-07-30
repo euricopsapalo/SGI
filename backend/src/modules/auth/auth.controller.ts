@@ -1,10 +1,11 @@
-import { Controller, Post, Body, HttpCode, Request } from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpCode, Request } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Public } from './public.decorator';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { TwoFactorCodeDto } from './dto/two-factor-code.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -14,7 +15,7 @@ export class AuthController {
     @Post('login')
     @HttpCode(200)
     login(@Body() dto: LoginDto) {
-        return this.authService.login(dto.email, dto.password);
+        return this.authService.login(dto.email, dto.password, dto.code);
     }
 
     @Public()
@@ -43,5 +44,29 @@ export class AuthController {
         // Issue #65: incluir tecnicoId/tecnicoNome (caso o user esteja vinculado)
         const tec = await this.authService.resolveTecnicoLink(req.user.id ?? req.user.sub);
         return { user: { ...req.user, tecnicoId: tec?.id, tecnicoNome: tec?.nome } };
+    }
+
+    // ── 2FA TOTP (issue #100) — enrolamento opt-in por utilizador ──────────
+    @Get('2fa/status')
+    twoFactorStatus(@Request() req: any) {
+        return this.authService.twoFactorStatus(req.user.id ?? req.user.sub);
+    }
+
+    @Post('2fa/setup')
+    @HttpCode(200)
+    twoFactorSetup(@Request() req: any) {
+        return this.authService.setupTwoFactor(req.user.id ?? req.user.sub);
+    }
+
+    @Post('2fa/enable')
+    @HttpCode(200)
+    twoFactorEnable(@Request() req: any, @Body() dto: TwoFactorCodeDto) {
+        return this.authService.enableTwoFactor(req.user.id ?? req.user.sub, dto.code);
+    }
+
+    @Post('2fa/disable')
+    @HttpCode(200)
+    twoFactorDisable(@Request() req: any, @Body() dto: TwoFactorCodeDto) {
+        return this.authService.disableTwoFactor(req.user.id ?? req.user.sub, dto.code);
     }
 }

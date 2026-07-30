@@ -10,6 +10,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { RolesGuard } from './roles.guard';
 import { User } from '../users/user.entity';
 import { MailModule } from '../mail/mail.module';
+import { ConfiguracaoModule } from '../configuracao/configuracao.module';
 
 @Module({
     imports: [
@@ -20,6 +21,7 @@ import { MailModule } from '../mail/mail.module';
             signOptions: { expiresIn: '8h' },
         }),
         MailModule,
+        ConfiguracaoModule,
     ],
     controllers: [AuthController],
     providers: [
