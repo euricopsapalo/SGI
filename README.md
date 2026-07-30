@@ -40,7 +40,7 @@ O SGI está dividido em módulos estratégicos que cobrem toda a cadeia de valor
 - **Backend:** NestJS 10 + TypeORM (Node.js framework, porta 3001)
 - **Frontend:** React 19 + TypeScript + react-router-dom 7 + Axios (porta 3000)
 - **Base de Dados:** PostgreSQL 15 (via Docker, admin em Adminer porta 8080)
-- **Autenticação:** Autenticação por sessão simulada com `currentUser` no GlobalContext (login + recuperação de palavra-passe com persistência na base de dados)
+- **Autenticação:** JWT real com Passport (`@nestjs/jwt`, token válido 8h) e palavras-passe cifradas com bcrypt; `JwtAuthGuard` e `RolesGuard` globais (`APP_GUARD`) protegem a API por perfil. Login e recuperação de palavra-passe persistem na base de dados.
 
 ## Comandos
 
