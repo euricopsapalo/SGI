@@ -48,4 +48,13 @@ export class User {
 
     @Column({ name: 'reset_token_expiry', type: 'timestamp', nullable: true })
     resetTokenExpiry: Date;
+
+    // --- 2FA TOTP (issue #100) ---
+    /** Segredo base32 do TOTP; presente após o setup (mesmo antes de ativar). */
+    @Column({ name: 'two_factor_secret', nullable: true, length: 64 })
+    twoFactorSecret: string;
+
+    /** 2FA ativo para esta conta (exige código TOTP no login). */
+    @Column({ name: 'two_factor_enabled', type: 'boolean', default: false })
+    twoFactorEnabled: boolean;
 }

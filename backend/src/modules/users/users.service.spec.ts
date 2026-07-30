@@ -4,10 +4,12 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConflictException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User, UserRole } from './user.entity';
+import { ConfiguracaoService } from '../configuracao/configuracao.service';
 
 describe('UsersService — Issue #65 (proteção do vínculo Tecnico↔User)', () => {
     let service: UsersService;
     let repo: any;
+    let module: TestingModule;
 
     beforeEach(async () => {
         repo = {
@@ -17,14 +19,19 @@ describe('UsersService — Issue #65 (proteção do vínculo Tecnico↔User)', (
             query: jest.fn(),
         };
 
-        const module: TestingModule = await Test.createTestingModule({
+        module = await Test.createTestingModule({
             providers: [
                 UsersService,
                 { provide: getRepositoryToken(User), useValue: repo },
+                { provide: ConfiguracaoService, useValue: { get: jest.fn().mockResolvedValue({ minPasswordLength: 8 }) } },
             ],
         }).compile();
 
         service = module.get<UsersService>(UsersService);
+    });
+
+    afterEach(async () => {
+        await module?.close();
     });
 
     it('rejeita mudar role de user vinculado a Tecnico para algo ≠ campo', async () => {

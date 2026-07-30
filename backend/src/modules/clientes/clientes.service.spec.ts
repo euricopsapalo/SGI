@@ -19,6 +19,7 @@ describe('ClientesService', () => {
     let service: ClientesService;
     let repo: ReturnType<typeof makeRepo>;
     let ds: { query: jest.Mock };
+    let module: TestingModule;
 
     const validBody = {
         nome: 'Teste',
@@ -31,7 +32,7 @@ describe('ClientesService', () => {
         repo = makeRepo();
         ds = { query: jest.fn() };
 
-        const module: TestingModule = await Test.createTestingModule({
+        module = await Test.createTestingModule({
             providers: [
                 ClientesService,
                 { provide: getRepositoryToken(Cliente), useValue: repo },
@@ -40,6 +41,10 @@ describe('ClientesService', () => {
         }).compile();
 
         service = module.get<ClientesService>(ClientesService);
+    });
+
+    afterEach(async () => {
+        await module?.close();
     });
 
     it('validate: lanca BadRequestException se nem telefone nem email', async () => {

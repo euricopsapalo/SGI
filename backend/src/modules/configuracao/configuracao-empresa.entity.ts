@@ -101,6 +101,23 @@ export class ConfiguracaoEmpresa {
     @Column({ type: 'numeric', precision: 10, scale: 6, nullable: true })
     longitude: number;
 
+    // --- Segurança (issue #100) ---
+    /** Comprimento mínimo exigido nas passwords (aplicado no criar/reset/alterar). */
+    @Column({ name: 'min_password_length', type: 'int', default: 8 })
+    minPasswordLength: number;
+
+    /** Duração da sessão em minutos (usado no expiresIn do JWT ao autenticar; 0 = 8h por defeito). */
+    @Column({ name: 'session_expiry_minutes', type: 'int', default: 60 })
+    sessionExpiryMinutes: number;
+
+    /** Permite que os utilizadores ativem 2FA (TOTP) na sua conta. */
+    @Column({ name: 'two_factor_enabled', type: 'boolean', default: false })
+    twoFactorEnabled: boolean;
+
+    /** Quando falso, a escrita de registos em sys_logs é ignorada. */
+    @Column({ name: 'access_log_enabled', type: 'boolean', default: true })
+    accessLogEnabled: boolean;
+
     @UpdateDateColumn({ name: 'updated_at' })
     updatedAt: Date;
 }

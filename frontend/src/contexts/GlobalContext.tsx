@@ -251,6 +251,9 @@ export interface EmpresaConfig {
     email: string; website?: string; logoUrl?: string; iban: string; banco: string;
     moeda: string; taxaIva: number; latitude?: number; longitude?: number;
     rodapeDocumentos?: string; casasDecimais?: number; formatoData?: string;
+    // Segurança (issue #100)
+    minPasswordLength?: number; sessionExpiryMinutes?: number;
+    twoFactorEnabled?: boolean; accessLogEnabled?: boolean;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -684,6 +687,10 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         rodapeDocumentos: c.rodapeDocumentos,
                         casasDecimais: c.casasDecimais !== undefined ? Number(c.casasDecimais) : 2,
                         formatoData: c.formatoData ?? 'DD/MM/YYYY',
+                        minPasswordLength: c.minPasswordLength !== undefined ? Number(c.minPasswordLength) : 8,
+                        sessionExpiryMinutes: c.sessionExpiryMinutes !== undefined ? Number(c.sessionExpiryMinutes) : 60,
+                        twoFactorEnabled: !!c.twoFactorEnabled,
+                        accessLogEnabled: c.accessLogEnabled !== undefined ? !!c.accessLogEnabled : true,
                     };
                     setEmpresaConfig(ec);
                     setTaxaIvaGlobal(Number(c.taxaIva ?? 0));
@@ -1221,6 +1228,10 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 rodapeDocumentos: data.rodapeDocumentos,
                 casasDecimais: data.casasDecimais !== undefined ? Number(data.casasDecimais) : 2,
                 formatoData: data.formatoData ?? 'DD/MM/YYYY',
+                minPasswordLength: data.minPasswordLength !== undefined ? Number(data.minPasswordLength) : 8,
+                sessionExpiryMinutes: data.sessionExpiryMinutes !== undefined ? Number(data.sessionExpiryMinutes) : 60,
+                twoFactorEnabled: !!data.twoFactorEnabled,
+                accessLogEnabled: data.accessLogEnabled !== undefined ? !!data.accessLogEnabled : true,
             };
             setEmpresaConfig(ec);
             setTaxaIvaGlobal(Number(data.taxaIva ?? 0));

@@ -10,12 +10,13 @@ describe('ParqueService — eliminação com tratamento de FK (#95)', () => {
   let service: ParqueService;
   let equipRepo: any;
   let modelosRepo: any;
+  let module: TestingModule;
 
   beforeEach(async () => {
     equipRepo = { delete: jest.fn() };
     modelosRepo = { delete: jest.fn() };
 
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         ParqueService,
         { provide: getRepositoryToken(ModeloEquipamento), useValue: modelosRepo },
@@ -24,6 +25,10 @@ describe('ParqueService — eliminação com tratamento de FK (#95)', () => {
     }).compile();
 
     service = module.get<ParqueService>(ParqueService);
+  });
+
+  afterEach(async () => {
+    await module?.close();
   });
 
   describe('removeEquip', () => {

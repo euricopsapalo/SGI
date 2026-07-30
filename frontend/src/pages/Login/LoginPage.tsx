@@ -24,15 +24,20 @@ const LoginPage: React.FC = () => {
     const [resetToken, setResetToken]   = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [showNewPw, setShowNewPw]     = useState(false);
+    const [twoFARequired, setTwoFARequired] = useState(false);
+    const [code, setCode]               = useState('');
 
     const go = (v: View) => { setView(v); setError(''); setSuccess(''); };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault(); setError('');
         if (!email || !password) { setError('Por favor preencha todos os campos.'); return; }
+        if (twoFARequired && code.trim().length !== 6) { setError('Introduza o código de 6 dígitos.'); return; }
         setLoading(true);
         try {
-            const { data } = await api.post('/auth/login', { email, password });
+            const { data } = await api.post('/auth/login', { email, password, code: twoFARequired ? code.trim() : undefined });
+            // Issue #100: conta com 2FA — pedir código e repetir o login
+            if (data.twoFactorRequired) { setTwoFARequired(true); setLoading(false); return; }
             const user = { nome: data.user.nome, email: data.user.email, role: ROLE_MAP[data.user.role] || data.user.role };
             setCurrentUser(user);
             localStorage.setItem('sgi_token', data.access_token);
@@ -107,7 +112,16 @@ const LoginPage: React.FC = () => {
                                         <button type="button" onClick={() => go('forgot')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', color: '#0D6EBF', padding: 0 }}>Esqueceu a password?</button>
                                     </div>
                                 </div>
-                                <Btn loading={loading} label="Entrar" icon={<LogIn size={14} />} />
+                                {twoFARequired && (
+                                    <div style={{ marginBottom: 20 }}>
+                                        <label style={lSt}>Código de verificação (2FA)</label>
+                                        <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} autoFocus
+                                            value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
+                                            placeholder="000000" style={{ ...iSt, letterSpacing: '0.3em', fontFamily: 'monospace' }} onFocus={hFocus} onBlur={hBlur} />
+                                        <span style={{ fontSize: '0.72rem', color: '#888' }}>Introduza o código de 6 dígitos da sua app de autenticação.</span>
+                                    </div>
+                                )}
+                                <Btn loading={loading} label={twoFARequired ? 'Verificar' : 'Entrar'} icon={<LogIn size={14} />} />
                             </form>
                         </>
                     )}
