@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import AppLayout from '../../components/Layout/AppLayout';
+import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
 import {
@@ -2351,7 +2352,6 @@ const EncomendaPage: React.FC = () => {
     const [receber,   setReceber]   = useState<string | null>(null);
     const [rececDropdown, setRececDropdown] = useState<string | null>(null);
     const [rececDropdownPos, setRececDropdownPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
-    const [toast,      setToast]     = useState('');
     const [previewHtml, setPreviewHtml] = useState('');
 
     // Close dropdown when clicking outside
@@ -2392,7 +2392,7 @@ const EncomendaPage: React.FC = () => {
             && (!sugCritico  || a.critico);
     }), [artigosRuptura, sugSearch, sugClasse, sugFamilia, sugCritico]);
 
-    const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+    const showToast = (msg: string) => notify(msg, 'success');
 
     const getFornNome = (id: string) => fornecedores.find(f => f.id === id)?.nome ?? id;
 
@@ -2478,7 +2478,7 @@ const EncomendaPage: React.FC = () => {
                 .sort((a, b) => new Date(b.dataHora).getTime() - new Date(a.dataHora).getTime())[0];
             if (newRececao) printNotaEntrada(newRececao, updatedEnc, empresaConfig, simboloMoeda);
             showToast(`Recepção registada → ${armazem}. Stock actualizado.`);
-        } catch { showToast('Erro ao registar recepção.'); }
+        } catch { /* erro já apresentado pelo interceptor global (api.ts) */ }
     };
 
     const handleAnularRececao = async (rececaoId: string) => {
@@ -2486,7 +2486,7 @@ const EncomendaPage: React.FC = () => {
         try {
             await anularRececao(rececaoId);
             showToast('Receção anulada. Stock revertido.');
-        } catch { showToast('Erro ao anular receção.'); }
+        } catch { /* erro já apresentado pelo interceptor global (api.ts) */ }
     };
 
     const handleConverterEmEncomenda = (fornecedorId: string, dataEntrega: string, descricao: string, items: ConverterItem[]) => {
@@ -2520,7 +2520,7 @@ const EncomendaPage: React.FC = () => {
             });
             updateEncomenda(encId, { estado: 'Faturada' });
             showToast(`Fatura criada. Encomenda ${enc.numero} marcada como Faturada.`);
-        } catch { showToast('Erro ao criar fatura.'); }
+        } catch { /* erro já apresentado pelo interceptor global (api.ts) */ }
     };
 
     const handleVNCTransition = async (id: string, novoEstado: string) => {
@@ -2556,7 +2556,7 @@ const EncomendaPage: React.FC = () => {
                 modoPagamentoId: pagarModoId || undefined,
             });
             showToast('Pagamento registado com sucesso.');
-        } catch { showToast('Erro ao registar pagamento.'); }
+        } catch { /* erro já apresentado pelo interceptor global (api.ts) */ }
         setPagarModalId(null);
     };
 
@@ -2567,7 +2567,7 @@ const EncomendaPage: React.FC = () => {
             showToast(isVNC
                 ? 'VNC criada em estado Rascunho. Sem impacto em stock até validação.'
                 : 'Compra direta registada. Stock actualizado.');
-        } catch { showToast('Erro ao registar compra.'); }
+        } catch { /* erro já apresentado pelo interceptor global (api.ts) */ }
     };
 
     return (
@@ -3377,13 +3377,6 @@ const EncomendaPage: React.FC = () => {
                     filename="encomendas"
                     onClose={() => setShowExport(false)}
                 />
-            )}
-
-            {toast && (
-                <div className="toast" role="status">
-                    <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
-                    <span>{toast}</span>
-                </div>
             )}
 
             {previewHtml && (

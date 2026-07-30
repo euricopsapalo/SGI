@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
+import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
 import {
@@ -992,14 +993,13 @@ const OrdensPage: React.FC = () => {
     const [filterEstado, setFiltEst]  = useState('');
     const [filterTipo, setFiltTipo]   = useState('');
     const [modal, setModal]           = useState<'new' | string | null>(null);
-    const [toast,      setToast]      = useState('');
     const [showExport, setShowExport]       = useState(false);
     const [showRelatorio, setShowRelatorio] = useState(false);
     const [ctx, setCtx]               = useState<{ id: string; x: number; y: number } | null>(null);
     // RF-OT-003 — modal partilhada para Confirmar/Adiar com input de data + motivo + aprovação
     const [transicaoModal, setTransicaoModal] = useState<{ tipo: 'confirmar' | 'adiar'; ot: OrdemTrabalho } | null>(null);
 
-    const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
+    const showToast = (msg: string) => notify(msg, 'success');
 
     const getLabel = useCallback((ot: OrdemTrabalho) => {
         const eq  = equipInstalados.find(e => e.id === ot.equipInstaladoId);
@@ -1046,8 +1046,8 @@ const OrdensPage: React.FC = () => {
                 showToast(`OT ${ot.id} criada.`);
             }
             setModal(null);
-        } catch (e: any) {
-            showToast(e?.response?.data?.message ?? 'Erro ao guardar OT.');
+        } catch {
+            /* erro já apresentado pelo interceptor global (api.ts) */
         }
     };
 
@@ -1085,8 +1085,8 @@ const OrdensPage: React.FC = () => {
                 setModal(null);
                 showToast(`OT ${ot.id}: ${acao.label} → ${acao.target}.`);
             }
-        } catch (e: any) {
-            showToast(e?.response?.data?.message ?? `Erro: ${acao.label} OT ${ot.id}.`);
+        } catch {
+            /* erro já apresentado pelo interceptor global (api.ts) */
         }
         setCtx(null);
     };
@@ -1292,19 +1292,13 @@ const OrdensPage: React.FC = () => {
                             }
                             setTransicaoModal(null);
                             setModal(null);
-                        } catch (e: any) {
-                            showToast(e?.response?.data?.message ?? 'Erro na transição.');
+                        } catch {
+                            /* erro já apresentado pelo interceptor global (api.ts) */
                         }
                     }}
                 />
             )}
 
-            {toast && (
-                <div className="toast" role="status">
-                    <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
-                    <span>{toast}</span>
-                </div>
-            )}
         </AppLayout>
     );
 };

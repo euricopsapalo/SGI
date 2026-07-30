@@ -5,6 +5,7 @@ import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { Search, Plus, Pencil, Eye, Phone, Mail, MapPin, Building2, User, X, Check, AlertCircle, Trash2, Download, Printer } from 'lucide-react';
 import SearchableSelect from '../../components/SearchableSelect';
 import api from '../../services/api';
+import { showToast } from '../../utils/errorHandler';
 import { useGlobal, EquipInstalado, OrdemTrabalho, ModeloEquipamento } from '../../contexts/GlobalContext';
 
 /* ══════════════════════════════════════════
@@ -1102,24 +1103,19 @@ const ClientesPage: React.FC = () => {
     const [detail, setDetail]     = useState<Cliente | null>(null);
     const [editTarget, setEditTarget] = useState<Cliente | null>(null);
     const [modalOpen, setModalOpen] = useState(false);
-    const [toast, setToast]         = useState('');
-    const [toastErr, setToastErr]   = useState('');
     const [showExport, setShowExport] = useState(false);
     const [showRelatorios, setShowRelatorios] = useState(false);
-
-    const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
-    const showErr   = (msg: string) => { setToastErr(msg); setTimeout(() => setToastErr(''), 5000); };
 
     const handleRemove = async (id: number, nome: string) => {
         if (!window.confirm(`Eliminar o cliente "${nome}"? Esta acção não pode ser desfeita.`)) return;
         try {
             await api.delete(`/clientes/${id}`);
-            showToast(`Cliente "${nome}" eliminado.`);
+            showToast(`Cliente "${nome}" eliminado.`, 'success');
             addLog({ usuario: currentUser?.email ?? 'sistema', modulo: 'Clientes', acao: 'Cliente eliminado', detalhes: `Nome: ${nome}`, tipo: 'warning' });
             loadClientes();
             refreshClientes();
-        } catch (e: any) {
-            showErr(e?.response?.data?.message ?? 'Erro ao eliminar cliente.');
+        } catch {
+            /* erro já apresentado pelo interceptor global (api.ts) */
         }
     };
 
@@ -1144,18 +1140,18 @@ const ClientesPage: React.FC = () => {
         try {
             if (editTarget) {
                 await api.put(`/clientes/${editTarget.id}`, data);
-                showToast('Cliente actualizado com sucesso.');
+                showToast('Cliente actualizado com sucesso.', 'success');
             } else {
                 await api.post(`/clientes`, data);
-                showToast('Cliente criado com sucesso.');
+                showToast('Cliente criado com sucesso.', 'success');
             }
             await loadClientes();
             refreshClientes();
+            closeModal();
         } catch (e) {
             console.error('Erro ao guardar cliente', e);
-            showToast('Erro ao guardar cliente.');
+            /* erro já apresentado pelo interceptor global (api.ts) — modal fica aberto */
         }
-        closeModal();
     };
 
     const getMaquinas = (id: number) => equipInstalados.filter(e => e.clienteId === String(id)).length;
@@ -1346,19 +1342,6 @@ const ClientesPage: React.FC = () => {
                 />
             )}
 
-            {/* Toast */}
-            {toast && (
-                <div className="toast" role="status">
-                    <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
-                    <span>{toast}</span>
-                </div>
-            )}
-            {toastErr && (
-                <div className="toast" role="alert" style={{ background: 'var(--red,#ef4444)', color: '#fff' }}>
-                    <AlertCircle size={14} />
-                    <span>{toastErr}</span>
-                </div>
-            )}
 
             {showRelatorios && (
                 <RelatoriosClienteModal

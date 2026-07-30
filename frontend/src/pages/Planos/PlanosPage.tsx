@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
+import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
@@ -237,10 +238,9 @@ const PlanosPage: React.FC = () => {
     const [search, setSearch]     = useState('');
     const [modal, setModal]       = useState<'new' | string | null>(null);
     const [repetirId, setRepetirId] = useState<string | null>(null);
-    const [toast, setToast]       = useState('');
     const [showExport, setShowExport] = useState(false);
 
-    const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
+    const showToast = (msg: string) => notify(msg, 'success');
 
     const getEquipLabel = (id: string) => {
         const e = equipInstalados.find(x => x.id === id);
@@ -380,13 +380,6 @@ const PlanosPage: React.FC = () => {
             )}
             {repetirPlano && (
                 <RepetirModal plano={repetirPlano} onClose={() => setRepetirId(null)} onRepetir={handleRepetir} />
-            )}
-
-            {toast && (
-                <div className="toast" role="status">
-                    <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
-                    <span>{toast}</span>
-                </div>
             )}
 
             {showExport && (

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
+import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
 import { useGlobal, OrdemTrabalho, OTEstado } from '../../contexts/GlobalContext';
 import { ChevronLeft, ChevronRight, Calendar, X, Clock, PlayCircle, CheckCircle, Archive, AlertCircle, GripVertical, Printer, Eye } from 'lucide-react';
@@ -180,10 +181,9 @@ const AgendaPage: React.FC = () => {
     const [dragOT,      setDragOT]    = useState<OrdemTrabalho | null>(null);
     const [dropTarget,  setDropTarget]= useState<{ ot: OrdemTrabalho; date: string } | null>(null);
     const [dropOver,    setDropOver]  = useState<string | null>(null); // date being hovered
-    const [toast,       setToast]     = useState('');
     const [previewHtml, setPreviewHtml] = useState('');
 
-    const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
+    const showToast = (msg: string) => notify(msg, 'success');
 
     const campoTecs = tecnicos.filter(t => t.ativo);
 
@@ -708,13 +708,6 @@ ${legend}
                     onClose={() => setDropTarget(null)}
                     onConfirm={handleReprogramar}
                 />
-            )}
-
-            {toast && (
-                <div className="toast" role="status">
-                    <CheckCircle size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
-                    <span>{toast}</span>
-                </div>
             )}
 
             {previewHtml && (

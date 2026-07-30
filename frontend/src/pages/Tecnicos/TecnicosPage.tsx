@@ -3,6 +3,7 @@ import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { useGlobal, Tecnico, FuncaoTecnico, OrdemTrabalho, EmpresaConfig, Cliente, EquipInstalado, ModeloEquipamento } from '../../contexts/GlobalContext';
+import { showToast } from '../../utils/errorHandler';
 import { Search, Plus, Edit2, Eye, X, AlertCircle, Check, Download, Trash2, UserCog, MapPin, Printer } from 'lucide-react';
 
 /* ══ Print CSS + Helpers ═════════════════════════════════════ */
@@ -704,21 +705,16 @@ const TecnicosPage: React.FC = () => {
     const [search, setSearch]     = useState('');
     const [modal, setModal]       = useState<'new' | string | null>(null);
     const [viewId, setViewId]     = useState<string | null>(null);
-    const [toast, setToast]       = useState('');
-    const [toastErr, setToastErr] = useState('');
     const [showExport, setShowExport] = useState(false);
     const [showRelatorios, setShowRelatorios] = useState(false);
-
-    const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
-    const showErr   = (msg: string) => { setToastErr(msg); setTimeout(() => setToastErr(''), 5000); };
 
     const handleRemove = async (id: string, nome: string) => {
         if (!window.confirm(`Eliminar o técnico "${nome}"? Esta acção não pode ser desfeita.`)) return;
         try {
             await removeTecnico(id);
-            showToast(`Técnico "${nome}" eliminado.`);
-        } catch (e: any) {
-            showErr(e?.response?.data?.message ?? 'Erro ao eliminar técnico.');
+            showToast(`Técnico "${nome}" eliminado.`, 'success');
+        } catch {
+            /* erro já apresentado pelo interceptor global (api.ts) */
         }
     };
 
@@ -752,15 +748,14 @@ const TecnicosPage: React.FC = () => {
         try {
             if (typeof modal === 'string' && modal !== 'new') {
                 await updateTecnico(modal, data);
-                showToast('Técnico actualizado.');
+                showToast('Técnico actualizado.', 'success');
             } else {
                 const t = await addTecnico(data);
-                showToast(`Técnico ${t.id} registado.`);
+                showToast(`Técnico ${t.id} registado.`, 'success');
             }
             setModal(null);
-        } catch (e: any) {
-            const msg = e?.response?.data?.message;
-            showErr(Array.isArray(msg) ? msg.join(' · ') : (msg ?? 'Erro ao guardar técnico.'));
+        } catch {
+            /* erro já apresentado pelo interceptor global (api.ts) */
         }
     };
 
@@ -889,19 +884,6 @@ const TecnicosPage: React.FC = () => {
                     onClose={() => setModal(null)}
                     onSave={handleSave}
                 />
-            )}
-
-            {toast && (
-                <div className="toast" role="status">
-                    <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
-                    <span>{toast}</span>
-                </div>
-            )}
-            {toastErr && (
-                <div className="toast" role="alert" style={{ background: 'var(--red,#ef4444)', color: '#fff' }}>
-                    <AlertCircle size={14} />
-                    <span>{toastErr}</span>
-                </div>
             )}
 
             {showRelatorios && (

@@ -1720,25 +1720,23 @@ a:hover {
   font-weight: 600;
 }
 
+/* Fundo sólido + texto branco por tipo (issue #70). Verde/âmbar escurecidos
+   face aos hex sugeridos para garantir contraste AA (≥ 4.5:1) com texto branco. */
 .global-toast--error {
-  background: #FEE2E2;
-  border: 1px solid #FCA5A5;
-  color: #991B1B;
+  background: #DC2626;
+  color: #fff;
 }
 .global-toast--warning {
-  background: #FEF3C7;
-  border: 1px solid #FCD34D;
-  color: #92400E;
+  background: #B45309;
+  color: #fff;
 }
 .global-toast--success {
-  background: var(--green-bg);
-  border: 1px solid #A5D6A7;
-  color: var(--green);
+  background: #15803D;
+  color: #fff;
 }
 .global-toast--info {
-  background: #DBEAFE;
-  border: 1px solid #93C5FD;
-  color: #1E40AF;
+  background: #2563EB;
+  color: #fff;
 }
 
 .global-toast__icon {

@@ -49,7 +49,7 @@ describe('GlobalToast', () => {
 
         const toast = screen.getByTestId('global-toast');
         expect(toast).toHaveClass('global-toast--warning');
-        expect(toast.querySelector('.global-toast__icon')?.textContent).toBe('\u26A0');
+        expect(toast.querySelector('.global-toast__icon svg')).toBeInTheDocument();
     });
 
     it('shows info toast with correct icon', () => {
@@ -61,7 +61,7 @@ describe('GlobalToast', () => {
 
         const toast = screen.getByTestId('global-toast');
         expect(toast).toHaveClass('global-toast--info');
-        expect(toast.querySelector('.global-toast__icon')?.textContent).toBe('\u2139');
+        expect(toast.querySelector('.global-toast__icon svg')).toBeInTheDocument();
     });
 
     it('auto-removes toast after timeout', () => {

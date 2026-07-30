@@ -10,7 +10,7 @@ import {
     Search, Plus, Edit2, X, AlertCircle, Check, MapPin,
     Eye, AlertTriangle, RefreshCw, Package, Printer, Download, Trash2,
 } from 'lucide-react';
-import { extractErrorMessage } from '../../utils/errorHandler';
+import { showToast, extractErrorMessage } from '../../utils/errorHandler';
 
 const ESTADO_DOT: Record<EstadoEquip, string> = {
     ativo:         'dot-green',
@@ -880,10 +880,6 @@ const ParquePage: React.FC = () => {
     const [showExport,    setShowExport]    = useState(false);
     const [showRelatorio, setShowRelatorio] = useState(false);
     const [previewHtml,   setPreviewHtml]   = useState('');
-    const [toast, setToast] = useState('');
-    const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
-    const [toastErr, setToastErr] = useState('');
-    const showErr = (msg: string) => { setToastErr(msg); setTimeout(() => setToastErr(''), 5000); };
 
     const getCliente = (id: string) => clientes.find(c => c.id === id)?.nome ?? '—';
     const getModelo  = (id: string) => modelosEquipamento.find(m => m.id === id);
@@ -906,7 +902,7 @@ const ParquePage: React.FC = () => {
     const handleSaveEquip = async (data: Omit<EquipInstalado, 'id'>) => {
         if (modal === 'edit' && editId) {
             await updateEquipInstalado(editId, data);
-            showToast('Equipamento actualizado.');
+            showToast('Equipamento actualizado.', 'success');
         } else {
             const eq = await addEquipInstalado(data);
             const mod = modelosEquipamento.find(m => m.id === data.modeloId);
@@ -919,7 +915,7 @@ const ParquePage: React.FC = () => {
                 dataAgendada: data.dataInstalacao,
                 estado: 'Registada',
             } as any).catch(e => console.error('Erro ao criar OT de Montagem', e));
-            showToast(`${eq.id} registado. OT de Montagem criada automaticamente.`);
+            showToast(`${eq.id} registado. OT de Montagem criada automaticamente.`, 'success');
         }
         setModal(null); setEditId(null);
     };
@@ -928,9 +924,9 @@ const ParquePage: React.FC = () => {
         if (!window.confirm(`Eliminar o equipamento "${nrSerie}"? Esta acção não pode ser desfeita.`)) return;
         try {
             await removeEquipInstalado(id);
-            showToast(`Equipamento "${nrSerie}" eliminado.`);
-        } catch (e) {
-            showErr(extractErrorMessage(e));
+            showToast(`Equipamento "${nrSerie}" eliminado.`, 'success');
+        } catch {
+            /* erro já apresentado pelo interceptor global (api.ts) */
         }
     };
 
@@ -987,10 +983,10 @@ const ParquePage: React.FC = () => {
     const handleSaveModelo = (data: Omit<ModeloEquipamento, 'id'>) => {
         if (typeof mModal === 'string' && mModal !== 'new') {
             updateModelo(mModal, data);
-            showToast('Modelo actualizado.');
+            showToast('Modelo actualizado.', 'success');
         } else {
             const m = addModelo(data);
-            showToast(`Modelo ${m.id} criado.`);
+            showToast(`Modelo ${m.id} criado.`, 'success');
         }
         setMModal(null);
     };
@@ -999,9 +995,9 @@ const ParquePage: React.FC = () => {
         if (!window.confirm(`Eliminar o modelo "${nome}"? Esta acção não pode ser desfeita.`)) return;
         try {
             await removeModelo(id);
-            showToast(`Modelo "${nome}" eliminado.`);
-        } catch (e) {
-            showErr(extractErrorMessage(e));
+            showToast(`Modelo "${nome}" eliminado.`, 'success');
+        } catch {
+            /* erro já apresentado pelo interceptor global (api.ts) */
         }
     };
 
@@ -1266,19 +1262,6 @@ const ParquePage: React.FC = () => {
                 />
             )}
 
-            {toast && (
-                <div className="toast" role="status">
-                    <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
-                    <span>{toast}</span>
-                </div>
-            )}
-
-            {toastErr && (
-                <div className="toast" role="alert" style={{ borderColor: 'var(--red)' }}>
-                    <AlertCircle size={14} strokeWidth={2.5} style={{ color: 'var(--red)' }} />
-                    <span>{toastErr}</span>
-                </div>
-            )}
 
             {previewHtml && (
                 <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 10000, display: 'flex', flexDirection: 'column' }}>
