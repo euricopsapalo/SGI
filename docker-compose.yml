@@ -28,6 +28,12 @@
       DB_PASSWORD: app_password
       DB_NAME: app_development
       PORT: 3001
+      # ── Segurança (issues #23/#24) ──
+      # JWT_SECRET é OBRIGATÓRIO (mín. 32 chars) — a app falha o arranque sem ele.
+      # Em produção, definir um segredo forte via env; o default abaixo é só para dev.
+      JWT_SECRET: ${JWT_SECRET:-dev_sgi_jwt_secret_change_me_0123456789abcdef}
+      # Origens permitidas para CORS (lista separada por vírgulas).
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
       # ── Configuração SMTP (preencher com as credenciais reais) ──
       MAIL_HOST: smtp.gmail.com
       MAIL_PORT: "587"

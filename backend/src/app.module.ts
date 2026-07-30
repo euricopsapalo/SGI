@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
+import * as Joi from 'joi';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
@@ -27,7 +28,14 @@ import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot(),
+    // Valida variáveis críticas no arranque (issue #24). App falha se JWT_SECRET
+    // estiver ausente ou tiver < 32 caracteres. `.unknown(true)` deixa passar as
+    // restantes env vars (DB_*, MAIL_*, CORS_ORIGIN, etc.).
+    ConfigModule.forRoot({
+      validationSchema: Joi.object({
+        JWT_SECRET: Joi.string().min(32).required(),
+      }).unknown(true),
+    }),
     // Rate limiting global — 60 pedidos/min por IP e por endpoint (issue #41).
     // Desativado em ambiente de teste (e2e) para não gerar 429 nas suites.
     ThrottlerModule.forRoot({
