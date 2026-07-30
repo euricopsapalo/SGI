@@ -1,16 +1,16 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
 import {
     useGlobal, Encomenda, EncomendaLinha, EncomendaEstado, EmpresaConfig, Artigo, TaxaIva,
-    Rececao, RececaoItem, FaturaFornecedor, LinhaFaturaFornecedor, DocumentoCompra,
+    Rececao, FaturaFornecedor,
     CondicaoPagamento, ModoPagamento, Fornecedor,
 } from '../../contexts/GlobalContext';
 import {
     Search, Plus, X, AlertCircle, Check, ShoppingCart,
-    Package, Printer, ChevronDown, Archive, Download, TrendingDown, ShoppingBag,
+    Package, Printer, Archive, Download, TrendingDown, ShoppingBag,
     Ban, RotateCcw, Eye, BarChart2, Clock, AlertTriangle, CheckCircle2,
     CalendarDays, ListFilter, FileText, CreditCard, Wallet,
 } from 'lucide-react';
@@ -189,8 +189,6 @@ function buildNotaEncomendaHtml(encomenda: Encomenda, fornecedorNome: string, em
         return { ...l, codigoIva: art.codigoIva, taxaIva: taxa };
     });
     const encResolvida: Encomenda = { ...encomenda, linhas: linhasResolvidas };
-
-    const total = encTotal(encomenda);
 
     // Stamp config per estado
     const stampMap: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -396,7 +394,7 @@ function buildNotaEntradaHtml(
     simbolo?: string,
 ): string {
     const emp = empresa ?? {} as EmpresaConfig;
-    const { fmt, fmtDate } = makePrintFmt(emp, simbolo);
+    const { fmt } = makePrintFmt(emp, simbolo);
     const dataHora = new Date(rececao.dataHora).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
     const todasGuias = encomenda.rececoes
@@ -1015,7 +1013,7 @@ const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onS
     const [data,            setData]     = useState(encomenda?.data                  ?? new Date().toISOString().split('T')[0]);
     const [dataEntrega,     setDataEnt]  = useState(encomenda?.dataEntrega            ?? '');
     const [condPagamento,   setCondPag]  = useState(encomenda?.condicoesPagamento     ?? '30 Dias');
-    const [responsavel,     setResp]     = useState(encomenda?.responsavel            ?? currentUser?.nome ?? 'Administrador');
+    const [responsavel]                  = useState(encomenda?.responsavel            ?? currentUser?.nome ?? 'Administrador');
     const [moeda,           setMoeda]    = useState(encomenda?.moeda                  ?? 'AOA');
     const [descricao,       setDesc]     = useState(encomenda?.descricao              ?? '');
     const [observacoes,     setObs]      = useState(encomenda?.observacoes            ?? '');
@@ -1075,8 +1073,6 @@ const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onS
 
     const handleSave = () => {
         if (!validate()) { setTab('cabecalho'); return; }
-        const totalRec = linhas.reduce((s, l) => s + l.qtdRecebida, 0);
-        const totalEnc = linhas.reduce((s, l) => s + l.qtdEncomendada, 0);
         const estado: EncomendaEstado = encomenda?.estado ?? 'Aberta';
         onSave({ fornecedorId, data, dataEntrega, condicoesPagamento: condPagamento, responsavel, moeda, descricao, observacoes, estado, linhas, rececoes: encomenda?.rececoes ?? [] });
     };
@@ -1421,7 +1417,6 @@ interface ConvertFaturaModalProps {
 const ConvertFaturaModal: React.FC<ConvertFaturaModalProps> = ({ encomenda, onClose, onConfirm }) => {
     const { documentosCompra, artigos, taxasIva, fmt, fmtMoney } = useGlobal();
     const docOpts = documentosCompra.filter(d => d.codigo !== 'VNC');
-    const rececaoAtiva = [...encomenda.rececoes].filter(r => r.estado === 'Ativa').sort((a, b) => b.dataHora.localeCompare(a.dataHora));
 
     const [tipoDoc,     setTipoDoc]  = useState(docOpts[0]?.codigo ?? 'VFA');
     const [numFatura,   setNumFat]   = useState('');
@@ -1670,7 +1665,7 @@ interface CompraDiretaModalProps {
     onSave: (f: Omit<FaturaFornecedor, 'id'> & { faturasAssociadasIds?: string[] }) => void;
 }
 const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }) => {
-    const { fornecedores, artigos, documentosCompra, taxasIva, fmt, fmtMoney, condicoesPagamento, modosPagamento, faturasFornecedor } = useGlobal();
+    const { fornecedores, artigos, documentosCompra, taxasIva, fmtMoney, condicoesPagamento, modosPagamento, faturasFornecedor } = useGlobal();
 
     const [modalTab,    setModalTab]= useState<'documento' | 'condicoes'>('documento');
     const [fornId,      setFornId]  = useState('');
@@ -2284,7 +2279,7 @@ const ConverterModal: React.FC<ConverterModalProps> = ({ artigos, onClose, onCon
 /* ══ Print Sugestões ═════════════════════════════════════════ */
 function buildSugestoesHtml(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: string): string {
     const emp = empresa ?? {} as EmpresaConfig;
-    const { fmt, fmtMoney, fmtDate } = makePrintFmt(emp, simbolo);
+    const { fmtMoney, fmtDate } = makePrintFmt(emp, simbolo);
     const today = fmtDate(new Date().toISOString());
     const rows = artigos.map(a => {
         const disp = a.stockDisponivel ?? Math.max(0, a.existencia - a.stockReservado);
@@ -2347,14 +2342,13 @@ function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: st
 
 /* ══ Page ════════════════════════════════════════════════════ */
 const EncomendaPage: React.FC = () => {
-    const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, taxasIva, updateArtigo, addMovimento, currentUser, empresaConfig, fmtMoney, fmtDate, fmt, simboloMoeda, faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC, condicoesPagamento, modosPagamento, addLog } = useGlobal();
+    const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, taxasIva, updateArtigo, addMovimento, currentUser, empresaConfig, fmtMoney, fmtDate, fmt, simboloMoeda, faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC, condicoesPagamento, modosPagamento } = useGlobal();
 
     const [pageTab,   setPageTab]   = useState<'encomendas' | 'sugestoes' | 'compras' | 'relatorios'>('encomendas');
     const [search,    setSearch]    = useState('');
     const [filterEst, setFEst]      = useState('');
     const [modal,     setModal]     = useState<'new' | string | null>(null);
     const [receber,   setReceber]   = useState<string | null>(null);
-    const [printId,   setPrintId]   = useState<string | null>(null);
     const [rececDropdown, setRececDropdown] = useState<string | null>(null);
     const [rececDropdownPos, setRececDropdownPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
     const [toast,      setToast]     = useState('');
@@ -2445,7 +2439,6 @@ const EncomendaPage: React.FC = () => {
         Recebida:  encomendas.filter(e => e.estado === 'Recebida').length,
         Cancelada: encomendas.filter(e => e.estado === 'Cancelada').length,
     };
-    const totalNaoCanceladas = encomendas.filter(e => e.estado !== 'Cancelada').length || 1;
 
     // Last 7 days daily volume
     const dailyVolume = Array.from({ length: 7 }, (_, i) => {
@@ -2458,7 +2451,6 @@ const EncomendaPage: React.FC = () => {
 
     const editTarget  = typeof modal === 'string' && modal !== 'new' ? encomendas.find(e => e.id === modal) : undefined;
     const receberEnc  = receber ? encomendas.find(e => e.id === receber) : null;
-    const printEnc    = printId ? encomendas.find(e => e.id === printId) : null;
 
     const handleSave = (data: Omit<Encomenda, 'id' | 'numero'>) => {
         if (typeof modal === 'string' && modal !== 'new') {
@@ -2495,11 +2487,6 @@ const EncomendaPage: React.FC = () => {
             await anularRececao(rececaoId);
             showToast('Receção anulada. Stock revertido.');
         } catch { showToast('Erro ao anular receção.'); }
-    };
-
-    const handleCancelar = (id: string) => {
-        updateEncomenda(id, { estado: 'Cancelada' });
-        showToast('Encomenda cancelada.');
     };
 
     const handleConverterEmEncomenda = (fornecedorId: string, dataEntrega: string, descricao: string, items: ConverterItem[]) => {

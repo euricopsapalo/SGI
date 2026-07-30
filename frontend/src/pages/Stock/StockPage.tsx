@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
-import { useGlobal, Artigo, Armazem, StockArmazem } from '../../contexts/GlobalContext';
+import { useGlobal, Artigo, Armazem } from '../../contexts/GlobalContext';
 import {
     Search, Plus, Edit2, X, AlertCircle, Check, Package, Download,
     BarChart2, ArrowDownCircle, ArrowUpCircle, RefreshCw,

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
@@ -9,8 +9,8 @@ import {
 } from '../../contexts/GlobalContext';
 import {
     Search, Plus, Filter, Eye, X, AlertCircle, Check, Printer,
-    Clock, PlayCircle, CheckCircle, Archive, AlertTriangle,
-    Trash2, ChevronRight, Calendar, List, Download,
+    Clock, PlayCircle, CheckCircle, Archive,
+    Trash2, Download,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 
@@ -449,7 +449,7 @@ interface OTFormProps {
 }
 
 const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly }) => {
-    const { equipInstalados, clientes, modelosEquipamento, planos, funcoesTecnico, artigos: catalog, tecnicos, currentUser, taxasIva, fmtMoney, fmtDate, fmt, simboloMoeda, empresaConfig } = useGlobal();
+    const { equipInstalados, clientes, modelosEquipamento, planos, funcoesTecnico, artigos: catalog, tecnicos, currentUser, taxasIva, fmtMoney, simboloMoeda, empresaConfig } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
     // Issue #71 — 5 abas semânticas alinhadas com o ciclo de vida da OT.
     type TabId = 'identificacao' | 'cliente' | 'agendamento' | 'execucao' | 'gestao';
@@ -636,8 +636,6 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
         { id: 'execucao',      label: 'Execução'           },
         { id: 'gestao',        label: 'Gestão'             },
     ];
-
-    const estado = ot?.estado;
 
     const [previewHtml, setPreviewHtml] = useState('');
 
@@ -1003,12 +1001,12 @@ const OrdensPage: React.FC = () => {
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
 
-    const getLabel = (ot: OrdemTrabalho) => {
+    const getLabel = useCallback((ot: OrdemTrabalho) => {
         const eq  = equipInstalados.find(e => e.id === ot.equipInstaladoId);
         const mod = modelosEquipamento.find(m => m.id === eq?.modeloId)?.nome ?? '—';
         const cli = clientes.find(c => c.id === ot.clienteId)?.nome ?? '—';
         return { equip: `${ot.equipInstaladoId} — ${mod}`, cliente: cli };
-    };
+    }, [equipInstalados, modelosEquipamento, clientes]);
 
     const filtered = useMemo(() => ordens.filter(o => {
         const q = search.toLowerCase();
@@ -1017,7 +1015,7 @@ const OrdensPage: React.FC = () => {
             && (!filterEstado || o.estado === filterEstado)
             && (!filterTipo   || o.naturezaIntervencao === filterTipo)
             && (!isTecnicoCampo || o.responsavel === (currentUser?.tecnicoNome ?? currentUser?.nome));
-    }), [ordens, search, filterEstado, filterTipo, isTecnicoCampo, currentUser]);
+    }), [ordens, search, filterEstado, filterTipo, isTecnicoCampo, currentUser, getLabel]);
 
     // Base scoped to current user (ignores search/estado/tipo filters, but respects role)
     const baseOrdens = useMemo(() =>

@@ -8,7 +8,7 @@ import {
 } from '../../contexts/GlobalContext';
 import {
     Search, Plus, Edit2, X, AlertCircle, Check, ClipboardList,
-    Trash2, Eye, Copy, Download,
+    Trash2, Copy, Download,
 } from 'lucide-react';
 
 const PERIOD_OPTIONS = ['Mensal', 'Trimestral', 'Semestral', 'Anual', 'Única'];
@@ -232,7 +232,7 @@ const RepetirModal: React.FC<RepetirModalProps> = ({ plano, onClose, onRepetir }
 
 /* ══ Page ════════════════════════════════════════════════ */
 const PlanosPage: React.FC = () => {
-    const { planos, addPlano, updatePlano, removePlano, equipInstalados, clientes, modelosEquipamento } = useGlobal();
+    const { planos, addPlano, updatePlano, equipInstalados, clientes, modelosEquipamento } = useGlobal();
 
     const [search, setSearch]     = useState('');
     const [modal, setModal]       = useState<'new' | string | null>(null);
