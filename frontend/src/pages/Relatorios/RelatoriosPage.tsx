@@ -44,13 +44,14 @@ const COLS: Record<RelTab, ExportCol[]> = {
         { key: 'total',      label: 'Total (Kz)'     },
     ],
     comissoes: [
-        { key: 'nome',       label: 'Nome'       },
-        { key: 'tipo',       label: 'Perfil'     },
-        { key: 'os',         label: 'Nº OT'      },
-        { key: 'montagem',   label: 'Montagem'   },
-        { key: 'preventiva', label: 'Preventiva' },
-        { key: 'corretiva',  label: 'Corretiva'  },
-        { key: 'total',      label: 'Total (Kz)' },
+        { key: 'nome',       label: 'Nome'          },
+        { key: 'tipo',       label: 'Perfil'        },
+        { key: 'os',         label: 'Nº OT'         },
+        { key: 'montagem',   label: 'Montagem'      },
+        { key: 'preventiva', label: 'Preventiva'    },
+        { key: 'corretiva',  label: 'Corretiva'     },
+        { key: 'total',      label: 'Faturado (Kz)' },
+        { key: 'comissao',   label: 'Comissão (Kz)' },
     ],
     produtividade: [
         { key: 'nome',       label: 'Técnico'    },
@@ -95,7 +96,7 @@ const COLS: Record<RelTab, ExportCol[]> = {
 
 /* ══════════════════════════════════════════════════════════ */
 const RelatoriosPage: React.FC = () => {
-    const { faturas, ordens, movimentosStock, artigos, armazens, clientes, equipInstalados, provincias, fmtMoney, fmtDate, fmt: fmtNum } = useGlobal();
+    const { faturas, ordens, movimentosStock, artigos, armazens, clientes, equipInstalados, provincias, empresaConfig, fmtMoney, fmtDate, fmt: fmtNum } = useGlobal();
     const fmtKz = fmtMoney;
 
     const [tab,        setTab]        = useState<RelTab>('faturacao');
@@ -127,22 +128,29 @@ const RelatoriosPage: React.FC = () => {
     const fatDeEff  = fatDe  || mesKeys[0]                  || '';
     const fatAteEff = fatAte || mesKeys[mesKeys.length - 1] || '';
 
-    /* ── Comissões (real) — OTs concluídas por técnico ── */
+    /* ── Comissões (issue #101) — taxa fixa por natureza × OT concluída, por técnico ──
+       Comissão = Σ (taxa configurada da natureza de cada OT Finalizada). As taxas
+       vêm de Configurações → Comissões (empresaConfig). "Faturado" fica separado
+       como referência (não é comissão). */
     const comissoesData = useMemo(() => {
-        const byTec: Record<string, { nome: string; tipo: string; os: number; montagem: number; preventiva: number; corretiva: number; total: number }> = {};
+        const rMont = Number(empresaConfig.comissaoMontagem ?? 0);
+        const rPrev = Number(empresaConfig.comissaoPreventiva ?? 0);
+        const rCorr = Number(empresaConfig.comissaoCorretiva ?? 0);
+        const byTec: Record<string, { nome: string; tipo: string; os: number; montagem: number; preventiva: number; corretiva: number; comissao: number; total: number }> = {};
         ordens.filter(o => o.estado === 'Finalizada').forEach(o => {
             if (!o.responsavel) return;
-            if (!byTec[o.responsavel]) byTec[o.responsavel] = { nome: o.responsavel, tipo: 'Técnico Campo', os: 0, montagem: 0, preventiva: 0, corretiva: 0, total: 0 };
-            byTec[o.responsavel].os++;
+            if (!byTec[o.responsavel]) byTec[o.responsavel] = { nome: o.responsavel, tipo: 'Técnico Campo', os: 0, montagem: 0, preventiva: 0, corretiva: 0, comissao: 0, total: 0 };
+            const t = byTec[o.responsavel];
+            t.os++;
             const nat = o.naturezaIntervencao ?? '';
-            if (nat === 'Montagem / Instalação')    byTec[o.responsavel].montagem++;
-            else if (nat === 'Reparação de avaria') byTec[o.responsavel].corretiva++;
-            else                                    byTec[o.responsavel].preventiva++;
+            if (nat === 'Montagem / Instalação')    { t.montagem++;   t.comissao += rMont; }
+            else if (nat === 'Reparação de avaria') { t.corretiva++;  t.comissao += rCorr; }
+            else                                    { t.preventiva++; t.comissao += rPrev; }
             const fat = faturas.find(f => f.otId === o.id);
-            if (fat) byTec[o.responsavel].total += Number(fat.valorTotal);
+            if (fat) t.total += Number(fat.valorTotal);
         });
-        return Object.values(byTec).sort((a, b) => b.os - a.os);
-    }, [ordens, faturas]);
+        return Object.values(byTec).sort((a, b) => b.comissao - a.comissao);
+    }, [ordens, faturas, empresaConfig]);
 
     /* ── Produtividade (real) — OTs por técnico ── */
     const produtividadeData = useMemo(() => {
@@ -421,8 +429,8 @@ const RelatoriosPage: React.FC = () => {
 
                         <div className="stats-row" style={{ marginBottom: 16 }}>
                             {[
+                                { label: 'Total Comissões',   value: `Kz ${fmtKz(filtComissoes.reduce((s, c) => s + c.comissao, 0))}`, cls: 'green' },
                                 { label: 'Total Faturado',    value: `Kz ${fmtKz(filtComissoes.reduce((s, c) => s + c.total, 0))}`, cls: 'blue' },
-                                { label: 'Técnicos de Campo', value: filtComissoes.filter(c => c.tipo === 'Técnico Campo').length },
                                 { label: 'OT Concluídas',     value: filtComissoes.reduce((s, c) => s + c.os, 0) },
                             ].map(s => (
                                 <div key={s.label} className="stat-card">
@@ -434,9 +442,9 @@ const RelatoriosPage: React.FC = () => {
 
                         <div className="table-container">
                             <table className="data-table">
-                                <thead><tr><th>Nome</th><th>Perfil</th><th style={{ textAlign: 'center' }}>Total OT</th><th style={{ textAlign: 'center' }}>Montagem</th><th style={{ textAlign: 'center' }}>Preventiva</th><th style={{ textAlign: 'center' }}>Corretiva</th><th style={{ textAlign: 'right', fontWeight: 800 }}>Faturado (Kz)</th></tr></thead>
+                                <thead><tr><th>Nome</th><th>Perfil</th><th style={{ textAlign: 'center' }}>Total OT</th><th style={{ textAlign: 'center' }}>Montagem</th><th style={{ textAlign: 'center' }}>Preventiva</th><th style={{ textAlign: 'center' }}>Corretiva</th><th style={{ textAlign: 'right' }}>Faturado (Kz)</th><th style={{ textAlign: 'right', fontWeight: 800 }}>Comissão (Kz)</th></tr></thead>
                                 <tbody>
-                                    {filtComissoes.length === 0 && <tr><td colSpan={7}><div className="empty-state">Sem OT concluídas registadas.</div></td></tr>}
+                                    {filtComissoes.length === 0 && <tr><td colSpan={8}><div className="empty-state">Sem OT concluídas registadas.</div></td></tr>}
                                     {filtComissoes.map(c => (
                                         <tr key={c.nome}>
                                             <td style={{ fontWeight: 700 }}>{c.nome}</td>
@@ -445,7 +453,8 @@ const RelatoriosPage: React.FC = () => {
                                             <td style={{ textAlign: 'center' }}>{c.montagem}</td>
                                             <td style={{ textAlign: 'center' }}>{c.preventiva}</td>
                                             <td style={{ textAlign: 'center' }}>{c.corretiva}</td>
-                                            <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--green)' }}>{fmtKz(c.total)}</td>
+                                            <td style={{ textAlign: 'right', color: 'var(--text-muted)' }}>{fmtKz(c.total)}</td>
+                                            <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--green)' }}>{fmtKz(c.comissao)}</td>
                                         </tr>
                                     ))}
                                 </tbody>

@@ -282,7 +282,13 @@ const ConfiguracoesPage: React.FC = () => {
         decimals: empresaConfig.casasDecimais !== undefined ? String(empresaConfig.casasDecimais) : initMoeda.decimals,
         dateFormat: empresaConfig.formatoData || initMoeda.dateFormat,
     }));
-    const [comissoes, setComissoes] = useState(initComissoes);
+    const [comissoes, setComissoes] = useState(() => ({
+        montagem: String(empresaConfig.comissaoMontagem ?? initComissoes.montagem),
+        preventiva: String(empresaConfig.comissaoPreventiva ?? initComissoes.preventiva),
+        corretiva: String(empresaConfig.comissaoCorretiva ?? initComissoes.corretiva),
+        remota: String(empresaConfig.comissaoRemota ?? initComissoes.remota),
+        vendaPercent: String(empresaConfig.comissaoVendaPercentagem ?? initComissoes.vendaPercent),
+    }));
     const [seguranca, setSeguranca] = useState({
         minPassword: String(empresaConfig.minPasswordLength ?? 8),
         sessionExpiry: String(empresaConfig.sessionExpiryMinutes ?? 60),
@@ -326,6 +332,12 @@ const ConfiguracoesPage: React.FC = () => {
                 sessionExpiryMinutes: Number(seguranca.sessionExpiry),
                 twoFactorEnabled: seguranca.twoFactor,
                 accessLogEnabled: seguranca.accessLog,
+                // Comissões (issue #101)
+                comissaoMontagem: Number(comissoes.montagem),
+                comissaoPreventiva: Number(comissoes.preventiva),
+                comissaoCorretiva: Number(comissoes.corretiva),
+                comissaoRemota: Number(comissoes.remota),
+                comissaoVendaPercentagem: Number(comissoes.vendaPercent),
             });
         } catch (e) { console.error('Erro ao guardar empresa', e); }
         setDirty(false);
@@ -351,7 +363,13 @@ const ConfiguracoesPage: React.FC = () => {
             decimals: empresaConfig.casasDecimais !== undefined ? String(empresaConfig.casasDecimais) : initMoeda.decimals,
             dateFormat: empresaConfig.formatoData || initMoeda.dateFormat,
         });
-        setComissoes(initComissoes);
+        setComissoes({
+            montagem: String(empresaConfig.comissaoMontagem ?? initComissoes.montagem),
+            preventiva: String(empresaConfig.comissaoPreventiva ?? initComissoes.preventiva),
+            corretiva: String(empresaConfig.comissaoCorretiva ?? initComissoes.corretiva),
+            remota: String(empresaConfig.comissaoRemota ?? initComissoes.remota),
+            vendaPercent: String(empresaConfig.comissaoVendaPercentagem ?? initComissoes.vendaPercent),
+        });
         setSeguranca({
             minPassword: String(empresaConfig.minPasswordLength ?? 8),
             sessionExpiry: String(empresaConfig.sessionExpiryMinutes ?? 60),

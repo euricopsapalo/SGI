@@ -254,6 +254,9 @@ export interface EmpresaConfig {
     // Segurança (issue #100)
     minPasswordLength?: number; sessionExpiryMinutes?: number;
     twoFactorEnabled?: boolean; accessLogEnabled?: boolean;
+    // Comissões (issue #101)
+    comissaoMontagem?: number; comissaoPreventiva?: number; comissaoCorretiva?: number;
+    comissaoRemota?: number; comissaoVendaPercentagem?: number;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -691,6 +694,11 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         sessionExpiryMinutes: c.sessionExpiryMinutes !== undefined ? Number(c.sessionExpiryMinutes) : 60,
                         twoFactorEnabled: !!c.twoFactorEnabled,
                         accessLogEnabled: c.accessLogEnabled !== undefined ? !!c.accessLogEnabled : true,
+                        comissaoMontagem: c.comissaoMontagem !== undefined ? Number(c.comissaoMontagem) : 80,
+                        comissaoPreventiva: c.comissaoPreventiva !== undefined ? Number(c.comissaoPreventiva) : 40,
+                        comissaoCorretiva: c.comissaoCorretiva !== undefined ? Number(c.comissaoCorretiva) : 50,
+                        comissaoRemota: c.comissaoRemota !== undefined ? Number(c.comissaoRemota) : 25,
+                        comissaoVendaPercentagem: c.comissaoVendaPercentagem !== undefined ? Number(c.comissaoVendaPercentagem) : 3,
                     };
                     setEmpresaConfig(ec);
                     setTaxaIvaGlobal(Number(c.taxaIva ?? 0));
@@ -1232,6 +1240,11 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 sessionExpiryMinutes: data.sessionExpiryMinutes !== undefined ? Number(data.sessionExpiryMinutes) : 60,
                 twoFactorEnabled: !!data.twoFactorEnabled,
                 accessLogEnabled: data.accessLogEnabled !== undefined ? !!data.accessLogEnabled : true,
+                comissaoMontagem: data.comissaoMontagem !== undefined ? Number(data.comissaoMontagem) : 80,
+                comissaoPreventiva: data.comissaoPreventiva !== undefined ? Number(data.comissaoPreventiva) : 40,
+                comissaoCorretiva: data.comissaoCorretiva !== undefined ? Number(data.comissaoCorretiva) : 50,
+                comissaoRemota: data.comissaoRemota !== undefined ? Number(data.comissaoRemota) : 25,
+                comissaoVendaPercentagem: data.comissaoVendaPercentagem !== undefined ? Number(data.comissaoVendaPercentagem) : 3,
             };
             setEmpresaConfig(ec);
             setTaxaIvaGlobal(Number(data.taxaIva ?? 0));
