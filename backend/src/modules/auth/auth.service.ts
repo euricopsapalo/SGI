@@ -1,5 +1,6 @@
 import { Injectable, Logger, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { randomBytes } from 'crypto';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
@@ -115,8 +116,10 @@ export class AuthService {
         const user = await this.userRepo.findOne({ where: { email } });
         // Always return the same message to avoid exposing which emails exist
         if (!user) return { message: 'Se o email existir, receberá as instruções de recuperação.' };
-        const token = Math.random().toString(36).substring(2, 10).toUpperCase();
-        const expiry = new Date(Date.now() + 3600000); // 1 hour
+        // Token criptograficamente forte (256 bits) — não previsível (issue #25).
+        const token = randomBytes(32).toString('hex');
+        const expiry = new Date(Date.now() + 30 * 60 * 1000); // 30 min
+        // Ao gravar, sobrescreve qualquer token anterior deste utilizador (invalida-o).
         await this.userRepo.update(user.id, { resetToken: token, resetTokenExpiry: expiry });
         try {
             await this.mailService.sendPasswordReset(user.email, user.nome, token);
