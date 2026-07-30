@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { FaturaNew } from './fatura-new.entity';
+import { Fatura } from './fatura.entity';
 
 @Injectable()
 export class FaturasService {
     constructor(
-        @InjectRepository(FaturaNew)
-        private readonly repo: Repository<FaturaNew>,
+        @InjectRepository(Fatura)
+        private readonly repo: Repository<Fatura>,
     ) {}
 
     findAll() {

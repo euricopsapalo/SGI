@@ -1,14 +1,14 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
-import { FaturaNew } from './fatura-new.entity';
+import { Fatura } from './fatura.entity';
 
 @Entity('fatura_linhas')
 export class FaturaLinha {
     @PrimaryGeneratedColumn()
     id: number;
 
-    @ManyToOne(() => FaturaNew, (f) => f.linhas, { onDelete: 'CASCADE' })
+    @ManyToOne(() => Fatura, (f) => f.linhas, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'fatura_id' })
-    fatura: FaturaNew;
+    fatura: Fatura;
 
     @Column({ length: 300 })
     descricao: string;
