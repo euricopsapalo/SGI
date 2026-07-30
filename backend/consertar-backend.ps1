@@ -98,7 +98,7 @@ docker logs sgi_backend --tail 30
 # 11. Testar API
 Write-Host "[11] Testando API..."
 try {
-    $response = Invoke-WebRequest -Uri "http://localhost:3001/api/messages" -UseBasicParsing -TimeoutSec 5
+    $response = Invoke-WebRequest -Uri "http://localhost:3001/api/configuracao" -UseBasicParsing -TimeoutSec 5
     Write-Host "  SUCESSO: API respondeu! Status: $($response.StatusCode)"
 } catch {
     Write-Host "  FALHA: API nao respondeu"
@@ -106,4 +106,4 @@ try {
 }
 
 Write-Host "`nPROCESSO CONCLUIDO!"
-Write-Host "Acesse: http://localhost:3001/api/messages"
+Write-Host "Acesse: http://localhost:3001/api/configuracao"
