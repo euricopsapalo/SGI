@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Encomenda, EstadoEncomenda } from './encomenda.entity';
 import { EncomendaLinha } from './encomenda-linha.entity';
 import { Rececao, RececaoItem } from './rececao.entity';
@@ -23,6 +23,8 @@ export class EncomendaService {
 
         @InjectRepository(Artigo)
         private readonly artigoRepo: Repository<Artigo>,
+
+        private readonly dataSource: DataSource,
     ) {}
 
     private loadRelations = ['fornecedor', 'linhas', 'rececoes', 'rececoes.itens'];
@@ -105,54 +107,69 @@ export class EncomendaService {
         operador: string,
         armazem: string,
     ) {
-        const encomenda = await this.findOne(id);
-        if (!encomenda) throw new NotFoundException(`Encomenda ${id} não encontrada`);
+        // Toda a receção (cabeçalho + linhas + acumulados + stock + estado) numa
+        // única transação — se qualquer passo falhar, faz rollback (issue #37).
+        await this.dataSource.transaction(async (manager) => {
+            const encRepo = manager.getRepository(Encomenda);
+            const linhaRepo = manager.getRepository(EncomendaLinha);
+            const rececaoRepo = manager.getRepository(Rececao);
+            const rececaoItemRepo = manager.getRepository(RececaoItem);
+            const artigoRepo = manager.getRepository(Artigo);
 
-        // 1. Criar cabeçalho de receção
-        const rececao = this.rececaoRepo.create({
-            encomenda: { id } as Encomenda,
-            dataHora: new Date(),
-            operador,
-            armazem,
-            guiaRemessa: guiaRemessa.trim(),
-            estado: 'Ativa',
-        });
+            const encomenda = await encRepo.findOne({ where: { id }, relations: this.loadRelations });
+            if (!encomenda) throw new NotFoundException(`Encomenda ${id} não encontrada`);
 
-        // 2. Criar linhas de receção + atualizar acumulado + stock
-        const itens: RececaoItem[] = [];
-        for (const rec of recebidas) {
-            const artigoIdNum = Number(rec.artigoId);
-            const linha = encomenda.linhas.find((l) => Number(l.artigoId) === artigoIdNum);
-            if (!linha) continue;
+            // 1. Criar cabeçalho de receção
+            const rececao = rececaoRepo.create({
+                encomenda: { id } as Encomenda,
+                dataHora: new Date(),
+                operador,
+                armazem,
+                guiaRemessa: guiaRemessa.trim(),
+                estado: 'Ativa',
+            });
 
-            // Linha da receção
-            itens.push(this.rececaoItemRepo.create({
-                artigoId: rec.artigoId,
-                codigo: linha.codigo,
-                descricao: linha.descricao,
-                qtd: rec.qtd,
-                unidade: linha.unidade ?? 'UN',
-            }));
+            // 2. Criar linhas de receção + atualizar acumulado + stock
+            const itens: RececaoItem[] = [];
+            for (const rec of recebidas) {
+                const artigoIdNum = Number(rec.artigoId);
+                const linha = encomenda.linhas.find((l) => Number(l.artigoId) === artigoIdNum);
+                if (!linha) continue;
 
-            // Acumular qtdRecebida na linha da encomenda
-            const novaQtd = Number(linha.qtdRecebida) + rec.qtd;
-            await this.linhaRepo.update(linha.id, { qtdRecebida: novaQtd });
+                itens.push(rececaoItemRepo.create({
+                    artigoId: rec.artigoId,
+                    codigo: linha.codigo,
+                    descricao: linha.descricao,
+                    qtd: rec.qtd,
+                    unidade: linha.unidade ?? 'UN',
+                }));
 
-            // Atualizar stock
-            const artigo = await this.artigoRepo.findOne({ where: { id: artigoIdNum } });
-            if (artigo) {
-                await this.artigoRepo.update(artigoIdNum, {
-                    existencia: Number(artigo.existencia) + rec.qtd,
-                    stockEncomendado: Math.max(0, Number(artigo.stockEncomendado) - rec.qtd),
-                });
+                const novaQtd = Number(linha.qtdRecebida) + rec.qtd;
+                await linhaRepo.update(linha.id, { qtdRecebida: novaQtd });
+
+                const artigo = await artigoRepo.findOne({ where: { id: artigoIdNum } });
+                if (artigo) {
+                    await artigoRepo.update(artigoIdNum, {
+                        existencia: Number(artigo.existencia) + rec.qtd,
+                        stockEncomendado: Math.max(0, Number(artigo.stockEncomendado) - rec.qtd),
+                    });
+                }
             }
-        }
 
-        rececao.itens = itens;
-        await this.rececaoRepo.save(rececao);
+            rececao.itens = itens;
+            await rececaoRepo.save(rececao);
 
-        // 3. Recalcular estado da encomenda
-        await this.recalcularEstado(id);
+            // 3. Recalcular estado da encomenda (com as linhas já atualizadas nesta transação)
+            const atual = await encRepo.findOne({ where: { id }, relations: ['linhas'] });
+            const linhas = atual?.linhas ?? [];
+            const todasRecebidas = linhas.every((l) => Number(l.qtdRecebida) >= Number(l.qtdEncomendada));
+            const algumaRecebida = linhas.some((l) => Number(l.qtdRecebida) > 0);
+            if (todasRecebidas) {
+                await encRepo.update(id, { estado: EstadoEncomenda.RECEBIDA });
+            } else if (algumaRecebida) {
+                await encRepo.update(id, { estado: EstadoEncomenda.PARCIAL });
+            }
+        });
 
         return this.findOne(id);
     }
