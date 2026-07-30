@@ -1,10 +1,13 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ParqueService } from './parque.service';
 import { CreateModeloEquipamentoDto } from './dto/create-modelo-equipamento.dto';
 import { UpdateModeloEquipamentoDto } from './dto/update-modelo-equipamento.dto';
 import { CreateEquipInstaladoDto } from './dto/create-equip-instalado.dto';
 import { UpdateEquipInstaladoDto } from './dto/update-equip-instalado.dto';
 
+@ApiTags('modelos-equipamento')
+@ApiBearerAuth('access-token')
 @Controller('modelos-equipamento')
 export class ModelosEquipamentoController {
     constructor(private readonly service: ParqueService) {}
@@ -25,6 +28,8 @@ export class ModelosEquipamentoController {
     remove(@Param('id', ParseIntPipe) id: number) { return this.service.removeModelo(id); }
 }
 
+@ApiTags('equip-instalados')
+@ApiBearerAuth('access-token')
 @Controller('equip-instalados')
 export class EquipInstaladosController {
     constructor(private readonly service: ParqueService) {}

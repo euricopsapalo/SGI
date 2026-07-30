@@ -1,8 +1,11 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { TabelasSistemaService } from './tabelas-sistema.service';
 import { CreateModoPagamentoDto } from './dto/create-modo-pagamento.dto';
 import { UpdateModoPagamentoDto } from './dto/update-modo-pagamento.dto';
 
+@ApiTags('modos-pagamento')
+@ApiBearerAuth('access-token')
 @Controller('modos-pagamento')
 export class ModosPagamentoController {
     constructor(private readonly svc: TabelasSistemaService) {}

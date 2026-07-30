@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import * as compression from 'compression';
 import { AppModule } from './app.module';
@@ -17,7 +18,28 @@ async function bootstrap() {
     transform: true,
     transformOptions: { enableImplicitConversion: true },
   }));
+
+  // Documentação OpenAPI/Swagger — apenas fora de produção (issue #40)
+  if (process.env.NODE_ENV !== 'production') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('SGI — API')
+      .setDescription('Sistema de Gestão de Intervenções (AQUATEX). Documentação interactiva dos endpoints REST.')
+      .setVersion('1.0')
+      .addBearerAuth(
+        { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+        'access-token',
+      )
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document, {
+      swaggerOptions: { persistAuthorization: true },
+    });
+  }
+
   await app.listen(3001);
   console.log('Backend rodando na porta 3001');
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('Swagger disponível em http://localhost:3001/api/docs');
+  }
 }
 bootstrap();

@@ -1,8 +1,11 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ArmazensService } from './armazens.service';
 import { CreateArmazemDto } from './dto/create-armazem.dto';
 import { UpdateArmazemDto } from './dto/update-armazem.dto';
 
+@ApiTags('armazens')
+@ApiBearerAuth('access-token')
 @Controller('armazens')
 export class ArmazensController {
     constructor(private readonly service: ArmazensService) {}

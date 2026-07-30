@@ -1,8 +1,11 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { TabelasSistemaService } from './tabelas-sistema.service';
 import { CreateMoedaDto } from './dto/create-moeda.dto';
 import { UpdateMoedaDto } from './dto/update-moeda.dto';
 
+@ApiTags('moedas')
+@ApiBearerAuth('access-token')
 @Controller('moedas')
 export class MoedasController {
     constructor(private readonly service: TabelasSistemaService) {}

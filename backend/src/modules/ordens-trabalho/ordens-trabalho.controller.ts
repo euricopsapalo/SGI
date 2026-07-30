@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe, GoneException, Query, Request } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { OrdensTrabalhoService } from './ordens-trabalho.service';
 import { CreateOrdemTrabalhoDto } from './dto/create-ordem-trabalho.dto';
 import { UpdateOrdemTrabalhoDto } from './dto/update-ordem-trabalho.dto';
@@ -11,6 +12,8 @@ import {
     FinalizarOtDto,
 } from './dto/transicao-ot.dto';
 
+@ApiTags('ordens')
+@ApiBearerAuth('access-token')
 @Controller('ordens')
 export class OrdensTrabalhoController {
     constructor(private readonly service: OrdensTrabalhoService) {}

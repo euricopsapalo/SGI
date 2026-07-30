@@ -1,8 +1,11 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { TabelasSistemaService } from './tabelas-sistema.service';
 import { CreateTaxaIvaDto } from './dto/create-taxa-iva.dto';
 import { UpdateTaxaIvaDto } from './dto/update-taxa-iva.dto';
 
+@ApiTags('taxas-iva')
+@ApiBearerAuth('access-token')
 @Controller('taxas-iva')
 export class TaxasIvaController {
     constructor(private readonly service: TabelasSistemaService) {}
