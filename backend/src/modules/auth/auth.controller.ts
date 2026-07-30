@@ -29,7 +29,8 @@ export class AuthController {
 
     @ApiOperation({ summary: 'Pedir recuperação de password (envia código por email)' })
     @ApiResponse({ status: 200, description: 'Se o email existir, é enviado um código de recuperação.' })
-    @Throttle({ default: { limit: 5, ttl: 60000 } })
+    // Anti-abuso: 5 pedidos/hora por IP (issue #25)
+    @Throttle({ default: { limit: 5, ttl: 3600000 } })
     @Public()
     @Post('forgot-password')
     @HttpCode(200)
