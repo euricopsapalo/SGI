@@ -112,6 +112,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                             <div
                                 key={o.value}
                                 role="option"
+                                aria-selected={o.value === value}
                                 onClick={() => { onChange(o.value); setOpen(false); setSearch(''); }}
                                 style={{
                                     padding: '7px 10px', cursor: 'pointer',

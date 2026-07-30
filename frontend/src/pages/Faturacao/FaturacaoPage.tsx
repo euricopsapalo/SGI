@@ -1,14 +1,14 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
 import {
     useGlobal,
-    Fatura, FaturaEstado, FaturaLinha, EmpresaConfig,
+    Fatura, FaturaEstado, FaturaLinha,
 } from '../../contexts/GlobalContext';
 import {
     Search, Plus, X, Printer, Check, AlertCircle, FileText, Filter, Download,
-    ChevronDown, Eye,
+    Eye,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 
@@ -28,7 +28,7 @@ const ESTADO_BADGE: Record<FaturaEstado, { bg: string; color: string }> = {
 interface EmitirModalProps { onClose: () => void; onSave: (f: Omit<Fatura, 'id'>) => void; }
 
 const EmitirDocumentoModal: React.FC<EmitirModalProps> = ({ onClose, onSave }) => {
-    const { ordens, clientes, artigos, equipInstalados, tiposDocumento, taxaIvaGlobal, empresaConfig, fmtMoney, fmtDate, simboloMoeda } = useGlobal();
+    const { ordens, clientes, artigos, equipInstalados, tiposDocumento, taxaIvaGlobal, empresaConfig, fmtMoney } = useGlobal();
 
     const [tipoDoc,       setTipoDoc]    = useState(tiposDocumento[0]?.codigo ?? 'FAT');
     const [otId,          setOtId]       = useState('');
@@ -269,7 +269,7 @@ interface FaturaDetalheProps {
 }
 
 const FaturaDetalhe: React.FC<FaturaDetalheProps> = ({ fatura, nomeCliente, otDesc, onClose, onPagar, onAnular }) => {
-    const { empresaConfig, fmtMoney, fmtDate, simboloMoeda } = useGlobal();
+    const { empresaConfig, fmtMoney, fmtDate } = useGlobal();
     const [confirmAnular,  setConfirmAnular]  = useState(false);
     const [motivoAnular,   setMotivoAnular]   = useState('');
     const [confirmPagar,   setConfirmPagar]   = useState(false);
@@ -559,7 +559,7 @@ const COLS_FATURA: ExportCol[] = [
 
 /* ══ Page ════════════════════════════════════════════════════ */
 const FaturacaoPage: React.FC = () => {
-    const { faturas, addFatura, updateFatura, clientes, ordens, empresaConfig, fmtMoney, fmtDate, simboloMoeda } = useGlobal();
+    const { faturas, addFatura, updateFatura, clientes, ordens, empresaConfig, fmtMoney, fmtDate } = useGlobal();
 
     const [search,       setSearch]       = useState('');
     const [filterEstado, setFilterEstado] = useState('');

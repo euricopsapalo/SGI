@@ -353,13 +353,14 @@ const AgendaPage: React.FC = () => {
             const lastDay = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
             let weekStart = startOfWeek(sm);
             while (isoDate(weekStart) <= isoDate(lastDay)) {
-                const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+                const ws = weekStart; // snapshot por iteração (evita closures sobre a variável do loop)
+                const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
                 const weekOTs = days.flatMap(day => byDateP[isoDate(day)] ?? []);
                 if (weekOTs.length > 0) {
                     const byDateW: Record<string, OrdemTrabalho[]> = {};
                     weekOTs.forEach(ot => { const dt = otDate(ot); if (dt) { if (!byDateW[dt]) byDateW[dt] = []; byDateW[dt].push(ot); } });
-                    const sf = weekStart.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
-                    const ef = addDays(weekStart, 6).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
+                    const sf = ws.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
+                    const ef = addDays(ws, 6).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
                     sectionsHTML += buildSection(days, weekOTs, byDateW, `Semana de ${sf} a ${ef}`);
                 }
                 weekStart = addDays(weekStart, 7);

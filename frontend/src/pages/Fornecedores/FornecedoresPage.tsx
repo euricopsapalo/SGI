@@ -29,7 +29,7 @@ const fRF = (d?: string) => {
 const openPrintF = (html: string, title: string) => {
     const w = window.open('', '_blank', 'width=900,height=700');
     if (!w) return;
-    w.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>${RF_CSS}</style></head><body>${html}<script>window.onload=()=>window.print();<\/script></body></html>`);
+    w.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>${RF_CSS}</style></head><body>${html}<script>window.onload=()=>window.print();</script></body></html>`);
     w.document.close();
 };
 

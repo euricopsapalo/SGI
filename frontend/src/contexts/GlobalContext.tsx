@@ -602,8 +602,6 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
     const [faturas, setFaturas] = useState<Fatura[]>([]);
 
-    const today = () => new Date().toISOString().split('T')[0];
-
     /* ── Initial data load ──────────────────────────────────── */
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const reloadData = React.useCallback(async () => {

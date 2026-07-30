@@ -254,7 +254,7 @@ const RelatoriosPage: React.FC = () => {
                 utilizador: m.usuario ?? '',
             };
         }),
-        [movimentosStock, artigos, armazens]
+        [movimentosStock, artigos, armazens, fmtDate]
     );
 
     const filtMovimentos = useMemo(() =>

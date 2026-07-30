@@ -124,7 +124,7 @@ function printEquip(
     const html = buildEquipHtml(eq, clientes, modelosEquipamento, manut);
     const w = window.open('', '_blank', 'width=820,height=900');
     if (!w) return;
-    w.document.write(html.replace('</body></html>', '<script>window.onload=()=>window.print();<\/script></body></html>'));
+    w.document.write(html.replace('</body></html>', '<script>window.onload=()=>window.print();</script></body></html>'));
     w.document.close();
     w.focus();
 }
@@ -200,93 +200,7 @@ function printHistoricoEquip(
     const html = buildHistoricoEquipHtml(eq, ots, cli, mod, empresa);
     const w = window.open('', '_blank', 'width=1100,height=900');
     if (!w) return;
-    w.document.write(html.replace('</body></html>', '<script>window.onload=()=>window.print();<\/script></body></html>'));
-    w.document.close(); w.focus();
-}
-
-function buildHistoricoGeralHtml(
-    ots: OrdemTrabalho[],
-    equipInstalados: EquipInstalado[],
-    clientes: Cliente[],
-    modelosEquipamento: ModeloEquipamento[],
-    dateFrom: string,
-    dateTo: string,
-    equipId: string,
-    empresa: string,
-): string {
-    const refDate = (o: OrdemTrabalho) => o.dataAgendada || '';
-    const filtrado = ots
-        .filter(o => {
-            const d = refDate(o);
-            const equipMatch = !equipId || String(o.equipInstaladoId) === String(equipId);
-            return equipMatch && (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo);
-        })
-        .sort((a, b) => refDate(a).localeCompare(refDate(b)));
-
-    // Group by equipment
-    const grupos = new Map<string, OrdemTrabalho[]>();
-    for (const o of filtrado as OrdemTrabalho[]) {
-        const key = String(o.equipInstaladoId);
-        if (!grupos.has(key)) grupos.set(key, []);
-        grupos.get(key)!.push(o);
-    }
-
-    let body = '';
-    for (const [eqId, eqOts] of Array.from(grupos.entries())) {
-        const eq = equipInstalados.find(e => String(e.id) === eqId);
-        const cli = clientes.find(c => String(c.id) === String(eq?.clienteId));
-        const mod = modelosEquipamento.find(m => String(m.id) === String(eq?.modeloId));
-        const rows = eqOts.map(o => `<tr>
-            <td style="font-family:monospace">${o.id}</td>
-            <td>${o.tipo === 'pontual' ? 'Pontual' : 'Programada'}</td>
-            <td>${o.naturezaIntervencao ?? "—"}${isCorretivo(o) ? ' <span class="corr">●</span>' : ''}</td>
-            <td style="color:${o.estado === 'Finalizada' ? '#16a34a' : o.estado === 'Em execução' ? '#eab308' : o.estado === 'Adiada' ? '#f97316' : o.estado === 'Confirmada' ? '#7c3aed' : o.estado === 'Registada' ? '#6b7280' : '#2563eb'};font-weight:600">${o.estado}</td>
-            <td>${fD(refDate(o))}</td>
-            <td>${fD(o.dataFim)}</td>
-            <td>${o.descricao || '—'}</td>
-        </tr>`).join('');
-        body += `<div class="eq-group">
-  <div class="sec">Equip. ${eqId} — ${mod?.nome ?? '—'} &nbsp;|&nbsp; Cliente: ${cli?.nome ?? '—'} &nbsp;|&nbsp; Série: ${eq?.nrSerie ?? '—'}</div>
-  <table>
-    <thead><tr><th>ID OT</th><th>Tipo OT</th><th>Tipo Trabalho</th><th>Estado</th><th>Data Prog.</th><th>Data Fim</th><th>Descrição</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-</div>`;
-    }
-
-    const periodo = dateFrom || dateTo
-        ? `Período: ${dateFrom ? fD(dateFrom) : '—'} a ${dateTo ? fD(dateTo) : '—'}`
-        : 'Todos os períodos';
-
-    return `<!DOCTYPE html>
-<html lang="pt"><head><meta charset="UTF-8"><title>Relatório de Intervenções</title>
-<style>${PRINT_CSS}</style></head><body>
-<div class="hrow">
-  <div>
-    <h1>${empresa} — Relatório de Intervenções</h1>
-    <div class="sub">${periodo} &nbsp;|&nbsp; Impresso em ${new Date().toLocaleString('pt-PT')}</div>
-  </div>
-  <span class="badge">${filtrado.length} intervenção(ões)</span>
-</div>
-${body || '<p style="color:#999;text-align:center">Nenhuma intervenção encontrada no período seleccionado.</p>'}
-<div class="footer">${empresa} &nbsp;&bull;&nbsp; Sistema de Gestão de Intervenções</div>
-</body></html>`;
-}
-
-function printHistoricoGeral(
-    ots: OrdemTrabalho[],
-    equipInstalados: EquipInstalado[],
-    clientes: Cliente[],
-    modelosEquipamento: ModeloEquipamento[],
-    dateFrom: string,
-    dateTo: string,
-    equipId: string,
-    empresa: string,
-) {
-    const html = buildHistoricoGeralHtml(ots, equipInstalados, clientes, modelosEquipamento, dateFrom, dateTo, equipId, empresa);
-    const w = window.open('', '_blank', 'width=1100,height=900');
-    if (!w) return;
-    w.document.write(html.replace('</body></html>', '<script>window.onload=()=>window.print();<\/script></body></html>'));
+    w.document.write(html.replace('</body></html>', '<script>window.onload=()=>window.print();</script></body></html>'));
     w.document.close(); w.focus();
 }
 
@@ -436,7 +350,7 @@ function printEstadoParque(
     const html = buildEstadoParqueHtml(equipInstalados, ordens, clientes, modelosEquipamento, empresa, seccoes);
     const w = window.open('', '_blank', 'width=1000,height=900');
     if (!w) return;
-    w.document.write(html.replace('</body></html>', '<script>window.onload=()=>window.print();<\/script></body></html>'));
+    w.document.write(html.replace('</body></html>', '<script>window.onload=()=>window.print();</script></body></html>'));
     w.document.close(); w.focus();
 }
 
