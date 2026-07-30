@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
 import { DatabaseModule } from './database/database.module';
 import { UsersModule } from './modules/users/users.module';
@@ -26,6 +28,12 @@ import { HealthModule } from './modules/health/health.module';
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    // Rate limiting global — 60 pedidos/min por IP e por endpoint (issue #41).
+    // Desativado em ambiente de teste (e2e) para não gerar 429 nas suites.
+    ThrottlerModule.forRoot({
+      throttlers: [{ ttl: 60000, limit: 60 }],
+      skipIf: () => process.env.NODE_ENV === 'test',
+    }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST || 'postgres',
@@ -59,6 +67,10 @@ import { HealthModule } from './modules/health/health.module';
     SeedModule,
     FaturasFornecedorModule,
     HealthModule,
+  ],
+  providers: [
+    // Aplica o ThrottlerGuard globalmente (issue #41)
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}

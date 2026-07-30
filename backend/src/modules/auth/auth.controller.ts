@@ -1,4 +1,5 @@
 import { Controller, Post, Get, Body, HttpCode, Request } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { Public } from './public.decorator';
 import { LoginDto } from './dto/login.dto';
@@ -11,6 +12,8 @@ import { TwoFactorCodeDto } from './dto/two-factor-code.dto';
 export class AuthController {
     constructor(private readonly authService: AuthService) {}
 
+    // Anti brute-force: 5 tentativas/min por IP (issue #41)
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
     @Public()
     @Post('login')
     @HttpCode(200)
@@ -18,6 +21,7 @@ export class AuthController {
         return this.authService.login(dto.email, dto.password, dto.code);
     }
 
+    @Throttle({ default: { limit: 5, ttl: 60000 } })
     @Public()
     @Post('forgot-password')
     @HttpCode(200)
