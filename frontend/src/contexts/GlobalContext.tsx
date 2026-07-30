@@ -108,7 +108,9 @@ export const OT_PRIORIDADES: OTPrioridade[] = ['Normal', 'Alta', 'Urgente'];
 export interface OrdemTrabalho {
     id: string; tipo: OTTipo; equipInstaladoId: string; clienteId: string;
     descricao: string; previsaoTempo: number; periodicidade?: string;
-    planoId?: string; responsavel: string;
+    planoId?: string;
+    /** Derivado das FKs (executadoPor/registadoPor) — não é persistido (issue #76). */
+    responsavel?: string;
     maosDeObra: OTMaoObra[];
     artigos: OTArtigo[];
     orgao?: string; sintoma?: string; causa?: string;
@@ -330,7 +332,7 @@ const normOrdem = (o: any): OrdemTrabalho => ({
     equipInstaladoId: o.equipInstaladoId?.toString() ?? '', descricao: o.descricao,
     previsaoTempo: Number(o.previsaoTempo), periodicidade: o.periodicidade,
     planoId: o.planoId?.toString(),
-    responsavel: o.responsavel ?? '', maosDeObra: (o.maosObra ?? []).map((m: any) => ({ funcao: m.funcao, custo: Number(m.custo), hora: m.hora })),
+    responsavel: o.executadoPor?.nome ?? o.registadoPor?.nome ?? '', maosDeObra: (o.maosObra ?? []).map((m: any) => ({ funcao: m.funcao, custo: Number(m.custo), hora: m.hora })),
     artigos: (o.artigos ?? []).map((a: any) => ({ artigoId: a.artigoId?.toString() ?? '', descricao: a.descricao, quantidade: Number(a.quantidade), preco: Number(a.preco), codigoIva: a.codigoIva ?? undefined, taxaIva: a.taxaIva != null ? Number(a.taxaIva) : undefined })),
     orgao: o.orgao, sintoma: o.sintoma, causa: o.causa,
     dataInicio: o.dataInicio, dataFim: o.dataFim,

@@ -36,7 +36,7 @@ describe('OT Ciclo de Estados (RF-OT-001) E2E', () => {
 
     beforeAll(async () => {
         store = {
-            1: { id: 1, estado: OTEstado.REGISTADA, descricao: 'OT', responsavel: 'r',
+            1: { id: 1, estado: OTEstado.REGISTADA, descricao: 'OT',
                  dataRegisto: DATA_REGISTO, dataAgendada: DATA_AGENDADA,
                  janelaFim: JANELA_FIM, adiamentos: 0, executadoPorId: 1, artigos: [], tipo: 'pontual' },
         };

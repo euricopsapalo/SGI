@@ -464,11 +464,12 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
     const [previsao, setPrevisao]   = useState(String(ot?.previsaoTempo ?? ''));
     const [periodo, setPeriodo]     = useState(ot?.periodicidade ?? 'Mensal');
     const [planoId, setPlanoId]     = useState(ot?.planoId ?? '');
-    const [responsavel, setResp]    = useState(ot?.responsavel ?? (!ot && isTecnicoCampo ? (currentUser?.tecnicoNome ?? currentUser?.nome ?? '') : ''));
     // RF-OT-002 §3.1 — novos campos da marcação
     const [naturezaIntervencao, setNatureza] = useState<NaturezaIntervencao | ''>((ot?.naturezaIntervencao ?? '') as any);
     const [prioridade, setPrioridade]        = useState<OTPrioridade>(ot?.prioridade ?? 'Normal');
-    const [executadoPorId, setExecutadoPorId] = useState(ot?.executadoPorId ?? '');
+    // Técnico executante (FK) — fonte única do "responsável" (issue #76). Auto-atribui
+    // ao próprio quando um técnico de campo cria a OT.
+    const [executadoPorId, setExecutadoPorId] = useState(ot?.executadoPorId ?? (!ot && isTecnicoCampo ? (currentUser?.tecnicoId ?? '') : ''));
 
     // Mão de obra
     const [maos, setMaos] = useState<OTMaoObra[]>(ot?.maosDeObra ?? []);
@@ -518,7 +519,6 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
         });
     const clienteOpts = clientes.map(c => ({ value: c.id, label: c.nome, sub: c.nif }));
     const tecCampoFkOpts = tecnicos.filter(t => t.ativo).map(t => ({ value: t.id, label: t.nome, sub: funcoesTecnico.find(f => f.id === t.funcaoId)?.descricao }));
-    const tecCampoOpts = tecnicos.filter(t => t.ativo).map(t => ({ value: t.nome, label: t.nome, sub: funcoesTecnico.find(f => f.id === t.funcaoId)?.descricao }));
     const planoOpts = planos.filter(p => p.equipInstaladoId === equipId).map(p => ({ value: p.id, label: p.descricao, sub: `${p.periodicidade} · ${p.previsaoTempo}h` }));
     const catalogOpts = catalog.filter(a => !a.inativo).map(a => {
         const disponivel = a.existencia - a.stockReservado;
@@ -553,11 +553,11 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
         }));
     };
 
-    // Auto-fill mão de obra when responsável is selected (new OT only)
-    const handleRespChange = (nome: string) => {
-        setResp(nome);
+    // Auto-fill mão de obra quando o técnico executante é selecionado (nova OT)
+    const handleExecutadoChange = (id: string) => {
+        setExecutadoPorId(id);
         if (ot) return; // editing — don't override
-        const tec = tecnicos.find(t => t.nome === nome);
+        const tec = tecnicos.find(t => t.id === id);
         if (!tec) return;
         const funcao = funcoesTecnico.find(f => f.id === String(tec.funcaoId));
         if (funcao) setMaos([{ funcao: funcao.descricao, custo: funcao.custo, hora: '08:00' }]);
@@ -588,7 +588,6 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
         if (!naturezaIntervencao) e.natureza = 'Obrigatório';
         if (!equipId)          e.equip  = 'Obrigatório';
         if (!descricao.trim()) e.desc   = 'Obrigatório';
-        if (!responsavel)      e.resp   = 'Obrigatório';
         setErrors(e);
         return Object.keys(e);
     };
@@ -596,7 +595,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
     const buildOT = (): Omit<OrdemTrabalho, 'id'> => ({
         tipo, equipInstaladoId: equipId, clienteId,
         descricao, previsaoTempo: Number(previsao) || 0, periodicidade: tipo === 'periodica' ? periodo : undefined,
-        planoId: planoId || undefined, responsavel,
+        planoId: planoId || undefined,
         maosDeObra: maos, artigos: arts,
         orgao: orgao || undefined, sintoma: sintoma || undefined, causa: causa || undefined,
         dataAgendada: dpI || undefined,
@@ -764,12 +763,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label className="form-label">Técnico de Campo (executante)</label>
-                                        <SearchableSelect options={tecCampoFkOpts} value={executadoPorId} onChange={setExecutadoPorId} placeholder="Por atribuir..." />
-                                    </div>
-                                    <div className="form-group">
-                                        <label className="form-label req">Responsável</label>
-                                        <SearchableSelect options={tecCampoOpts} value={responsavel} onChange={handleRespChange} placeholder="Técnico de campo..." />
-                                        {errors.resp && <span className="form-error"><AlertCircle size={11} /> {errors.resp}</span>}
+                                        <SearchableSelect options={tecCampoFkOpts} value={executadoPorId} onChange={handleExecutadoChange} placeholder="Por atribuir..." />
                                     </div>
                                 </div>
                                 <div className="form-row">

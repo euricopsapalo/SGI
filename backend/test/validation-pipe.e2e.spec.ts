@@ -398,7 +398,6 @@ describe('ValidationPipe E2E — validação de dados de entrada', () => {
           tipo: 'periodica',
           clienteId: 1,
           estado: 'Programada',
-          responsavel: 'João Silva',
           maosObra: [{ funcao: 'Técnico', custo: 5000, hora: '08:00' }],
           artigos: [{ descricao: 'Filtro 10"', quantidade: 2, preco: 2500 }],
         })

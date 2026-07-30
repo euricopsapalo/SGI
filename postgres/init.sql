@@ -399,7 +399,6 @@ CREATE TABLE ordens_trabalho (
     descricao          TEXT         NOT NULL DEFAULT '',
     previsao_tempo     NUMERIC(5,2) NOT NULL DEFAULT 1,
     periodicidade      VARCHAR(50),
-    responsavel        VARCHAR(150),
     orgao              VARCHAR(150),
     sintoma            TEXT,
     causa              TEXT,

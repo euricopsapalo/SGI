@@ -31,7 +31,6 @@ export class CreateOrdemTrabalhoDto {
   @IsString() @IsNotEmpty() descricao: string;
   @IsOptional() @IsNumber() previsaoTempo?: number;
   @IsOptional() @IsString() periodicidade?: string;
-  @IsOptional() @IsString() responsavel?: string;
   @IsOptional() @IsString() orgao?: string;
   @IsOptional() @IsString() sintoma?: string;
   @IsOptional() @IsString() causa?: string;
