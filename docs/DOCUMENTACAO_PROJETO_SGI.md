@@ -203,13 +203,13 @@ SGI/
 | Funcionalidade | Estado | Descricao |
 |---------------|--------|-----------|
 | CRUD de OTs | OK | Criacao, edicao, eliminacao |
-| Workflow de estados | OK | Programado -> Em curso -> Terminado -> Encerrado |
+| Workflow de estados | OK | 6 estados: Registada -> Programada -> Adiada -> Confirmada -> Em execucao -> Finalizada (RF-OT-001..003) |
 | OTs programadas e pontuais | OK | Dois tipos |
 | Modal com 5 tabs | OK | Info, mao de obra, artigos, servicos, gestao |
 | Impressao com assinaturas | OK | Folha de intervencao |
 | Reprogramacao | OK | Historico com motivo e badge R{n} |
 | Menu de contexto | OK | Abrir, mudar estado, reverter |
-| Geracao automatica | OK | Ao terminar OT periodica, cria proxima |
+| Geracao automatica | OK | Ao finalizar OT periodica, cria proxima |
 
 ### 4.5 Planos de Manutencao
 
@@ -223,7 +223,7 @@ SGI/
 | Funcionalidade | Estado | Descricao |
 |---------------|--------|-----------|
 | Vistas dia/semana/mes | OK | Calendario interativo |
-| Drag-to-reschedule | OK | Arrasto para reprogramar (apenas Programado) |
+| Drag-to-reschedule | OK | Arrasto para reprogramar/adiar (apenas Programada) |
 | Modal de motivo | OK | Obrigatorio ao reprogramar |
 
 ### 4.7 Stock e Armazens
@@ -372,11 +372,15 @@ SGI/
 | GET | /:id | Obter por ID |
 | POST | / | Criar OT |
 | PUT | /:id | Atualizar |
-| PUT | /:id/emitir | Emitir (mudar para Em Curso) |
-| PUT | /:id/terminar | Terminar |
-| PUT | /:id/encerrar | Encerrar |
-| POST | /:id/reprogramar | Reprogramar com motivo |
+| PUT | /:id/agendar | Registada -> Programada |
+| PUT | /:id/confirmar | Programada/Adiada -> Confirmada (exige dataExecucao + executadoPor) |
+| PUT | /:id/adiar | Adiar com nova data + motivo (>= limite requer aprovacao admin) |
+| PUT | /:id/iniciar | Confirmada -> Em execucao |
+| PUT | /:id/finalizar | Em execucao -> Finalizada (OT periodica gera a proxima) |
+| POST | /:id/reprogramar | Alias de adiar (mantido por compatibilidade) |
 | DELETE | /:id | Eliminar |
+
+> Os endpoints antigos `PUT /:id/{emitir,terminar,encerrar}` foram descontinuados e respondem **410 Gone**.
 
 ### Faturas (`/api/faturas`)
 
@@ -454,7 +458,7 @@ Cada tabela expoe CRUD completo (GET /, GET /:id, POST /, PUT /:id, DELETE /:id)
 - `equip_instalados` - Parque instalado
 
 #### Operacoes
-- `ordens_trabalho` - OTs (24 campos, estados: Programado/Em curso/Terminado/Encerrado)
+- `ordens_trabalho` - OTs (estados: Registada/Programada/Adiada/Confirmada/Em execucao/Finalizada)
 - `ot_maos_obra` - Mao de obra por OT
 - `ot_artigos` - Artigos consumidos por OT
 - `ot_reprogramacoes` - Historico de reprogramacoes
