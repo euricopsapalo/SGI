@@ -9,6 +9,7 @@ import { EquipInstalado } from './equip-instalado.entity';
 describe('ParqueService — nr_serie único (#93)', () => {
   let service: ParqueService;
   let equipRepo: any;
+  let module: TestingModule;
 
   beforeEach(async () => {
     equipRepo = {
@@ -19,7 +20,7 @@ describe('ParqueService — nr_serie único (#93)', () => {
       findOne: jest.fn().mockResolvedValue({ id: 5, nrSerie: 'SN-001' }),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         ParqueService,
         { provide: getRepositoryToken(ModeloEquipamento), useValue: {} },
@@ -28,6 +29,10 @@ describe('ParqueService — nr_serie único (#93)', () => {
     }).compile();
 
     service = module.get<ParqueService>(ParqueService);
+  });
+
+  afterEach(async () => {
+    await module?.close();
   });
 
   describe('createEquip', () => {

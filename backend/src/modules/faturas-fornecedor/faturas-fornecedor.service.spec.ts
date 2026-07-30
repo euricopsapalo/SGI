@@ -17,6 +17,7 @@ describe('FaturasFornecedorService (regression #14)', () => {
     let service: FaturasFornecedorService;
     let vncAssociadaRepo: any;
     let faturaRepo: any;
+    let module: TestingModule;
 
     beforeEach(async () => {
         // Repositórios fake em memória
@@ -50,7 +51,7 @@ describe('FaturasFornecedorService (regression #14)', () => {
         const artigoRepo = { findOne: jest.fn(), update: jest.fn() };
         const movimentoRepo = { save: jest.fn(), create: jest.fn() };
 
-        const module: TestingModule = await Test.createTestingModule({
+        module = await Test.createTestingModule({
             providers: [
                 FaturasFornecedorService,
                 { provide: getRepositoryToken(FaturaFornecedor), useValue: faturaRepo },
@@ -62,6 +63,10 @@ describe('FaturasFornecedorService (regression #14)', () => {
         }).compile();
 
         service = module.get<FaturasFornecedorService>(FaturasFornecedorService);
+    });
+
+    afterEach(async () => {
+        await module?.close();
     });
 
     it('create(VNC) — lê faturasAssociadas e cria uma linha vnc_faturas_associadas por cada {faturaAssociadaId}', async () => {

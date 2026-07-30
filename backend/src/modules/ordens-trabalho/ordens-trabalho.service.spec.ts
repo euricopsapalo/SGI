@@ -24,6 +24,7 @@ describe('OrdensTrabalhoService (regression #15)', () => {
     let service: OrdensTrabalhoService;
     let artigoRepo: any;
     let repo: any;
+    let module: TestingModule;
 
     beforeEach(async () => {
         repo = {
@@ -60,7 +61,7 @@ describe('OrdensTrabalhoService (regression #15)', () => {
 
         const sysLogsMock = { create: jest.fn(async (b) => b) };
 
-        const module: TestingModule = await Test.createTestingModule({
+        module = await Test.createTestingModule({
             providers: [
                 OrdensTrabalhoService,
                 { provide: getRepositoryToken(OrdemTrabalho), useValue: repo },
@@ -78,6 +79,10 @@ describe('OrdensTrabalhoService (regression #15)', () => {
 
         service = module.get<OrdensTrabalhoService>(OrdensTrabalhoService);
         (service as any).sysLogsMock = sysLogsMock;
+    });
+
+    afterEach(async () => {
+        await module?.close();
     });
 
     // ── RF-OT-001 — máquina de estados ───────────────────────────────

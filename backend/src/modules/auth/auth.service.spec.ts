@@ -16,6 +16,7 @@ describe('AuthService — segurança (issue #100)', () => {
   let jwt: any;
   let config: any;
   let cfg: any;
+  let module: TestingModule;
 
   const senha = 'password123';
   let hash: string;
@@ -32,7 +33,7 @@ describe('AuthService — segurança (issue #100)', () => {
     cfg = { minPasswordLength: 8, sessionExpiryMinutes: 60, twoFactorEnabled: true, accessLogEnabled: true };
     config = { get: jest.fn().mockResolvedValue(cfg) };
 
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: getRepositoryToken(User), useValue: userRepo },
@@ -43,6 +44,10 @@ describe('AuthService — segurança (issue #100)', () => {
     }).compile();
 
     service = module.get<AuthService>(AuthService);
+  });
+
+  afterEach(async () => {
+    await module?.close();
   });
 
   const baseUser = (over: Partial<User> = {}): any => ({

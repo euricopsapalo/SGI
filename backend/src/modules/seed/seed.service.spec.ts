@@ -11,6 +11,7 @@ describe('SeedService', () => {
   let service: SeedService;
   let userRepo: any;
   let taxaIvaRepo: any;
+  let module: TestingModule;
 
   beforeEach(async () => {
     userRepo = {
@@ -26,7 +27,7 @@ describe('SeedService', () => {
       create: jest.fn().mockImplementation((t) => t),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         SeedService,
         { provide: getRepositoryToken(User), useValue: userRepo },
@@ -37,8 +38,9 @@ describe('SeedService', () => {
     service = module.get<SeedService>(SeedService);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     jest.restoreAllMocks();
+    await module?.close();
   });
 
   describe('onModuleInit', () => {

@@ -5,12 +5,13 @@ import { MigrationService } from './migration.service';
 describe('MigrationService', () => {
   let service: MigrationService;
   let runMigrationsMock: jest.Mock;
+  let module: TestingModule;
   const originalNodeEnv = process.env.NODE_ENV;
 
   beforeEach(async () => {
     runMigrationsMock = jest.fn().mockResolvedValue([]);
 
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         MigrationService,
         {
@@ -25,9 +26,10 @@ describe('MigrationService', () => {
     service = module.get<MigrationService>(MigrationService);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     process.env.NODE_ENV = originalNodeEnv;
     jest.clearAllMocks();
+    await module?.close();
   });
 
   it('should be defined', () => {

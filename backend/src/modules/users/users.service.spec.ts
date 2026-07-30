@@ -9,6 +9,7 @@ import { ConfiguracaoService } from '../configuracao/configuracao.service';
 describe('UsersService — Issue #65 (proteção do vínculo Tecnico↔User)', () => {
     let service: UsersService;
     let repo: any;
+    let module: TestingModule;
 
     beforeEach(async () => {
         repo = {
@@ -18,7 +19,7 @@ describe('UsersService — Issue #65 (proteção do vínculo Tecnico↔User)', (
             query: jest.fn(),
         };
 
-        const module: TestingModule = await Test.createTestingModule({
+        module = await Test.createTestingModule({
             providers: [
                 UsersService,
                 { provide: getRepositoryToken(User), useValue: repo },
@@ -27,6 +28,10 @@ describe('UsersService — Issue #65 (proteção do vínculo Tecnico↔User)', (
         }).compile();
 
         service = module.get<UsersService>(UsersService);
+    });
+
+    afterEach(async () => {
+        await module?.close();
     });
 
     it('rejeita mudar role de user vinculado a Tecnico para algo ≠ campo', async () => {

@@ -27,6 +27,7 @@ describe('TecnicosService', () => {
 
     let txUserRepo: ReturnType<typeof makeRepo>;
     let txTecRepo: ReturnType<typeof makeRepo>;
+    let module: TestingModule;
 
     beforeEach(async () => {
         repo = makeRepo();
@@ -48,7 +49,7 @@ describe('TecnicosService', () => {
             transaction: jest.fn(async (fn: any) => fn(mgr)),
         } as any;
 
-        const module: TestingModule = await Test.createTestingModule({
+        module = await Test.createTestingModule({
             providers: [
                 TecnicosService,
                 { provide: getRepositoryToken(Tecnico), useValue: repo },
@@ -58,6 +59,10 @@ describe('TecnicosService', () => {
         }).compile();
 
         service = module.get<TecnicosService>(TecnicosService);
+    });
+
+    afterEach(async () => {
+        await module?.close();
     });
 
     describe('findAll', () => {
