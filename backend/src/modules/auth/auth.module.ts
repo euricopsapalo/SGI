@@ -17,7 +17,7 @@ import { ConfiguracaoModule } from '../configuracao/configuracao.module';
         TypeOrmModule.forFeature([User]),
         PassportModule,
         JwtModule.register({
-            secret: process.env.JWT_SECRET || 'sgi_aquatex_secret_2026',
+            secret: process.env.JWT_SECRET,
             signOptions: { expiresIn: '8h' },
         }),
         MailModule,

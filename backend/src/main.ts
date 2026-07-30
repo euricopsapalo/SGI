@@ -10,7 +10,10 @@ async function bootstrap() {
   // Segurança e performance (issue #41)
   app.use(helmet());
   app.use(compression());
-  app.enableCors();
+  // CORS restrito por CORS_ORIGIN (lista separada por vírgulas). Default dev:
+  // http://localhost:3000. Em produção deve ser o domínio oficial (issue #23).
+  const corsOrigins = process.env.CORS_ORIGIN?.split(',').map(o => o.trim()).filter(Boolean);
+  app.enableCors({ origin: corsOrigins ?? ['http://localhost:3000'], credentials: true });
   app.setGlobalPrefix('api');
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
