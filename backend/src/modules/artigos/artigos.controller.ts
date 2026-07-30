@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ArtigosService } from './artigos.service';
 import { CreateArtigoDto } from './dto/create-artigo.dto';
 import { UpdateArtigoDto } from './dto/update-artigo.dto';
@@ -6,6 +7,8 @@ import { AjusteExistenciaDto } from './dto/ajuste-existencia.dto';
 import { UpsertStockArmazemDto } from './dto/upsert-stock-armazem.dto';
 import { CreateMovimentoStockDto } from './dto/create-movimento-stock.dto';
 
+@ApiTags('artigos')
+@ApiBearerAuth('access-token')
 @Controller('artigos')
 export class ArtigosController {
     constructor(private readonly service: ArtigosService) {}
@@ -55,6 +58,8 @@ export class ArtigosController {
     }
 }
 
+@ApiTags('movimentos-stock')
+@ApiBearerAuth('access-token')
 @Controller('movimentos-stock')
 export class MovimentosStockController {
     constructor(private readonly service: ArtigosService) {}

@@ -1,8 +1,11 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { FaturasService } from './faturas.service';
 import { CreateFaturaDto } from './dto/create-fatura.dto';
 import { UpdateFaturaDto } from './dto/update-fatura.dto';
 
+@ApiTags('faturas')
+@ApiBearerAuth('access-token')
 @Controller('faturas')
 export class FaturasController {
     constructor(private readonly service: FaturasService) {}

@@ -1,8 +1,11 @@
 import { Controller, Get, Post, Delete, Param, Body, ParseIntPipe, Query } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { SysLogsService } from './sys-logs.service';
 import { Roles } from '../auth/roles.decorator';
 import { CreateLogDto } from './dto/create-log.dto';
 
+@ApiTags('logs')
+@ApiBearerAuth('access-token')
 @Controller('logs')
 export class SysLogsController {
     constructor(private readonly service: SysLogsService) {}

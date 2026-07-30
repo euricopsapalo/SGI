@@ -1,8 +1,11 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { PlanosService } from './planos.service';
 import { CreatePlanoDto } from './dto/create-plano.dto';
 import { UpdatePlanoDto } from './dto/update-plano.dto';
 
+@ApiTags('planos')
+@ApiBearerAuth('access-token')
 @Controller('planos')
 export class PlanosController {
     constructor(private readonly service: PlanosService) {}

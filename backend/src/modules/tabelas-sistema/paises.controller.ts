@@ -1,8 +1,11 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { TabelasSistemaService } from './tabelas-sistema.service';
 import { CreatePaisDto } from './dto/create-pais.dto';
 import { UpdatePaisDto } from './dto/update-pais.dto';
 
+@ApiTags('paises')
+@ApiBearerAuth('access-token')
 @Controller('paises')
 export class PaisesController {
     constructor(private readonly service: TabelasSistemaService) {}
