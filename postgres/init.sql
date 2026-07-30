@@ -141,6 +141,12 @@ CREATE TABLE configuracao_empresa (
     session_expiry_minutes      INTEGER       NOT NULL DEFAULT 60,
     two_factor_enabled          BOOLEAN       NOT NULL DEFAULT FALSE,
     access_log_enabled          BOOLEAN       NOT NULL DEFAULT TRUE,
+    -- Comissões (issue #101)
+    comissao_montagem           NUMERIC(10,2) NOT NULL DEFAULT 80,
+    comissao_preventiva         NUMERIC(10,2) NOT NULL DEFAULT 40,
+    comissao_corretiva          NUMERIC(10,2) NOT NULL DEFAULT 50,
+    comissao_remota             NUMERIC(10,2) NOT NULL DEFAULT 25,
+    comissao_venda_percentagem  NUMERIC(5,2)  NOT NULL DEFAULT 3,
     updated_at                  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
 );
 INSERT INTO configuracao_empresa

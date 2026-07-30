@@ -25,4 +25,10 @@ export class UpdateConfiguracaoDto {
   @IsOptional() @IsNumber() @Min(0) @Max(1440) sessionExpiryMinutes?: number;
   @IsOptional() @IsBoolean() twoFactorEnabled?: boolean;
   @IsOptional() @IsBoolean() accessLogEnabled?: boolean;
+  // Comissões (issue #101)
+  @IsOptional() @IsNumber() @Min(0) comissaoMontagem?: number;
+  @IsOptional() @IsNumber() @Min(0) comissaoPreventiva?: number;
+  @IsOptional() @IsNumber() @Min(0) comissaoCorretiva?: number;
+  @IsOptional() @IsNumber() @Min(0) comissaoRemota?: number;
+  @IsOptional() @IsNumber() @Min(0) @Max(100) comissaoVendaPercentagem?: number;
 }

@@ -118,6 +118,27 @@ export class ConfiguracaoEmpresa {
     @Column({ name: 'access_log_enabled', type: 'boolean', default: true })
     accessLogEnabled: boolean;
 
+    // --- Comissões (issue #101) ---
+    /** Comissão fixa (moeda) por OT concluída de natureza "Montagem / Instalação". */
+    @Column({ name: 'comissao_montagem', type: 'numeric', precision: 10, scale: 2, default: 80 })
+    comissaoMontagem: number;
+
+    /** Comissão fixa (moeda) por OT concluída preventiva (Manutenção/Substituição de filtro/Inspeção). */
+    @Column({ name: 'comissao_preventiva', type: 'numeric', precision: 10, scale: 2, default: 40 })
+    comissaoPreventiva: number;
+
+    /** Comissão fixa (moeda) por OT concluída de natureza "Reparação de avaria" (corretiva). */
+    @Column({ name: 'comissao_corretiva', type: 'numeric', precision: 10, scale: 2, default: 50 })
+    comissaoCorretiva: number;
+
+    /** Comissão fixa (moeda) por OT concluída de suporte remoto. */
+    @Column({ name: 'comissao_remota', type: 'numeric', precision: 10, scale: 2, default: 25 })
+    comissaoRemota: number;
+
+    /** Percentagem de comissão de vendas aplicada aos vendedores. */
+    @Column({ name: 'comissao_venda_percentagem', type: 'numeric', precision: 5, scale: 2, default: 3 })
+    comissaoVendaPercentagem: number;
+
     @UpdateDateColumn({ name: 'updated_at' })
     updatedAt: Date;
 }
