@@ -1,47 +1,66 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { toastEvents, ToastEvent } from '../utils/errorHandler';
+import { CheckCircle, AlertCircle, AlertTriangle, Info, X } from 'lucide-react';
+import { toastEvents, ToastEvent, ToastType } from '../utils/errorHandler';
 
-const TOAST_DURATION = 4000;
+/** Erros/avisos ficam mais tempo (mais texto a ler); sucesso/info saem antes. */
+const DURATION: Record<ToastType, number> = {
+    error: 6000,
+    warning: 6000,
+    success: 4000,
+    info: 4000,
+};
+
+const ICON: Record<ToastType, React.FC<{ size?: number }>> = {
+    success: CheckCircle,
+    error: AlertCircle,
+    warning: AlertTriangle,
+    info: Info,
+};
 
 const GlobalToast: React.FC = () => {
     const [toasts, setToasts] = useState<(ToastEvent & { id: number })[]>([]);
 
+    const dismiss = useCallback((id: number) => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+    }, []);
+
     const addToast = useCallback((event: ToastEvent) => {
         const id = Date.now() + Math.random();
         setToasts(prev => [...prev, { ...event, id }]);
-        setTimeout(() => {
-            setToasts(prev => prev.filter(t => t.id !== id));
-        }, TOAST_DURATION);
-    }, []);
+        setTimeout(() => dismiss(id), DURATION[event.type] ?? 4000);
+    }, [dismiss]);
 
-    useEffect(() => {
-        return toastEvents.subscribe(addToast);
-    }, [addToast]);
+    useEffect(() => toastEvents.subscribe(addToast), [addToast]);
 
     if (toasts.length === 0) return null;
 
     return (
         <div className="global-toast-container" data-testid="global-toast-container">
-            {toasts.map(t => (
-                <div
-                    key={t.id}
-                    className={`global-toast global-toast--${t.type}`}
-                    data-testid="global-toast"
-                    role="alert"
-                >
-                    <span className="global-toast__icon">
-                        {t.type === 'error' ? '\u2716' : t.type === 'warning' ? '\u26A0' : t.type === 'success' ? '\u2714' : '\u2139'}
-                    </span>
-                    <span className="global-toast__message">{t.message}</span>
-                    <button
-                        className="global-toast__close"
-                        onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}
-                        aria-label="Fechar"
+            {toasts.map(t => {
+                const IconCmp = ICON[t.type] ?? Info;
+                const assertive = t.type === 'error' || t.type === 'warning';
+                return (
+                    <div
+                        key={t.id}
+                        className={`global-toast global-toast--${t.type}`}
+                        data-testid="global-toast"
+                        role={assertive ? 'alert' : 'status'}
+                        aria-live={assertive ? 'assertive' : 'polite'}
                     >
-                        &times;
-                    </button>
-                </div>
-            ))}
+                        <span className="global-toast__icon">
+                            <IconCmp size={16} />
+                        </span>
+                        <span className="global-toast__message">{t.message}</span>
+                        <button
+                            className="global-toast__close"
+                            onClick={() => dismiss(t.id)}
+                            aria-label="Fechar"
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
+                );
+            })}
         </div>
     );
 };

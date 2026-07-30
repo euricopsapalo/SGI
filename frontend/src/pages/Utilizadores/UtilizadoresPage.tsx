@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
+import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
 import UtilizadorModal from './UtilizadorModal';
 import { useGlobal } from '../../contexts/GlobalContext';
@@ -114,12 +115,7 @@ const UtilizadoresPage: React.FC = () => {
     const [filterStatus, setFilterStatus] = useState('');
     const [modalOpen, setModalOpen] = useState(false);
     const [editUser, setEditUser] = useState<Utilizador | null>(null);
-    const [toast, setToast] = useState('');
-
-    const showToast = (msg: string) => {
-        setToast(msg);
-        setTimeout(() => setToast(''), 3000);
-    };
+    const showToast = (msg: string) => notify(msg, 'success');
 
     const loadUsers = useCallback(async () => {
         try {
@@ -163,11 +159,11 @@ const UtilizadoresPage: React.FC = () => {
                 showToast('Utilizador criado com sucesso.');
             }
             await loadUsers();
+            setModalOpen(false);
         } catch (e) {
             console.error('Erro ao guardar utilizador', e);
-            showToast('Erro ao guardar utilizador.');
+            /* erro já apresentado pelo interceptor global (api.ts) — modal fica aberto */
         }
-        setModalOpen(false);
         setEditUser(null);
     };
 
@@ -191,7 +187,7 @@ const UtilizadoresPage: React.FC = () => {
             showToast('Utilizador eliminado.');
         } catch (e) {
             console.error('Erro ao eliminar utilizador', e);
-            showToast('Erro ao eliminar utilizador.');
+            /* erro já apresentado pelo interceptor global (api.ts) */
         }
     };
 
@@ -378,12 +374,6 @@ const UtilizadoresPage: React.FC = () => {
             )}
 
             {/* Toast */}
-            {toast && (
-                <div className="toast" role="status">
-                    <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
-                    <span>{toast}</span>
-                </div>
-            )}
         </AppLayout>
     );
 };

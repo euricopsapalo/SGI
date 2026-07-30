@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
+import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
 import {
@@ -563,12 +564,11 @@ const FaturacaoPage: React.FC = () => {
 
     const [search,       setSearch]       = useState('');
     const [filterEstado, setFilterEstado] = useState('');
-    const [toast,         setToast]        = useState('');
     const [showExport,    setShowExport]   = useState(false);
     const [emitirModal,   setEmitirModal]  = useState(false);
     const [detalheId,     setDetalheId]    = useState<string | null>(null);
 
-    const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
+    const showToast = (msg: string) => notify(msg, 'success');
 
     const getClienteNome = (id: string) => clientes.find(c => c.id === id)?.nome ?? id;
     const getOTDesc      = (otId: string) => {
@@ -757,12 +757,6 @@ const FaturacaoPage: React.FC = () => {
                 />
             )}
 
-            {toast && (
-                <div className="toast" role="status">
-                    <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
-                    <span>{toast}</span>
-                </div>
-            )}
         </AppLayout>
     );
 };

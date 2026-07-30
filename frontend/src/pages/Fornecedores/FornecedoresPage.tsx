@@ -3,6 +3,7 @@ import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { useGlobal, Fornecedor, Encomenda, Artigo, EmpresaConfig, Provincia, Municipio } from '../../contexts/GlobalContext';
+import { showToast } from '../../utils/errorHandler';
 import { Search, Plus, Edit2, Eye, X, AlertCircle, Check, Truck, Download, Trash2, MapPin, Printer } from 'lucide-react';
 
 /* ══ Print helpers ═══════════════════════════════════════════ */
@@ -489,21 +490,16 @@ const FornecedoresPage: React.FC = () => {
     const [search, setSearch]         = useState('');
     const [modal, setModal]           = useState<'new' | string | null>(null);
     const [viewId, setViewId]         = useState<string | null>(null);
-    const [toast, setToast]           = useState('');
-    const [toastErr, setToastErr]     = useState('');
     const [showExport, setShowExport] = useState(false);
     const [showRelatorios, setShowRelatorios] = useState(false);
-
-    const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
-    const showErr   = (msg: string) => { setToastErr(msg); setTimeout(() => setToastErr(''), 5000); };
 
     const handleRemove = async (id: string, nome: string) => {
         if (!window.confirm(`Eliminar o fornecedor "${nome}"? Esta acção não pode ser desfeita.`)) return;
         try {
             await removeFornecedor(id);
-            showToast(`Fornecedor "${nome}" eliminado.`);
-        } catch (e: any) {
-            showErr(e?.response?.data?.message ?? 'Erro ao eliminar fornecedor.');
+            showToast(`Fornecedor "${nome}" eliminado.`, 'success');
+        } catch {
+            /* erro já apresentado pelo interceptor global (api.ts) */
         }
     };
 
@@ -533,10 +529,10 @@ const FornecedoresPage: React.FC = () => {
     const handleSave = (data: Omit<Fornecedor, 'id'>) => {
         if (typeof modal === 'string' && modal !== 'new') {
             updateFornecedor(modal, data);
-            showToast('Fornecedor actualizado.');
+            showToast('Fornecedor actualizado.', 'success');
         } else {
             addFornecedor(data);
-            showToast('Fornecedor registado.');
+            showToast('Fornecedor registado.', 'success');
         }
         setModal(null);
     };
@@ -666,19 +662,6 @@ const FornecedoresPage: React.FC = () => {
                     onClose={() => setModal(null)}
                     onSave={handleSave}
                 />
-            )}
-
-            {toast && (
-                <div className="toast" role="status">
-                    <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
-                    <span>{toast}</span>
-                </div>
-            )}
-            {toastErr && (
-                <div className="toast" role="alert" style={{ background: 'var(--red,#ef4444)', color: '#fff' }}>
-                    <AlertCircle size={14} />
-                    <span>{toastErr}</span>
-                </div>
             )}
 
             {showRelatorios && (

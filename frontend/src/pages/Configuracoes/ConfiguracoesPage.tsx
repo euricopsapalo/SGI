@@ -4,7 +4,7 @@ import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import { useGlobal } from '../../contexts/GlobalContext';
 import api from '../../services/api';
-import { extractErrorMessage } from '../../utils/errorHandler';
+import { extractErrorMessage, showToast } from '../../utils/errorHandler';
 import {
     Building2, DollarSign, TrendingUp, Shield, Upload, Check,
     Table2, Plus, X, Edit2, Smartphone, AlertCircle,
@@ -296,7 +296,6 @@ const ConfiguracoesPage: React.FC = () => {
         accessLog: empresaConfig.accessLogEnabled ?? true,
     });
     const [dirty, setDirty] = useState(false);
-    const [toast, setToast] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
 
     const markDirty = () => setDirty(true);
@@ -339,10 +338,9 @@ const ConfiguracoesPage: React.FC = () => {
                 comissaoRemota: Number(comissoes.remota),
                 comissaoVendaPercentagem: Number(comissoes.vendaPercent),
             });
-        } catch (e) { console.error('Erro ao guardar empresa', e); }
-        setDirty(false);
-        setToast(true);
-        setTimeout(() => setToast(false), 3000);
+            setDirty(false);
+            showToast('Configurações guardadas com sucesso.', 'success');
+        } catch (e) { console.error('Erro ao guardar empresa', e); /* erro já apresentado pelo interceptor global */ }
     };
 
     const discard = () => {
@@ -891,13 +889,6 @@ const ConfiguracoesPage: React.FC = () => {
                 </div>
             )}
 
-            {/* Toast */}
-            {toast && (
-                <div className="toast" role="status">
-                    <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
-                    <span>Configurações guardadas com sucesso.</span>
-                </div>
-            )}
         </AppLayout>
     );
 };

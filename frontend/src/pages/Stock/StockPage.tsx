@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
+import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
 import { useGlobal, Artigo, Armazem } from '../../contexts/GlobalContext';
@@ -1147,11 +1148,10 @@ const StockPage: React.FC = () => {
     const [modal,     setModal]   = useState<'new' | string | null>(null);
     const [viewModal, setViewModal] = useState<string | null>(null);
     const [op,         setOp]       = useState<OpState>(null);
-    const [toast,      setToast]   = useState('');
     const [showExport, setShowExport] = useState(false);
     const [expanded,   setExpanded]  = useState<Set<string>>(new Set());
 
-    const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+    const showToast = (msg: string) => notify(msg, 'success');
 
     const classes  = classesArtigo.map(c => c.descricao);
     const familias = familiasArtigo.map(f => f.descricao);
@@ -1454,12 +1454,6 @@ const StockPage: React.FC = () => {
                 />
             )}
 
-            {toast && (
-                <div className="toast" role="status">
-                    <Check size={14} strokeWidth={2.5} style={{ color: 'var(--green)' }} />
-                    <span>{toast}</span>
-                </div>
-            )}
         </AppLayout>
     );
 };
