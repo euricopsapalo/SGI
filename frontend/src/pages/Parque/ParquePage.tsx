@@ -910,7 +910,7 @@ const ParquePage: React.FC = () => {
             addOrdem({
                 id: '', tipo: 'pontual', equipInstaladoId: eq.id, clienteId: data.clienteId,
                 descricao: `Montagem e comissionamento — ${mod?.nome ?? 'equipamento'}`,
-                previsaoTempo: 4, naturezaIntervencao: 'Montagem / Instalação', responsavel: '—',
+                previsaoTempo: 4, naturezaIntervencao: 'Montagem / Instalação',
                 maosDeObra: [], artigos: [],
                 dataAgendada: data.dataInstalacao,
                 estado: 'Registada',

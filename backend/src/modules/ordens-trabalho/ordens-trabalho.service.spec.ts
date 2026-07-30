@@ -92,7 +92,7 @@ describe('OrdensTrabalhoService (regression #15)', () => {
             repo.findOne.mockResolvedValue({
                 id: 1, estado, artigos: [],
                 dataAgendada: '2026-06-01',
-                descricao: 'x', responsavel: 'r', executadoPorId: 1,
+                descricao: 'x', executadoPorId: 1,
                 dataRegisto: '2026-05-01', janelaFim: '2026-11-01',
                 adiamentos: 0,
             });

@@ -591,7 +591,6 @@ export class OrdensTrabalhoService {
                 descricao: updated.descricao,
                 previsaoTempo: updated.previsaoTempo,
                 periodicidade: updated.periodicidade,
-                responsavel: updated.responsavel,
                 orgao: updated.orgao,
                 sintoma: updated.sintoma,
                 causa: updated.causa,

@@ -121,9 +121,6 @@ export class OrdemTrabalho {
     periodicidade: string;
 
     @Column({ nullable: true, length: 150 })
-    responsavel: string;
-
-    @Column({ nullable: true, length: 150 })
     orgao: string;
 
     @Column({ nullable: true, type: 'text' })
