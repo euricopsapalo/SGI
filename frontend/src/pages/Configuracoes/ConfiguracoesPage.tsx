@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import { useGlobal } from '../../contexts/GlobalContext';
@@ -123,16 +124,19 @@ const TwoFactorSection: React.FC<{ allowed: boolean }> = ({ allowed }) => {
                 {allowed && setup && (
                     <>
                         <div className="form-hint">
-                            Adicione a conta na sua app de autenticação (Google Authenticator, Authy…) usando a chave abaixo,
-                            e depois introduza o código de 6 dígitos para confirmar.
+                            Digitalize o código QR com a sua app de autenticação (Google Authenticator, Authy…)
+                            e depois introduza o código de 6 dígitos para confirmar. Em alternativa, adicione a conta
+                            manualmente com a chave abaixo.
+                        </div>
+                        <div className="form-group">
+                            <label className="form-label">Digitalizar QR</label>
+                            <div style={{ display: 'inline-block', background: '#fff', padding: 12, borderRadius: 8, lineHeight: 0 }}>
+                                <QRCodeSVG value={setup.otpauthUri} size={176} level="M" marginSize={0} />
+                            </div>
                         </div>
                         <div className="form-group">
                             <label className="form-label">Chave (introdução manual)</label>
                             <input className="form-input" readOnly value={setup.secret} style={{ fontFamily: 'monospace' }} onFocus={e => e.currentTarget.select()} />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">URI otpauth (para QR)</label>
-                            <input className="form-input" readOnly value={setup.otpauthUri} style={{ fontFamily: 'monospace', fontSize: '0.72rem' }} onFocus={e => e.currentTarget.select()} />
                         </div>
                         <div className="form-group" style={{ maxWidth: 220 }}>
                             <label className="form-label req">Código de confirmação</label>
