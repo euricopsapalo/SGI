@@ -3,7 +3,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 
 import { DatabaseModule } from './database/database.module';
-import { MessagesModule } from './modules/messages/messages.module';
 import { UsersModule } from './modules/users/users.module';
 import { ClientesModule } from './modules/clientes/clientes.module';
 import { TecnicosModule } from './modules/tecnicos/tecnicos.module';
@@ -41,7 +40,6 @@ import { HealthModule } from './modules/health/health.module';
       logging: true,
     }),
     DatabaseModule,
-    MessagesModule,
     UsersModule,
     ClientesModule,
     TecnicosModule,
