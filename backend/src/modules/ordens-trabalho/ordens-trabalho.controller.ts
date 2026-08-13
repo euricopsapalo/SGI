@@ -11,6 +11,7 @@ import {
     IniciarOtDto,
     FinalizarOtDto,
 } from './dto/transicao-ot.dto';
+import { RegistarConsumoDto } from './dto/registar-consumo.dto';
 
 @ApiTags('ordens')
 @ApiBearerAuth('access-token')
@@ -70,6 +71,11 @@ export class OrdensTrabalhoController {
     @Put(':id/iniciar')
     iniciar(@Param('id', ParseIntPipe) id: number, @Body() dto: IniciarOtDto) {
         return this.service.iniciar(id, dto.dataInicio, dto.usuario);
+    }
+
+    @Put(':id/consumo')
+    registarConsumo(@Param('id', ParseIntPipe) id: number, @Body() dto: RegistarConsumoDto) {
+        return this.service.registarConsumo(id, dto.linhas, dto.usuario);
     }
 
     @Put(':id/finalizar')

@@ -46,6 +46,7 @@ describe('OrdensTrabalhoService (regression #15)', () => {
         artigoRepo = {
             create: jest.fn((obj) => ({ ...obj })),
             save: jest.fn(async (arr) => arr),
+            update: jest.fn(async () => ({ affected: 1 })),
             delete: jest.fn(async () => ({ affected: 0 })),
         };
 
@@ -58,6 +59,7 @@ describe('OrdensTrabalhoService (regression #15)', () => {
         const artigosServiceMock = {
             ajusteExistencia: jest.fn(),
             createMovimento: jest.fn(),
+            findOne: jest.fn(async (id: number) => ({ id, precoUnitario: 1000, codigoIva: 'I14', descricao: `Peça ${id}` })),
         };
 
         const sysLogsMock = { create: jest.fn(async (b) => b) };
@@ -195,6 +197,39 @@ describe('OrdensTrabalhoService (regression #15)', () => {
         const call = artigoRepo.create.mock.calls[0][0];
         expect(call.codigoIva).toBeNull();
         expect(call.taxaIva).toBeNull();
+    });
+
+    // ── RF-OT-005 — execução e consumo ───────────────────────────────
+    describe('registarConsumo / custo real (RF-OT-005)', () => {
+        it('rejeita consumo fora de "Em execução" com 422', async () => {
+            repo.findOne.mockResolvedValue({ id: 1, estado: OTEstado.CONFIRMADA, artigos: [] });
+            await expect(service.registarConsumo(1, [{ artigoId: 5, quantidade: 1 }]))
+                .rejects.toBeInstanceOf(UnprocessableEntityException);
+        });
+
+        it('atualiza linha prevista existente com qtd_consumida', async () => {
+            repo.findOne.mockResolvedValue({
+                id: 1, estado: OTEstado.EM_EXECUCAO,
+                artigos: [{ id: 10, artigoId: 5, qtdPrevista: 4, preco: 1000 }],
+            });
+            await service.registarConsumo(1, [{ artigoId: 5, quantidade: 3 }], 'tester');
+            const call = artigoRepo.update.mock.calls.find((c: any[]) => c[0] === 10);
+            expect(call[1].qtdConsumida).toBe(3);
+        });
+
+        it('cria linha para peça extra não prevista (qtd_prevista 0)', async () => {
+            repo.findOne.mockResolvedValue({ id: 1, estado: OTEstado.EM_EXECUCAO, artigos: [] });
+            await service.registarConsumo(1, [{ artigoId: 9, quantidade: 2 }], 'tester');
+            const created = artigoRepo.create.mock.calls[0][0];
+            expect(created.qtdPrevista).toBe(0);
+            expect(created.qtdConsumida).toBe(2);
+            expect(created.artigoId).toBe(9);
+        });
+
+        it('iniciar sem técnico de campo devolve 422', async () => {
+            repo.findOne.mockResolvedValue({ id: 1, estado: OTEstado.CONFIRMADA, executadoPorId: null, artigos: [] });
+            await expect(service.iniciar(1, undefined, 'tester')).rejects.toBeInstanceOf(UnprocessableEntityException);
+        });
     });
 
     it('update — também propaga codigoIva/taxaIva ao recriar as linhas', async () => {

@@ -139,6 +139,9 @@ export interface OrdemTrabalho {
     requerAprovacaoAdiar?: boolean;
     aprovadoPorId?: string;
     aprovadoPorNome?: string;
+    // RF-OT-005 §3.4 — custo previsto vs. real (peças + mão de obra)
+    custoPrevisto?: number;
+    custoReal?: number;
 }
 
 // ── Warehouse ──────────────────────────────────────────────
@@ -358,6 +361,9 @@ const normOrdem = (o: any): OrdemTrabalho => ({
     requerAprovacaoAdiar: !!o.requerAprovacaoAdiar,
     aprovadoPorId: o.aprovadoPorId?.toString() ?? o.aprovadoPor?.id?.toString(),
     aprovadoPorNome: o.aprovadoPor?.nome,
+    // RF-OT-005
+    custoPrevisto: o.custoPrevisto != null ? Number(o.custoPrevisto) : undefined,
+    custoReal: o.custoReal != null ? Number(o.custoReal) : undefined,
     reprogramacoes: (o.reprogramacoes ?? []).map((r: any) => ({
         id: r.id?.toString(), dataAnterior: r.dataAnterior, novaData: r.novaData,
         motivo: r.motivo ?? '', criadoEm: r.criadoEm ?? '', usuario: r.usuario,
@@ -508,6 +514,7 @@ interface GlobalContextType {
     confirmarOT: (id: string, opts?: { dataExecucao: string; executadoPorId?: string }) => Promise<AvisoStock[]>;
     adiarOT: (id: string, opts?: { novaData: string; motivo: string; aprovadoPor?: string; aprovacaoMotivo?: string }) => Promise<void>;
     iniciarOT: (id: string, dataInicio?: string) => Promise<void>;
+    registarConsumoOT: (id: string, linhas: { artigoId?: number; quantidade: number; descricao?: string }[]) => Promise<void>;
     finalizarOT: (id: string, dataFim?: string) => Promise<void>;
     reprogramarOT: (id: string, novaData: string, dataAnterior?: string, motivo?: string) => Promise<void>;
     // Warehouse
@@ -1218,7 +1225,14 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const { data } = await api.put(`/ordens/${id}/iniciar`, { dataInicio, usuario });
         setOrdens(p => p.map(x => x.id === id ? normOrdem(data) : x));
         log('Ordens de Trabalho', 'OT iniciada', `ID: ${id} → Em execução`);
-        await refreshStock();
+    };
+
+    // RF-OT-005 §3.2 — regista o consumo real de peças (só em execução)
+    const registarConsumoOT = async (id: string, linhas: { artigoId?: number; quantidade: number; descricao?: string }[]) => {
+        const usuario = currentUserRef.current?.email ?? 'sistema';
+        const { data } = await api.put(`/ordens/${id}/consumo`, { linhas, usuario });
+        setOrdens(p => p.map(x => x.id === id ? normOrdem(data) : x));
+        log('Ordens de Trabalho', 'Consumo registado', `ID: ${id} — ${linhas.length} linha(s)`);
     };
 
     const finalizarOT = async (id: string, dataFim?: string) => {
@@ -1227,6 +1241,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const { data: all } = await api.get(`/ordens`);
         setOrdens(all.map(normOrdem));
         log('Ordens de Trabalho', 'OT finalizada', `ID: ${id}`);
+        // RF-OT-005 §3.3 — a baixa definitiva de stock ocorre no fecho.
+        await refreshStock();
     };
 
     const updateEmpresaConfig = async (c: Partial<EmpresaConfig>) => {
@@ -1507,7 +1523,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             modelosEquipamento, addModelo, updateModelo, removeModelo,
             equipInstalados, addEquipInstalado, updateEquipInstalado, removeEquipInstalado,
             planos, addPlano, updatePlano, removePlano,
-            ordens, addOrdem, updateOrdem, removeOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, finalizarOT, reprogramarOT,
+            ordens, addOrdem, updateOrdem, removeOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, registarConsumoOT, finalizarOT, reprogramarOT,
             armazens, addArmazem, updateArmazem,
             artigos: artigosComReserva, addArtigo, updateArtigo, adjustExistencia, adjustReservado,
             stockArmazem, upsertStockArmazem, removeStockArmazem,
