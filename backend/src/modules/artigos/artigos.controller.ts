@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe, Query } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ArtigosService } from './artigos.service';
 import { CreateArtigoDto } from './dto/create-artigo.dto';
@@ -14,7 +14,7 @@ export class ArtigosController {
     constructor(private readonly service: ArtigosService) {}
 
     @Get()
-    findAll() { return this.service.findAll(); }
+    findAll(@Query() query: { paraReposicao?: string }) { return this.service.findAll(query); }
 
     @Get('stock-armazem')
     findAllStockArmazem() { return this.service.findAllStockArmazem(); }

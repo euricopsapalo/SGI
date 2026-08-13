@@ -95,7 +95,9 @@ export const OT_ESTADO_COR: Record<OTEstado, string> = {
     'Finalizada': '#16a34a',
 };
 export interface OTMaoObra { funcao: string; custo: number; hora: string; }
-export interface OTArtigo { artigoId: string; descricao: string; quantidade: number; preco: number; codigoIva?: string; taxaIva?: number; }
+export interface OTArtigo { artigoId: string; descricao: string; quantidade: number; preco: number; codigoIva?: string; taxaIva?: number; qtdPrevista?: number; qtdReservada?: number; qtdConsumida?: number; paraReposicao?: boolean; }
+/** RF-OT-004 §4 — aviso de falta de stock devolvido ao confirmar. */
+export interface AvisoStock { artigoId: number; descricao: string; previsto: number; reservado: number; emFalta: number; }
 export interface OTReprogramacao { id: string; dataAnterior?: string; novaData?: string; motivo: string; criadoEm: string; usuario?: string; }
 /** RF-OT-002 §3.1 + #75 — natureza da intervenção (classificação única da OT). */
 export type NaturezaIntervencao = 'Manutenção' | 'Substituição de filtro' | 'Reparação de avaria' | 'Inspeção' | 'Montagem / Instalação';
@@ -333,7 +335,7 @@ const normOrdem = (o: any): OrdemTrabalho => ({
     previsaoTempo: Number(o.previsaoTempo), periodicidade: o.periodicidade,
     planoId: o.planoId?.toString(),
     responsavel: o.executadoPor?.nome ?? o.registadoPor?.nome ?? '', maosDeObra: (o.maosObra ?? []).map((m: any) => ({ funcao: m.funcao, custo: Number(m.custo), hora: m.hora })),
-    artigos: (o.artigos ?? []).map((a: any) => ({ artigoId: a.artigoId?.toString() ?? '', descricao: a.descricao, quantidade: Number(a.quantidade), preco: Number(a.preco), codigoIva: a.codigoIva ?? undefined, taxaIva: a.taxaIva != null ? Number(a.taxaIva) : undefined })),
+    artigos: (o.artigos ?? []).map((a: any) => ({ artigoId: a.artigoId?.toString() ?? '', descricao: a.descricao, quantidade: Number(a.quantidade), preco: Number(a.preco), codigoIva: a.codigoIva ?? undefined, taxaIva: a.taxaIva != null ? Number(a.taxaIva) : undefined, qtdPrevista: a.qtdPrevista != null ? Number(a.qtdPrevista) : undefined, qtdReservada: a.qtdReservada != null ? Number(a.qtdReservada) : undefined, qtdConsumida: a.qtdConsumida != null ? Number(a.qtdConsumida) : undefined, paraReposicao: a.paraReposicao ?? undefined })),
     orgao: o.orgao, sintoma: o.sintoma, causa: o.causa,
     dataInicio: o.dataInicio, dataFim: o.dataFim,
     estado: normEstado(o.estado),
@@ -503,7 +505,7 @@ interface GlobalContextType {
     // Work Orders
     ordens: OrdemTrabalho[]; addOrdem: (o: Omit<OrdemTrabalho, 'id'>) => Promise<OrdemTrabalho>; updateOrdem: (id: string, o: Partial<OrdemTrabalho>) => void; removeOrdem: (id: string) => void;
     agendarOT: (id: string, dataAgendada?: string) => Promise<void>;
-    confirmarOT: (id: string, opts?: { dataExecucao: string; executadoPorId?: string }) => Promise<void>;
+    confirmarOT: (id: string, opts?: { dataExecucao: string; executadoPorId?: string }) => Promise<AvisoStock[]>;
     adiarOT: (id: string, opts?: { novaData: string; motivo: string; aprovadoPor?: string; aprovacaoMotivo?: string }) => Promise<void>;
     iniciarOT: (id: string, dataInicio?: string) => Promise<void>;
     finalizarOT: (id: string, dataFim?: string) => Promise<void>;
@@ -1193,7 +1195,9 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (opts?.executadoPorId) body.executadoPorId = Number(opts.executadoPorId);
         const { data } = await api.put(`/ordens/${id}/confirmar`, body);
         setOrdens(p => p.map(x => x.id === id ? normOrdem(data) : x));
-        log('Ordens de Trabalho', 'OT confirmada', `ID: ${id}${opts?.dataExecucao ? ` (execução: ${opts.dataExecucao})` : ''}`);
+        const avisosStock: AvisoStock[] = data?.avisosStock ?? [];
+        log('Ordens de Trabalho', 'OT confirmada', `ID: ${id}${opts?.dataExecucao ? ` (execução: ${opts.dataExecucao})` : ''}${avisosStock.length ? ` — ${avisosStock.length} peça(s) em reposição` : ''}`, avisosStock.length ? 'warning' : 'info');
+        return avisosStock;
     };
 
     // RF-OT-003 §3.3 — Programada/Confirmada → Adiada

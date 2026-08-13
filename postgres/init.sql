@@ -424,14 +424,19 @@ CREATE TABLE ot_maos_obra (
 );
 
 CREATE TABLE ot_artigos (
-    id         SERIAL        PRIMARY KEY,
-    ot_id      INTEGER       NOT NULL REFERENCES ordens_trabalho(id) ON DELETE CASCADE,
-    artigo_id  INTEGER       REFERENCES artigos(id) ON DELETE SET NULL,
-    descricao  VARCHAR(300)  NOT NULL,
-    quantidade NUMERIC(12,3) NOT NULL DEFAULT 1,
-    preco      NUMERIC(12,2) NOT NULL DEFAULT 0,
-    codigo_iva VARCHAR(20),
-    taxa_iva   NUMERIC(5,2)
+    id             SERIAL        PRIMARY KEY,
+    ot_id          INTEGER       NOT NULL REFERENCES ordens_trabalho(id) ON DELETE CASCADE,
+    artigo_id      INTEGER       REFERENCES artigos(id) ON DELETE SET NULL,
+    descricao      VARCHAR(300)  NOT NULL,
+    quantidade     NUMERIC(12,3) NOT NULL DEFAULT 1,
+    -- RF-OT-004 (#57) — Linha de Consumo: previsto/reservado/consumido/reposição
+    qtd_prevista   NUMERIC(12,3) NOT NULL DEFAULT 0,
+    qtd_reservada  NUMERIC(12,3) NOT NULL DEFAULT 0,
+    qtd_consumida  NUMERIC(12,3),
+    para_reposicao BOOLEAN       NOT NULL DEFAULT false,
+    preco          NUMERIC(12,2) NOT NULL DEFAULT 0,
+    codigo_iva     VARCHAR(20),
+    taxa_iva       NUMERIC(5,2)
 );
 
 -- Histórico de reprogramações de OT
@@ -650,6 +655,7 @@ CREATE INDEX IF NOT EXISTS idx_ot_prioridade             ON ordens_trabalho(prio
 CREATE INDEX IF NOT EXISTS idx_ordens_trabalho_equip     ON ordens_trabalho(equip_instalado_id);
 CREATE INDEX IF NOT EXISTS idx_ordens_trabalho_prog      ON ordens_trabalho(data_agendada);
 CREATE INDEX IF NOT EXISTS idx_ot_artigos_ot             ON ot_artigos(ot_id);
+CREATE INDEX IF NOT EXISTS idx_ot_artigos_reposicao      ON ot_artigos(para_reposicao) WHERE para_reposicao = true;
 CREATE INDEX IF NOT EXISTS idx_ot_maos_obra_ot           ON ot_maos_obra(ot_id);
 CREATE INDEX IF NOT EXISTS idx_ot_reprogramacoes_ot      ON ot_reprogramacoes(ordem_trabalho_id);
 CREATE INDEX IF NOT EXISTS idx_faturas_cliente ON faturas(cliente_id);

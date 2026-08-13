@@ -12,6 +12,7 @@ import { OtMaoObra } from './ot-mao-obra.entity';
 import { OtArtigo } from './ot-artigo.entity';
 import { OtReprogramacao } from './ot-reprogramacao.entity';
 import { ArtigosService } from '../artigos/artigos.service';
+import { StockReservaService } from './stock-reserva.service';
 import { SysLogsService } from '../sys-logs/sys-logs.service';
 import { Tecnico } from '../tecnicos/tecnico.entity';
 import { EquipInstalado } from '../parque/equip-instalado.entity';
@@ -60,6 +61,7 @@ export class OrdensTrabalhoService {
         @InjectRepository(ConfiguracaoEmpresa)
         private readonly configRepo: Repository<ConfiguracaoEmpresa>,
         private readonly artigosService: ArtigosService,
+        private readonly stockReserva: StockReservaService,
         private readonly sysLogs: SysLogsService,
     ) {}
 
@@ -296,6 +298,7 @@ export class OrdensTrabalhoService {
                     artigoId: a.artigoId ? Number(a.artigoId) : null,
                     descricao: a.descricao ?? '',
                     quantidade: a.quantidade,
+                    qtdPrevista: a.qtdPrevista ?? a.quantidade ?? 0,
                     preco: a.preco,
                     codigoIva: a.codigoIva ?? null,
                     taxaIva: a.taxaIva ?? null,
@@ -331,6 +334,7 @@ export class OrdensTrabalhoService {
                         artigoId: a.artigoId ? Number(a.artigoId) : null,
                         descricao: a.descricao ?? '',
                         quantidade: a.quantidade,
+                        qtdPrevista: a.qtdPrevista ?? a.quantidade ?? 0,
                         preco: a.preco,
                         codigoIva: a.codigoIva ?? null,
                         taxaIva: a.taxaIva ?? null,
@@ -417,10 +421,12 @@ export class OrdensTrabalhoService {
             detalhes: `#${id} confirmada para ${dataExecucao}, técnico ${executadoPorId}`,
         });
 
-        // RF-OT-004 (TODO): disparar reserva de stock para a OT.
-        // await this.stockService.reservar(id);
+        // RF-OT-004 §4 — reserva de stock (não bloqueia; avisa se faltar).
+        const avisosStock = await this.stockReserva.reservar(id, opts.usuario ?? 'sistema');
 
-        return this.findOne(id);
+        const result = await this.findOne(id);
+        if (result) (result as any).avisosStock = avisosStock;
+        return result;
     }
 
     /**
@@ -517,8 +523,8 @@ export class OrdensTrabalhoService {
         }
 
         if (eraConfirmada) {
-            // RF-OT-004 (TODO): libertar reservas de stock.
-            // await this.stockService.libertarReserva(id);
+            // RF-OT-004 §5 — adiar uma OT confirmada liberta as reservas de stock.
+            await this.stockReserva.libertar(id, usuario ?? 'sistema');
         }
 
         return this.findOne(id);
@@ -534,10 +540,13 @@ export class OrdensTrabalhoService {
             dataInicio: dataInicio ?? today,
         }, usuario);
 
-        // Deduct stock for every article on the OT
+        // RF-OT-004 §3.2 — baixa definitiva: deduz existência e liberta a reserva
+        // que foi feita na confirmação (mantém a invariante disponível = exist − reservado).
+        await this.stockReserva.consumir(id, usuario ?? 'sistema');
+
+        // Regista o movimento de saída de cada artigo consumido.
         for (const art of (ot.artigos ?? [])) {
             if (!art.artigoId || art.quantidade <= 0) continue;
-            await this.artigosService.ajusteExistencia(art.artigoId, -Number(art.quantidade));
             await this.artigosService.createMovimento({
                 artigoId: art.artigoId,
                 tipo: 'saida',
@@ -616,6 +625,7 @@ export class OrdensTrabalhoService {
                         artigoId: a.artigoId,
                         descricao: a.descricao,
                         quantidade: a.quantidade,
+                        qtdPrevista: a.qtdPrevista ?? a.quantidade ?? 0,
                         preco: a.preco,
                         codigoIva: a.codigoIva ?? null,
                         taxaIva: a.taxaIva ?? null,

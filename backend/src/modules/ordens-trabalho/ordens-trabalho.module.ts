@@ -5,6 +5,7 @@ import { OtMaoObra } from './ot-mao-obra.entity';
 import { OtArtigo } from './ot-artigo.entity';
 import { OtReprogramacao } from './ot-reprogramacao.entity';
 import { OrdensTrabalhoService } from './ordens-trabalho.service';
+import { StockReservaService } from './stock-reserva.service';
 import { OrdensTrabalhoController } from './ordens-trabalho.controller';
 import { ArtigosModule } from '../artigos/artigos.module';
 import { SysLogsModule } from '../sys-logs/sys-logs.module';
@@ -20,7 +21,7 @@ import { ConfiguracaoEmpresa } from '../configuracao/configuracao-empresa.entity
         SysLogsModule,
     ],
     controllers: [OrdensTrabalhoController],
-    providers: [OrdensTrabalhoService],
-    exports: [TypeOrmModule, OrdensTrabalhoService],
+    providers: [OrdensTrabalhoService, StockReservaService],
+    exports: [TypeOrmModule, OrdensTrabalhoService, StockReservaService],
 })
 export class OrdensTrabalhoModule {}
