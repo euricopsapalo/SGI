@@ -13,6 +13,25 @@ Sobe a cobertura de testes unitários dos services backend críticos e passa a C
 - **CI:** o job backend passa a correr `npm run test:cov` (falha abaixo dos thresholds); novo script `test:cov`.
 - **Resultado:** 280 testes unit verdes; "All files" dos services críticos a 83% statements / 86% lines.
 
+### feat(ot): reserva e validação de stock na confirmação (closes #57)
+
+RF-OT-004 do épico #60. A confirmação de uma OT passa a **reservar** as peças previstas no armazém (usando a coluna `artigos.stock_reservado`, até agora sem uso), avisando **sem bloquear** quando falta stock, e libertando as reservas ao adiar.
+
+**Modelo de dados**
+- `ot_artigos` ganha a Linha de Consumo: `qtd_prevista`, `qtd_reservada`, `qtd_consumida`, `para_reposicao`. A coluna `quantidade` mantém-se (impressão/faturação). `qtd_prevista` é preenchida na marcação (backfill = `quantidade`).
+- Migration `ReservaStockOT1748600000000` (colunas + índice parcial `idx_ot_artigos_reposicao` + backfill); `init.sql` atualizado para containers novos.
+
+**Backend**
+- Novo `StockReservaService` transacional (`dataSource.transaction` + lock pessimista na linha de `artigos`, RD-2): `reservar` / `libertar` / `consumir`. Invariante `disponivel = existencia − stock_reservado`.
+- `confirmar` dispara `reservar` e devolve `avisosStock: [{ artigoId, descricao, previsto, reservado, emFalta }]` (não bloqueia com stock insuficiente — reserva o disponível e marca `para_reposicao`). Logs `OT_STOCK_RESERVADO`.
+- `adiar` de uma OT que estava **Confirmada** liberta as reservas (`OT_STOCK_LIBERTADO`). `iniciar` passa a dar baixa via `consumir` (deduz existência **e** liberta a reserva, mantendo a invariante) — substitui o ajuste ad-hoc anterior.
+- `GET /api/artigos` expõe `disponivel` e aceita `?paraReposicao=true` (lista de reposição).
+
+**Frontend**
+- `OTArtigo` ganha `qtdPrevista/qtdReservada/qtdConsumida/paraReposicao`; `confirmarOT` devolve `avisosStock` e a página de Ordens avisa o utilizador das peças em reposição ao confirmar. Stock e seletor de artigos mostram Reservado/Disponível.
+
+**Validação:** 246 unit + 93 E2E verdes (novos: `stock-reserva.service.spec`, `artigos.service.spec`, `ot-reserva-stock.e2e`; CA-7 de `ot-confirmar-adiar` agora verifica a libertação real); `nest build` e `tsc` (frontend) limpos.
+
 ### chore(db): padronizar enums do schema para `varchar` + `CHECK` (closes #89)
 
 Decisão **Opção B** da #89: substituir os enums nativos do Postgres por `varchar(30)` + `CHECK` em todo o schema. Motivo: os enums do domínio evoluem com frequência (natureza estendida em #75, estados reformulados em RF-OT-001) e `varchar+CHECK` evolui com um simples `DROP/ADD CONSTRAINT`, ao contrário do `ALTER TYPE` rígido. Resolve a divergência sistémica entre `init.sql` (varchar) e entidades (enum nativo). **Reverte o #88** (que alinhara a OT na direção oposta).

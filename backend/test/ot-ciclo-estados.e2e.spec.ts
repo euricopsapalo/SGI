@@ -10,6 +10,7 @@ import { OtMaoObra } from '../src/modules/ordens-trabalho/ot-mao-obra.entity';
 import { OtArtigo } from '../src/modules/ordens-trabalho/ot-artigo.entity';
 import { OtReprogramacao } from '../src/modules/ordens-trabalho/ot-reprogramacao.entity';
 import { ArtigosService } from '../src/modules/artigos/artigos.service';
+import { StockReservaService } from '../src/modules/ordens-trabalho/stock-reserva.service';
 import { SysLogsService } from '../src/modules/sys-logs/sys-logs.service';
 import { Tecnico } from '../src/modules/tecnicos/tecnico.entity';
 import { EquipInstalado } from '../src/modules/parque/equip-instalado.entity';
@@ -64,6 +65,7 @@ describe('OT Ciclo de Estados (RF-OT-001) E2E', () => {
                 { provide: getRepositoryToken(User), useValue: { findOne: jest.fn(async ({ where }: any) => ({ id: where.id, role: 'admin' })) } },
                 { provide: getRepositoryToken(ConfiguracaoEmpresa), useValue: { find: jest.fn(async () => [{ limiteAdiamentos: 3 }]) } },
                 { provide: ArtigosService, useValue: { ajusteExistencia: jest.fn(), createMovimento: jest.fn() } },
+                { provide: StockReservaService, useValue: { reservar: jest.fn(async () => []), libertar: jest.fn(), consumir: jest.fn() } },
                 { provide: SysLogsService, useValue: { create: jest.fn(async (b: any) => { sysLogs.push(b); return b; }) } },
             ],
         }).compile();

@@ -12,6 +12,7 @@ import { OtMaoObra } from './ot-mao-obra.entity';
 import { OtArtigo } from './ot-artigo.entity';
 import { OtReprogramacao } from './ot-reprogramacao.entity';
 import { ArtigosService } from '../artigos/artigos.service';
+import { StockReservaService } from './stock-reserva.service';
 import { SysLogsService } from '../sys-logs/sys-logs.service';
 import { OTEstado } from './ordem-trabalho.entity';
 import { Tecnico } from '../tecnicos/tecnico.entity';
@@ -73,6 +74,7 @@ describe('OrdensTrabalhoService (regression #15)', () => {
                 { provide: getRepositoryToken(User), useValue: { findOne: jest.fn(async ({ where }: any) => ({ id: where.id, role: 'admin' })) } },
                 { provide: getRepositoryToken(ConfiguracaoEmpresa), useValue: { find: jest.fn(async () => [{ limiteAdiamentos: 3 }]) } },
                 { provide: ArtigosService, useValue: artigosServiceMock },
+                { provide: StockReservaService, useValue: { reservar: jest.fn(async () => []), libertar: jest.fn(), consumir: jest.fn() } },
                 { provide: SysLogsService, useValue: sysLogsMock },
             ],
         }).compile();

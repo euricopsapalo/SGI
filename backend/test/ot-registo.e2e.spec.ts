@@ -14,6 +14,7 @@ import { EquipInstalado } from '../src/modules/parque/equip-instalado.entity';
 import { User } from '../src/modules/users/user.entity';
 import { ConfiguracaoEmpresa } from '../src/modules/configuracao/configuracao-empresa.entity';
 import { ArtigosService } from '../src/modules/artigos/artigos.service';
+import { StockReservaService } from '../src/modules/ordens-trabalho/stock-reserva.service';
 import { SysLogsService } from '../src/modules/sys-logs/sys-logs.service';
 
 /**
@@ -73,6 +74,7 @@ describe('OT Registo e Marcação (RF-OT-002) E2E', () => {
                 { provide: getRepositoryToken(User), useValue: { findOne: jest.fn(async ({ where }: any) => ({ id: where.id, role: 'admin' })) } },
                 { provide: getRepositoryToken(ConfiguracaoEmpresa), useValue: { find: jest.fn(async () => [{ limiteAdiamentos: 3 }]) } },
                 { provide: ArtigosService, useValue: { ajusteExistencia: jest.fn(), createMovimento: jest.fn() } },
+                { provide: StockReservaService, useValue: { reservar: jest.fn(async () => []), libertar: jest.fn(), consumir: jest.fn() } },
                 { provide: SysLogsService, useValue: { create: jest.fn(async (b: any) => { sysLogs.push(b); return b; }) } },
             ],
         }).compile();
