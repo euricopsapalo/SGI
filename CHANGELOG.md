@@ -4,6 +4,41 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(ot): fecho, assinatura e geração automática periódica (closes #59)
+
+RF-OT-006 do épico #60 (depende do #58) — fecha a série de reformulação da OT. O fecho exige **assinatura do cliente**, aplica a baixa definitiva de stock conciliada com a reserva, e — se periódica — gera automaticamente a próxima ordem datada pela **data planeada** (anti-deriva).
+
+**Modelo de dados**
+- `ordens_trabalho` ganha `assinatura_ref` (comprovativo opcional) e `gerada_de_ot_id` (FK self, cadeia periódica, `ON DELETE SET NULL`) + índice.
+- Migration `1748700000000-FechoGeracaoOT`; `init.sql` atualizado.
+
+**Backend**
+- `finalizar` (`Em execução → Finalizada`): exige `assinadaCliente = true` (**422** `OT não pode ser finalizada sem assinatura do cliente`); aceita `assinaturaRef`; baixa via `StockReservaService.consumir` + movimentos; log `OT_FINALIZADA`.
+- Geração periódica reescrita (`gerarProximaPeriodica`): **datada pela planeada** (`reprogramacoes[0].dataAnterior ?? dataAgendada`) + intervalo, com `max(planeada+intervalo, hoje)`; valida `plano.ativo` e `equip.estado` (senão **não gera**, log `OT_PERIODICA_NAO_GERADA` com motivo); liga via `gerada_de_ot_id`; copia mão de obra + peças previstas; log `OT_PERIODICA_GERADA`. Pontual não gera.
+- `GET /api/ordens/:id` expõe `geradaDeOtId` e `otSeguinteId`.
+
+**Frontend**
+- `OrdemTrabalho` ganha `assinaturaRef`/`geradaDeOtId`/`otSeguinteId`; `finalizarOT(id, { assinadaCliente, dataFim })` devolve `{ otGeradaId }`.
+- Modal **Finalizar** com checkbox de assinatura **obrigatória** (bloqueia submissão) + custo real; toast com o número da OT periódica gerada.
+
+**Validação:** 252 unit + 108 E2E verdes (novo `ot-fecho-geracao.e2e` cobrindo assinatura, dating pela planeada com adiamentos, plano/equip inativo, próxima no passado); `nest build` e `tsc` (frontend) limpos.
+
+### feat(ot): execução e consumo de peças — Linha de Consumo (closes #58)
+
+RF-OT-005 do épico #60 (depende do #57). O técnico de campo inicia a OT e regista o **consumo real** de peças, que pode divergir do previsto; a baixa definitiva de stock passa a ocorrer no **fecho** (não no início).
+
+**Backend**
+- `iniciar` (`Confirmada → Em execução`) exige técnico de campo atribuído (422 se ausente) e **deixa de abater stock**; log `OT_INICIADA`.
+- Novo `PUT /api/ordens/:id/consumo` (`registarConsumo`): só em `Em execução` (422 caso contrário). Payload autoritativo — previstas mencionadas atualizam `qtd_consumida`, peças extra criam linha com `qtd_prevista = 0`, previstas omitidas ficam a `0`. Captura preço/IVA do artigo (custo histórico estável). Log `OT_CONSUMO_REGISTADO`.
+- `GET /api/ordens` expõe `custoPrevisto` (Σ `qtd_prevista`×preço + mão de obra) e `custoReal` (Σ `qtd_consumida`×preço + mão de obra).
+- A baixa definitiva (`StockReservaService.consumir` + movimentos de saída pela quantidade consumida) foi movida de `iniciar` para `finalizar`.
+
+**Frontend**
+- `OrdemTrabalho` ganha `custoPrevisto`/`custoReal`; novo `registarConsumoOT(id, linhas)`; `refreshStock` movido para o fecho.
+- Modal **Registar Consumo** (menu de contexto de OT em execução): tabela previsto vs. consumido editável, adicionar peça não prevista, e resumo do custo real.
+
+**Validação:** 250 unit + 101 E2E verdes (novos: `ot-execucao.e2e`, testes de `registarConsumo`/custo no service spec); `nest build` e `tsc` (frontend) limpos.
+
 ### test(backend): cobertura ≥80% nos services críticos + gate na CI (closes #38)
 
 Sobe a cobertura de testes unitários dos services backend críticos e passa a CI a falhar se a cobertura descer.

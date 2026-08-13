@@ -139,6 +139,13 @@ export interface OrdemTrabalho {
     requerAprovacaoAdiar?: boolean;
     aprovadoPorId?: string;
     aprovadoPorNome?: string;
+    // RF-OT-005 §3.4 — custo previsto vs. real (peças + mão de obra)
+    custoPrevisto?: number;
+    custoReal?: number;
+    // RF-OT-006 — assinatura e cadeia periódica
+    assinaturaRef?: string;
+    geradaDeOtId?: string;
+    otSeguinteId?: string;
 }
 
 // ── Warehouse ──────────────────────────────────────────────
@@ -358,6 +365,13 @@ const normOrdem = (o: any): OrdemTrabalho => ({
     requerAprovacaoAdiar: !!o.requerAprovacaoAdiar,
     aprovadoPorId: o.aprovadoPorId?.toString() ?? o.aprovadoPor?.id?.toString(),
     aprovadoPorNome: o.aprovadoPor?.nome,
+    // RF-OT-005
+    custoPrevisto: o.custoPrevisto != null ? Number(o.custoPrevisto) : undefined,
+    custoReal: o.custoReal != null ? Number(o.custoReal) : undefined,
+    // RF-OT-006
+    assinaturaRef: o.assinaturaRef ?? undefined,
+    geradaDeOtId: o.geradaDeOtId?.toString() ?? o.geradaDe?.id?.toString(),
+    otSeguinteId: o.otSeguinteId?.toString(),
     reprogramacoes: (o.reprogramacoes ?? []).map((r: any) => ({
         id: r.id?.toString(), dataAnterior: r.dataAnterior, novaData: r.novaData,
         motivo: r.motivo ?? '', criadoEm: r.criadoEm ?? '', usuario: r.usuario,
@@ -508,7 +522,8 @@ interface GlobalContextType {
     confirmarOT: (id: string, opts?: { dataExecucao: string; executadoPorId?: string }) => Promise<AvisoStock[]>;
     adiarOT: (id: string, opts?: { novaData: string; motivo: string; aprovadoPor?: string; aprovacaoMotivo?: string }) => Promise<void>;
     iniciarOT: (id: string, dataInicio?: string) => Promise<void>;
-    finalizarOT: (id: string, dataFim?: string) => Promise<void>;
+    registarConsumoOT: (id: string, linhas: { artigoId?: number; quantidade: number; descricao?: string }[]) => Promise<void>;
+    finalizarOT: (id: string, opts?: { assinadaCliente: boolean; dataFim?: string; assinaturaRef?: string }) => Promise<{ otGeradaId?: string }>;
     reprogramarOT: (id: string, novaData: string, dataAnterior?: string, motivo?: string) => Promise<void>;
     // Warehouse
     armazens: Armazem[]; addArmazem: (a: Omit<Armazem, 'id'>) => Armazem; updateArmazem: (id: string, a: Partial<Armazem>) => void;
@@ -1218,15 +1233,34 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const { data } = await api.put(`/ordens/${id}/iniciar`, { dataInicio, usuario });
         setOrdens(p => p.map(x => x.id === id ? normOrdem(data) : x));
         log('Ordens de Trabalho', 'OT iniciada', `ID: ${id} → Em execução`);
-        await refreshStock();
     };
 
-    const finalizarOT = async (id: string, dataFim?: string) => {
+    // RF-OT-005 §3.2 — regista o consumo real de peças (só em execução)
+    const registarConsumoOT = async (id: string, linhas: { artigoId?: number; quantidade: number; descricao?: string }[]) => {
         const usuario = currentUserRef.current?.email ?? 'sistema';
-        await api.put(`/ordens/${id}/finalizar`, { dataFim, usuario });
+        const { data } = await api.put(`/ordens/${id}/consumo`, { linhas, usuario });
+        setOrdens(p => p.map(x => x.id === id ? normOrdem(data) : x));
+        log('Ordens de Trabalho', 'Consumo registado', `ID: ${id} — ${linhas.length} linha(s)`);
+    };
+
+    // RF-OT-006 §3.1 — finalizar exige assinatura do cliente; periódica gera a seguinte.
+    const finalizarOT = async (id: string, opts?: { assinadaCliente: boolean; dataFim?: string; assinaturaRef?: string }) => {
+        const usuario = currentUserRef.current?.email ?? 'sistema';
+        await api.put(`/ordens/${id}/finalizar`, {
+            dataFim: opts?.dataFim,
+            assinadaCliente: opts?.assinadaCliente ?? true,
+            assinaturaRef: opts?.assinaturaRef,
+            usuario,
+        });
         const { data: all } = await api.get(`/ordens`);
-        setOrdens(all.map(normOrdem));
+        const ordensNorm = all.map(normOrdem);
+        setOrdens(ordensNorm);
         log('Ordens de Trabalho', 'OT finalizada', `ID: ${id}`);
+        // RF-OT-005 §3.3 — a baixa definitiva de stock ocorre no fecho.
+        await refreshStock();
+        // RF-OT-006 §3.2 — devolve a OT periódica gerada, se existir.
+        const gerada = ordensNorm.find((o: OrdemTrabalho) => o.geradaDeOtId === id);
+        return { otGeradaId: gerada?.id };
     };
 
     const updateEmpresaConfig = async (c: Partial<EmpresaConfig>) => {
@@ -1507,7 +1541,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             modelosEquipamento, addModelo, updateModelo, removeModelo,
             equipInstalados, addEquipInstalado, updateEquipInstalado, removeEquipInstalado,
             planos, addPlano, updatePlano, removePlano,
-            ordens, addOrdem, updateOrdem, removeOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, finalizarOT, reprogramarOT,
+            ordens, addOrdem, updateOrdem, removeOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, registarConsumoOT, finalizarOT, reprogramarOT,
             armazens, addArmazem, updateArmazem,
             artigos: artigosComReserva, addArtigo, updateArtigo, adjustExistencia, adjustReservado,
             stockArmazem, upsertStockArmazem, removeStockArmazem,

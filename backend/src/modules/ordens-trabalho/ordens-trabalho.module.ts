@@ -13,10 +13,11 @@ import { Tecnico } from '../tecnicos/tecnico.entity';
 import { EquipInstalado } from '../parque/equip-instalado.entity';
 import { User } from '../users/user.entity';
 import { ConfiguracaoEmpresa } from '../configuracao/configuracao-empresa.entity';
+import { PlanoManutencao } from '../planos/plano-manutencao.entity';
 
 @Module({
     imports: [
-        TypeOrmModule.forFeature([OrdemTrabalho, OtMaoObra, OtArtigo, OtReprogramacao, Tecnico, EquipInstalado, User, ConfiguracaoEmpresa]),
+        TypeOrmModule.forFeature([OrdemTrabalho, OtMaoObra, OtArtigo, OtReprogramacao, Tecnico, EquipInstalado, User, ConfiguracaoEmpresa, PlanoManutencao]),
         ArtigosModule,
         SysLogsModule,
     ],

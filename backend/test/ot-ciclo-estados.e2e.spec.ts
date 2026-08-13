@@ -16,6 +16,7 @@ import { Tecnico } from '../src/modules/tecnicos/tecnico.entity';
 import { EquipInstalado } from '../src/modules/parque/equip-instalado.entity';
 import { User } from '../src/modules/users/user.entity';
 import { ConfiguracaoEmpresa } from '../src/modules/configuracao/configuracao-empresa.entity';
+import { PlanoManutencao } from '../src/modules/planos/plano-manutencao.entity';
 
 /**
  * RF-OT-001 — E2E da máquina de estados.
@@ -64,6 +65,7 @@ describe('OT Ciclo de Estados (RF-OT-001) E2E', () => {
                 { provide: getRepositoryToken(EquipInstalado), useValue: { findOne: jest.fn(async ({ where }: any) => ({ id: where.id, clienteId: 99 })) } },
                 { provide: getRepositoryToken(User), useValue: { findOne: jest.fn(async ({ where }: any) => ({ id: where.id, role: 'admin' })) } },
                 { provide: getRepositoryToken(ConfiguracaoEmpresa), useValue: { find: jest.fn(async () => [{ limiteAdiamentos: 3 }]) } },
+                { provide: getRepositoryToken(PlanoManutencao), useValue: { findOne: jest.fn(async () => ({ id: 1, ativo: true })) } },
                 { provide: ArtigosService, useValue: { ajusteExistencia: jest.fn(), createMovimento: jest.fn() } },
                 { provide: StockReservaService, useValue: { reservar: jest.fn(async () => []), libertar: jest.fn(), consumir: jest.fn() } },
                 { provide: SysLogsService, useValue: { create: jest.fn(async (b: any) => { sysLogs.push(b); return b; }) } },
@@ -92,7 +94,7 @@ describe('OT Ciclo de Estados (RF-OT-001) E2E', () => {
         expect(store[1].estado).toBe('Confirmada');
         await request(srv()).put('/ordens/1/iniciar').send({}).expect(200);
         expect(store[1].estado).toBe('Em execução');
-        await request(srv()).put('/ordens/1/finalizar').send({}).expect(200);
+        await request(srv()).put('/ordens/1/finalizar').send({ assinadaCliente: true }).expect(200);
         expect(store[1].estado).toBe('Finalizada');
         expect(store[1].assinadaCliente).toBe(true);
     });

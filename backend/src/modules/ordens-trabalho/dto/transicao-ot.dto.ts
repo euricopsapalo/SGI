@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
 
 /** DTOs das transições da máquina de estados da OT (RF-OT-001 + RF-OT-003). */
 
@@ -38,5 +38,8 @@ export class IniciarOtDto {
 
 export class FinalizarOtDto {
   @IsOptional() @IsString() dataFim?: string;
+  /** RF-OT-006 §3.1 — assinatura do cliente é obrigatória para finalizar. */
+  @IsOptional() @IsBoolean() assinadaCliente?: boolean;
+  @IsOptional() @IsString() assinaturaRef?: string;
   @IsOptional() @IsString() usuario?: string;
 }

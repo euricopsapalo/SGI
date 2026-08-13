@@ -18,6 +18,7 @@ import { Tecnico } from '../tecnicos/tecnico.entity';
 import { EquipInstalado } from '../parque/equip-instalado.entity';
 import { User, UserRole } from '../users/user.entity';
 import { ConfiguracaoEmpresa } from '../configuracao/configuracao-empresa.entity';
+import { PlanoManutencao } from '../planos/plano-manutencao.entity';
 
 export function calcNextDate(fromDate: string, periodicidade: string): string {
     const d = new Date(fromDate);
@@ -60,6 +61,8 @@ export class OrdensTrabalhoService {
         private readonly userRepo: Repository<User>,
         @InjectRepository(ConfiguracaoEmpresa)
         private readonly configRepo: Repository<ConfiguracaoEmpresa>,
+        @InjectRepository(PlanoManutencao)
+        private readonly planoRepo: Repository<PlanoManutencao>,
         private readonly artigosService: ArtigosService,
         private readonly stockReserva: StockReservaService,
         private readonly sysLogs: SysLogsService,
@@ -141,6 +144,23 @@ export class OrdensTrabalhoService {
         return ot;
     }
 
+    /**
+     * RF-OT-005 §3.4 — anexa `custoPrevisto` e `custoReal` (peças + mão de obra).
+     * Previsto usa `qtd_prevista`; real usa `qtd_consumida`. Ambos somam a mão de obra.
+     */
+    private withCustos<T extends OrdemTrabalho | null>(ot: T): T {
+        if (!ot) return ot;
+        const arts = ot.artigos ?? [];
+        const maoCusto = (ot.maosObra ?? []).reduce((s, m) => s + Number(m.custo ?? 0), 0);
+        const previstoPecas = arts.reduce(
+            (s, a) => s + Number(a.qtdPrevista ?? a.quantidade ?? 0) * Number(a.preco ?? 0), 0);
+        const realPecas = arts.reduce(
+            (s, a) => s + Number(a.qtdConsumida ?? 0) * Number(a.preco ?? 0), 0);
+        (ot as any).custoPrevisto = previstoPecas + maoCusto;
+        (ot as any).custoReal = realPecas + maoCusto;
+        return ot;
+    }
+
     /** Fetch OT or throw 404, optionally validate current estado */
     private async findOrFail(id: number, expectedEstado?: OTEstado): Promise<OrdemTrabalho> {
         const ot = await this.findOne(id);
@@ -183,7 +203,7 @@ export class OrdensTrabalhoService {
         return ots.map(o => {
             this.withTransicoes(o);
             (o as any).requerAprovacaoAdiar = (o.adiamentos ?? 0) >= limite;
-            return o;
+            return this.withCustos(o);
         });
     }
 
@@ -193,7 +213,14 @@ export class OrdensTrabalhoService {
             relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes', 'registadoPor', 'executadoPor', 'aprovadoPor'],
         });
         this.withTransicoes(ot);
-        return this.withDerivados(ot);
+        await this.withDerivados(ot);
+        this.withCustos(ot);
+        // RF-OT-006 §5 — expõe a OT periódica gerada a partir desta (se existir).
+        if (ot) {
+            const seguinte = await this.repo.findOne({ where: { geradaDeOtId: ot.id }, select: ['id'] });
+            (ot as any).otSeguinteId = seguinte?.id ?? null;
+        }
+        return ot;
     }
 
     /**
@@ -530,40 +557,139 @@ export class OrdensTrabalhoService {
         return this.findOne(id);
     }
 
-    /** Confirmada → Em execução (RF-OT-005). Deduz stock dos artigos da OT. */
+    /**
+     * RF-OT-005 §3.1 — Confirmada → Em execução.
+     * Exige técnico de campo atribuído (422 se ausente). **Não** abate stock:
+     * a baixa definitiva ocorre no fecho (RF-OT-006, RD-1).
+     */
     async iniciar(id: number, dataInicio?: string, usuario?: string) {
         const ot = await this.findOrFail(id);
         this.assertTransicao(ot, OTEstado.EM_EXECUCAO);
+
+        if (!ot.executadoPorId) {
+            throw new UnprocessableEntityException(
+                'OT não pode ser iniciada sem técnico de campo atribuído',
+            );
+        }
 
         const today = new Date().toISOString().split('T')[0];
         await this.transitar(id, ot.estado, OTEstado.EM_EXECUCAO, {
             dataInicio: dataInicio ?? today,
         }, usuario);
 
-        // RF-OT-004 §3.2 — baixa definitiva: deduz existência e liberta a reserva
-        // que foi feita na confirmação (mantém a invariante disponível = exist − reservado).
-        await this.stockReserva.consumir(id, usuario ?? 'sistema');
-
-        // Regista o movimento de saída de cada artigo consumido.
-        for (const art of (ot.artigos ?? [])) {
-            if (!art.artigoId || art.quantidade <= 0) continue;
-            await this.artigosService.createMovimento({
-                artigoId: art.artigoId,
-                tipo: 'saida',
-                quantidade: art.quantidade,
-                referencia: `OT-${id}`,
-                usuario: usuario ?? 'sistema',
-                observacao: `Saída OT ${id}`,
-            });
-        }
+        await this.sysLogs.create({
+            usuario: usuario ?? 'sistema',
+            modulo: 'OT',
+            acao: 'OT_INICIADA',
+            detalhes: `#${id} em execução desde ${dataInicio ?? today}`,
+        });
 
         return this.findOne(id);
     }
 
-    /** Em execução → Finalizada (RF-OT-006). OTs periódicas geram a ordem seguinte. */
-    async finalizar(id: number, dataFim?: string, usuario?: string) {
+    /**
+     * RF-OT-005 §3.2 — Regista o consumo real de peças (Linha de Consumo).
+     * Só permitido em `Em execução` (422 caso contrário). O payload é a lista
+     * autoritativa de peças realmente usadas: linhas previstas mencionadas são
+     * atualizadas, peças extra são criadas (`qtd_prevista = 0`) e previstas
+     * omitidas ficam com `qtd_consumida = 0` (não usadas).
+     */
+    async registarConsumo(
+        id: number,
+        linhas: { artigoId?: number; quantidade: number; descricao?: string }[],
+        usuario = 'sistema',
+    ) {
+        const ot = await this.findOrFail(id);
+        if (ot.estado !== OTEstado.EM_EXECUCAO) {
+            throw new UnprocessableEntityException(
+                `Consumo só pode ser registado com a OT em execução (estado atual: "${ot.estado}").`,
+            );
+        }
+
+        const existentes = ot.artigos ?? [];
+        const tocadas = new Set<number>();
+
+        for (const linha of linhas ?? []) {
+            const artigoId = linha.artigoId ? Number(linha.artigoId) : undefined;
+            const q = Number(linha.quantidade ?? 0);
+
+            // Captura preço/IVA do artigo no momento (custo histórico estável).
+            let preco: number | undefined;
+            let codigoIva: string | undefined;
+            let descricao = linha.descricao;
+            if (artigoId) {
+                const artigo = await this.artigosService.findOne(artigoId);
+                if (artigo) {
+                    preco = Number(artigo.precoUnitario);
+                    codigoIva = artigo.codigoIva ?? undefined;
+                    descricao = descricao ?? artigo.descricao;
+                }
+            }
+
+            const existente = artigoId
+                ? existentes.find((l) => Number(l.artigoId) === artigoId)
+                : undefined;
+
+            if (existente) {
+                tocadas.add(existente.id);
+                await this.artigoRepo.update(existente.id, {
+                    qtdConsumida: q,
+                    quantidade: q,
+                    ...(preco !== undefined ? { preco } : {}),
+                    ...(codigoIva !== undefined ? { codigoIva } : {}),
+                });
+            } else {
+                // Peça extra não prevista.
+                const nova = await this.artigoRepo.save(this.artigoRepo.create({
+                    ordemTrabalho: { id },
+                    artigoId: artigoId ?? null,
+                    descricao: descricao ?? '',
+                    quantidade: q,
+                    qtdPrevista: 0,
+                    qtdConsumida: q,
+                    preco: preco ?? 0,
+                    codigoIva: codigoIva ?? null,
+                }));
+                tocadas.add(nova.id);
+            }
+        }
+
+        // Previstas não mencionadas → não usadas.
+        for (const l of existentes) {
+            if (!tocadas.has(l.id)) {
+                await this.artigoRepo.update(l.id, { qtdConsumida: 0 });
+            }
+        }
+
+        await this.sysLogs.create({
+            usuario,
+            modulo: 'OT',
+            acao: 'OT_CONSUMO_REGISTADO',
+            detalhes: `#${id}: ${(linhas ?? []).length} linha(s) de consumo real`,
+        });
+
+        return this.findOne(id);
+    }
+
+    /**
+     * RF-OT-006 §3.1 — Em execução → Finalizada.
+     * Exige **assinatura do cliente** (422 se ausente), aplica a baixa definitiva
+     * de stock conciliada com a reserva, e — se periódica — gera a próxima ordem
+     * datada a partir da **data planeada** (anti-deriva).
+     */
+    async finalizar(
+        id: number,
+        opts: { dataFim?: string; assinadaCliente?: boolean; assinaturaRef?: string; usuario?: string } = {},
+    ) {
+        const { dataFim, assinadaCliente, assinaturaRef, usuario } = opts;
         const ot = await this.findOrFail(id);
         this.assertTransicao(ot, OTEstado.FINALIZADA);
+
+        if (assinadaCliente !== true) {
+            throw new UnprocessableEntityException(
+                'OT não pode ser finalizada sem assinatura do cliente',
+            );
+        }
 
         const today = new Date().toISOString().split('T')[0];
         const fim = dataFim ?? today;
@@ -577,64 +703,121 @@ export class OrdensTrabalhoService {
         await this.transitar(id, ot.estado, OTEstado.FINALIZADA, {
             dataFim: fim,
             assinadaCliente: true,
+            ...(assinaturaRef ? { assinaturaRef } : {}),
         }, usuario);
 
-        // Create next periodic OT automatically
+        await this.sysLogs.create({
+            usuario: usuario ?? 'sistema',
+            modulo: 'OT',
+            acao: 'OT_FINALIZADA',
+            detalhes: `#${id} finalizada (${fim}), assinada pelo cliente`,
+        });
+
+        // RF-OT-006 §3.1.3 — baixa definitiva conciliada com a reserva (transacional).
+        await this.stockReserva.consumir(id, usuario ?? 'sistema');
+        for (const art of (ot.artigos ?? [])) {
+            const consumido = Number(art.qtdConsumida ?? art.quantidade ?? 0);
+            if (!art.artigoId || consumido <= 0) continue;
+            await this.artigosService.createMovimento({
+                artigoId: art.artigoId,
+                tipo: 'saida',
+                quantidade: consumido,
+                referencia: `OT-${id}`,
+                usuario: usuario ?? 'sistema',
+                observacao: `Consumo OT ${id}`,
+            });
+        }
+
+        // RF-OT-006 §3.2 — geração automática da próxima OT periódica.
         const updated = await this.findOne(id);
-        if (
-            updated &&
-            updated.tipo === OTTipo.PERIODICA &&
-            updated.periodicidade &&
-            updated.periodicidade !== 'Única'
-        ) {
-            const nextStart = calcNextDate(fim, updated.periodicidade);
-
-            // Save new OT first (without children) to get its ID
-            const newOt = await this.repo.save(this.repo.create({
-                tipo: OTTipo.PERIODICA,
-                cliente: updated.cliente,
-                equipInstaladoId: updated.equipInstaladoId,
-                planoId: updated.planoId,
-                naturezaIntervencao: updated.naturezaIntervencao,
-                prioridade: updated.prioridade,
-                descricao: updated.descricao,
-                previsaoTempo: updated.previsaoTempo,
-                periodicidade: updated.periodicidade,
-                orgao: updated.orgao,
-                sintoma: updated.sintoma,
-                causa: updated.causa,
-                estado: OTEstado.PROGRAMADA,
-                dataAgendada: nextStart,
-            }));
-
-            // Explicitly save children so they are linked to the new OT
-            if ((updated.maosObra ?? []).length > 0) {
-                await this.maoRepo.save(
-                    updated.maosObra.map(m => this.maoRepo.create({
-                        ordemTrabalho: { id: newOt.id },
-                        funcao: m.funcao,
-                        custo: m.custo,
-                        hora: m.hora,
-                    }))
-                );
-            }
-            if ((updated.artigos ?? []).length > 0) {
-                await this.artigoRepo.save(
-                    updated.artigos.map(a => this.artigoRepo.create({
-                        ordemTrabalho: { id: newOt.id },
-                        artigoId: a.artigoId,
-                        descricao: a.descricao,
-                        quantidade: a.quantidade,
-                        qtdPrevista: a.qtdPrevista ?? a.quantidade ?? 0,
-                        preco: a.preco,
-                        codigoIva: a.codigoIva ?? null,
-                        taxaIva: a.taxaIva ?? null,
-                    }))
-                );
-            }
+        if (updated && updated.tipo === OTTipo.PERIODICA
+            && updated.periodicidade && updated.periodicidade !== 'Única') {
+            await this.gerarProximaPeriodica(updated, usuario ?? 'sistema');
         }
 
         return this.findAll();
+    }
+
+    /**
+     * RF-OT-006 §3.2 — cria a OT periódica seguinte a partir de uma OT finalizada.
+     * - Valida que o plano/equipamento continua ativo (senão não gera, regista motivo).
+     * - Data a nova ordem a partir da **data planeada** original + intervalo, nunca
+     *   da data real (anti-deriva); se cair no passado, usa `max(planeada+intervalo, hoje)`.
+     * - Liga a nova à anterior via `gerada_de_ot_id`.
+     */
+    private async gerarProximaPeriodica(origem: OrdemTrabalho, usuario: string): Promise<void> {
+        // 1. Validar plano/equipamento ativo.
+        let motivoNaoGera: string | undefined;
+        if (origem.planoId) {
+            const plano = await this.planoRepo.findOne({ where: { id: origem.planoId } });
+            if (plano && plano.ativo === false) motivoNaoGera = 'plano inativo';
+        }
+        if (!motivoNaoGera && origem.equipInstaladoId) {
+            const equip = await this.equipRepo.findOne({ where: { id: origem.equipInstaladoId } });
+            if (equip && (equip as any).estado === 'inativo') motivoNaoGera = 'equipamento inativo';
+        }
+        if (motivoNaoGera) {
+            await this.sysLogs.create({
+                usuario, modulo: 'OT', acao: 'OT_PERIODICA_NAO_GERADA',
+                detalhes: `#${origem.id}: próxima periódica não gerada — ${motivoNaoGera}`,
+            });
+            return;
+        }
+
+        // 2. Datar a partir da data planeada original (anti-deriva).
+        const today = new Date().toISOString().split('T')[0];
+        const reprogs = (origem.reprogramacoes ?? []).slice().sort(
+            (a, b) => new Date(a.criadoEm ?? 0).getTime() - new Date(b.criadoEm ?? 0).getTime());
+        const dataPlaneada = reprogs[0]?.dataAnterior ?? origem.dataAgendada ?? origem.dataFim ?? today;
+        let nextStart = calcNextDate(dataPlaneada, origem.periodicidade);
+        let avisoPassado = false;
+        if (nextStart < today) { nextStart = today; avisoPassado = true; }
+
+        // 3. Criar a nova OT ligada à anterior.
+        const newOt = await this.repo.save(this.repo.create({
+            tipo: OTTipo.PERIODICA,
+            cliente: origem.cliente,
+            equipInstaladoId: origem.equipInstaladoId,
+            planoId: origem.planoId,
+            naturezaIntervencao: origem.naturezaIntervencao,
+            prioridade: origem.prioridade,
+            descricao: origem.descricao,
+            previsaoTempo: origem.previsaoTempo,
+            periodicidade: origem.periodicidade,
+            orgao: origem.orgao,
+            sintoma: origem.sintoma,
+            causa: origem.causa,
+            estado: OTEstado.PROGRAMADA,
+            dataAgendada: nextStart,
+            geradaDeOtId: origem.id,
+        }));
+
+        // 4. Copiar mão de obra e peças previstas.
+        if ((origem.maosObra ?? []).length > 0) {
+            await this.maoRepo.save(origem.maosObra.map(m => this.maoRepo.create({
+                ordemTrabalho: { id: newOt.id }, funcao: m.funcao, custo: m.custo, hora: m.hora,
+            })));
+        }
+        if ((origem.artigos ?? []).length > 0) {
+            await this.artigoRepo.save(origem.artigos
+                .filter(a => Number(a.qtdPrevista ?? a.quantidade ?? 0) > 0)
+                .map(a => this.artigoRepo.create({
+                    ordemTrabalho: { id: newOt.id },
+                    artigoId: a.artigoId,
+                    descricao: a.descricao,
+                    quantidade: a.qtdPrevista ?? a.quantidade ?? 0,
+                    qtdPrevista: a.qtdPrevista ?? a.quantidade ?? 0,
+                    preco: a.preco,
+                    codigoIva: a.codigoIva ?? null,
+                    taxaIva: a.taxaIva ?? null,
+                })));
+        }
+
+        await this.sysLogs.create({
+            usuario, modulo: 'OT', acao: 'OT_PERIODICA_GERADA',
+            detalhes: `#${newOt.id} gerada a partir de #${origem.id}, dataAgendada=${nextStart}`
+                + (avisoPassado ? ' (planeada+intervalo no passado → hoje)' : ''),
+        });
     }
 
     /**
