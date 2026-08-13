@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColum
 import { EquipInstalado } from '../parque/equip-instalado.entity';
 import { PlanoMaoObra } from './plano-mao-obra.entity';
 import { PlanoArtigo } from './plano-artigo.entity';
+import { TipoTrabalho } from '../tabelas-sistema/tipo-trabalho.entity';
 
 @Entity('planos_manutencao')
 export class PlanoManutencao {
@@ -14,6 +15,11 @@ export class PlanoManutencao {
 
     @Column({ type: 'text' })
     descricao: string;
+
+    // #36 — relação para o Tipo de Trabalho (init.sql: ON DELETE SET NULL).
+    @ManyToOne(() => TipoTrabalho, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'tipo_trabalho_id' })
+    tipoTrabalho: TipoTrabalho;
 
     @Column({ name: 'tipo_trabalho_id', nullable: true })
     tipoTrabalhoId: number;

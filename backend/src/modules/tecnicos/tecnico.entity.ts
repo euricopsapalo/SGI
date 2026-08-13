@@ -3,9 +3,11 @@ import {
     PrimaryGeneratedColumn,
     Column,
     OneToOne,
+    ManyToOne,
     JoinColumn,
 } from 'typeorm';
 import { User } from '../users/user.entity';
+import { FuncaoTecnico } from '../tabelas-sistema/funcao-tecnico.entity';
 
 @Entity('tecnicos')
 export class Tecnico {
@@ -20,6 +22,11 @@ export class Tecnico {
 
     @Column({ nullable: true, length: 30 })
     telefone: string;
+
+    // #36 — relação para a Função Técnico (init.sql: ON DELETE SET NULL).
+    @ManyToOne(() => FuncaoTecnico, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'funcao_id' })
+    funcao: FuncaoTecnico;
 
     @Column({ name: 'funcao_id', nullable: true })
     funcaoId: number;

@@ -5,6 +5,8 @@ import { User } from '../users/user.entity';
 import { OtMaoObra } from './ot-mao-obra.entity';
 import { OtArtigo } from './ot-artigo.entity';
 import { OtReprogramacao } from './ot-reprogramacao.entity';
+import { EquipInstalado } from '../parque/equip-instalado.entity';
+import { PlanoManutencao } from '../planos/plano-manutencao.entity';
 
 /**
  * RF-OT-002 §3.1 — natureza da intervenção pedida.
@@ -105,8 +107,18 @@ export class OrdemTrabalho {
     @JoinColumn({ name: 'cliente_id' })
     cliente: Cliente;
 
+    // #36 — relações para máquina instalada e plano (init.sql: ON DELETE SET NULL);
+    // mantêm-se os escalares `equipInstaladoId`/`planoId` para o shape do frontend.
+    @ManyToOne(() => EquipInstalado, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'equip_instalado_id' })
+    equipInstalado: EquipInstalado;
+
     @Column({ name: 'equip_instalado_id', nullable: true })
     equipInstaladoId: number;
+
+    @ManyToOne(() => PlanoManutencao, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'plano_id' })
+    plano: PlanoManutencao;
 
     @Column({ name: 'plano_id', nullable: true })
     planoId: number;

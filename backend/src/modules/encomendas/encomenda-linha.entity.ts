@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { Encomenda } from './encomenda.entity';
+import { Artigo } from '../artigos/artigo.entity';
 
 @Entity('encomenda_linhas')
 export class EncomendaLinha {
@@ -9,6 +10,11 @@ export class EncomendaLinha {
     @ManyToOne(() => Encomenda, (e) => e.linhas, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'encomenda_id' })
     encomenda: Encomenda;
+
+    // #36 — relação para o Artigo (init.sql: ON DELETE SET NULL).
+    @ManyToOne(() => Artigo, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'artigo_id' })
+    artigo: Artigo;
 
     @Column({ name: 'artigo_id', nullable: true })
     artigoId: number;
