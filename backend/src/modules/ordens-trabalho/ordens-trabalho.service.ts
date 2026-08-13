@@ -141,6 +141,23 @@ export class OrdensTrabalhoService {
         return ot;
     }
 
+    /**
+     * RF-OT-005 §3.4 — anexa `custoPrevisto` e `custoReal` (peças + mão de obra).
+     * Previsto usa `qtd_prevista`; real usa `qtd_consumida`. Ambos somam a mão de obra.
+     */
+    private withCustos<T extends OrdemTrabalho | null>(ot: T): T {
+        if (!ot) return ot;
+        const arts = ot.artigos ?? [];
+        const maoCusto = (ot.maosObra ?? []).reduce((s, m) => s + Number(m.custo ?? 0), 0);
+        const previstoPecas = arts.reduce(
+            (s, a) => s + Number(a.qtdPrevista ?? a.quantidade ?? 0) * Number(a.preco ?? 0), 0);
+        const realPecas = arts.reduce(
+            (s, a) => s + Number(a.qtdConsumida ?? 0) * Number(a.preco ?? 0), 0);
+        (ot as any).custoPrevisto = previstoPecas + maoCusto;
+        (ot as any).custoReal = realPecas + maoCusto;
+        return ot;
+    }
+
     /** Fetch OT or throw 404, optionally validate current estado */
     private async findOrFail(id: number, expectedEstado?: OTEstado): Promise<OrdemTrabalho> {
         const ot = await this.findOne(id);
@@ -183,7 +200,7 @@ export class OrdensTrabalhoService {
         return ots.map(o => {
             this.withTransicoes(o);
             (o as any).requerAprovacaoAdiar = (o.adiamentos ?? 0) >= limite;
-            return o;
+            return this.withCustos(o);
         });
     }
 
@@ -193,7 +210,8 @@ export class OrdensTrabalhoService {
             relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes', 'registadoPor', 'executadoPor', 'aprovadoPor'],
         });
         this.withTransicoes(ot);
-        return this.withDerivados(ot);
+        await this.withDerivados(ot);
+        return this.withCustos(ot);
     }
 
     /**
@@ -530,32 +548,116 @@ export class OrdensTrabalhoService {
         return this.findOne(id);
     }
 
-    /** Confirmada → Em execução (RF-OT-005). Deduz stock dos artigos da OT. */
+    /**
+     * RF-OT-005 §3.1 — Confirmada → Em execução.
+     * Exige técnico de campo atribuído (422 se ausente). **Não** abate stock:
+     * a baixa definitiva ocorre no fecho (RF-OT-006, RD-1).
+     */
     async iniciar(id: number, dataInicio?: string, usuario?: string) {
         const ot = await this.findOrFail(id);
         this.assertTransicao(ot, OTEstado.EM_EXECUCAO);
+
+        if (!ot.executadoPorId) {
+            throw new UnprocessableEntityException(
+                'OT não pode ser iniciada sem técnico de campo atribuído',
+            );
+        }
 
         const today = new Date().toISOString().split('T')[0];
         await this.transitar(id, ot.estado, OTEstado.EM_EXECUCAO, {
             dataInicio: dataInicio ?? today,
         }, usuario);
 
-        // RF-OT-004 §3.2 — baixa definitiva: deduz existência e liberta a reserva
-        // que foi feita na confirmação (mantém a invariante disponível = exist − reservado).
-        await this.stockReserva.consumir(id, usuario ?? 'sistema');
+        await this.sysLogs.create({
+            usuario: usuario ?? 'sistema',
+            modulo: 'OT',
+            acao: 'OT_INICIADA',
+            detalhes: `#${id} em execução desde ${dataInicio ?? today}`,
+        });
 
-        // Regista o movimento de saída de cada artigo consumido.
-        for (const art of (ot.artigos ?? [])) {
-            if (!art.artigoId || art.quantidade <= 0) continue;
-            await this.artigosService.createMovimento({
-                artigoId: art.artigoId,
-                tipo: 'saida',
-                quantidade: art.quantidade,
-                referencia: `OT-${id}`,
-                usuario: usuario ?? 'sistema',
-                observacao: `Saída OT ${id}`,
-            });
+        return this.findOne(id);
+    }
+
+    /**
+     * RF-OT-005 §3.2 — Regista o consumo real de peças (Linha de Consumo).
+     * Só permitido em `Em execução` (422 caso contrário). O payload é a lista
+     * autoritativa de peças realmente usadas: linhas previstas mencionadas são
+     * atualizadas, peças extra são criadas (`qtd_prevista = 0`) e previstas
+     * omitidas ficam com `qtd_consumida = 0` (não usadas).
+     */
+    async registarConsumo(
+        id: number,
+        linhas: { artigoId?: number; quantidade: number; descricao?: string }[],
+        usuario = 'sistema',
+    ) {
+        const ot = await this.findOrFail(id);
+        if (ot.estado !== OTEstado.EM_EXECUCAO) {
+            throw new UnprocessableEntityException(
+                `Consumo só pode ser registado com a OT em execução (estado atual: "${ot.estado}").`,
+            );
         }
+
+        const existentes = ot.artigos ?? [];
+        const tocadas = new Set<number>();
+
+        for (const linha of linhas ?? []) {
+            const artigoId = linha.artigoId ? Number(linha.artigoId) : undefined;
+            const q = Number(linha.quantidade ?? 0);
+
+            // Captura preço/IVA do artigo no momento (custo histórico estável).
+            let preco: number | undefined;
+            let codigoIva: string | undefined;
+            let descricao = linha.descricao;
+            if (artigoId) {
+                const artigo = await this.artigosService.findOne(artigoId);
+                if (artigo) {
+                    preco = Number(artigo.precoUnitario);
+                    codigoIva = artigo.codigoIva ?? undefined;
+                    descricao = descricao ?? artigo.descricao;
+                }
+            }
+
+            const existente = artigoId
+                ? existentes.find((l) => Number(l.artigoId) === artigoId)
+                : undefined;
+
+            if (existente) {
+                tocadas.add(existente.id);
+                await this.artigoRepo.update(existente.id, {
+                    qtdConsumida: q,
+                    quantidade: q,
+                    ...(preco !== undefined ? { preco } : {}),
+                    ...(codigoIva !== undefined ? { codigoIva } : {}),
+                });
+            } else {
+                // Peça extra não prevista.
+                const nova = await this.artigoRepo.save(this.artigoRepo.create({
+                    ordemTrabalho: { id },
+                    artigoId: artigoId ?? null,
+                    descricao: descricao ?? '',
+                    quantidade: q,
+                    qtdPrevista: 0,
+                    qtdConsumida: q,
+                    preco: preco ?? 0,
+                    codigoIva: codigoIva ?? null,
+                }));
+                tocadas.add(nova.id);
+            }
+        }
+
+        // Previstas não mencionadas → não usadas.
+        for (const l of existentes) {
+            if (!tocadas.has(l.id)) {
+                await this.artigoRepo.update(l.id, { qtdConsumida: 0 });
+            }
+        }
+
+        await this.sysLogs.create({
+            usuario,
+            modulo: 'OT',
+            acao: 'OT_CONSUMO_REGISTADO',
+            detalhes: `#${id}: ${(linhas ?? []).length} linha(s) de consumo real`,
+        });
 
         return this.findOne(id);
     }
@@ -578,6 +680,21 @@ export class OrdensTrabalhoService {
             dataFim: fim,
             assinadaCliente: true,
         }, usuario);
+
+        // RF-OT-005 §3.3 — baixa definitiva conciliada com a reserva (transacional).
+        await this.stockReserva.consumir(id, usuario ?? 'sistema');
+        for (const art of (ot.artigos ?? [])) {
+            const consumido = Number(art.qtdConsumida ?? art.quantidade ?? 0);
+            if (!art.artigoId || consumido <= 0) continue;
+            await this.artigosService.createMovimento({
+                artigoId: art.artigoId,
+                tipo: 'saida',
+                quantidade: consumido,
+                referencia: `OT-${id}`,
+                usuario: usuario ?? 'sistema',
+                observacao: `Consumo OT ${id}`,
+            });
+        }
 
         // Create next periodic OT automatically
         const updated = await this.findOne(id);

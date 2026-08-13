@@ -11,7 +11,7 @@ import {
 import {
     Search, Plus, Filter, Eye, X, AlertCircle, Check, Printer,
     Clock, PlayCircle, CheckCircle, Archive,
-    Trash2, Download,
+    Trash2, Download, Package,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 
@@ -980,7 +980,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
 
 /* ══ Main Page ═══════════════════════════════════════════ */
 const OrdensPage: React.FC = () => {
-    const { ordens, addOrdem, updateOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, finalizarOT, equipInstalados, clientes, modelosEquipamento, currentUser, fmtDate, empresaConfig, simboloMoeda, tecnicos } = useGlobal();
+    const { ordens, addOrdem, updateOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, registarConsumoOT, finalizarOT, equipInstalados, clientes, modelosEquipamento, currentUser, fmtDate, empresaConfig, simboloMoeda, tecnicos, artigos: artigosStock } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
 
     const [search, setSearch]         = useState('');
@@ -992,6 +992,7 @@ const OrdensPage: React.FC = () => {
     const [ctx, setCtx]               = useState<{ id: string; x: number; y: number } | null>(null);
     // RF-OT-003 — modal partilhada para Confirmar/Adiar com input de data + motivo + aprovação
     const [transicaoModal, setTransicaoModal] = useState<{ tipo: 'confirmar' | 'adiar'; ot: OrdemTrabalho } | null>(null);
+    const [consumoOt, setConsumoOt] = useState<OrdemTrabalho | null>(null);
 
     const showToast = (msg: string) => notify(msg, 'success');
 
@@ -1232,6 +1233,7 @@ const OrdensPage: React.FC = () => {
                         {[
                             { label: 'Abrir',    action: () => { setModal(ctx.id); setCtx(null); } },
                             { label: '⎙ Imprimir', action: () => { printOT(ot, equipInstalados, modelosEquipamento, clientes, empresaConfig, simboloMoeda); setCtx(null); } },
+                            ...(ot.estado === 'Em execução' && !isTecnicoCampo ? [{ label: '📦 Registar Consumo', action: () => { setConsumoOt(ot); setCtx(null); } }] : []),
                             ...acoesDisponiveis(ot).map(a => ({ label: `→ ${a.label} (${a.target})`, action: () => executarTransicao(ot, a) })),
                         ].map(item => (
                             <button key={item.label} type="button" onClick={item.action}
@@ -1264,6 +1266,25 @@ const OrdensPage: React.FC = () => {
                     data={exportData}
                     filename="ordens_trabalho"
                     onClose={() => setShowExport(false)}
+                />
+            )}
+
+            {/* RF-OT-005 — Modal Registar Consumo */}
+            {consumoOt && (
+                <ConsumoModal
+                    ot={consumoOt}
+                    artigosStock={artigosStock}
+                    simboloMoeda={simboloMoeda}
+                    onClose={() => setConsumoOt(null)}
+                    onSubmit={async (linhas) => {
+                        try {
+                            await registarConsumoOT(consumoOt.id, linhas);
+                            showToast(`Consumo registado para a OT ${consumoOt.id}.`);
+                            setConsumoOt(null);
+                        } catch {
+                            /* erro já apresentado pelo interceptor global (api.ts) */
+                        }
+                    }}
                 />
             )}
 
@@ -1415,6 +1436,121 @@ const TransicaoModal: React.FC<TransicaoModalProps> = ({ tipo, ot, tecnicos, cur
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    );
+};
+
+/* ══ ConsumoModal — Registar consumo real (RF-OT-005) ═══════ */
+type ConsumoLinha = { artigoId?: string; descricao: string; qtdPrevista: number; qtdConsumida: number; preco: number; extra: boolean };
+type ConsumoModalProps = {
+    ot: OrdemTrabalho;
+    artigosStock: ReturnType<typeof useGlobal>['artigos'];
+    simboloMoeda: string;
+    onClose: () => void;
+    onSubmit: (linhas: { artigoId?: number; quantidade: number; descricao?: string }[]) => Promise<void>;
+};
+const ConsumoModal: React.FC<ConsumoModalProps> = ({ ot, artigosStock, simboloMoeda, onClose, onSubmit }) => {
+    const [linhas, setLinhas] = useState<ConsumoLinha[]>(
+        (ot.artigos ?? []).map(a => ({
+            artigoId: a.artigoId,
+            descricao: a.descricao,
+            qtdPrevista: a.qtdPrevista ?? a.quantidade ?? 0,
+            qtdConsumida: a.qtdConsumida ?? a.qtdPrevista ?? a.quantidade ?? 0,
+            preco: a.preco ?? 0,
+            extra: false,
+        })),
+    );
+    const [saving, setSaving] = useState(false);
+
+    const setQtd = (i: number, v: string) =>
+        setLinhas(p => p.map((l, j) => j === i ? { ...l, qtdConsumida: Number(v) || 0 } : l));
+    const removeLinha = (i: number) => setLinhas(p => p.filter((_, j) => j !== i));
+    const addExtra = (artigoId: string) => {
+        const art = artigosStock.find(a => a.id === artigoId);
+        if (!art || linhas.some(l => l.artigoId === artigoId)) return;
+        setLinhas(p => [...p, { artigoId, descricao: art.descricao, qtdPrevista: 0, qtdConsumida: 1, preco: art.precoUnitario, extra: true }]);
+    };
+
+    const custoReal = linhas.reduce((s, l) => s + l.qtdConsumida * l.preco, 0);
+    const opcoesExtra = artigosStock
+        .filter(a => !a.inativo && !linhas.some(l => l.artigoId === a.id))
+        .map(a => ({ value: a.id, label: a.descricao, sub: `${a.codigo} · Disp: ${a.existencia - a.stockReservado}` }));
+
+    const submit = async () => {
+        setSaving(true);
+        try {
+            await onSubmit(linhas.map(l => ({
+                artigoId: l.artigoId ? Number(l.artigoId) : undefined,
+                quantidade: l.qtdConsumida,
+                descricao: l.descricao,
+            })));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="modal" style={{ maxWidth: 640 }}>
+                <div className="modal-header">
+                    <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Package size={14} /> Registar Consumo — OT {ot.numero ?? ot.id}
+                    </h3>
+                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                </div>
+                <div className="modal-body">
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 0 }}>
+                        Ajuste as quantidades realmente consumidas. Peças não previstas podem ser adicionadas abaixo.
+                    </p>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                        <thead>
+                            <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
+                                <th style={{ padding: '6px 4px' }}>Peça</th>
+                                <th style={{ padding: '6px 4px', textAlign: 'right' }}>Previsto</th>
+                                <th style={{ padding: '6px 4px', textAlign: 'right' }}>Consumido</th>
+                                <th style={{ padding: '6px 4px', textAlign: 'right' }}>Subtotal</th>
+                                <th style={{ width: 28 }} />
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {linhas.length === 0 && (
+                                <tr><td colSpan={5} style={{ padding: 12, textAlign: 'center', color: 'var(--text-muted)' }}>Sem peças. Adicione o consumo real.</td></tr>
+                            )}
+                            {linhas.map((l, i) => (
+                                <tr key={`${l.artigoId ?? 'x'}-${i}`} style={{ borderBottom: '1px solid var(--border-subtle,#f1f5f9)' }}>
+                                    <td style={{ padding: '6px 4px' }}>
+                                        {l.descricao}{l.extra && <span style={{ marginLeft: 6, fontSize: '0.68rem', color: 'var(--orange,#f97316)', fontWeight: 700 }}>EXTRA</span>}
+                                    </td>
+                                    <td style={{ padding: '6px 4px', textAlign: 'right', color: 'var(--text-muted)' }}>{l.qtdPrevista}</td>
+                                    <td style={{ padding: '6px 4px', textAlign: 'right' }}>
+                                        <input type="number" min={0} className="form-input" style={{ width: 72, textAlign: 'right' }}
+                                            value={l.qtdConsumida} onChange={e => setQtd(i, e.target.value)} />
+                                    </td>
+                                    <td style={{ padding: '6px 4px', textAlign: 'right' }}>{(l.qtdConsumida * l.preco).toLocaleString('pt-PT')} {simboloMoeda}</td>
+                                    <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                                        <button type="button" onClick={() => removeLinha(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red,#ef4444)' }}><Trash2 size={13} /></button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+
+                    <div style={{ marginTop: 12 }}>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Adicionar peça não prevista</label>
+                        <SearchableSelect options={opcoesExtra} value="" onChange={addExtra} placeholder="Procurar artigo..." />
+                    </div>
+
+                    <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 24, fontSize: '0.85rem' }}>
+                        <span>Custo real (peças): <strong>{custoReal.toLocaleString('pt-PT')} {simboloMoeda}</strong></span>
+                    </div>
+                </div>
+                <div className="modal-footer">
+                    <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
+                    <button type="button" className="abtn abtn-primary" onClick={submit} disabled={saving}>
+                        {saving ? 'A guardar…' : 'Registar Consumo'}
+                    </button>
+                </div>
             </div>
         </div>
     );
