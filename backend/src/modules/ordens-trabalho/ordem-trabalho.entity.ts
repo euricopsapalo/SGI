@@ -162,6 +162,21 @@ export class OrdemTrabalho {
     @Column({ name: 'data_fim', type: 'date', nullable: true })
     dataFim: string;
 
+    /** RF-OT-006 §3.1 — referência opcional ao comprovativo de assinatura do cliente. */
+    @Column({ name: 'assinatura_ref', type: 'varchar', length: 255, nullable: true })
+    assinaturaRef: string;
+
+    /**
+     * RF-OT-006 §3.2.4 — rastreabilidade da cadeia periódica: aponta para a OT
+     * que originou esta (NULL na primeira do ciclo).
+     */
+    @ManyToOne(() => OrdemTrabalho, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'gerada_de_ot_id' })
+    geradaDe: OrdemTrabalho;
+
+    @Column({ name: 'gerada_de_ot_id', nullable: true })
+    geradaDeOtId: number;
+
     @Column({ type: 'varchar', length: 30, default: OTEstado.REGISTADA })
     estado: OTEstado;
 

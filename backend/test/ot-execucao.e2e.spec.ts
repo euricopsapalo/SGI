@@ -14,6 +14,7 @@ import { Tecnico } from '../src/modules/tecnicos/tecnico.entity';
 import { EquipInstalado } from '../src/modules/parque/equip-instalado.entity';
 import { User } from '../src/modules/users/user.entity';
 import { ConfiguracaoEmpresa } from '../src/modules/configuracao/configuracao-empresa.entity';
+import { PlanoManutencao } from '../src/modules/planos/plano-manutencao.entity';
 import { ArtigosService } from '../src/modules/artigos/artigos.service';
 import { SysLogsService } from '../src/modules/sys-logs/sys-logs.service';
 
@@ -77,6 +78,7 @@ describe('OT Execução e Consumo (RF-OT-005) E2E', () => {
                 { provide: getRepositoryToken(EquipInstalado), useValue: { findOne: jest.fn() } },
                 { provide: getRepositoryToken(User), useValue: { findOne: jest.fn(async ({ where }: any) => ({ id: where.id, role: 'admin' })) } },
                 { provide: getRepositoryToken(ConfiguracaoEmpresa), useValue: { find: jest.fn(async () => [{ limiteAdiamentos: 3 }]) } },
+                { provide: getRepositoryToken(PlanoManutencao), useValue: { findOne: jest.fn(async () => ({ id: 1, ativo: true })) } },
                 { provide: ArtigosService, useValue: {
                     findOne: jest.fn(async (id: number) => ({ id, precoUnitario: 1000, codigoIva: 'I14', descricao: `Peça ${id}` })),
                     createMovimento: jest.fn(),

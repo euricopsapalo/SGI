@@ -80,7 +80,12 @@ export class OrdensTrabalhoController {
 
     @Put(':id/finalizar')
     finalizar(@Param('id', ParseIntPipe) id: number, @Body() dto: FinalizarOtDto) {
-        return this.service.finalizar(id, dto.dataFim, dto.usuario);
+        return this.service.finalizar(id, {
+            dataFim: dto.dataFim,
+            assinadaCliente: dto.assinadaCliente,
+            assinaturaRef: dto.assinaturaRef,
+            usuario: dto.usuario,
+        });
     }
 
     @Post(':id/reprogramar')

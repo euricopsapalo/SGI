@@ -410,6 +410,9 @@ CREATE TABLE ordens_trabalho (
     aprovado_por_id    INTEGER      REFERENCES users(id) ON DELETE SET NULL,
     data_inicio        DATE,
     data_fim           DATE,
+    -- RF-OT-006 (fecho, assinatura, cadeia periódica)
+    assinatura_ref     VARCHAR(255),
+    gerada_de_ot_id    INTEGER      REFERENCES ordens_trabalho(id) ON DELETE SET NULL,
     estado             VARCHAR(30)  NOT NULL DEFAULT 'Registada'
         CONSTRAINT chk_ot_estado CHECK (estado IN
             ('Registada','Programada','Adiada','Confirmada','Em execução','Finalizada'))
@@ -656,6 +659,7 @@ CREATE INDEX IF NOT EXISTS idx_ordens_trabalho_equip     ON ordens_trabalho(equi
 CREATE INDEX IF NOT EXISTS idx_ordens_trabalho_prog      ON ordens_trabalho(data_agendada);
 CREATE INDEX IF NOT EXISTS idx_ot_artigos_ot             ON ot_artigos(ot_id);
 CREATE INDEX IF NOT EXISTS idx_ot_artigos_reposicao      ON ot_artigos(para_reposicao) WHERE para_reposicao = true;
+CREATE INDEX IF NOT EXISTS idx_ot_gerada_de              ON ordens_trabalho(gerada_de_ot_id);
 CREATE INDEX IF NOT EXISTS idx_ot_maos_obra_ot           ON ot_maos_obra(ot_id);
 CREATE INDEX IF NOT EXISTS idx_ot_reprogramacoes_ot      ON ot_reprogramacoes(ordem_trabalho_id);
 CREATE INDEX IF NOT EXISTS idx_faturas_cliente ON faturas(cliente_id);
