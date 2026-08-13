@@ -993,6 +993,7 @@ const OrdensPage: React.FC = () => {
     // RF-OT-003 — modal partilhada para Confirmar/Adiar com input de data + motivo + aprovação
     const [transicaoModal, setTransicaoModal] = useState<{ tipo: 'confirmar' | 'adiar'; ot: OrdemTrabalho } | null>(null);
     const [consumoOt, setConsumoOt] = useState<OrdemTrabalho | null>(null);
+    const [finalizarOt, setFinalizarOt] = useState<OrdemTrabalho | null>(null);
 
     const showToast = (msg: string) => notify(msg, 'success');
 
@@ -1062,7 +1063,7 @@ const OrdensPage: React.FC = () => {
             { target: 'Em execução', label: 'Iniciar', run: ot => iniciarOT(ot.id, today()) },
             { target: 'Adiada',      label: 'Adiar',   run: ot => setTransicaoModal({ tipo: 'adiar', ot }) },
         ],
-        'Em execução': [{ target: 'Finalizada',  label: 'Finalizar', run: ot => finalizarOT(ot.id, today()) }],
+        'Em execução': [{ target: 'Finalizada',  label: 'Finalizar', run: ot => setFinalizarOt(ot) }],
         'Finalizada':  [],
     };
 
@@ -1266,6 +1267,29 @@ const OrdensPage: React.FC = () => {
                     data={exportData}
                     filename="ordens_trabalho"
                     onClose={() => setShowExport(false)}
+                />
+            )}
+
+            {/* RF-OT-006 — Modal Finalizar (assinatura obrigatória) */}
+            {finalizarOt && (
+                <FinalizarModal
+                    ot={finalizarOt}
+                    simboloMoeda={simboloMoeda}
+                    onClose={() => setFinalizarOt(null)}
+                    onSubmit={async (dataFim) => {
+                        try {
+                            const r = await finalizarOT(finalizarOt.id, { assinadaCliente: true, dataFim });
+                            if (r?.otGeradaId) {
+                                showToast(`OT ${finalizarOt.id} finalizada. Próxima OT #${r.otGeradaId} criada.`);
+                            } else {
+                                showToast(`OT ${finalizarOt.id} finalizada.`);
+                            }
+                            setFinalizarOt(null);
+                            setModal(null);
+                        } catch {
+                            /* erro já apresentado pelo interceptor global (api.ts) */
+                        }
+                    }}
                 />
             )}
 
@@ -1549,6 +1573,70 @@ const ConsumoModal: React.FC<ConsumoModalProps> = ({ ot, artigosStock, simboloMo
                     <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
                     <button type="button" className="abtn abtn-primary" onClick={submit} disabled={saving}>
                         {saving ? 'A guardar…' : 'Registar Consumo'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+/* ══ FinalizarModal — Fecho com assinatura (RF-OT-006) ══════ */
+type FinalizarModalProps = {
+    ot: OrdemTrabalho;
+    simboloMoeda: string;
+    onClose: () => void;
+    onSubmit: (dataFim: string) => Promise<void>;
+};
+const FinalizarModal: React.FC<FinalizarModalProps> = ({ ot, simboloMoeda, onClose, onSubmit }) => {
+    const [dataFim, setDataFim] = useState(today());
+    const [assinou, setAssinou] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const ehPeriodica = ot.tipo === 'periodica';
+
+    const submit = async () => {
+        if (!assinou) return;
+        setSaving(true);
+        try { await onSubmit(dataFim); } finally { setSaving(false); }
+    };
+
+    return (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="modal" style={{ maxWidth: 480 }}>
+                <div className="modal-header">
+                    <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <CheckCircle size={14} /> Finalizar OT {ot.numero ?? ot.id}
+                    </h3>
+                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                </div>
+                <div className="modal-body">
+                    {ot.custoReal != null && (
+                        <div style={{ fontSize: '0.82rem', marginBottom: 12, color: 'var(--text-secondary)' }}>
+                            Custo real da intervenção: <strong>{ot.custoReal.toLocaleString('pt-PT')} {simboloMoeda}</strong>
+                        </div>
+                    )}
+                    <div className="form-group">
+                        <label className="form-label">Data de fim</label>
+                        <input type="date" className="form-input" value={dataFim} onChange={e => setDataFim(e.target.value)} />
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 12, cursor: 'pointer', fontSize: '0.85rem' }}>
+                        <input type="checkbox" checked={assinou} onChange={e => setAssinou(e.target.checked)} style={{ marginTop: 2 }} />
+                        <span>O cliente assinou a ficha da intervenção <span style={{ color: 'var(--red,#ef4444)' }}>*</span></span>
+                    </label>
+                    {!assinou && (
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 6, marginBottom: 0 }}>
+                            A assinatura do cliente é obrigatória para finalizar.
+                        </p>
+                    )}
+                    {ehPeriodica && (
+                        <p style={{ fontSize: '0.78rem', color: 'var(--blue)', marginTop: 10, marginBottom: 0 }}>
+                            Esta OT é periódica — a próxima intervenção será criada automaticamente.
+                        </p>
+                    )}
+                </div>
+                <div className="modal-footer">
+                    <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
+                    <button type="button" className="abtn abtn-primary" onClick={submit} disabled={!assinou || saving}>
+                        {saving ? 'A finalizar…' : 'Finalizar'}
                     </button>
                 </div>
             </div>

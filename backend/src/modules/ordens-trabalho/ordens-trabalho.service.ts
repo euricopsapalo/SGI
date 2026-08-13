@@ -18,6 +18,7 @@ import { Tecnico } from '../tecnicos/tecnico.entity';
 import { EquipInstalado } from '../parque/equip-instalado.entity';
 import { User, UserRole } from '../users/user.entity';
 import { ConfiguracaoEmpresa } from '../configuracao/configuracao-empresa.entity';
+import { PlanoManutencao } from '../planos/plano-manutencao.entity';
 
 export function calcNextDate(fromDate: string, periodicidade: string): string {
     const d = new Date(fromDate);
@@ -60,6 +61,8 @@ export class OrdensTrabalhoService {
         private readonly userRepo: Repository<User>,
         @InjectRepository(ConfiguracaoEmpresa)
         private readonly configRepo: Repository<ConfiguracaoEmpresa>,
+        @InjectRepository(PlanoManutencao)
+        private readonly planoRepo: Repository<PlanoManutencao>,
         private readonly artigosService: ArtigosService,
         private readonly stockReserva: StockReservaService,
         private readonly sysLogs: SysLogsService,
@@ -211,7 +214,13 @@ export class OrdensTrabalhoService {
         });
         this.withTransicoes(ot);
         await this.withDerivados(ot);
-        return this.withCustos(ot);
+        this.withCustos(ot);
+        // RF-OT-006 §5 — expõe a OT periódica gerada a partir desta (se existir).
+        if (ot) {
+            const seguinte = await this.repo.findOne({ where: { geradaDeOtId: ot.id }, select: ['id'] });
+            (ot as any).otSeguinteId = seguinte?.id ?? null;
+        }
+        return ot;
     }
 
     /**
@@ -662,10 +671,25 @@ export class OrdensTrabalhoService {
         return this.findOne(id);
     }
 
-    /** Em execução → Finalizada (RF-OT-006). OTs periódicas geram a ordem seguinte. */
-    async finalizar(id: number, dataFim?: string, usuario?: string) {
+    /**
+     * RF-OT-006 §3.1 — Em execução → Finalizada.
+     * Exige **assinatura do cliente** (422 se ausente), aplica a baixa definitiva
+     * de stock conciliada com a reserva, e — se periódica — gera a próxima ordem
+     * datada a partir da **data planeada** (anti-deriva).
+     */
+    async finalizar(
+        id: number,
+        opts: { dataFim?: string; assinadaCliente?: boolean; assinaturaRef?: string; usuario?: string } = {},
+    ) {
+        const { dataFim, assinadaCliente, assinaturaRef, usuario } = opts;
         const ot = await this.findOrFail(id);
         this.assertTransicao(ot, OTEstado.FINALIZADA);
+
+        if (assinadaCliente !== true) {
+            throw new UnprocessableEntityException(
+                'OT não pode ser finalizada sem assinatura do cliente',
+            );
+        }
 
         const today = new Date().toISOString().split('T')[0];
         const fim = dataFim ?? today;
@@ -679,9 +703,17 @@ export class OrdensTrabalhoService {
         await this.transitar(id, ot.estado, OTEstado.FINALIZADA, {
             dataFim: fim,
             assinadaCliente: true,
+            ...(assinaturaRef ? { assinaturaRef } : {}),
         }, usuario);
 
-        // RF-OT-005 §3.3 — baixa definitiva conciliada com a reserva (transacional).
+        await this.sysLogs.create({
+            usuario: usuario ?? 'sistema',
+            modulo: 'OT',
+            acao: 'OT_FINALIZADA',
+            detalhes: `#${id} finalizada (${fim}), assinada pelo cliente`,
+        });
+
+        // RF-OT-006 §3.1.3 — baixa definitiva conciliada com a reserva (transacional).
         await this.stockReserva.consumir(id, usuario ?? 'sistema');
         for (const art of (ot.artigos ?? [])) {
             const consumido = Number(art.qtdConsumida ?? art.quantidade ?? 0);
@@ -696,62 +728,96 @@ export class OrdensTrabalhoService {
             });
         }
 
-        // Create next periodic OT automatically
+        // RF-OT-006 §3.2 — geração automática da próxima OT periódica.
         const updated = await this.findOne(id);
-        if (
-            updated &&
-            updated.tipo === OTTipo.PERIODICA &&
-            updated.periodicidade &&
-            updated.periodicidade !== 'Única'
-        ) {
-            const nextStart = calcNextDate(fim, updated.periodicidade);
-
-            // Save new OT first (without children) to get its ID
-            const newOt = await this.repo.save(this.repo.create({
-                tipo: OTTipo.PERIODICA,
-                cliente: updated.cliente,
-                equipInstaladoId: updated.equipInstaladoId,
-                planoId: updated.planoId,
-                naturezaIntervencao: updated.naturezaIntervencao,
-                prioridade: updated.prioridade,
-                descricao: updated.descricao,
-                previsaoTempo: updated.previsaoTempo,
-                periodicidade: updated.periodicidade,
-                orgao: updated.orgao,
-                sintoma: updated.sintoma,
-                causa: updated.causa,
-                estado: OTEstado.PROGRAMADA,
-                dataAgendada: nextStart,
-            }));
-
-            // Explicitly save children so they are linked to the new OT
-            if ((updated.maosObra ?? []).length > 0) {
-                await this.maoRepo.save(
-                    updated.maosObra.map(m => this.maoRepo.create({
-                        ordemTrabalho: { id: newOt.id },
-                        funcao: m.funcao,
-                        custo: m.custo,
-                        hora: m.hora,
-                    }))
-                );
-            }
-            if ((updated.artigos ?? []).length > 0) {
-                await this.artigoRepo.save(
-                    updated.artigos.map(a => this.artigoRepo.create({
-                        ordemTrabalho: { id: newOt.id },
-                        artigoId: a.artigoId,
-                        descricao: a.descricao,
-                        quantidade: a.quantidade,
-                        qtdPrevista: a.qtdPrevista ?? a.quantidade ?? 0,
-                        preco: a.preco,
-                        codigoIva: a.codigoIva ?? null,
-                        taxaIva: a.taxaIva ?? null,
-                    }))
-                );
-            }
+        if (updated && updated.tipo === OTTipo.PERIODICA
+            && updated.periodicidade && updated.periodicidade !== 'Única') {
+            await this.gerarProximaPeriodica(updated, usuario ?? 'sistema');
         }
 
         return this.findAll();
+    }
+
+    /**
+     * RF-OT-006 §3.2 — cria a OT periódica seguinte a partir de uma OT finalizada.
+     * - Valida que o plano/equipamento continua ativo (senão não gera, regista motivo).
+     * - Data a nova ordem a partir da **data planeada** original + intervalo, nunca
+     *   da data real (anti-deriva); se cair no passado, usa `max(planeada+intervalo, hoje)`.
+     * - Liga a nova à anterior via `gerada_de_ot_id`.
+     */
+    private async gerarProximaPeriodica(origem: OrdemTrabalho, usuario: string): Promise<void> {
+        // 1. Validar plano/equipamento ativo.
+        let motivoNaoGera: string | undefined;
+        if (origem.planoId) {
+            const plano = await this.planoRepo.findOne({ where: { id: origem.planoId } });
+            if (plano && plano.ativo === false) motivoNaoGera = 'plano inativo';
+        }
+        if (!motivoNaoGera && origem.equipInstaladoId) {
+            const equip = await this.equipRepo.findOne({ where: { id: origem.equipInstaladoId } });
+            if (equip && (equip as any).estado === 'inativo') motivoNaoGera = 'equipamento inativo';
+        }
+        if (motivoNaoGera) {
+            await this.sysLogs.create({
+                usuario, modulo: 'OT', acao: 'OT_PERIODICA_NAO_GERADA',
+                detalhes: `#${origem.id}: próxima periódica não gerada — ${motivoNaoGera}`,
+            });
+            return;
+        }
+
+        // 2. Datar a partir da data planeada original (anti-deriva).
+        const today = new Date().toISOString().split('T')[0];
+        const reprogs = (origem.reprogramacoes ?? []).slice().sort(
+            (a, b) => new Date(a.criadoEm ?? 0).getTime() - new Date(b.criadoEm ?? 0).getTime());
+        const dataPlaneada = reprogs[0]?.dataAnterior ?? origem.dataAgendada ?? origem.dataFim ?? today;
+        let nextStart = calcNextDate(dataPlaneada, origem.periodicidade);
+        let avisoPassado = false;
+        if (nextStart < today) { nextStart = today; avisoPassado = true; }
+
+        // 3. Criar a nova OT ligada à anterior.
+        const newOt = await this.repo.save(this.repo.create({
+            tipo: OTTipo.PERIODICA,
+            cliente: origem.cliente,
+            equipInstaladoId: origem.equipInstaladoId,
+            planoId: origem.planoId,
+            naturezaIntervencao: origem.naturezaIntervencao,
+            prioridade: origem.prioridade,
+            descricao: origem.descricao,
+            previsaoTempo: origem.previsaoTempo,
+            periodicidade: origem.periodicidade,
+            orgao: origem.orgao,
+            sintoma: origem.sintoma,
+            causa: origem.causa,
+            estado: OTEstado.PROGRAMADA,
+            dataAgendada: nextStart,
+            geradaDeOtId: origem.id,
+        }));
+
+        // 4. Copiar mão de obra e peças previstas.
+        if ((origem.maosObra ?? []).length > 0) {
+            await this.maoRepo.save(origem.maosObra.map(m => this.maoRepo.create({
+                ordemTrabalho: { id: newOt.id }, funcao: m.funcao, custo: m.custo, hora: m.hora,
+            })));
+        }
+        if ((origem.artigos ?? []).length > 0) {
+            await this.artigoRepo.save(origem.artigos
+                .filter(a => Number(a.qtdPrevista ?? a.quantidade ?? 0) > 0)
+                .map(a => this.artigoRepo.create({
+                    ordemTrabalho: { id: newOt.id },
+                    artigoId: a.artigoId,
+                    descricao: a.descricao,
+                    quantidade: a.qtdPrevista ?? a.quantidade ?? 0,
+                    qtdPrevista: a.qtdPrevista ?? a.quantidade ?? 0,
+                    preco: a.preco,
+                    codigoIva: a.codigoIva ?? null,
+                    taxaIva: a.taxaIva ?? null,
+                })));
+        }
+
+        await this.sysLogs.create({
+            usuario, modulo: 'OT', acao: 'OT_PERIODICA_GERADA',
+            detalhes: `#${newOt.id} gerada a partir de #${origem.id}, dataAgendada=${nextStart}`
+                + (avisoPassado ? ' (planeada+intervalo no passado → hoje)' : ''),
+        });
     }
 
     /**

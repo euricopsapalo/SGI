@@ -13,6 +13,7 @@ import { Tecnico } from '../src/modules/tecnicos/tecnico.entity';
 import { EquipInstalado } from '../src/modules/parque/equip-instalado.entity';
 import { User } from '../src/modules/users/user.entity';
 import { ConfiguracaoEmpresa } from '../src/modules/configuracao/configuracao-empresa.entity';
+import { PlanoManutencao } from '../src/modules/planos/plano-manutencao.entity';
 import { ArtigosService } from '../src/modules/artigos/artigos.service';
 import { StockReservaService } from '../src/modules/ordens-trabalho/stock-reserva.service';
 import { SysLogsService } from '../src/modules/sys-logs/sys-logs.service';
@@ -88,6 +89,7 @@ describe('OT Confirmar/Adiar + Janela (RF-OT-003) E2E', () => {
                 { provide: getRepositoryToken(EquipInstalado), useValue: { findOne: jest.fn() } },
                 { provide: getRepositoryToken(User), useValue: { findOne: jest.fn(async ({ where }: any) => users[where.id] ?? null) } },
                 { provide: getRepositoryToken(ConfiguracaoEmpresa), useValue: { find: jest.fn(async () => [{ limiteAdiamentos: 3 }]) } },
+                { provide: getRepositoryToken(PlanoManutencao), useValue: { findOne: jest.fn(async () => ({ id: 1, ativo: true })) } },
                 { provide: ArtigosService, useValue: { ajusteExistencia: jest.fn(), createMovimento: jest.fn() } },
                 { provide: StockReservaService, useValue: stockReserva },
                 { provide: SysLogsService, useValue: { create: jest.fn(async (b: any) => { sysLogs.push(b); return b; }) } },

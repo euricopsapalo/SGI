@@ -4,6 +4,25 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(ot): fecho, assinatura e geração automática periódica (closes #59)
+
+RF-OT-006 do épico #60 (depende do #58) — fecha a série de reformulação da OT. O fecho exige **assinatura do cliente**, aplica a baixa definitiva de stock conciliada com a reserva, e — se periódica — gera automaticamente a próxima ordem datada pela **data planeada** (anti-deriva).
+
+**Modelo de dados**
+- `ordens_trabalho` ganha `assinatura_ref` (comprovativo opcional) e `gerada_de_ot_id` (FK self, cadeia periódica, `ON DELETE SET NULL`) + índice.
+- Migration `1748700000000-FechoGeracaoOT`; `init.sql` atualizado.
+
+**Backend**
+- `finalizar` (`Em execução → Finalizada`): exige `assinadaCliente = true` (**422** `OT não pode ser finalizada sem assinatura do cliente`); aceita `assinaturaRef`; baixa via `StockReservaService.consumir` + movimentos; log `OT_FINALIZADA`.
+- Geração periódica reescrita (`gerarProximaPeriodica`): **datada pela planeada** (`reprogramacoes[0].dataAnterior ?? dataAgendada`) + intervalo, com `max(planeada+intervalo, hoje)`; valida `plano.ativo` e `equip.estado` (senão **não gera**, log `OT_PERIODICA_NAO_GERADA` com motivo); liga via `gerada_de_ot_id`; copia mão de obra + peças previstas; log `OT_PERIODICA_GERADA`. Pontual não gera.
+- `GET /api/ordens/:id` expõe `geradaDeOtId` e `otSeguinteId`.
+
+**Frontend**
+- `OrdemTrabalho` ganha `assinaturaRef`/`geradaDeOtId`/`otSeguinteId`; `finalizarOT(id, { assinadaCliente, dataFim })` devolve `{ otGeradaId }`.
+- Modal **Finalizar** com checkbox de assinatura **obrigatória** (bloqueia submissão) + custo real; toast com o número da OT periódica gerada.
+
+**Validação:** 252 unit + 108 E2E verdes (novo `ot-fecho-geracao.e2e` cobrindo assinatura, dating pela planeada com adiamentos, plano/equip inativo, próxima no passado); `nest build` e `tsc` (frontend) limpos.
+
 ### feat(ot): execução e consumo de peças — Linha de Consumo (closes #58)
 
 RF-OT-005 do épico #60 (depende do #57). O técnico de campo inicia a OT e regista o **consumo real** de peças, que pode divergir do previsto; a baixa definitiva de stock passa a ocorrer no **fecho** (não no início).

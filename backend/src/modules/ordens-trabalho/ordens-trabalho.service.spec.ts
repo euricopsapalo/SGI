@@ -19,6 +19,7 @@ import { Tecnico } from '../tecnicos/tecnico.entity';
 import { EquipInstalado } from '../parque/equip-instalado.entity';
 import { User } from '../users/user.entity';
 import { ConfiguracaoEmpresa } from '../configuracao/configuracao-empresa.entity';
+import { PlanoManutencao } from '../planos/plano-manutencao.entity';
 import { UnprocessableEntityException } from '@nestjs/common';
 
 describe('OrdensTrabalhoService (regression #15)', () => {
@@ -75,6 +76,7 @@ describe('OrdensTrabalhoService (regression #15)', () => {
                 { provide: getRepositoryToken(EquipInstalado), useValue: { findOne: jest.fn(async ({ where }: any) => ({ id: where.id, clienteId: 99 })) } },
                 { provide: getRepositoryToken(User), useValue: { findOne: jest.fn(async ({ where }: any) => ({ id: where.id, role: 'admin' })) } },
                 { provide: getRepositoryToken(ConfiguracaoEmpresa), useValue: { find: jest.fn(async () => [{ limiteAdiamentos: 3 }]) } },
+                { provide: getRepositoryToken(PlanoManutencao), useValue: { findOne: jest.fn(async () => ({ id: 1, ativo: true })) } },
                 { provide: ArtigosService, useValue: artigosServiceMock },
                 { provide: StockReservaService, useValue: { reservar: jest.fn(async () => []), libertar: jest.fn(), consumir: jest.fn() } },
                 { provide: SysLogsService, useValue: sysLogsMock },
@@ -129,7 +131,7 @@ describe('OrdensTrabalhoService (regression #15)', () => {
 
         it('Em execução → Finalizada é válida', async () => {
             setEstado(OTEstado.EM_EXECUCAO);
-            await expect(service.finalizar(1, undefined, 'tester')).resolves.toBeDefined();
+            await expect(service.finalizar(1, { assinadaCliente: true, usuario: 'tester' })).resolves.toBeDefined();
         });
 
         it('Programada → Adiada e Confirmada → Adiada são válidas', async () => {
@@ -229,6 +231,23 @@ describe('OrdensTrabalhoService (regression #15)', () => {
         it('iniciar sem técnico de campo devolve 422', async () => {
             repo.findOne.mockResolvedValue({ id: 1, estado: OTEstado.CONFIRMADA, executadoPorId: null, artigos: [] });
             await expect(service.iniciar(1, undefined, 'tester')).rejects.toBeInstanceOf(UnprocessableEntityException);
+        });
+    });
+
+    // ── RF-OT-006 — fecho e geração periódica ─────────────────────────
+    describe('finalizar / geração periódica (RF-OT-006)', () => {
+        it('finalizar sem assinatura do cliente devolve 422', async () => {
+            repo.findOne.mockResolvedValue({ id: 1, estado: OTEstado.EM_EXECUCAO, artigos: [], tipo: 'pontual' });
+            await expect(service.finalizar(1, { assinadaCliente: false, usuario: 'tester' }))
+                .rejects.toBeInstanceOf(UnprocessableEntityException);
+        });
+
+        it('finalizar pontual não gera nova OT', async () => {
+            repo.findOne.mockResolvedValue({ id: 1, estado: OTEstado.EM_EXECUCAO, artigos: [], tipo: 'pontual' });
+            repo.save.mockClear();
+            await service.finalizar(1, { assinadaCliente: true, usuario: 'tester' });
+            // save não é chamado para criar uma OT filha (pontual)
+            expect(repo.save).not.toHaveBeenCalled();
         });
     });
 
