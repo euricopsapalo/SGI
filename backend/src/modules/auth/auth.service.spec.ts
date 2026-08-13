@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
@@ -16,6 +16,7 @@ describe('AuthService — segurança (issue #100)', () => {
   let jwt: any;
   let config: any;
   let cfg: any;
+  let mail: any;
   let module: TestingModule;
 
   const senha = 'password123';
@@ -32,13 +33,14 @@ describe('AuthService — segurança (issue #100)', () => {
     jwt = { sign: jest.fn().mockReturnValue('TOKEN') };
     cfg = { minPasswordLength: 8, sessionExpiryMinutes: 60, twoFactorEnabled: true, accessLogEnabled: true };
     config = { get: jest.fn().mockResolvedValue(cfg) };
+    mail = { sendPasswordReset: jest.fn().mockResolvedValue(undefined) };
 
     module = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: getRepositoryToken(User), useValue: userRepo },
         { provide: JwtService, useValue: jwt },
-        { provide: MailService, useValue: {} },
+        { provide: MailService, useValue: mail },
         { provide: ConfiguracaoService, useValue: config },
       ],
     }).compile();
@@ -127,6 +129,98 @@ describe('AuthService — segurança (issue #100)', () => {
       userRepo.findOne.mockResolvedValue(baseUser({ twoFactorSecret: secret }));
       await service.enableTwoFactor(1, generateToken(secret));
       expect(userRepo.update).toHaveBeenCalledWith(1, { twoFactorEnabled: true });
+    });
+  });
+
+  describe('2FA disable/status', () => {
+    it('disable com código válido limpa o segredo', async () => {
+      const secret = generateSecret();
+      userRepo.findOne.mockResolvedValue(baseUser({ twoFactorEnabled: true, twoFactorSecret: secret }));
+      await service.disableTwoFactor(1, generateToken(secret));
+      expect(userRepo.update).toHaveBeenCalledWith(1, { twoFactorSecret: null, twoFactorEnabled: false });
+    });
+
+    it('disable com código inválido lança 400', async () => {
+      const secret = generateSecret();
+      userRepo.findOne.mockResolvedValue(baseUser({ twoFactorEnabled: true, twoFactorSecret: secret }));
+      await expect(service.disableTwoFactor(1, '000000')).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('status devolve enabled/allowed', async () => {
+      userRepo.findOne.mockResolvedValue(baseUser({ twoFactorEnabled: true }));
+      const s = await service.twoFactorStatus(1);
+      expect(s).toEqual({ enabled: true, allowed: true });
+    });
+
+    it('setup/enable/disable lançam 404 se o utilizador não existe', async () => {
+      userRepo.findOne.mockResolvedValue(null);
+      await expect(service.setupTwoFactor(1)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.enableTwoFactor(1, '123456')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.disableTwoFactor(1, '123456')).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('login — conta inativa', () => {
+    it('utilizador inativo lança 401', async () => {
+      userRepo.findOne.mockResolvedValue(baseUser({ ativo: false }));
+      await expect(service.login('ana@aquatex.ao', senha)).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+  });
+
+  describe('forgotPassword', () => {
+    it('email inexistente devolve mensagem genérica sem gravar token', async () => {
+      userRepo.findOne.mockResolvedValue(null);
+      const r = await service.forgotPassword('nao@existe.ao');
+      expect(r.message).toMatch(/Se o email existir/);
+      expect(userRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('email existente grava token e envia email', async () => {
+      userRepo.findOne.mockResolvedValue(baseUser());
+      mail.sendPasswordReset.mockResolvedValue(undefined);
+      await service.forgotPassword('ana@aquatex.ao');
+      expect(userRepo.update).toHaveBeenCalledWith(1, expect.objectContaining({ resetToken: expect.any(String) }));
+      expect(mail.sendPasswordReset).toHaveBeenCalled();
+    });
+
+    it('falha do SMTP não rebenta (regista token em dev)', async () => {
+      userRepo.findOne.mockResolvedValue(baseUser());
+      mail.sendPasswordReset.mockRejectedValue(new Error('SMTP down'));
+      const r = await service.forgotPassword('ana@aquatex.ao');
+      expect(r.message).toMatch(/Se o email existir/);
+    });
+  });
+
+  describe('resetPassword / changePassword', () => {
+    it('resetPassword com token válido grava nova password e limpa o token', async () => {
+      userRepo.findOne.mockResolvedValue(baseUser({ resetToken: 'TK', resetTokenExpiry: new Date(Date.now() + 100000) }));
+      await service.resetPassword('TK', 'password-nova-123');
+      const patch = userRepo.update.mock.calls[0][1];
+      expect(patch.resetToken).toBeNull();
+      expect(patch.passwordHash).toEqual(expect.any(String));
+    });
+
+    it('resetPassword com token inválido/expirado lança 400', async () => {
+      userRepo.findOne.mockResolvedValue(null);
+      await expect(service.resetPassword('X', 'password-nova-123')).rejects.toBeInstanceOf(BadRequestException);
+      userRepo.findOne.mockResolvedValue(baseUser({ resetToken: 'TK', resetTokenExpiry: new Date(Date.now() - 1000) }));
+      await expect(service.resetPassword('TK', 'password-nova-123')).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('changePassword com password atual correta grava a nova', async () => {
+      userRepo.findOne.mockResolvedValue(baseUser());
+      await service.changePassword(1, senha, 'password-nova-123');
+      expect(userRepo.update).toHaveBeenCalledWith(1, expect.objectContaining({ passwordHash: expect.any(String) }));
+    });
+
+    it('changePassword com password atual errada lança 400', async () => {
+      userRepo.findOne.mockResolvedValue(baseUser());
+      await expect(service.changePassword(1, 'errada', 'password-nova-123')).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('changePassword para utilizador inexistente lança 404', async () => {
+      userRepo.findOne.mockResolvedValue(null);
+      await expect(service.changePassword(1, senha, 'password-nova-123')).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

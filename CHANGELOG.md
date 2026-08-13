@@ -4,6 +4,15 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### test(backend): cobertura ≥80% nos services críticos + gate na CI (closes #38)
+
+Sobe a cobertura de testes unitários dos services backend críticos e passa a CI a falhar se a cobertura descer.
+
+- **Novos specs:** `artigos.service` (97%), `encomendas.service` (92% — create/cancelar/receber/anular transacional), `faturas.service` (100%), `configuracao.service` (100%). `auth.service` estendido de 66% → 99% (2FA disable/status, forgot/reset/change password, conta inativa).
+- **Gate de cobertura (jest):** `collectCoverageFrom` restrito aos 6 services críticos; `coverageThreshold` global 60% (statements/lines) e **80%** por-ficheiro nos 5 services acima. `ordens-trabalho.service` guardado no baseline (67%) — atinge ≥80% via a série RF-OT (#57–#59).
+- **CI:** o job backend passa a correr `npm run test:cov` (falha abaixo dos thresholds); novo script `test:cov`.
+- **Resultado:** 280 testes unit verdes; "All files" dos services críticos a 83% statements / 86% lines.
+
 ### feat(ot): reserva e validação de stock na confirmação (closes #57)
 
 RF-OT-004 do épico #60. A confirmação de uma OT passa a **reservar** as peças previstas no armazém (usando a coluna `artigos.stock_reservado`, até agora sem uso), avisando **sem bloquear** quando falta stock, e libertando as reservas ao adiar.
