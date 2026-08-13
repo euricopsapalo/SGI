@@ -1278,8 +1278,13 @@ const OrdensPage: React.FC = () => {
                     onSubmit={async (payload) => {
                         try {
                             if (transicaoModal.tipo === 'confirmar') {
-                                await confirmarOT(transicaoModal.ot.id, payload as any);
-                                showToast(`OT ${transicaoModal.ot.id} confirmada.`);
+                                const avisos = await confirmarOT(transicaoModal.ot.id, payload as any);
+                                if (avisos && avisos.length) {
+                                    const faltas = avisos.map(a => `${a.descricao} (faltam ${a.emFalta})`).join(', ');
+                                    showToast(`OT ${transicaoModal.ot.id} confirmada — reposição necessária: ${faltas}`);
+                                } else {
+                                    showToast(`OT ${transicaoModal.ot.id} confirmada.`);
+                                }
                             } else {
                                 await adiarOT(transicaoModal.ot.id, payload as any);
                                 showToast(`OT ${transicaoModal.ot.id} adiada.`);

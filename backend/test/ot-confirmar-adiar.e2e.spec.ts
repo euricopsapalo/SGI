@@ -14,6 +14,7 @@ import { EquipInstalado } from '../src/modules/parque/equip-instalado.entity';
 import { User } from '../src/modules/users/user.entity';
 import { ConfiguracaoEmpresa } from '../src/modules/configuracao/configuracao-empresa.entity';
 import { ArtigosService } from '../src/modules/artigos/artigos.service';
+import { StockReservaService } from '../src/modules/ordens-trabalho/stock-reserva.service';
 import { SysLogsService } from '../src/modules/sys-logs/sys-logs.service';
 
 /**
@@ -25,6 +26,7 @@ describe('OT Confirmar/Adiar + Janela (RF-OT-003) E2E', () => {
     let store: Record<number, any>;
     let reprogramacoes: any[];
     const sysLogs: any[] = [];
+    const stockReserva = { reservar: jest.fn(async () => []), libertar: jest.fn(), consumir: jest.fn() };
 
     // Helpers de datas relativas (independentes do dia em que o teste corre).
     const today = () => new Date().toISOString().split('T')[0];
@@ -87,6 +89,7 @@ describe('OT Confirmar/Adiar + Janela (RF-OT-003) E2E', () => {
                 { provide: getRepositoryToken(User), useValue: { findOne: jest.fn(async ({ where }: any) => users[where.id] ?? null) } },
                 { provide: getRepositoryToken(ConfiguracaoEmpresa), useValue: { find: jest.fn(async () => [{ limiteAdiamentos: 3 }]) } },
                 { provide: ArtigosService, useValue: { ajusteExistencia: jest.fn(), createMovimento: jest.fn() } },
+                { provide: StockReservaService, useValue: stockReserva },
                 { provide: SysLogsService, useValue: { create: jest.fn(async (b: any) => { sysLogs.push(b); return b; }) } },
             ],
         }).compile();
@@ -104,6 +107,9 @@ describe('OT Confirmar/Adiar + Janela (RF-OT-003) E2E', () => {
         store[1] = newOt();
         reprogramacoes.length = 0;
         sysLogs.length = 0;
+        stockReserva.reservar.mockClear();
+        stockReserva.libertar.mockClear();
+        stockReserva.consumir.mockClear();
     });
 
     // ─── CA-1: Confirmar define data e técnico ───────────────────────
@@ -191,8 +197,8 @@ describe('OT Confirmar/Adiar + Janela (RF-OT-003) E2E', () => {
         expect(store[1].estado).toBe('Programada');
     });
 
-    // ─── CA-7: Adiar OT Confirmada (RF-OT-004 stock libertação — TODO) ─
-    it('CA-7: adiar OT Confirmada → Adiada e mantém histórico (libertar reserva é TODO RF-OT-004)', async () => {
+    // ─── CA-7: Adiar OT Confirmada liberta reservas (RF-OT-004 §5) ────
+    it('CA-7: adiar OT Confirmada → Adiada, mantém histórico e liberta reservas de stock', async () => {
         store[1].estado = OTEstado.CONFIRMADA;
         store[1].dataExecucao = offsetDays(20);
         await request(srv())
@@ -202,6 +208,18 @@ describe('OT Confirmar/Adiar + Janela (RF-OT-003) E2E', () => {
         expect(store[1].estado).toBe('Adiada');
         expect(store[1].dataExecucao).toBeNull();
         expect(reprogramacoes).toHaveLength(1);
+        // RF-OT-004 §5 — vinha de Confirmada, logo liberta as reservas.
+        expect(stockReserva.libertar).toHaveBeenCalledWith(1, expect.anything());
+    });
+
+    it('CA-7b: adiar OT Programada (sem reservas) não liberta stock', async () => {
+        // store[1] arranca em Programada
+        await request(srv())
+            .put('/ordens/1/adiar')
+            .send({ novaData: offsetDays(40), motivo: 'Reagendamento simples' })
+            .expect(200);
+        expect(store[1].estado).toBe('Adiada');
+        expect(stockReserva.libertar).not.toHaveBeenCalled();
     });
 
     // ─── CA-8: Reagendar Adiada → Programada ─────────────────────────

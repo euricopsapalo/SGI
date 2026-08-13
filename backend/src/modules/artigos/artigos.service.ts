@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Artigo } from './artigo.entity';
 import { MovimentoStock } from './movimento-stock.entity';
 import { StockArmazem } from './stock-armazem.entity';
+import { OtArtigo } from '../ordens-trabalho/ot-artigo.entity';
 
 @Injectable()
 export class ArtigosService {
@@ -16,11 +17,42 @@ export class ArtigosService {
 
         @InjectRepository(StockArmazem)
         private stockArmazemRepo: Repository<StockArmazem>,
+
+        private readonly dataSource: DataSource,
     ) {}
 
+    /** RF-OT-004 §3.2 — anexa `disponivel = existencia − stock_reservado`. */
+    private withDisponivel(a: Artigo): Artigo {
+        (a as any).disponivel = Number(a.existencia) - Number(a.stockReservado);
+        return a;
+    }
+
     // Artigos
-    findAll() { return this.artigosRepo.find(); }
-    findOne(id: number) { return this.artigosRepo.findOne({ where: { id } }); }
+    /**
+     * RF-OT-004 §7 — `?paraReposicao=true` devolve só os artigos com alguma
+     * Linha de Consumo marcada para reposição. Todos os artigos expõem `disponivel`.
+     */
+    async findAll(query: { paraReposicao?: string } = {}) {
+        if (String(query.paraReposicao) === 'true') {
+            const rows = await this.dataSource
+                .getRepository(OtArtigo)
+                .createQueryBuilder('l')
+                .select('DISTINCT l.artigo_id', 'artigoId')
+                .where('l.para_reposicao = true')
+                .andWhere('l.artigo_id IS NOT NULL')
+                .getRawMany();
+            const ids = rows.map((r) => Number(r.artigoId));
+            if (!ids.length) return [];
+            const artigos = await this.artigosRepo.findBy({ id: In(ids) });
+            return artigos.map((a) => this.withDisponivel(a));
+        }
+        const artigos = await this.artigosRepo.find();
+        return artigos.map((a) => this.withDisponivel(a));
+    }
+    async findOne(id: number) {
+        const a = await this.artigosRepo.findOne({ where: { id } });
+        return a ? this.withDisponivel(a) : a;
+    }
     create(body: Partial<Artigo>) { return this.artigosRepo.save(this.artigosRepo.create(body)); }
     async update(id: number, body: Partial<Artigo>) {
         await this.artigosRepo.update(id, body);
