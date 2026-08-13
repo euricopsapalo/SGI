@@ -4,6 +4,15 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### test(backend): cobertura ≥80% nos services críticos + gate na CI (closes #38)
+
+Sobe a cobertura de testes unitários dos services backend críticos e passa a CI a falhar se a cobertura descer.
+
+- **Novos specs:** `artigos.service` (97%), `encomendas.service` (92% — create/cancelar/receber/anular transacional), `faturas.service` (100%), `configuracao.service` (100%). `auth.service` estendido de 66% → 99% (2FA disable/status, forgot/reset/change password, conta inativa).
+- **Gate de cobertura (jest):** `collectCoverageFrom` restrito aos 6 services críticos; `coverageThreshold` global 60% (statements/lines) e **80%** por-ficheiro nos 5 services acima. `ordens-trabalho.service` guardado no baseline (67%) — atinge ≥80% via a série RF-OT (#57–#59).
+- **CI:** o job backend passa a correr `npm run test:cov` (falha abaixo dos thresholds); novo script `test:cov`.
+- **Resultado:** 280 testes unit verdes; "All files" dos services críticos a 83% statements / 86% lines.
+
 ### chore(db): padronizar enums do schema para `varchar` + `CHECK` (closes #89)
 
 Decisão **Opção B** da #89: substituir os enums nativos do Postgres por `varchar(30)` + `CHECK` em todo o schema. Motivo: os enums do domínio evoluem com frequência (natureza estendida em #75, estados reformulados em RF-OT-001) e `varchar+CHECK` evolui com um simples `DROP/ADD CONSTRAINT`, ao contrário do `ALTER TYPE` rígido. Resolve a divergência sistémica entre `init.sql` (varchar) e entidades (enum nativo). **Reverte o #88** (que alinhara a OT na direção oposta).

@@ -8,6 +8,7 @@
     "build": "nest build",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
+    "test:cov": "jest --runInBand --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.config.js --runInBand",
     "migration:generate": "typeorm-ts-node-commonjs -d src/database/data-source.ts migration:generate src/migrations/Migration",
     "migration:run": "typeorm-ts-node-commonjs -d src/database/data-source.ts migration:run",
@@ -25,7 +26,28 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "modules/auth/auth.service.ts",
+      "modules/ordens-trabalho/ordens-trabalho.service.ts",
+      "modules/encomendas/encomendas.service.ts",
+      "modules/faturas/faturas.service.ts",
+      "modules/artigos/artigos.service.ts",
+      "modules/configuracao/configuracao.service.ts"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 60,
+        "lines": 60,
+        "branches": 45,
+        "functions": 60
+      },
+      "**/modules/auth/auth.service.ts": { "statements": 80, "lines": 80 },
+      "**/modules/artigos/artigos.service.ts": { "statements": 80, "lines": 80 },
+      "**/modules/encomendas/encomendas.service.ts": { "statements": 80, "lines": 80 },
+      "**/modules/faturas/faturas.service.ts": { "statements": 80, "lines": 80 },
+      "**/modules/configuracao/configuracao.service.ts": { "statements": 80, "lines": 80 }
+    }
   },
   "dependencies": {
     "@nestjs/common": "^10.4.22",
