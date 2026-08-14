@@ -6,7 +6,7 @@ import {
     UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { OrdemTrabalho, OTEstado, OTTipo, OT_TRANSICOES } from './ordem-trabalho.entity';
 import { OtMaoObra } from './ot-mao-obra.entity';
 import { OtArtigo } from './ot-artigo.entity';
@@ -66,6 +66,7 @@ export class OrdensTrabalhoService {
         private readonly artigosService: ArtigosService,
         private readonly stockReserva: StockReservaService,
         private readonly sysLogs: SysLogsService,
+        private readonly dataSource: DataSource,
     ) {}
 
     /** RF-OT-003 §3.3.1 — lê o limite de adiamentos (com fallback). */
@@ -700,21 +701,39 @@ export class OrdensTrabalhoService {
             );
         }
 
-        await this.transitar(id, ot.estado, OTEstado.FINALIZADA, {
-            dataFim: fim,
-            assinadaCliente: true,
-            ...(assinaturaRef ? { assinaturaRef } : {}),
-        }, usuario);
+        const geraPeriodica = ot.tipo === OTTipo.PERIODICA
+            && !!ot.periodicidade && ot.periodicidade !== 'Única';
 
+        // #37 — operação multi-tabela atómica: mudança de estado + baixa de stock
+        // conciliada + geração da OT periódica. Falha a meio → rollback total.
+        await this.dataSource.transaction(async (manager) => {
+            await manager.update(OrdemTrabalho, id, {
+                estado: OTEstado.FINALIZADA,
+                dataFim: fim,
+                assinadaCliente: true,
+                ...(assinaturaRef ? { assinaturaRef } : {}),
+            });
+            // RF-OT-006 §3.1.3 — baixa definitiva partilhando esta transação.
+            await this.stockReserva.consumir(id, usuario ?? 'sistema', manager);
+            // RF-OT-006 §3.2 — geração da próxima periódica na mesma transação.
+            if (geraPeriodica) {
+                await this.gerarProximaPeriodica(ot, usuario ?? 'sistema', manager);
+            }
+        });
+
+        // Auditoria e movimentos (best-effort, fora da transação de negócio).
+        await this.sysLogs.create({
+            usuario: usuario ?? 'sistema',
+            modulo: 'OT',
+            acao: 'OT_TRANSICAO',
+            detalhes: `#${id}: ${ot.estado} → ${OTEstado.FINALIZADA}`,
+        });
         await this.sysLogs.create({
             usuario: usuario ?? 'sistema',
             modulo: 'OT',
             acao: 'OT_FINALIZADA',
             detalhes: `#${id} finalizada (${fim}), assinada pelo cliente`,
         });
-
-        // RF-OT-006 §3.1.3 — baixa definitiva conciliada com a reserva (transacional).
-        await this.stockReserva.consumir(id, usuario ?? 'sistema');
         for (const art of (ot.artigos ?? [])) {
             const consumido = Number(art.qtdConsumida ?? art.quantidade ?? 0);
             if (!art.artigoId || consumido <= 0) continue;
@@ -728,13 +747,6 @@ export class OrdensTrabalhoService {
             });
         }
 
-        // RF-OT-006 §3.2 — geração automática da próxima OT periódica.
-        const updated = await this.findOne(id);
-        if (updated && updated.tipo === OTTipo.PERIODICA
-            && updated.periodicidade && updated.periodicidade !== 'Única') {
-            await this.gerarProximaPeriodica(updated, usuario ?? 'sistema');
-        }
-
         return this.findAll();
     }
 
@@ -745,7 +757,7 @@ export class OrdensTrabalhoService {
      *   da data real (anti-deriva); se cair no passado, usa `max(planeada+intervalo, hoje)`.
      * - Liga a nova à anterior via `gerada_de_ot_id`.
      */
-    private async gerarProximaPeriodica(origem: OrdemTrabalho, usuario: string): Promise<void> {
+    private async gerarProximaPeriodica(origem: OrdemTrabalho, usuario: string, manager: EntityManager): Promise<void> {
         // 1. Validar plano/equipamento ativo.
         let motivoNaoGera: string | undefined;
         if (origem.planoId) {
@@ -773,8 +785,8 @@ export class OrdensTrabalhoService {
         let avisoPassado = false;
         if (nextStart < today) { nextStart = today; avisoPassado = true; }
 
-        // 3. Criar a nova OT ligada à anterior.
-        const newOt = await this.repo.save(this.repo.create({
+        // 3. Criar a nova OT ligada à anterior (via manager da transação do fecho).
+        const newOt = await manager.save(this.repo.create({
             tipo: OTTipo.PERIODICA,
             cliente: origem.cliente,
             equipInstaladoId: origem.equipInstaladoId,
@@ -792,14 +804,14 @@ export class OrdensTrabalhoService {
             geradaDeOtId: origem.id,
         }));
 
-        // 4. Copiar mão de obra e peças previstas.
+        // 4. Copiar mão de obra e peças previstas (mesma transação).
         if ((origem.maosObra ?? []).length > 0) {
-            await this.maoRepo.save(origem.maosObra.map(m => this.maoRepo.create({
+            await manager.save(origem.maosObra.map(m => this.maoRepo.create({
                 ordemTrabalho: { id: newOt.id }, funcao: m.funcao, custo: m.custo, hora: m.hora,
             })));
         }
         if ((origem.artigos ?? []).length > 0) {
-            await this.artigoRepo.save(origem.artigos
+            await manager.save(origem.artigos
                 .filter(a => Number(a.qtdPrevista ?? a.quantidade ?? 0) > 0)
                 .map(a => this.artigoRepo.create({
                     ordemTrabalho: { id: newOt.id },

@@ -185,3 +185,65 @@ describe('ArtigosService.findAll (RF-OT-004)', () => {
         expect(res).toEqual([]);
     });
 });
+
+/**
+ * Unit — ArtigosService.transferencia (#37, transação DB)
+ * Cobre: validações de guarda, débito/crédito atómico entre armazéns,
+ * criação da linha de destino inexistente e registo do movimento.
+ */
+describe('ArtigosService.transferencia (#37)', () => {
+    function makeManager(origem: any, destino: any) {
+        const saRepo = {
+            findOne: jest.fn()
+                .mockResolvedValueOnce(origem)   // origem
+                .mockResolvedValueOnce(destino), // destino
+            create: jest.fn((e: any) => ({ ...e })),
+            save: jest.fn(async (e: any) => e),
+        };
+        const movRepo = {
+            create: jest.fn((e: any) => ({ ...e })),
+            save: jest.fn(async (e: any) => e),
+        };
+        const manager = {
+            getRepository: jest.fn((ent: any) => (ent === StockArmazem ? saRepo : movRepo)),
+        };
+        const dataSource: any = { transaction: jest.fn(async (cb: any) => cb(manager)) };
+        const svc = new ArtigosService({} as any, movRepo as any, saRepo as any, dataSource);
+        return { svc, saRepo, movRepo, dataSource };
+    }
+
+    it('rejeita quantidade não positiva', async () => {
+        const { svc } = makeManager({ quantidade: 10 }, null);
+        await expect(svc.transferencia(1, 1, 2, 0)).rejects.toThrow(/positiva/i);
+    });
+
+    it('rejeita origem igual ao destino', async () => {
+        const { svc } = makeManager({ quantidade: 10 }, null);
+        await expect(svc.transferencia(1, 2, 2, 5)).rejects.toThrow(/diferentes/i);
+    });
+
+    it('rejeita stock insuficiente na origem', async () => {
+        const { svc } = makeManager({ quantidade: 3 }, null);
+        await expect(svc.transferencia(1, 1, 2, 5)).rejects.toThrow(/insuficiente/i);
+    });
+
+    it('debita origem, credita destino existente e regista o movimento', async () => {
+        const origem = { quantidade: 10 };
+        const destino = { quantidade: 4 };
+        const { svc, saRepo, movRepo } = makeManager(origem, destino);
+        const res = await svc.transferencia(1, 1, 2, 6, 'ana@x.pt');
+        expect(origem.quantidade).toBe(4);   // 10 − 6
+        expect(destino.quantidade).toBe(10); // 4 + 6
+        expect(saRepo.create).not.toHaveBeenCalled();
+        expect(movRepo.save).toHaveBeenCalled();
+        expect(res).toEqual({ ok: true, artigoId: 1, quantidade: 6 });
+    });
+
+    it('cria a linha de destino quando não existe', async () => {
+        const origem = { quantidade: 8 };
+        const { svc, saRepo } = makeManager(origem, null);
+        await svc.transferencia(1, 1, 3, 2);
+        expect(origem.quantidade).toBe(6);
+        expect(saRepo.create).toHaveBeenCalledWith(expect.objectContaining({ quantidade: 2 }));
+    });
+});

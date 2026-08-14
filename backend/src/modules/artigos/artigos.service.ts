@@ -1,8 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import { Artigo } from './artigo.entity';
-import { MovimentoStock } from './movimento-stock.entity';
+import { MovimentoStock, TipoMovimento } from './movimento-stock.entity';
 import { StockArmazem } from './stock-armazem.entity';
 import { OtArtigo } from '../ordens-trabalho/ot-artigo.entity';
 
@@ -82,6 +82,68 @@ export class ArtigosService {
         const novo = Math.max(0, Number(artigo.stockEncomendado) + delta);
         await this.artigosRepo.update(id, { stockEncomendado: novo });
         return this.findOne(id);
+    }
+
+    /**
+     * #37 — Transferência de stock entre armazéns, **transacional**.
+     * Debita a origem, credita o destino (cria a linha se não existir) e regista
+     * um movimento `transferencia`, tudo numa transação — falha a meio → rollback.
+     * A `existencia` total do artigo não muda (só se move entre armazéns).
+     */
+    async transferencia(
+        artigoId: number,
+        armazemOrigemId: number,
+        armazemDestinoId: number,
+        quantidade: number,
+        usuario?: string,
+        observacao?: string,
+    ) {
+        if (!(quantidade > 0)) {
+            throw new BadRequestException('Quantidade da transferência tem de ser positiva.');
+        }
+        if (Number(armazemOrigemId) === Number(armazemDestinoId)) {
+            throw new BadRequestException('Armazém de origem e destino têm de ser diferentes.');
+        }
+        return this.dataSource.transaction(async (manager) => {
+            const saRepo = manager.getRepository(StockArmazem);
+            const movRepo = manager.getRepository(MovimentoStock);
+
+            const origem = await saRepo.findOne({
+                where: { artigo: { id: artigoId }, armazem: { id: armazemOrigemId } },
+            });
+            if (!origem || Number(origem.quantidade) < quantidade) {
+                throw new BadRequestException('Stock insuficiente no armazém de origem.');
+            }
+            origem.quantidade = Number(origem.quantidade) - quantidade;
+            await saRepo.save(origem);
+
+            let destino = await saRepo.findOne({
+                where: { artigo: { id: artigoId }, armazem: { id: armazemDestinoId } },
+            });
+            if (destino) {
+                destino.quantidade = Number(destino.quantidade) + quantidade;
+            } else {
+                destino = saRepo.create({
+                    artigo: { id: artigoId } as Artigo,
+                    armazem: { id: armazemDestinoId } as any,
+                    quantidade,
+                    stockMinimo: 0,
+                });
+            }
+            await saRepo.save(destino);
+
+            await movRepo.save(movRepo.create({
+                artigo: { id: artigoId } as Artigo,
+                tipo: TipoMovimento.TRANSFERENCIA,
+                quantidade,
+                armazemId: String(armazemOrigemId),
+                armazemDestinoId: String(armazemDestinoId),
+                usuario: usuario ?? 'sistema',
+                observacao: observacao ?? `Transferência ${armazemOrigemId} → ${armazemDestinoId}`,
+            }));
+
+            return { ok: true, artigoId, quantidade };
+        });
     }
 
     // MovimentoStock

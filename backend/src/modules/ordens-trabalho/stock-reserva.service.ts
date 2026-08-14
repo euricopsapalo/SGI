@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { OtArtigo } from './ot-artigo.entity';
 import { Artigo } from '../artigos/artigo.entity';
 import { SysLogsService } from '../sys-logs/sys-logs.service';
@@ -139,41 +139,49 @@ export class StockReservaService {
      * A conciliação fina reserva↔consumo é detalhada em RF-OT-005; aqui garante-se
      * apenas que a reserva é desfeita ao dar baixa (mantém a invariante).
      */
-    async consumir(otId: number, usuario = 'sistema'): Promise<void> {
-        await this.dataSource.transaction(async (manager) => {
-            const linhas = await manager.find(OtArtigo, {
-                where: { ordemTrabalho: { id: otId } },
+    async consumir(otId: number, usuario = 'sistema', manager?: EntityManager): Promise<void> {
+        // #37 — se receber um `manager`, participa na transação do chamador
+        // (ex.: fecho da OT); senão abre a sua própria transação.
+        if (manager) {
+            await this.consumirCom(manager, otId, usuario);
+            return;
+        }
+        await this.dataSource.transaction((m) => this.consumirCom(m, otId, usuario));
+    }
+
+    private async consumirCom(manager: EntityManager, otId: number, usuario: string): Promise<void> {
+        const linhas = await manager.find(OtArtigo, {
+            where: { ordemTrabalho: { id: otId } },
+        });
+
+        for (const linha of linhas) {
+            if (!linha.artigoId) continue;
+            const consumido = Number(linha.qtdConsumida ?? linha.quantidade ?? 0);
+            const reservada = Number(linha.qtdReservada ?? 0);
+            if (consumido <= 0 && reservada <= 0) continue;
+
+            const artigo = await manager.findOne(Artigo, {
+                where: { id: linha.artigoId },
+                lock: { mode: 'pessimistic_write' },
+            });
+            if (!artigo) continue;
+
+            await manager.update(Artigo, artigo.id, {
+                existencia: Number(artigo.existencia) - consumido,
+                stockReservado: Math.max(0, Number(artigo.stockReservado) - reservada),
             });
 
-            for (const linha of linhas) {
-                if (!linha.artigoId) continue;
-                const consumido = Number(linha.qtdConsumida ?? linha.quantidade ?? 0);
-                const reservada = Number(linha.qtdReservada ?? 0);
-                if (consumido <= 0 && reservada <= 0) continue;
+            linha.qtdConsumida = consumido;
+            linha.qtdReservada = 0;
+            linha.paraReposicao = false;
+            await manager.save(OtArtigo, linha);
+        }
 
-                const artigo = await manager.findOne(Artigo, {
-                    where: { id: linha.artigoId },
-                    lock: { mode: 'pessimistic_write' },
-                });
-                if (!artigo) continue;
-
-                await manager.update(Artigo, artigo.id, {
-                    existencia: Number(artigo.existencia) - consumido,
-                    stockReservado: Math.max(0, Number(artigo.stockReservado) - reservada),
-                });
-
-                linha.qtdConsumida = consumido;
-                linha.qtdReservada = 0;
-                linha.paraReposicao = false;
-                await manager.save(OtArtigo, linha);
-            }
-
-            await this.sysLogs.create({
-                usuario,
-                modulo: 'OT',
-                acao: 'OT_STOCK_CONSUMIDO',
-                detalhes: `#${otId}: baixa definitiva de ${linhas.length} linha(s)`,
-            });
+        await this.sysLogs.create({
+            usuario,
+            modulo: 'OT',
+            acao: 'OT_STOCK_CONSUMIDO',
+            detalhes: `#${otId}: baixa definitiva de ${linhas.length} linha(s)`,
         });
     }
 }
