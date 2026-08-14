@@ -4,6 +4,16 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### refactor(entities): FKs de domínio raw → `@ManyToOne` (padrão dual) (#36)
+
+Converte as FKs de domínio operacional de colunas escalares soltas para relações `@ManyToOne` + `@JoinColumn`, **mantendo o escalar `xxxId`** (padrão dual já usado em `registadoPor`/`user`) para preservar o shape esperado pelo frontend/DTOs.
+
+- **Relações adicionadas** (todas com o `ON DELETE` a espelhar o `init.sql`, logo aditivas — o `synchronize` não altera a BD): `OrdemTrabalho.equipInstalado`/`plano`; `OtArtigo.artigo`; `EncomendaLinha.artigo`; `PlanoArtigo.artigo`; `PlanoManutencao.tipoTrabalho`; `PlanoMaoObra.funcao`; `Tecnico.funcao`.
+- **Shape preservado:** as queries dos services mantêm-se (não carregam as novas relações), pelo que os payloads existentes não mudam; as relações ficam disponíveis para `relations: [...]` quando precisar.
+- **Teste dedicado** (`fk-dual-pattern.spec`): valida via metadados TypeORM que cada FK tem relação **e** escalar, e que o `ON DELETE` bate certo.
+- **Fora de âmbito (follow-up):** FKs de lookup sem constraint no `init.sql` (`municipio_id`, `condicao_pagamento_id`, `modo_pagamento_id`, `faturas.ot_id`) — exigem adicionar a FK ao schema primeiro (risco de dados órfãos), pelo que não são convertidas aqui.
+- **Validação:** 300 testes unit + 108 E2E verdes; `nest build` limpo; gate de cobertura passa.
+
 ### feat(ot): fecho, assinatura e geração automática periódica (closes #59)
 
 RF-OT-006 do épico #60 (depende do #58) — fecha a série de reformulação da OT. O fecho exige **assinatura do cliente**, aplica a baixa definitiva de stock conciliada com a reserva, e — se periódica — gera automaticamente a próxima ordem datada pela **data planeada** (anti-deriva).
