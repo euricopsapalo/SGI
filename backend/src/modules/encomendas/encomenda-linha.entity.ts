@@ -1,8 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, Check, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { Encomenda } from './encomenda.entity';
 import { Artigo } from '../artigos/artigo.entity';
 
 @Entity('encomenda_linhas')
+// #35 — quantidades não-negativas e recebido nunca excede o encomendado.
+@Check('chk_enc_linha_qtds', `"qtd_encomendada" >= 0 AND "qtd_recebida" >= 0 AND "qtd_recebida" <= "qtd_encomendada"`)
 export class EncomendaLinha {
     @PrimaryGeneratedColumn()
     id: number;
@@ -45,4 +47,10 @@ export class EncomendaLinha {
 
     @Column({ name: 'taxa_iva', type: 'numeric', precision: 5, scale: 2, default: 0 })
     taxaIva: number;
+
+    @CreateDateColumn({ name: 'created_at' })
+    createdAt: Date;
+
+    @UpdateDateColumn({ name: 'updated_at' })
+    updatedAt: Date;
 }

@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { OrdemTrabalho } from './ordem-trabalho.entity';
 import { Artigo } from '../artigos/artigo.entity';
 
@@ -51,4 +51,10 @@ export class OtArtigo {
 
     @Column({ name: 'taxa_iva', type: 'numeric', precision: 5, scale: 2, nullable: true })
     taxaIva: number;
+
+    @CreateDateColumn({ name: 'created_at' })
+    createdAt: Date;
+
+    @UpdateDateColumn({ name: 'updated_at' })
+    updatedAt: Date;
 }

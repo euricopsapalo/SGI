@@ -1,7 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Check, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { MovimentoStock } from './movimento-stock.entity';
 
 @Entity('artigos')
+// #35 — stock e quantidades nunca negativos.
+@Check('chk_artigos_stock_nn', `"existencia" >= 0 AND "stock_reservado" >= 0 AND "stock_encomendado" >= 0`)
 export class Artigo {
     @PrimaryGeneratedColumn()
     id: number;
@@ -80,4 +82,10 @@ export class Artigo {
 
     @OneToMany(() => MovimentoStock, (m) => m.artigo)
     movimentos: MovimentoStock[];
+
+    @CreateDateColumn({ name: 'created_at' })
+    createdAt: Date;
+
+    @UpdateDateColumn({ name: 'updated_at' })
+    updatedAt: Date;
 }
