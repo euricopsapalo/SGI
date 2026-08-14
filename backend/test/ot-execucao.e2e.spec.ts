@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import * as request from 'supertest';
 import { OrdensTrabalhoController } from '../src/modules/ordens-trabalho/ordens-trabalho.controller';
 import { OrdensTrabalhoService } from '../src/modules/ordens-trabalho/ordens-trabalho.service';
@@ -66,6 +67,13 @@ describe('OT Execução e Consumo (RF-OT-005) E2E', () => {
         };
         const noopRepo = { save: jest.fn(), create: jest.fn(), delete: jest.fn(async () => ({})), find: jest.fn(async () => []) };
 
+        // #37 — provider DataSource (o service passou a injetá-lo); manager delega no repo.
+        const manager: any = {
+            update: (_e: any, id: any, patch: any) => repo.update(id, patch),
+            save: (e: any) => repo.save(e),
+        };
+        const dataSource: any = { transaction: async (cb: any) => cb(manager) };
+
         const module: TestingModule = await Test.createTestingModule({
             controllers: [OrdensTrabalhoController],
             providers: [
@@ -85,6 +93,7 @@ describe('OT Execução e Consumo (RF-OT-005) E2E', () => {
                 } },
                 { provide: StockReservaService, useValue: { reservar: jest.fn(async () => []), libertar: jest.fn(), consumir: jest.fn() } },
                 { provide: SysLogsService, useValue: { create: jest.fn(async (b: any) => { sysLogs.push(b); return b; }) } },
+                { provide: DataSource, useValue: dataSource },
             ],
         }).compile();
 
