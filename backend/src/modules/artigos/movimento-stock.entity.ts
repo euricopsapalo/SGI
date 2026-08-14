@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Check } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Check, Index } from 'typeorm';
 import { Artigo } from './artigo.entity';
 
 export enum TipoMovimento {
@@ -11,6 +11,8 @@ export enum TipoMovimento {
 
 @Entity('movimentos_stock')
 @Check('chk_mov_stock_tipo', `"tipo" IN ('entrada','saida','ajuste','transferencia','devolucao')`)
+// #35 — índice na FK crítica (relatórios/kardex por artigo).
+@Index('idx_mov_stock_artigo', ['artigo'])
 export class MovimentoStock {
     @PrimaryGeneratedColumn()
     id: number;

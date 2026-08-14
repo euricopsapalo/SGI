@@ -1,5 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { FaturaFornecedor } from './fatura-fornecedor.entity';
+import { Artigo } from '../artigos/artigo.entity';
+import { EncomendaLinha } from '../encomendas/encomenda-linha.entity';
 
 @Entity('linhas_fatura_fornecedor')
 export class LinhaFaturaFornecedor {
@@ -10,8 +12,18 @@ export class LinhaFaturaFornecedor {
     @JoinColumn({ name: 'fatura_id' })
     fatura: FaturaFornecedor;
 
+    // #35/#36 — FK para o artigo (produto). Padrão dual: relação + coluna raw.
+    @ManyToOne(() => Artigo, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'produto_id' })
+    produto: Artigo;
+
     @Column({ name: 'produto_id', nullable: true })
     produtoId: number;
+
+    // #35 — FK para a linha de encomenda de origem (conciliação compra↔fatura).
+    @ManyToOne(() => EncomendaLinha, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'id_linha_encomenda' })
+    linhaEncomenda: EncomendaLinha;
 
     @Column({ name: 'id_linha_encomenda', nullable: true })
     idLinhaEncomenda: number;
@@ -39,4 +51,10 @@ export class LinhaFaturaFornecedor {
 
     @Column({ name: 'valor_total_linha', type: 'numeric', precision: 18, scale: 2, default: 0 })
     valorTotalLinha: number;
+
+    @CreateDateColumn({ name: 'created_at' })
+    createdAt: Date;
+
+    @UpdateDateColumn({ name: 'updated_at' })
+    updatedAt: Date;
 }

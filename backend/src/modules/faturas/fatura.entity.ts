@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, Check } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, Check, Index, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { Cliente } from '../clientes/cliente.entity';
 import { FaturaLinha } from './fatura-linha.entity';
 
@@ -11,6 +11,10 @@ export enum EstadoFatura {
 
 @Entity('faturas')
 @Check('chk_faturas_estado', `"estado" IN ('Pendente','Paga','Anulada','Emitido')`)
+// #35 — totais nunca negativos.
+@Check('chk_faturas_totais_nn', `"valor_subtotal" >= 0 AND "valor_iva" >= 0 AND "valor_total" >= 0`)
+// #35 — índice na FK da OT de origem (faturação por OT).
+@Index('idx_faturas_ot', ['otId'])
 export class Fatura {
     @PrimaryGeneratedColumn()
     id: number;
@@ -66,4 +70,10 @@ export class Fatura {
 
     @OneToMany(() => FaturaLinha, (l) => l.fatura, { cascade: true })
     linhas: FaturaLinha[];
+
+    @CreateDateColumn({ name: 'created_at' })
+    createdAt: Date;
+
+    @UpdateDateColumn({ name: 'updated_at' })
+    updatedAt: Date;
 }

@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { Fatura } from './fatura.entity';
 
 @Entity('fatura_linhas')
@@ -18,4 +18,10 @@ export class FaturaLinha {
 
     @Column({ name: 'preco_unit', type: 'numeric', precision: 12, scale: 2, default: 0 })
     precoUnit: number;
+
+    @CreateDateColumn({ name: 'created_at' })
+    createdAt: Date;
+
+    @UpdateDateColumn({ name: 'updated_at' })
+    updatedAt: Date;
 }
