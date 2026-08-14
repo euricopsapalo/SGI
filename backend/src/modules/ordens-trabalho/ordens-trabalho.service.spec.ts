@@ -6,6 +6,7 @@
 import 'reflect-metadata';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { OrdensTrabalhoService } from './ordens-trabalho.service';
 import { OrdemTrabalho } from './ordem-trabalho.entity';
 import { OtMaoObra } from './ot-mao-obra.entity';
@@ -65,6 +66,14 @@ describe('OrdensTrabalhoService (regression #15)', () => {
 
         const sysLogsMock = { create: jest.fn(async (b) => b) };
 
+        // #37 — DataSource.transaction executa o callback com um manager mockado
+        // (update para a mudança de estado; save para a OT periódica gerada).
+        const managerMock = {
+            update: jest.fn(async () => ({ affected: 1 })),
+            save: jest.fn(async (e: any) => (Array.isArray(e) ? e : { ...e, id: 200 })),
+        };
+        const dataSourceMock = { transaction: jest.fn(async (cb: any) => cb(managerMock)) };
+
         module = await Test.createTestingModule({
             providers: [
                 OrdensTrabalhoService,
@@ -80,6 +89,7 @@ describe('OrdensTrabalhoService (regression #15)', () => {
                 { provide: ArtigosService, useValue: artigosServiceMock },
                 { provide: StockReservaService, useValue: { reservar: jest.fn(async () => []), libertar: jest.fn(), consumir: jest.fn() } },
                 { provide: SysLogsService, useValue: sysLogsMock },
+                { provide: DataSource, useValue: dataSourceMock },
             ],
         }).compile();
 

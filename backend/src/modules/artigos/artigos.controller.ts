@@ -6,6 +6,7 @@ import { UpdateArtigoDto } from './dto/update-artigo.dto';
 import { AjusteExistenciaDto } from './dto/ajuste-existencia.dto';
 import { UpsertStockArmazemDto } from './dto/upsert-stock-armazem.dto';
 import { CreateMovimentoStockDto } from './dto/create-movimento-stock.dto';
+import { TransferenciaStockDto } from './dto/transferencia-stock.dto';
 
 @ApiTags('artigos')
 @ApiBearerAuth('access-token')
@@ -55,6 +56,19 @@ export class ArtigosController {
         @Body() dto: UpsertStockArmazemDto,
     ) {
         return this.service.upsertStockArmazem(id, dto.armazemId, dto.quantidade ?? 0, dto.stockMinimo ?? 0);
+    }
+
+    /** #37 — transferência atómica de stock entre armazéns. */
+    @Post(':id/transferencia')
+    transferencia(@Param('id', ParseIntPipe) id: number, @Body() dto: TransferenciaStockDto) {
+        return this.service.transferencia(
+            id,
+            dto.armazemOrigemId,
+            dto.armazemDestinoId,
+            dto.quantidade,
+            dto.usuario,
+            dto.observacao,
+        );
     }
 }
 
