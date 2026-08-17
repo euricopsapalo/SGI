@@ -1761,6 +1761,115 @@ a:hover {
   opacity: 1;
 }
 
+/* ── #42 — Suspense fallback (route chunk loading) ── */
+.route-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  min-height: 60vh;
+  color: var(--text-secondary);
+}
+.route-fallback__spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid var(--blue-border);
+  border-top-color: var(--blue);
+  border-radius: var(--r-full);
+  animation: spin 0.8s linear infinite;
+}
+.route-fallback__text {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* ── #42 — ErrorBoundary fallback screen ── */
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--sp-6);
+  background: var(--page-bg);
+}
+.error-boundary__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--sp-4);
+  max-width: 460px;
+  width: 100%;
+  padding: var(--sp-8);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--r-lg);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+.error-boundary__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--r-full);
+  background: var(--red-bg);
+  color: var(--red);
+}
+.error-boundary__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.error-boundary__text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.error-boundary__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  justify-content: center;
+  margin-top: var(--sp-2);
+}
+.error-boundary__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--text-primary);
+  background: var(--panel-bg);
+  border: 1px solid var(--border-dark);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.error-boundary__btn:hover {
+  background: var(--gray-s-bg);
+}
+.error-boundary__btn--primary {
+  color: #fff;
+  background: var(--blue);
+  border-color: var(--blue);
+}
+.error-boundary__btn--primary:hover {
+  background: var(--blue-dark);
+}
+.error-boundary__detail {
+  margin: 0;
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
