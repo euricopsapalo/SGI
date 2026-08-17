@@ -5,6 +5,7 @@ import { User } from '../users/user.entity';
 import { OtMaoObra } from './ot-mao-obra.entity';
 import { OtArtigo } from './ot-artigo.entity';
 import { OtReprogramacao } from './ot-reprogramacao.entity';
+import { OtAnexo } from './ot-anexo.entity';
 import { EquipInstalado } from '../parque/equip-instalado.entity';
 import { PlanoManutencao } from '../planos/plano-manutencao.entity';
 
@@ -210,4 +211,8 @@ export class OrdemTrabalho {
 
     @OneToMany(() => OtReprogramacao, (r) => r.ordemTrabalho, { cascade: true })
     reprogramacoes: OtReprogramacao[];
+
+    // #47 — fotos e assinatura da intervenção
+    @OneToMany(() => OtAnexo, (a) => a.ordemTrabalho, { cascade: true })
+    anexos: OtAnexo[];
 }

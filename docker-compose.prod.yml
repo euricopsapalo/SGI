@@ -43,11 +43,17 @@ services:
       MAIL_SECURE: "false"
       MAIL_USER: ${MAIL_USER:-}
       MAIL_FROM: '"SGI — Aquatex" <${MAIL_USER:-noreply@aquatex.ao}>'
-    volumes: []
+      # #47 — fotos/assinaturas persistem num volume nomeado (não no filesystem efémero).
+      UPLOADS_DIR: /app/uploads
+    volumes:
+      - sgi_uploads:/app/uploads
     secrets:
       - sgi_db_password
       - sgi_jwt_secret
       - sgi_mail_pass
+
+volumes:
+  sgi_uploads:
 
 secrets:
   sgi_db_password:

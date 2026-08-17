@@ -3,6 +3,8 @@ import AppLayout from '../../components/Layout/AppLayout';
 import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
+import api from '../../services/api';
+import OtAnexosSection from './OtAnexosSection';
 import {
     useGlobal, OrdemTrabalho, OTEstado, OTTipo, OTMaoObra, OTArtigo,
     EquipInstalado, ModeloEquipamento, Cliente,
@@ -334,6 +336,7 @@ function buildOTHtml(
     clientes: Cliente[],
     empresa?: import('../../contexts/GlobalContext').EmpresaConfig,
     simbolo?: string,
+    assinaturaDataUrl?: string,   // #47 — assinatura do cliente embebida na ficha
 ): string {
     const fmtDate = makePrintDate(empresa?.formatoData);
     const equip = equipInstalados.find(e => e.id === ot.equipInstaladoId);
@@ -417,6 +420,7 @@ ${artsHtml}${diagHtml}
   <div class="sign-box">
     <div class="sign-lbl">Cliente / Responsável</div>
     <div class="sign-name">${cli}</div>
+    ${assinaturaDataUrl ? `<img src="${assinaturaDataUrl}" alt="Assinatura do cliente" style="max-height:60px;max-width:100%;display:block;margin:2px auto 0" />` : ''}
     <div class="sign-line">Assinatura &amp; Data</div>
   </div>
 </div>
@@ -424,7 +428,25 @@ ${artsHtml}${diagHtml}
 </body></html>`;
 }
 
-function printOT(
+/** #47 — busca a assinatura da OT (se existir) como data URL PNG para embeber na ficha. */
+async function fetchAssinaturaDataUrl(otId: number | string): Promise<string | undefined> {
+    try {
+        const { data } = await api.get<{ id: number; tipo: string }[]>(`/ordens/${otId}/anexos`);
+        const ass = data.find(a => a.tipo === 'assinatura');
+        if (!ass) return undefined;
+        const resp = await api.get(`/ordens/${otId}/anexos/${ass.id}/ficheiro`, { responseType: 'blob' });
+        return await new Promise<string>((resolve, reject) => {
+            const r = new FileReader();
+            r.onloadend = () => resolve(r.result as string);
+            r.onerror = reject;
+            r.readAsDataURL(resp.data);
+        });
+    } catch {
+        return undefined;   // sem assinatura ou erro → imprime sem imagem
+    }
+}
+
+async function printOT(
     ot: OrdemTrabalho,
     equipInstalados: EquipInstalado[],
     modelosEquipamento: ModeloEquipamento[],
@@ -432,9 +454,10 @@ function printOT(
     empresa?: import('../../contexts/GlobalContext').EmpresaConfig,
     simbolo?: string,
 ) {
+    const assinatura = await fetchAssinaturaDataUrl(ot.id);
     const w = window.open('', '_blank', 'width=840,height=960');
     if (!w) return;
-    w.document.write(buildOTHtml(ot, equipInstalados, modelosEquipamento, clientes, empresa, simbolo));
+    w.document.write(buildOTHtml(ot, equipInstalados, modelosEquipamento, clientes, empresa, simbolo, assinatura));
     w.document.close();
     w.focus();
     setTimeout(() => w.print(), 350);
@@ -906,6 +929,17 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                                         <input className="form-input" value={causa} onChange={e => setCausa(e.target.value)} placeholder="Ex: Desgaste da bomba" />
                                     </div>
                                 </div>
+
+                                {/* — Fotos & Assinatura (#47) — só para OTs já criadas — */}
+                                {ot?.id ? (
+                                    <div style={{ marginTop: 18 }}>
+                                        <OtAnexosSection otId={ot.id} />
+                                    </div>
+                                ) : (
+                                    <div style={{ marginTop: 18, fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                                        Guarde a OT para adicionar fotos e a assinatura do cliente.
+                                    </div>
+                                )}
                             </>
                         )}
 
