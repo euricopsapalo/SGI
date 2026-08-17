@@ -1,7 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Index } from 'typeorm';
 import { OrdemTrabalho } from './ordem-trabalho.entity';
 
 @Entity('ot_reprogramacoes')
+// #31 — índice de performance (antes no init.sql, na FK ot_id).
+@Index('idx_ot_reprogramacoes_ot', ['ordemTrabalho'])
 export class OtReprogramacao {
     @PrimaryGeneratedColumn()
     id: number;

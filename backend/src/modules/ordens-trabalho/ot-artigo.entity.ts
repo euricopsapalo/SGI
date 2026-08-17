@@ -1,8 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { OrdemTrabalho } from './ordem-trabalho.entity';
 import { Artigo } from '../artigos/artigo.entity';
 
 @Entity('ot_artigos')
+// #31 — índices de performance (antes no init.sql).
+@Index('idx_ot_artigos_ot', ['ordemTrabalho'])
+@Index('idx_ot_artigos_reposicao', ['paraReposicao'], { where: '"para_reposicao" = true' })
 export class OtArtigo {
     @PrimaryGeneratedColumn()
     id: number;

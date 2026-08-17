@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, Check } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, Check, Index } from 'typeorm';
 import { Cliente } from '../clientes/cliente.entity';
 import { ModeloEquipamento } from './modelo-equipamento.entity';
 
@@ -10,6 +10,9 @@ export enum EstadoEquip {
 
 @Entity('equip_instalados')
 @Check('chk_equip_inst_estado', `"estado" IN ('ativo','com_problema','inativo')`)
+// #31 — índices de performance (antes no init.sql).
+@Index('idx_equip_instalados_cliente', ['cliente'])
+@Index('idx_equip_instalados_estado', ['estado'])
 export class EquipInstalado {
     @PrimaryGeneratedColumn()
     id: number;

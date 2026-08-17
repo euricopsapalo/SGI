@@ -68,20 +68,15 @@ describe('MigrationService', () => {
     });
   });
 
+  // #31 — o schema passou a ser versionado por migrações em todos os ambientes.
   describe('onModuleInit in development', () => {
     beforeEach(() => {
       process.env.NODE_ENV = 'development';
     });
 
-    it('should NOT call runMigrations when NODE_ENV is development', async () => {
+    it('should call runMigrations when NODE_ENV is development', async () => {
       await service.onModuleInit();
-      expect(runMigrationsMock).not.toHaveBeenCalled();
-    });
-
-    it('should log development mode', async () => {
-      const logSpy = jest.spyOn(service['logger'], 'log');
-      await service.onModuleInit();
-      expect(logSpy).toHaveBeenCalledWith('Running in development mode');
+      expect(runMigrationsMock).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -90,7 +85,18 @@ describe('MigrationService', () => {
       delete process.env.NODE_ENV;
     });
 
-    it('should NOT call runMigrations when NODE_ENV is undefined', async () => {
+    it('should call runMigrations when NODE_ENV is undefined', async () => {
+      await service.onModuleInit();
+      expect(runMigrationsMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('onModuleInit in test', () => {
+    beforeEach(() => {
+      process.env.NODE_ENV = 'test';
+    });
+
+    it('should NOT call runMigrations when NODE_ENV is test', async () => {
       await service.onModuleInit();
       expect(runMigrationsMock).not.toHaveBeenCalled();
     });

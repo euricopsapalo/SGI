@@ -57,3 +57,30 @@ docker-compose logs -f
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:3001
 - Adminer: http://localhost:8080
+
+## Base de dados — Migrações (issue #31)
+
+O schema e os dados de referência são versionados por **migrações TypeORM**
+(`backend/src/migrations/`). O `synchronize` está **permanentemente desligado**
+em todos os ambientes e o `postgres/init.sql` deixou de ser usado.
+
+- **1786743588363-InitialSchema** — schema completo (tabelas, FKs, índices, CHECKs)
+- **1786745000000-InitialSeed** — dados de referência (tipos, países, IVA, utilizador admin, etc.)
+
+Ao arrancar (`docker-compose up`), o backend corre automaticamente as migrações
+pendentes numa BD limpa (via `MigrationService`, em todos os ambientes exceto `test`).
+
+### Comandos (a partir de `backend/`)
+
+```bash
+npm run migration:run        # aplica as migrações pendentes
+npm run migration:revert     # reverte a última migração
+npm run migration:show       # lista o estado das migrações
+# Gerar uma nova migração a partir de alterações às entities (contra uma BD vazia):
+npm run migration:generate -- src/migrations/NomeDaMigracao
+```
+
+> ⚠️ **Bases de dados existentes** (que usavam `synchronize`): como as tabelas já
+> existem, corra o *baseline* uma vez antes de ligar as migrações — registe a
+> `InitialSchema`/`InitialSeed` como já aplicadas (`INSERT INTO migrations(...)`)
+> **ou** recrie a BD do zero (`docker-compose down -v && docker-compose up`).

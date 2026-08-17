@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn, Check } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn, Check, Index } from 'typeorm';
 import { Cliente } from '../clientes/cliente.entity';
 import { Tecnico } from '../tecnicos/tecnico.entity';
 import { User } from '../users/user.entity';
@@ -58,6 +58,16 @@ export const OT_TRANSICOES: Record<OTEstado, OTEstado[]> = {
 @Check('chk_ot_natureza', `"natureza_intervencao" IS NULL OR "natureza_intervencao" IN ('Manutenção','Substituição de filtro','Reparação de avaria','Inspeção','Montagem / Instalação')`)
 @Check('chk_ot_prioridade', `"prioridade" IN ('Normal','Alta','Urgente')`)
 @Check('chk_ot_estado', `"estado" IN ('Registada','Programada','Adiada','Confirmada','Em execução','Finalizada')`)
+// #31 — índices de performance (antes definidos no init.sql; agora geridos pela entity).
+@Index('idx_ordens_trabalho_cliente', ['cliente'])
+@Index('idx_ordens_trabalho_estado', ['estado'])
+@Index('idx_ot_registado_por', ['registadoPorId'])
+@Index('idx_ot_executado_por', ['executadoPorId'])
+@Index('idx_ot_natureza', ['naturezaIntervencao'])
+@Index('idx_ot_prioridade', ['prioridade'])
+@Index('idx_ordens_trabalho_equip', ['equipInstaladoId'])
+@Index('idx_ordens_trabalho_prog', ['dataAgendada'])
+@Index('idx_ot_gerada_de', ['geradaDeOtId'])
 export class OrdemTrabalho {
     @PrimaryGeneratedColumn()
     id: number;

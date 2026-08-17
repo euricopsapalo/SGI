@@ -10,7 +10,8 @@
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      # #31 — o schema e os dados-semente passaram a ser criados pelas migrações
+      # TypeORM (corridas pelo backend no arranque). O init.sql deixou de ser usado.
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U app_user" ]
       interval: 10s

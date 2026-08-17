@@ -1,9 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Check, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Check, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { MovimentoStock } from './movimento-stock.entity';
 
 @Entity('artigos')
 // #35 — stock e quantidades nunca negativos.
 @Check('chk_artigos_stock_nn', `"existencia" >= 0 AND "stock_reservado" >= 0 AND "stock_encomendado" >= 0`)
+// #31 — índices de performance (antes no init.sql).
+@Index('idx_artigos_codigo', ['codigo'])
+@Index('idx_artigos_armazem', ['codigoArmazem'])
 export class Artigo {
     @PrimaryGeneratedColumn()
     id: number;

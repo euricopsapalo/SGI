@@ -10,6 +10,8 @@ export enum TipoSysLog {
 @Check('chk_sys_logs_tipo', `"tipo" IN ('info','warning','error')`)
 // #35 — índice temporal (a página de Logs ordena/filtra por data).
 @Index('idx_sys_logs_timestamp', ['timestamp'])
+// #31 — índice de performance (antes no init.sql).
+@Index('idx_sys_logs_usuario', ['usuario'])
 export class SysLog {
     @PrimaryGeneratedColumn()
     id: number;
