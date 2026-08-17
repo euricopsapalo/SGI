@@ -1,26 +1,28 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import './index.css';
 import { GlobalProvider, useGlobal } from './contexts/GlobalContext';
 import GlobalToast from './components/GlobalToast';
+import RouteFallback from './components/RouteFallback';
 
-/* Pages */
-import LoginPage from './pages/Login/LoginPage';
-import DashboardPage from './pages/Dashboard/DashboardPage';
-import ClientesPage from './pages/Clientes/ClientesPage';
-import TecnicosPage from './pages/Tecnicos/TecnicosPage';
-import FornecedoresPage from './pages/Fornecedores/FornecedoresPage';
-import ParquePage from './pages/Parque/ParquePage';
-import PlanosPage from './pages/Planos/PlanosPage';
-import OrdensPage from './pages/Ordens/OrdensPage';
-import AgendaPage from './pages/Agenda/AgendaPage';
-import EncomendaPage from './pages/Encomendas/EncomendaPage';
-import StockPage from './pages/Stock/StockPage';
-import FaturacaoPage from './pages/Faturacao/FaturacaoPage';
-import UtilizadoresPage from './pages/Utilizadores/UtilizadoresPage';
-import RelatoriosPage from './pages/Relatorios/RelatoriosPage';
-import ConfiguracoesPage from './pages/Configuracoes/ConfiguracoesPage';
-import LogsPage from './pages/Logs/LogsPage';
+/* Pages — carregadas por rota via React.lazy (#42) para dividir o bundle.
+   Cada página vira um chunk separado, pedido só quando a rota é visitada. */
+const LoginPage = lazy(() => import('./pages/Login/LoginPage'));
+const DashboardPage = lazy(() => import('./pages/Dashboard/DashboardPage'));
+const ClientesPage = lazy(() => import('./pages/Clientes/ClientesPage'));
+const TecnicosPage = lazy(() => import('./pages/Tecnicos/TecnicosPage'));
+const FornecedoresPage = lazy(() => import('./pages/Fornecedores/FornecedoresPage'));
+const ParquePage = lazy(() => import('./pages/Parque/ParquePage'));
+const PlanosPage = lazy(() => import('./pages/Planos/PlanosPage'));
+const OrdensPage = lazy(() => import('./pages/Ordens/OrdensPage'));
+const AgendaPage = lazy(() => import('./pages/Agenda/AgendaPage'));
+const EncomendaPage = lazy(() => import('./pages/Encomendas/EncomendaPage'));
+const StockPage = lazy(() => import('./pages/Stock/StockPage'));
+const FaturacaoPage = lazy(() => import('./pages/Faturacao/FaturacaoPage'));
+const UtilizadoresPage = lazy(() => import('./pages/Utilizadores/UtilizadoresPage'));
+const RelatoriosPage = lazy(() => import('./pages/Relatorios/RelatoriosPage'));
+const ConfiguracoesPage = lazy(() => import('./pages/Configuracoes/ConfiguracoesPage'));
+const LogsPage = lazy(() => import('./pages/Logs/LogsPage'));
 
 /* Requires authentication — redirects to /login if no user */
 function AuthGuard({ children }: { children: React.ReactElement }) {
@@ -43,6 +45,7 @@ function App() {
     <GlobalProvider>
       <GlobalToast />
       <BrowserRouter>
+        <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/login"    element={<LoginPage />} />
           <Route path="/"         element={<Navigate to="/login" replace />} />
@@ -65,6 +68,7 @@ function App() {
 
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </GlobalProvider>
   );
