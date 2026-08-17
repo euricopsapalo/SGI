@@ -3,6 +3,7 @@ import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { useGlobal, Tecnico, FuncaoTecnico, OrdemTrabalho, EmpresaConfig, Cliente, EquipInstalado, ModeloEquipamento } from '../../contexts/GlobalContext';
+import { useConfirm } from '../../components/useConfirm';
 import { showToast } from '../../utils/errorHandler';
 import { Search, Plus, Edit2, Eye, X, AlertCircle, Check, Download, Trash2, UserCog, MapPin, Printer } from 'lucide-react';
 
@@ -701,6 +702,7 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
 /* ══ Page ════════════════════════════════════════════════ */
 const TecnicosPage: React.FC = () => {
     const { tecnicos, addTecnico, updateTecnico, removeTecnico, funcoesTecnico, simboloMoeda, provincias, municipios, ordens, empresaConfig, clientes, equipInstalados, modelosEquipamento } = useGlobal();
+    const confirm = useConfirm();
 
     const [search, setSearch]     = useState('');
     const [modal, setModal]       = useState<'new' | string | null>(null);
@@ -709,7 +711,12 @@ const TecnicosPage: React.FC = () => {
     const [showRelatorios, setShowRelatorios] = useState(false);
 
     const handleRemove = async (id: string, nome: string) => {
-        if (!window.confirm(`Eliminar o técnico "${nome}"? Esta acção não pode ser desfeita.`)) return;
+        if (!(await confirm({
+            title: 'Eliminar técnico',
+            message: `Eliminar o técnico "${nome}"? Esta acção não pode ser desfeita.`,
+            confirmLabel: 'Eliminar',
+            variant: 'danger',
+        }))) return;
         try {
             await removeTecnico(id);
             showToast(`Técnico "${nome}" eliminado.`, 'success');

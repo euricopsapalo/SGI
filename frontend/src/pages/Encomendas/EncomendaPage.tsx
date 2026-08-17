@@ -9,6 +9,7 @@ import {
     Rececao, FaturaFornecedor,
     CondicaoPagamento, ModoPagamento, Fornecedor,
 } from '../../contexts/GlobalContext';
+import { useConfirm } from '../../components/useConfirm';
 import {
     Search, Plus, X, AlertCircle, Check, ShoppingCart,
     Package, Printer, Archive, Download, TrendingDown, ShoppingBag,
@@ -2344,6 +2345,7 @@ function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: st
 /* ══ Page ════════════════════════════════════════════════════ */
 const EncomendaPage: React.FC = () => {
     const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, taxasIva, updateArtigo, addMovimento, currentUser, empresaConfig, fmtMoney, fmtDate, fmt, simboloMoeda, faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC, condicoesPagamento, modosPagamento } = useGlobal();
+    const confirm = useConfirm();
 
     const [pageTab,   setPageTab]   = useState<'encomendas' | 'sugestoes' | 'compras' | 'relatorios'>('encomendas');
     const [search,    setSearch]    = useState('');
@@ -2482,7 +2484,12 @@ const EncomendaPage: React.FC = () => {
     };
 
     const handleAnularRececao = async (rececaoId: string) => {
-        if (!window.confirm('Anular esta receção irá reverter o stock e os acumulados. Confirmar?')) return;
+        if (!(await confirm({
+            title: 'Anular receção',
+            message: 'Anular esta receção irá reverter o stock e os acumulados. Confirmar?',
+            confirmLabel: 'Anular',
+            variant: 'danger',
+        }))) return;
         try {
             await anularRececao(rececaoId);
             showToast('Receção anulada. Stock revertido.');
@@ -2527,7 +2534,12 @@ const EncomendaPage: React.FC = () => {
         const fatura = faturasFornecedor.find(f => f.id === id);
         if (!fatura) return;
         if (novoEstado === 'Validado' && fatura.tipoNotaCredito === 'Devolucao') {
-            if (!window.confirm('Validar esta VNC irá reduzir o stock dos artigos. Confirma?')) return;
+            if (!(await confirm({
+                title: 'Validar nota de crédito',
+                message: 'Validar esta VNC irá reduzir o stock dos artigos. Confirma?',
+                confirmLabel: 'Validar',
+                variant: 'info',
+            }))) return;
         }
         try {
             await updateEstadoVNC(id, novoEstado, currentUser?.nome);

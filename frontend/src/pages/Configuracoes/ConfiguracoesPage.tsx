@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import { useGlobal } from '../../contexts/GlobalContext';
+import { useConfirm } from '../../components/useConfirm';
 import api from '../../services/api';
 import { extractErrorMessage, showToast } from '../../utils/errorHandler';
 import {
@@ -42,6 +43,7 @@ const initSeguranca = {
 
 /* ── 2FA (TOTP) — enrolamento opt-in por utilizador (issue #100) ── */
 const TwoFactorSection: React.FC<{ allowed: boolean }> = ({ allowed }) => {
+    const confirm = useConfirm();
     const [enabled, setEnabled] = useState(false);
     const [setup, setSetup] = useState<{ secret: string; otpauthUri: string } | null>(null);
     const [code, setCode] = useState('');
@@ -75,7 +77,12 @@ const TwoFactorSection: React.FC<{ allowed: boolean }> = ({ allowed }) => {
     };
 
     const disable = async () => {
-        if (!window.confirm('Desativar a autenticação de dois fatores nesta conta?')) return;
+        if (!(await confirm({
+            title: 'Desativar 2FA',
+            message: 'Desativar a autenticação de dois fatores nesta conta?',
+            confirmLabel: 'Desativar',
+            variant: 'danger',
+        }))) return;
         setBusy(true); setMsg(null);
         try {
             await api.post('/auth/2fa/disable', { code: code.trim() });
