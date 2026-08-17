@@ -6,6 +6,7 @@ import ExportModal, { ExportCol } from '../../components/ExportModal';
 import {
     useGlobal, EquipInstalado, EstadoEquip, ModeloEquipamento, Cliente, OrdemTrabalho,
 } from '../../contexts/GlobalContext';
+import { useConfirm } from '../../components/useConfirm';
 import {
     Search, Plus, Edit2, X, AlertCircle, Check, MapPin,
     Eye, AlertTriangle, RefreshCw, Package, Printer, Download, Trash2,
@@ -840,6 +841,7 @@ const ParquePage: React.FC = () => {
         modelosEquipamento, addModelo, updateModelo, removeModelo,
         clientes, addOrdem, ordens, fmtDate, empresaConfig,
     } = useGlobal();
+    const confirm = useConfirm();
 
     // Computed stats per equipment from OTs
     const equipStats = useMemo(() => {
@@ -921,7 +923,12 @@ const ParquePage: React.FC = () => {
     };
 
     const handleDeleteEquip = async (id: string, nrSerie: string) => {
-        if (!window.confirm(`Eliminar o equipamento "${nrSerie}"? Esta acção não pode ser desfeita.`)) return;
+        if (!(await confirm({
+            title: 'Eliminar equipamento',
+            message: `Eliminar o equipamento "${nrSerie}"? Esta acção não pode ser desfeita.`,
+            confirmLabel: 'Eliminar',
+            variant: 'danger',
+        }))) return;
         try {
             await removeEquipInstalado(id);
             showToast(`Equipamento "${nrSerie}" eliminado.`, 'success');
@@ -992,7 +999,12 @@ const ParquePage: React.FC = () => {
     };
 
     const handleDeleteModelo = async (id: string, nome: string) => {
-        if (!window.confirm(`Eliminar o modelo "${nome}"? Esta acção não pode ser desfeita.`)) return;
+        if (!(await confirm({
+            title: 'Eliminar modelo',
+            message: `Eliminar o modelo "${nome}"? Esta acção não pode ser desfeita.`,
+            confirmLabel: 'Eliminar',
+            variant: 'danger',
+        }))) return;
         try {
             await removeModelo(id);
             showToast(`Modelo "${nome}" eliminado.`, 'success');

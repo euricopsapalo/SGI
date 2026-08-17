@@ -4,10 +4,11 @@ import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
 import UtilizadorModal from './UtilizadorModal';
 import { useGlobal } from '../../contexts/GlobalContext';
+import { useConfirm } from '../../components/useConfirm';
 import api from '../../services/api';
 import {
     Search, Plus, Filter, Pencil, Trash2,
-    ToggleLeft, ToggleRight, MoreVertical, Check,
+    ToggleLeft, ToggleRight, MoreVertical,
 } from 'lucide-react';
 
 
@@ -108,6 +109,7 @@ const RowMenu: React.FC<RowMenuProps> = ({ user, onEdit, onToggle, onDelete }) =
 ════════════════════════════════════════════════ */
 const UtilizadoresPage: React.FC = () => {
     const { tecnicos } = useGlobal();
+    const confirm = useConfirm();
     const [users, setUsers] = useState<Utilizador[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -180,7 +182,12 @@ const UtilizadoresPage: React.FC = () => {
     };
 
     const handleDelete = async (id: number) => {
-        if (!window.confirm('Eliminar este utilizador?')) return;
+        if (!(await confirm({
+            title: 'Eliminar utilizador',
+            message: 'Eliminar este utilizador?',
+            confirmLabel: 'Eliminar',
+            variant: 'danger',
+        }))) return;
         try {
             await api.delete(`/users/${id}`);
             setUsers(prev => prev.filter(u => u.id !== id));

@@ -3,6 +3,7 @@ import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { useGlobal, Fornecedor, Encomenda, Artigo, EmpresaConfig, Provincia, Municipio } from '../../contexts/GlobalContext';
+import { useConfirm } from '../../components/useConfirm';
 import { showToast } from '../../utils/errorHandler';
 import { Search, Plus, Edit2, Eye, X, AlertCircle, Check, Truck, Download, Trash2, MapPin, Printer } from 'lucide-react';
 
@@ -486,6 +487,7 @@ const FornecedorModal: React.FC<FornecedorModalProps> = ({ fornecedor, onClose, 
 /* ══ Page ════════════════════════════════════════════════ */
 const FornecedoresPage: React.FC = () => {
     const { fornecedores, addFornecedor, updateFornecedor, removeFornecedor, encomendas, artigos, provincias, municipios, empresaConfig } = useGlobal();
+    const confirm = useConfirm();
 
     const [search, setSearch]         = useState('');
     const [modal, setModal]           = useState<'new' | string | null>(null);
@@ -494,7 +496,12 @@ const FornecedoresPage: React.FC = () => {
     const [showRelatorios, setShowRelatorios] = useState(false);
 
     const handleRemove = async (id: string, nome: string) => {
-        if (!window.confirm(`Eliminar o fornecedor "${nome}"? Esta acção não pode ser desfeita.`)) return;
+        if (!(await confirm({
+            title: 'Eliminar fornecedor',
+            message: `Eliminar o fornecedor "${nome}"? Esta acção não pode ser desfeita.`,
+            confirmLabel: 'Eliminar',
+            variant: 'danger',
+        }))) return;
         try {
             await removeFornecedor(id);
             showToast(`Fornecedor "${nome}" eliminado.`, 'success');
