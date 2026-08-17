@@ -25,15 +25,23 @@ import { AuthModule } from './modules/auth/auth.module';
 import { SeedModule } from './modules/seed/seed.module';
 import { FaturasFornecedorModule } from './modules/faturas-fornecedor/faturas-fornecedor.module';
 import { HealthModule } from './modules/health/health.module';
+import { readSecret } from './config/read-secret';
 
 @Module({
   imports: [
     // Valida variáveis críticas no arranque (issue #24). App falha se JWT_SECRET
     // estiver ausente ou tiver < 32 caracteres. `.unknown(true)` deixa passar as
     // restantes env vars (DB_*, MAIL_*, CORS_ORIGIN, etc.).
+    // #53 — quando o segredo vem de um ficheiro (JWT_SECRET_FILE, Docker secrets),
+    // a env JWT_SECRET pode não existir; nesse caso a validação do valor resolvido
+    // é feita por `assertJwtSecret()` no arranque (main.ts).
     ConfigModule.forRoot({
       validationSchema: Joi.object({
-        JWT_SECRET: Joi.string().min(32).required(),
+        JWT_SECRET: Joi.string().min(32).when('JWT_SECRET_FILE', {
+          is: Joi.exist(),
+          then: Joi.optional(),
+          otherwise: Joi.required(),
+        }),
       }).unknown(true),
     }),
     // Rate limiting global — 60 pedidos/min por IP e por endpoint (issue #41).
@@ -47,7 +55,7 @@ import { HealthModule } from './modules/health/health.module';
       host: process.env.DB_HOST || 'postgres',
       port: parseInt(process.env.DB_PORT) || 5432,
       username: process.env.DB_USER || 'app_user',
-      password: process.env.DB_PASSWORD || 'app_password',
+      password: readSecret('DB_PASSWORD') || 'app_password',
       database: process.env.DB_NAME || 'app_development',
       autoLoadEntities: true,
       // #31 — schema é agora versionado por migrações em TODOS os ambientes.

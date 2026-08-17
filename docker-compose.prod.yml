@@ -1,0 +1,58 @@
+# #53 — Override de PRODUÇÃO: segredos via Docker secrets (montados em /run/secrets/*)
+# em vez de variáveis de ambiente do processo.
+#
+# Uso (Docker Swarm):
+#   docker stack deploy -c docker-compose.yml -c docker-compose.prod.yml sgi
+#
+# Os segredos são `external: true` — têm de ser criados ANTES do deploy:
+#   printf '%s' "$(openssl rand -hex 32)" | docker secret create sgi_jwt_secret -
+#   printf '%s' 'a_password_forte'        | docker secret create sgi_db_password -
+#   printf '%s' 'gmail_app_password'      | docker secret create sgi_mail_pass  -
+#
+# O backend lê cada segredo do ficheiro apontado por *_FILE (helper readSecret);
+# o Postgres usa POSTGRES_PASSWORD_FILE (suporte nativo da imagem oficial).
+# Ver docs/producao-segredos.md para o procedimento completo (criar/rodar).
+
+services:
+  postgres:
+    environment:
+      # A password deixa de vir em texto; passa a ser lida do ficheiro do secret.
+      POSTGRES_PASSWORD_FILE: /run/secrets/sgi_db_password
+      # POSTGRES_PASSWORD explícito removido (definido em docker-compose.yml só p/ dev).
+    secrets:
+      - sgi_db_password
+
+  backend:
+    # Sem bind-mount do código nem start:dev em produção.
+    command: npm run start:prod
+    environment:
+      NODE_ENV: production
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: app_user
+      DB_NAME: app_development
+      PORT: 3001
+      # Segredos por ficheiro (readSecret usa *_FILE com precedência sobre a env).
+      DB_PASSWORD_FILE: /run/secrets/sgi_db_password
+      JWT_SECRET_FILE: /run/secrets/sgi_jwt_secret
+      MAIL_PASS_FILE: /run/secrets/sgi_mail_pass
+      # Não-segredos continuam como env normais.
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://sgi.aquatex.ao}
+      MAIL_HOST: smtp.gmail.com
+      MAIL_PORT: "587"
+      MAIL_SECURE: "false"
+      MAIL_USER: ${MAIL_USER:-}
+      MAIL_FROM: '"SGI — Aquatex" <${MAIL_USER:-noreply@aquatex.ao}>'
+    volumes: []
+    secrets:
+      - sgi_db_password
+      - sgi_jwt_secret
+      - sgi_mail_pass
+
+secrets:
+  sgi_db_password:
+    external: true
+  sgi_jwt_secret:
+    external: true
+  sgi_mail_pass:
+    external: true
