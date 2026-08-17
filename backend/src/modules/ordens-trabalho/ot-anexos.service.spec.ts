@@ -1,15 +1,9 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import * as fs from 'fs';
 import { OtAnexosService } from './ot-anexos.service';
 
-// Mock do fs — os testes não tocam no disco real.
-jest.mock('fs', () => ({
-    mkdirSync: jest.fn(),
-    writeFileSync: jest.fn(),
-    existsSync: jest.fn(() => true),
-    unlinkSync: jest.fn(),
-    createReadStream: jest.fn(),
-}));
-import * as fs from 'fs';
+// Espia apenas os métodos usados pelo service (não substitui o módulo fs inteiro:
+// isso quebrava o istanbul em modo cobertura — `fs.realpathSync.native`).
 
 const PNG_1PX =
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
@@ -31,11 +25,17 @@ describe('OtAnexosService (#47)', () => {
     let service: OtAnexosService;
 
     beforeEach(() => {
-        jest.clearAllMocks();
+        jest.restoreAllMocks();
+        jest.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined as any);
+        jest.spyOn(fs, 'writeFileSync').mockImplementation(() => undefined);
+        jest.spyOn(fs, 'existsSync').mockReturnValue(true);
+        jest.spyOn(fs, 'unlinkSync').mockImplementation(() => undefined);
         anexoRepo = makeRepo();
         otRepo = makeRepo({ findOne: jest.fn().mockResolvedValue({ id: 7 }) });
         service = new OtAnexosService(anexoRepo, otRepo);
     });
+
+    afterEach(() => jest.restoreAllMocks());
 
     describe('guardarFoto', () => {
         const foto = (mime: string): Express.Multer.File => ({
