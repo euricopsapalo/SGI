@@ -4,6 +4,7 @@ import './index.css';
 import { GlobalProvider, useGlobal } from './contexts/GlobalContext';
 import GlobalToast from './components/GlobalToast';
 import RouteFallback from './components/RouteFallback';
+import { ConfirmProvider } from './components/useConfirm';
 
 /* Pages — carregadas por rota via React.lazy (#42) para dividir o bundle.
    Cada página vira um chunk separado, pedido só quando a rota é visitada. */
@@ -43,6 +44,7 @@ function TecnicoGuard({ children }: { children: React.ReactElement }) {
 function App() {
   return (
     <GlobalProvider>
+      <ConfirmProvider>
       <GlobalToast />
       <BrowserRouter>
         <Suspense fallback={<RouteFallback />}>
@@ -70,6 +72,7 @@ function App() {
         </Routes>
         </Suspense>
       </BrowserRouter>
+      </ConfirmProvider>
     </GlobalProvider>
   );
 }

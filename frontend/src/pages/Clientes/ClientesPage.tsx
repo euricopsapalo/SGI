@@ -7,6 +7,7 @@ import SearchableSelect from '../../components/SearchableSelect';
 import api from '../../services/api';
 import { showToast } from '../../utils/errorHandler';
 import { useGlobal, EquipInstalado, OrdemTrabalho, ModeloEquipamento } from '../../contexts/GlobalContext';
+import { useConfirm } from '../../components/useConfirm';
 
 /* ══════════════════════════════════════════
    Types
@@ -1097,6 +1098,7 @@ const RelatoriosClienteModal: React.FC<RelatoriosClienteModalProps> = ({ cliente
 ══════════════════════════════════════════ */
 const ClientesPage: React.FC = () => {
     const { equipInstalados, ordens, addLog, currentUser, refreshClientes } = useGlobal();
+    const confirm = useConfirm();
     const [clientes, setClientes] = useState<Cliente[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch]     = useState('');
@@ -1107,7 +1109,12 @@ const ClientesPage: React.FC = () => {
     const [showRelatorios, setShowRelatorios] = useState(false);
 
     const handleRemove = async (id: number, nome: string) => {
-        if (!window.confirm(`Eliminar o cliente "${nome}"? Esta acção não pode ser desfeita.`)) return;
+        if (!(await confirm({
+            title: 'Eliminar cliente',
+            message: `Eliminar o cliente "${nome}"? Esta acção não pode ser desfeita.`,
+            confirmLabel: 'Eliminar',
+            variant: 'danger',
+        }))) return;
         try {
             await api.delete(`/clientes/${id}`);
             showToast(`Cliente "${nome}" eliminado.`, 'success');
