@@ -4,8 +4,12 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import * as compression from 'compression';
 import { AppModule } from './app.module';
+import { assertJwtSecret } from './config/read-secret';
 
 async function bootstrap() {
+  // #53/#24 — valida o JWT_SECRET resolvido (env ou ficheiro Docker secret)
+  // antes de arrancar. Fail-fast se ausente ou < 32 caracteres.
+  assertJwtSecret();
   const app = await NestFactory.create(AppModule);
   // Segurança e performance (issue #41)
   app.use(helmet());

@@ -11,13 +11,14 @@ import { RolesGuard } from './roles.guard';
 import { User } from '../users/user.entity';
 import { MailModule } from '../mail/mail.module';
 import { ConfiguracaoModule } from '../configuracao/configuracao.module';
+import { readSecret } from '../../config/read-secret';
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([User]),
         PassportModule,
         JwtModule.register({
-            secret: process.env.JWT_SECRET,
+            secret: readSecret('JWT_SECRET'),
             signOptions: { expiresIn: '8h' },
         }),
         MailModule,

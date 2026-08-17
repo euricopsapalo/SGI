@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import { readSecret } from '../../config/read-secret';
 
 
 @Injectable()
@@ -14,7 +15,7 @@ export class MailService {
             secure: process.env.MAIL_SECURE === 'true',
             auth: {
                 user: process.env.MAIL_USER || '',
-                pass: process.env.MAIL_PASS || '',
+                pass: readSecret('MAIL_PASS') || '',
             },
         });
     }
