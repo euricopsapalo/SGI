@@ -50,7 +50,10 @@ import { HealthModule } from './modules/health/health.module';
       password: process.env.DB_PASSWORD || 'app_password',
       database: process.env.DB_NAME || 'app_development',
       autoLoadEntities: true,
-      synchronize: process.env.NODE_ENV !== 'production',
+      // #31 — schema é agora versionado por migrações em TODOS os ambientes.
+      // O synchronize fica permanentemente desligado; a MigrationService corre
+      // as migrações pendentes no arranque (exceto em 'test', sem BD real).
+      synchronize: false,
       migrationsRun: false,
       migrations: [__dirname + '/migrations/*.js'],
       logging: true,

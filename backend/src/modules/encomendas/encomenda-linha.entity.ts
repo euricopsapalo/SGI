@@ -1,10 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, Check, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, Check, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { Encomenda } from './encomenda.entity';
 import { Artigo } from '../artigos/artigo.entity';
 
 @Entity('encomenda_linhas')
 // #35 — quantidades não-negativas e recebido nunca excede o encomendado.
 @Check('chk_enc_linha_qtds', `"qtd_encomendada" >= 0 AND "qtd_recebida" >= 0 AND "qtd_recebida" <= "qtd_encomendada"`)
+// #31 — índice de performance (antes no init.sql).
+@Index('idx_encomenda_linhas_enc', ['encomenda'])
 export class EncomendaLinha {
     @PrimaryGeneratedColumn()
     id: number;

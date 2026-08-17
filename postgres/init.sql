@@ -1,11 +1,17 @@
 -- ============================================================
--- AQUATEX SGI — Schema Compatível com TypeORM
+-- ⚠️ LEGADO / DESATIVADO (issue #31)
+-- Este ficheiro DEIXOU de ser usado. O schema e os dados-semente passaram a
+-- ser criados pelas migrações TypeORM (backend/src/migrations/):
+--   • 1786743588363-InitialSchema  — schema completo (tabelas, FKs, índices, CHECKs)
+--   • 1786745000000-InitialSeed    — dados de referência (tipos, países, IVA, etc.)
+-- Já não está montado no docker-compose; mantido apenas como referência histórica.
+-- ============================================================
+-- AQUATEX SGI — Schema Compatível com TypeORM (histórico)
 -- Versão: 4.0 — Sincronizado com todas as entities actuais
 --
--- Executado UMA VEZ ao criar o container PostgreSQL (data dir vazio).
--- Colunas enum usam VARCHAR para que o TypeORM (synchronize: true)
--- possa criar os seus próprios tipos sem conflito.
--- PKs são SERIAL INTEGER para corresponder a @PrimaryGeneratedColumn().
+-- (Antigamente) Executado UMA VEZ ao criar o container PostgreSQL (data dir vazio).
+-- Colunas enum usam VARCHAR para que o TypeORM possa criar os seus próprios
+-- tipos sem conflito. PKs são SERIAL INTEGER (@PrimaryGeneratedColumn()).
 -- ============================================================
 
 -- ============================================================

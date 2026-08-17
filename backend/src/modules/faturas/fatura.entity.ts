@@ -15,6 +15,9 @@ export enum EstadoFatura {
 @Check('chk_faturas_totais_nn', `"valor_subtotal" >= 0 AND "valor_iva" >= 0 AND "valor_total" >= 0`)
 // #35 — índice na FK da OT de origem (faturação por OT).
 @Index('idx_faturas_ot', ['otId'])
+// #31 — índices de performance (antes no init.sql).
+@Index('idx_faturas_cliente', ['cliente'])
+@Index('idx_faturas_estado', ['estado'])
 export class Fatura {
     @PrimaryGeneratedColumn()
     id: number;

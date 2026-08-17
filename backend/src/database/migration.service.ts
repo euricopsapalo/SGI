@@ -9,20 +9,21 @@ export class MigrationService implements OnModuleInit {
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
 
   async onModuleInit(): Promise<void> {
-    const isProduction = process.env.NODE_ENV === 'production';
+    // #31 — com synchronize desligado, as migrações constroem o schema em todos
+    // os ambientes. Em 'test' não há BD real (suites usam repos mockados), por
+    // isso não se corre nada.
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
 
-    this.logger.log(
-      `Running in ${isProduction ? 'production' : 'development'} mode`,
-    );
+    this.logger.log(`Running migrations (NODE_ENV=${process.env.NODE_ENV ?? 'development'})`);
 
-    if (isProduction) {
-      const migrations = await this.dataSource.runMigrations();
+    const migrations = await this.dataSource.runMigrations();
 
-      if (migrations.length === 0) {
-        this.logger.log('Nenhuma migration pendente');
-      } else {
-        this.logger.log(`${migrations.length} migration(s) executada(s) com sucesso`);
-      }
+    if (migrations.length === 0) {
+      this.logger.log('Nenhuma migration pendente');
+    } else {
+      this.logger.log(`${migrations.length} migration(s) executada(s) com sucesso`);
     }
   }
 }
