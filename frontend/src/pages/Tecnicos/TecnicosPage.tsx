@@ -4,6 +4,8 @@ import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { useGlobal, Tecnico, FuncaoTecnico, OrdemTrabalho, EmpresaConfig, Cliente, EquipInstalado, ModeloEquipamento } from '../../contexts/GlobalContext';
 import { useConfirm } from '../../components/useConfirm';
+import EmptyState from '../../components/EmptyState';
+import TableSkeleton from '../../components/TableSkeleton';
 import { showToast } from '../../utils/errorHandler';
 import { Search, Plus, Edit2, Eye, X, AlertCircle, Check, Download, Trash2, UserCog, MapPin, Printer } from 'lucide-react';
 
@@ -701,7 +703,7 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
 
 /* ══ Page ════════════════════════════════════════════════ */
 const TecnicosPage: React.FC = () => {
-    const { tecnicos, addTecnico, updateTecnico, removeTecnico, funcoesTecnico, simboloMoeda, provincias, municipios, ordens, empresaConfig, clientes, equipInstalados, modelosEquipamento } = useGlobal();
+    const { tecnicos, addTecnico, updateTecnico, removeTecnico, funcoesTecnico, simboloMoeda, provincias, municipios, ordens, empresaConfig, clientes, equipInstalados, modelosEquipamento, loadingData } = useGlobal();
     const confirm = useConfirm();
 
     const [search, setSearch]     = useState('');
@@ -831,10 +833,11 @@ const TecnicosPage: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.length === 0 && (
-                                    <tr><td colSpan={9}><div className="empty-state">Nenhum técnico encontrado.</div></td></tr>
+                                {loadingData && <TableSkeleton cols={9} />}
+                                {!loadingData && filtered.length === 0 && (
+                                    <tr><td colSpan={9}><EmptyState icon={<UserCog size={28} />} title="Nenhum técnico encontrado" description="Registe técnicos de campo para atribuir e executar ordens de trabalho." /></td></tr>
                                 )}
-                                {filtered.map(t => (
+                                {!loadingData && filtered.map(t => (
                                     <tr key={t.id} style={{ opacity: t.ativo ? 1 : 0.5 }}>
                                         <td style={{ paddingLeft: 10 }}>
                                             <span className={`dot ${t.ativo ? 'dot-green' : 'dot-gray'}`} />

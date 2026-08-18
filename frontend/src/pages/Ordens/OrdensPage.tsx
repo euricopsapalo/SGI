@@ -13,9 +13,11 @@ import {
 import {
     Search, Plus, Filter, Eye, X, AlertCircle, Check, Printer,
     Clock, PlayCircle, CheckCircle, Archive,
-    Trash2, Download, Package,
+    Trash2, Download, Package, ClipboardList,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
+import EmptyState from '../../components/EmptyState';
+import TableSkeleton from '../../components/TableSkeleton';
 
 /* ── Constants ───────────────────────────────────────── */
 const ESTADO_CONFIG: Record<OTEstado, { dot: string; label: string; icon: React.ReactNode }> = {
@@ -1014,7 +1016,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
 
 /* ══ Main Page ═══════════════════════════════════════════ */
 const OrdensPage: React.FC = () => {
-    const { ordens, addOrdem, updateOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, registarConsumoOT, finalizarOT, equipInstalados, clientes, modelosEquipamento, currentUser, fmtDate, empresaConfig, simboloMoeda, tecnicos, artigos: artigosStock } = useGlobal();
+    const { ordens, addOrdem, updateOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, registarConsumoOT, finalizarOT, equipInstalados, clientes, modelosEquipamento, currentUser, fmtDate, empresaConfig, simboloMoeda, tecnicos, artigos: artigosStock, loadingData } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
 
     const [search, setSearch]         = useState('');
@@ -1199,10 +1201,11 @@ const OrdensPage: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.length === 0 && (
-                                    <tr><td colSpan={17}><div className="empty-state">Nenhuma OT encontrada.</div></td></tr>
+                                {loadingData && <TableSkeleton cols={17} />}
+                                {!loadingData && filtered.length === 0 && (
+                                    <tr><td colSpan={17}><EmptyState icon={<ClipboardList size={28} />} title="Nenhuma OT encontrada" description="Registe ordens de trabalho para planear, executar e faturar intervenções." /></td></tr>
                                 )}
-                                {filtered.map(o => {
+                                {!loadingData && filtered.map(o => {
                                     const { equip, cliente } = getLabel(o);
                                     const cfg = ESTADO_CONFIG[o.estado];
                                     return (

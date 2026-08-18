@@ -10,6 +10,8 @@ import {
     CondicaoPagamento, ModoPagamento, Fornecedor,
 } from '../../contexts/GlobalContext';
 import { useConfirm } from '../../components/useConfirm';
+import EmptyState from '../../components/EmptyState';
+import TableSkeleton from '../../components/TableSkeleton';
 import {
     Search, Plus, X, AlertCircle, Check, ShoppingCart,
     Package, Printer, Archive, Download, TrendingDown, ShoppingBag,
@@ -2344,7 +2346,7 @@ function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: st
 
 /* ══ Page ════════════════════════════════════════════════════ */
 const EncomendaPage: React.FC = () => {
-    const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, taxasIva, updateArtigo, addMovimento, currentUser, empresaConfig, fmtMoney, fmtDate, fmt, simboloMoeda, faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC, condicoesPagamento, modosPagamento } = useGlobal();
+    const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, taxasIva, updateArtigo, addMovimento, currentUser, empresaConfig, fmtMoney, fmtDate, fmt, simboloMoeda, faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC, condicoesPagamento, modosPagamento, loadingData } = useGlobal();
     const confirm = useConfirm();
 
     const [pageTab,   setPageTab]   = useState<'encomendas' | 'sugestoes' | 'compras' | 'relatorios'>('encomendas');
@@ -2696,10 +2698,11 @@ const EncomendaPage: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.length === 0 && (
-                                    <tr><td colSpan={9}><div className="empty-state"><ShoppingCart size={28} /><br />Nenhuma encomenda encontrada.</div></td></tr>
+                                {loadingData && <TableSkeleton cols={9} />}
+                                {!loadingData && filtered.length === 0 && (
+                                    <tr><td colSpan={9}><EmptyState icon={<ShoppingCart size={28} />} title="Nenhuma encomenda encontrada" description="Crie encomendas a fornecedores para repor stock e registar receções." /></td></tr>
                                 )}
-                                {filtered.map(e => {
+                                {!loadingData && filtered.map(e => {
                                     const vencida = e.dataEntrega && e.estado === 'Aberta' && new Date(e.dataEntrega) < new Date();
                                     return (
                                         <tr key={e.id} style={{ opacity: e.estado === 'Cancelada' ? 0.5 : 1 }}>
