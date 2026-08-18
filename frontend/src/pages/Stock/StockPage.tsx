@@ -148,7 +148,7 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
             <div className="modal" style={{ maxWidth: 620 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">{artigo ? 'Editar Artigo' : 'Novo Artigo'}</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 20px' }}>
                     {TABS_A.map(t => (
@@ -539,7 +539,7 @@ const ArtigoViewModal: React.FC<ArtigoViewModalProps> = ({ artigo, onClose, onEd
                         <Eye size={15} style={{ color: 'var(--blue)' }} />
                         {artigo.codigo} — {artigo.descricao}
                     </h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 20px' }}>
                     {TABS_V.map(t => (
@@ -805,7 +805,7 @@ const InventarioModal: React.FC<InventarioModalProps> = ({ artigos, armazens, on
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Archive size={14} /> Inventário de Stock
                     </h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body" style={{ padding: 0 }}>
                     <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8 }}>
@@ -937,7 +937,7 @@ const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, armaze
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <RefreshCw size={14} /> Transferência entre Armazéns
                     </h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body">
                     <div className="form-row">
@@ -1041,7 +1041,7 @@ const SimpleOpModal: React.FC<SimpleOpModalProps> = ({ tipo, artigos, onClose, o
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {cfg.icon} {cfg.titulo}
                     </h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body">
                     <div className="form-group">
@@ -1094,7 +1094,7 @@ const StatsModal: React.FC<{ artigos: Artigo[]; onClose: () => void }> = ({ arti
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <BarChart2 size={14} /> Estatísticas de Stock
                     </h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body">
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>

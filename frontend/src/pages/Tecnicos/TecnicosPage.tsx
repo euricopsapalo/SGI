@@ -7,6 +7,7 @@ import { useConfirm } from '../../components/useConfirm';
 import { showToast, extractFieldErrors } from '../../utils/errorHandler';
 import FieldError, { fieldAria } from '../../components/FieldError';
 import SubmitButton from '../../components/SubmitButton';
+import { useModalA11y } from '../../components/useModalA11y';
 import EmptyState from '../../components/EmptyState';
 import TableSkeleton from '../../components/TableSkeleton';
 import { Search, Plus, Edit2, Eye, X, Check, Download, Trash2, UserCog, MapPin, Printer } from 'lucide-react';
@@ -390,7 +391,7 @@ const RelatoriosTecnicoModal: React.FC<RelatoriosTecnicoModalProps> = ({ tecnico
             <div className="modal" style={{ maxWidth: 540 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Relatórios de Técnicos</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body" style={{ paddingBottom: 8 }}>
                     {/* ── Selector de relatório ── */}
@@ -507,7 +508,7 @@ const TecnicoViewModal: React.FC<TecnicoViewModalProps> = ({ tecnico: t, funcaoN
         <div className="modal" style={{ maxWidth: 500 }}>
             <div className="modal-header">
                 <h3 className="modal-title">Técnico</h3>
-                <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
             </div>
             <div className="modal-body">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
@@ -569,6 +570,7 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
     const [passwordConfirm, setPasswordConfirm] = useState('');
     const [errors, setErrors]       = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
+    const modalRef = useModalA11y<HTMLDivElement>(onClose);
 
     // #49 — chaves do backend → chaves de erro locais deste formulário
     const BACKEND_FIELD_MAP: Record<string, string> = { funcaoId: 'funcao', custoHora: 'custo' };
@@ -613,10 +615,10 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 520 }}>
+            <div className="modal" style={{ maxWidth: 520 }} ref={modalRef} role="dialog" aria-modal="true" aria-labelledby="tec-modal-title" tabIndex={-1}>
                 <div className="modal-header">
-                    <h3 className="modal-title">{tecnico ? 'Editar Técnico' : 'Novo Técnico'}</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <h3 className="modal-title" id="tec-modal-title">{tecnico ? 'Editar Técnico' : 'Novo Técnico'}</h3>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <form onSubmit={handleSave} noValidate>
                     <div className="modal-body">

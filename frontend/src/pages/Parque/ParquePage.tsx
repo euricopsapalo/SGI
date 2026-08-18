@@ -379,7 +379,7 @@ const RelatorioEstadoModal: React.FC<{ onClose: () => void; onPrint: (s: EstadoS
             <div className="modal" style={{ maxWidth: 440 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Relatório de Estado do Parque</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body" style={{ padding: 0 }}>
                     <div style={{ padding: '12px 16px 8px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
@@ -450,7 +450,7 @@ const ModeloModal: React.FC<ModeloModalProps> = ({ modelo, onClose, onSave }) =>
             <div className="modal" style={{ maxWidth: 460 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">{modelo ? 'Editar Modelo' : 'Novo Modelo de Equipamento'}</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <form onSubmit={handleSave} noValidate>
                     <div className="modal-body">
@@ -543,7 +543,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ equip, onClose, onSave })
             <div className="modal" style={{ maxWidth: 540 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">{equip ? 'Editar Equipamento' : 'Registar Equipamento'}</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <form onSubmit={handleSave} noValidate>
                     <div className="modal-body">
@@ -696,7 +696,7 @@ const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
                             )}
                         </div>
                     </div>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
 
                 {/* Tabs */}

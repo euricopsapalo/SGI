@@ -92,7 +92,7 @@ const ReceberModal: React.FC<ReceberModalProps> = ({ encomenda, onClose, onConfi
             <div className="modal" style={{ maxWidth: 580 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Receber Encomenda — {encomenda.numero}</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body">
                     {rececoesPrev.length > 0 && (
@@ -1090,7 +1090,7 @@ const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onS
             <div className="modal" style={{ maxWidth: 760 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">{encomenda ? `Encomenda ${encomenda.numero}` : 'Nova Encomenda'}</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
 
                 {/* Tabs */}
@@ -1494,7 +1494,7 @@ const ConvertFaturaModal: React.FC<ConvertFaturaModalProps> = ({ encomenda, onCl
                         <FileText size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
                         Converter em Fatura Fornecedor — {encomenda.numero}
                     </h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
                     {/* Verification */}
@@ -1820,7 +1820,7 @@ const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }
                         <CreditCard size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
                         Compra
                     </h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 16px' }}>
                     {(['documento', 'condicoes'] as const).map(t => (
@@ -2183,7 +2183,7 @@ const ConverterModal: React.FC<ConverterModalProps> = ({ artigos, onClose, onCon
             <div className="modal" style={{ maxWidth: 860 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Converter em Encomenda</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
                     {/* Cabeçalho encomenda */}

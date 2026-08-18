@@ -132,7 +132,7 @@ const ExportModal: React.FC<Props> = ({ title, columns, data, filename, onClose 
                 {/* Header */}
                 <div className="modal-header">
                     <span className="modal-title"><Download size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />Exportar — {title}</span>
-                    <button className="modal-close" onClick={onClose}><X size={14} /></button>
+                    <button className="modal-close" aria-label="Fechar" onClick={onClose}><X size={14} /></button>
                 </div>
 
                 <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

@@ -7,6 +7,7 @@ import { useConfirm } from '../../components/useConfirm';
 import { showToast, extractFieldErrors } from '../../utils/errorHandler';
 import FieldError, { fieldAria } from '../../components/FieldError';
 import SubmitButton from '../../components/SubmitButton';
+import { useModalA11y } from '../../components/useModalA11y';
 import EmptyState from '../../components/EmptyState';
 import TableSkeleton from '../../components/TableSkeleton';
 import { Search, Plus, Edit2, Eye, X, Check, Truck, Download, Trash2, MapPin, Printer } from 'lucide-react';
@@ -237,7 +238,7 @@ const RelatoriosFornecedorModal: React.FC<RelatoriosFornecedorModalProps> = ({
             <div className="modal" style={{ maxWidth: 480 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Relatórios de Fornecedores</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body">
                     <div className="form-group">
@@ -314,7 +315,7 @@ const FornecedorViewModal: React.FC<FornecedorViewModalProps> = ({ fornecedor: f
         <div className="modal" style={{ maxWidth: 520 }}>
             <div className="modal-header">
                 <h3 className="modal-title">Fornecedor</h3>
-                <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
             </div>
             <div className="modal-body">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
@@ -375,6 +376,7 @@ const FornecedorModal: React.FC<FornecedorModalProps> = ({ fornecedor, onClose, 
     const [modoPagId, setModoId]    = useState(fornecedor?.modoPagamentoId ?? '');
     const [errors, setErrors]       = useState<Record<string, string>>({});
     const [submitting, setSubmitting] = useState(false);
+    const modalRef = useModalA11y<HTMLDivElement>(onClose);
 
     const munsFiltrados = municipios.filter(m => m.provinciaId === provinciaId);
 
@@ -404,10 +406,10 @@ const FornecedorModal: React.FC<FornecedorModalProps> = ({ fornecedor, onClose, 
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 520 }}>
+            <div className="modal" style={{ maxWidth: 520 }} ref={modalRef} role="dialog" aria-modal="true" aria-labelledby="forn-modal-title" tabIndex={-1}>
                 <div className="modal-header">
-                    <h3 className="modal-title">{fornecedor ? 'Editar Fornecedor' : 'Novo Fornecedor'}</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <h3 className="modal-title" id="forn-modal-title">{fornecedor ? 'Editar Fornecedor' : 'Novo Fornecedor'}</h3>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-tabs" style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 16px' }}>
                     {(['geral', 'comercial'] as const).map(t => (

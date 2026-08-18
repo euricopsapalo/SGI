@@ -229,7 +229,7 @@ const RelatorioIntervModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             <div className="modal" style={{ maxWidth: 520 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Relatório de Intervenções</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body">
                     <div className="form-row">
@@ -699,7 +699,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                             </div>
                         )}
                     </div>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
 
                 {/* Tab bar */}
@@ -1432,7 +1432,7 @@ const TransicaoModal: React.FC<TransicaoModalProps> = ({ tipo, ot, tecnicos, cur
                     <h3 className="modal-title">
                         {isConfirmar ? `Confirmar OT ${ot.id}` : `Adiar OT ${ot.id}`}
                     </h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
@@ -1558,7 +1558,7 @@ const ConsumoModal: React.FC<ConsumoModalProps> = ({ ot, artigosStock, simboloMo
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Package size={14} /> Registar Consumo — OT {ot.numero ?? ot.id}
                     </h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body">
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 0 }}>
@@ -1643,7 +1643,7 @@ const FinalizarModal: React.FC<FinalizarModalProps> = ({ ot, simboloMoeda, onClo
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <CheckCircle size={14} /> Finalizar OT {ot.numero ?? ot.id}
                     </h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body">
                     {ot.custoReal != null && (
