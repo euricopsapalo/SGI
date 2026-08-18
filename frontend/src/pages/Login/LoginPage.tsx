@@ -100,13 +100,13 @@ const LoginPage: React.FC = () => {
                                 {error && <Msg type="error" text={error} />}
                                 <div style={{ marginBottom: 14 }}>
                                     <label style={lSt}>Email</label>
-                                    <input type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} placeholder="utilizador@aquatex.ao" style={iSt} onFocus={hFocus} onBlur={hBlur} />
+                                    <input type="email" aria-label="Email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} placeholder="utilizador@aquatex.ao" style={iSt} onFocus={hFocus} onBlur={hBlur} />
                                 </div>
                                 <div style={{ marginBottom: 20 }}>
                                     <label style={lSt}>Password</label>
                                     <div style={{ position: 'relative' }}>
-                                        <input type={showPw ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" style={{ ...iSt, padding: '0 36px 0 12px' }} onFocus={hFocus} onBlur={hBlur} />
-                                        <button type="button" onClick={() => setShowPw(p => !p)} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: 0 }}>{showPw ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+                                        <input type={showPw ? 'text' : 'password'} aria-label="Password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" style={{ ...iSt, padding: '0 36px 0 12px' }} onFocus={hFocus} onBlur={hBlur} />
+                                        <button type="button" aria-label={showPw ? 'Ocultar password' : 'Mostrar password'} onClick={() => setShowPw(p => !p)} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: 0 }}>{showPw ? <EyeOff size={15} /> : <Eye size={15} />}</button>
                                     </div>
                                     <div style={{ textAlign: 'right', marginTop: 6 }}>
                                         <button type="button" onClick={() => go('forgot')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', color: '#0D6EBF', padding: 0 }}>Esqueceu a password?</button>
@@ -115,7 +115,7 @@ const LoginPage: React.FC = () => {
                                 {twoFARequired && (
                                     <div style={{ marginBottom: 20 }}>
                                         <label style={lSt}>Código de verificação (2FA)</label>
-                                        <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} autoFocus
+                                        <input inputMode="numeric" aria-label="Código de verificação 2FA" autoComplete="one-time-code" maxLength={6} autoFocus
                                             value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
                                             placeholder="000000" style={{ ...iSt, letterSpacing: '0.3em', fontFamily: 'monospace' }} onFocus={hFocus} onBlur={hBlur} />
                                         <span style={{ fontSize: '0.72rem', color: '#888' }}>Introduza o código de 6 dígitos da sua app de autenticação.</span>
@@ -138,7 +138,7 @@ const LoginPage: React.FC = () => {
                                 {success && <Msg type="success" text={success} />}
                                 <div style={{ marginBottom: 20 }}>
                                     <label style={lSt}>Email</label>
-                                    <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} placeholder="utilizador@aquatex.ao" style={iSt} onFocus={hFocus} onBlur={hBlur} />
+                                    <input type="email" aria-label="Email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} placeholder="utilizador@aquatex.ao" style={iSt} onFocus={hFocus} onBlur={hBlur} />
                                 </div>
                                 <Btn loading={loading} label="Gerar Token de Recuperação" />
                                 <div style={{ textAlign: 'center', marginTop: 12 }}>
@@ -159,13 +159,13 @@ const LoginPage: React.FC = () => {
                                 {success && <Msg type="success" text={success} />}
                                 <div style={{ marginBottom: 14 }}>
                                     <label style={lSt}>Token de Recuperação</label>
-                                    <input type="text" value={resetToken} onChange={e => setResetToken(e.target.value.toUpperCase())} placeholder="Ex: A3B9F2KX" style={{ ...iSt, fontFamily: 'monospace', letterSpacing: '0.1em' }} onFocus={hFocus} onBlur={hBlur} />
+                                    <input type="text" aria-label="Token de recuperação" value={resetToken} onChange={e => setResetToken(e.target.value.toUpperCase())} placeholder="Ex: A3B9F2KX" style={{ ...iSt, fontFamily: 'monospace', letterSpacing: '0.1em' }} onFocus={hFocus} onBlur={hBlur} />
                                 </div>
                                 <div style={{ marginBottom: 20 }}>
                                     <label style={lSt}>Nova Password</label>
                                     <div style={{ position: 'relative' }}>
-                                        <input type={showNewPw ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" style={{ ...iSt, padding: '0 36px 0 12px' }} onFocus={hFocus} onBlur={hBlur} />
-                                        <button type="button" onClick={() => setShowNewPw(p => !p)} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: 0 }}>{showNewPw ? <EyeOff size={15} /> : <Eye size={15} />}</button>
+                                        <input type={showNewPw ? 'text' : 'password'} aria-label="Nova password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" style={{ ...iSt, padding: '0 36px 0 12px' }} onFocus={hFocus} onBlur={hBlur} />
+                                        <button type="button" aria-label={showNewPw ? 'Ocultar password' : 'Mostrar password'} onClick={() => setShowNewPw(p => !p)} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: 0 }}>{showNewPw ? <EyeOff size={15} /> : <Eye size={15} />}</button>
                                     </div>
                                 </div>
                                 <Btn loading={loading} label="Alterar Password" />

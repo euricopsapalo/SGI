@@ -8,10 +8,12 @@ interface AppLayoutProps {
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     return (
         <div className="app-layout">
+            {/* #45 — salto de teclado para o conteúdo principal */}
+            <a href="#main-content" className="skip-link">Saltar para o conteúdo</a>
             <TopNav />
-            <div className="app-body">
+            <main id="main-content" className="app-body" tabIndex={-1}>
                 {children}
-            </div>
+            </main>
         </div>
     );
 };

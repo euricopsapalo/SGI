@@ -133,7 +133,7 @@ const EmitirDocumentoModal: React.FC<EmitirModalProps> = ({ onClose, onSave }) =
             <div className="modal" style={{ maxWidth: 620 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Emitir Documento</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <form onSubmit={handleSubmit} noValidate>
                     <div className="modal-body" style={{ maxHeight: '68vh', overflowY: 'auto' }}>
@@ -387,7 +387,7 @@ const FaturaDetalhe: React.FC<FaturaDetalheProps> = ({ fatura, nomeCliente, otDe
                             </span>
                         </div>
                     </div>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
                     <div style={{ padding: '10px 14px', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 4, marginBottom: 12 }}>

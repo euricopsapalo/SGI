@@ -5,6 +5,7 @@ import { Tecnico } from '../../contexts/GlobalContext';
 import SearchableSelect from '../../components/SearchableSelect';
 import FieldError, { fieldAria } from '../../components/FieldError';
 import SubmitButton from '../../components/SubmitButton';
+import { useModalA11y } from '../../components/useModalA11y';
 import { extractFieldErrors } from '../../utils/errorHandler';
 
 interface Props {
@@ -39,6 +40,7 @@ const UtilizadorModal: React.FC<Props> = ({ initial, tecnicos, onClose, onSave }
     const [submitting, setSubmitting] = useState(false);
     const [showPw, setShowPw] = useState(false);
     const [showCpw, setShowCpw] = useState(false);
+    const modalRef = useModalA11y<HTMLDivElement>(onClose);
 
     const isEdit = Boolean(initial);
     const isTecnicoCampo = form.perfil === 'Técnico Campo';
@@ -135,12 +137,12 @@ const UtilizadorModal: React.FC<Props> = ({ initial, tecnicos, onClose, onSave }
         .map(t => ({ value: t.id, label: t.nome, sub: t.email }));
 
     return (
-        <div className="modal-overlay" role="dialog" aria-modal="true" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 540 }}>
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+            <div className="modal" style={{ maxWidth: 540 }} ref={modalRef} role="dialog" aria-modal="true" aria-labelledby="user-modal-title" tabIndex={-1}>
 
                 {/* Header */}
                 <div className="modal-header">
-                    <h3 className="modal-title">{isEdit ? `Editar — ${initial?.nome}` : 'Novo Utilizador'}</h3>
+                    <h3 className="modal-title" id="user-modal-title">{isEdit ? `Editar — ${initial?.nome}` : 'Novo Utilizador'}</h3>
                     <button className="modal-close" onClick={onClose} type="button" aria-label="Fechar">
                         <X size={13} />
                     </button>

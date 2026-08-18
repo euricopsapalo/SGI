@@ -82,7 +82,7 @@ const PlanoModal: React.FC<PlanoModalProps> = ({ plano, onClose, onSave }) => {
             <div className="modal" style={{ maxWidth: 620 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">{plano ? 'Editar Plano' : 'Novo Plano de Manutenção'}</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <form onSubmit={handleSave} noValidate>
                     <div className="modal-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
@@ -198,7 +198,7 @@ const RepetirModal: React.FC<RepetirModalProps> = ({ plano, onClose, onRepetir }
             <div className="modal" style={{ maxWidth: 480 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Repetir Plano — {plano.id}</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body">
                     <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 12 }}>

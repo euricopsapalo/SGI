@@ -10,6 +10,7 @@ import { useGlobal, EquipInstalado, OrdemTrabalho, ModeloEquipamento } from '../
 import { useConfirm } from '../../components/useConfirm';
 import FieldError, { fieldAria } from '../../components/FieldError';
 import SubmitButton from '../../components/SubmitButton';
+import { useModalA11y } from '../../components/useModalA11y';
 import EmptyState from '../../components/EmptyState';
 import TableSkeleton from '../../components/TableSkeleton';
 
@@ -98,6 +99,7 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
     const [errors, setErrors] = useState<FormErrors>({});
     const [endErrors, setEndErrors] = useState<EndErrors>([]);
     const [submitting, setSubmitting] = useState(false);
+    const modalRef = useModalA11y<HTMLDivElement>(onClose);
 
     useEffect(() => {
         if (initial) {
@@ -203,13 +205,13 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
     const isEmpresa = form.tipo === 'empresa';
 
     return (
-        <div className="modal-overlay" role="dialog" aria-modal="true"
+        <div className="modal-overlay"
             onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 560 }}>
+            <div className="modal" style={{ maxWidth: 560 }} ref={modalRef} role="dialog" aria-modal="true" aria-labelledby="cliente-modal-title" tabIndex={-1}>
 
                 <div className="modal-header">
-                    <h3 className="modal-title">{isEdit ? `Editar — ${initial?.nome}` : 'Novo Cliente'}</h3>
-                    <button className="modal-close" onClick={onClose} type="button"><X size={13} /></button>
+                    <h3 className="modal-title" id="cliente-modal-title">{isEdit ? `Editar — ${initial?.nome}` : 'Novo Cliente'}</h3>
+                    <button className="modal-close" aria-label="Fechar" onClick={onClose} type="button"><X size={13} /></button>
                 </div>
                 <div className="modal-tabs" style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 16px' }}>
                     {(['geral', 'comercial'] as const).map(t => (
@@ -419,7 +421,7 @@ const ClienteDetail: React.FC<DetailProps> = ({ cliente, maquinas, osTotal, onCl
                             {cliente.tipo === 'empresa' ? 'Empresa' : 'Particular'}
                         </span>
                     </div>
-                    <button className="modal-close" onClick={onClose} type="button"><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" onClick={onClose} type="button"><X size={13} /></button>
                 </div>
 
                 <div className="modal-body">
@@ -1027,7 +1029,7 @@ const RelatoriosClienteModal: React.FC<RelatoriosClienteModalProps> = ({ cliente
             <div className="modal" style={{ maxWidth: 540 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Relatórios de Clientes</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body">
                     {/* Report type selector */}

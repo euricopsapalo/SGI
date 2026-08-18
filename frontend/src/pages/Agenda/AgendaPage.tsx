@@ -61,7 +61,7 @@ const ReprogramarModal: React.FC<ReprogramarProps> = ({ ot, novaData: initialDat
             <div className="modal" style={{ maxWidth: 440 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Reprogramar OT</h3>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body">
                     <div style={{ padding: '10px 12px', background: '#F0F9FF', border: '1px solid #BAE6FD', borderRadius: 4, marginBottom: 14, fontSize: '0.8rem' }}>
@@ -139,7 +139,7 @@ const OTDetail: React.FC<{ ot: OrdemTrabalho; nomeCliente: string; nomeEquip: st
                             </span>
                         </div>
                     </div>
-                    <button className="modal-close" type="button" onClick={onClose}><X size={13} /></button>
+                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
                 </div>
                 <div className="modal-body">
                     {[
