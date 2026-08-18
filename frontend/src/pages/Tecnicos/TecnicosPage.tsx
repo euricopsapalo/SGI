@@ -4,10 +4,12 @@ import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { useGlobal, Tecnico, FuncaoTecnico, OrdemTrabalho, EmpresaConfig, Cliente, EquipInstalado, ModeloEquipamento } from '../../contexts/GlobalContext';
 import { useConfirm } from '../../components/useConfirm';
+import { showToast, extractFieldErrors } from '../../utils/errorHandler';
+import FieldError, { fieldAria } from '../../components/FieldError';
+import SubmitButton from '../../components/SubmitButton';
 import EmptyState from '../../components/EmptyState';
 import TableSkeleton from '../../components/TableSkeleton';
-import { showToast } from '../../utils/errorHandler';
-import { Search, Plus, Edit2, Eye, X, AlertCircle, Check, Download, Trash2, UserCog, MapPin, Printer } from 'lucide-react';
+import { Search, Plus, Edit2, Eye, X, Check, Download, Trash2, UserCog, MapPin, Printer } from 'lucide-react';
 
 /* ══ Print CSS + Helpers ═════════════════════════════════════ */
 const RT_CSS = `
@@ -549,7 +551,7 @@ interface TecnicoModalProps {
     tecnico?: Tecnico;
     funcoes: FuncaoTecnico[];
     onClose: () => void;
-    onSave: (t: Omit<Tecnico, 'id'> & { password?: string; passwordConfirm?: string }) => void;
+    onSave: (t: Omit<Tecnico, 'id'> & { password?: string; passwordConfirm?: string }) => Promise<void>;
 }
 const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, onSave }) => {
     const { simboloMoeda, provincias, municipios } = useGlobal();
@@ -566,6 +568,10 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
     const [password, setPassword]               = useState('');
     const [passwordConfirm, setPasswordConfirm] = useState('');
     const [errors, setErrors]       = useState<Record<string, string>>({});
+    const [submitting, setSubmitting] = useState(false);
+
+    // #49 — chaves do backend → chaves de erro locais deste formulário
+    const BACKEND_FIELD_MAP: Record<string, string> = { funcaoId: 'funcao', custoHora: 'custo' };
 
     const munsFiltrados = municipios.filter(m => m.provinciaId === provinciaId);
 
@@ -584,14 +590,25 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
         return Object.keys(e).length === 0;
     };
 
-    const handleSave = (ev: React.FormEvent) => {
+    const handleSave = async (ev: React.FormEvent) => {
         ev.preventDefault();
-        if (!validate()) return;
-        onSave({
-            nome, telefone, email, funcaoId, custoHora: Number(custoHora), ativo,
-            provinciaId: provinciaId || undefined, municipioId: municipioId || undefined,
-            ...(isNew ? { password, passwordConfirm } : {}),
-        });
+        if (!validate() || submitting) return;
+        setSubmitting(true);
+        try {
+            await onSave({
+                nome, telefone, email, funcaoId, custoHora: Number(custoHora), ativo,
+                provinciaId: provinciaId || undefined, municipioId: municipioId || undefined,
+                ...(isNew ? { password, passwordConfirm } : {}),
+            });
+        } catch (err) {
+            // #49 — mapeia erros de validação do backend aos campos do formulário
+            const fe = extractFieldErrors(err);
+            const mapped: Record<string, string> = {};
+            for (const [k, v] of Object.entries(fe)) mapped[BACKEND_FIELD_MAP[k] ?? k] = v;
+            if (Object.keys(mapped).length) setErrors(prev => ({ ...prev, ...mapped }));
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -606,8 +623,9 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
                         <div className="form-group">
                             <label className="form-label req">Nome</label>
                             <input className={`form-input${errors.nome ? ' err' : ''}`} value={nome}
-                                onChange={e => setNome(e.target.value)} placeholder="Nome completo" />
-                            {errors.nome && <span className="form-error"><AlertCircle size={11} /> {errors.nome}</span>}
+                                onChange={e => setNome(e.target.value)} placeholder="Nome completo"
+                                {...fieldAria('tec-nome-err', errors.nome)} />
+                            <FieldError id="tec-nome-err" message={errors.nome} />
                         </div>
                         <div className="form-row">
                             <div className="form-group">
@@ -618,8 +636,9 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
                             <div className="form-group">
                                 <label className={`form-label${isNew ? ' req' : ''}`}>Email</label>
                                 <input type="email" className={`form-input${errors.email ? ' err' : ''}`} value={email}
-                                    onChange={e => setEmail(e.target.value)} placeholder="nome@aquatex.ao" />
-                                {errors.email && <span className="form-error"><AlertCircle size={11} /> {errors.email}</span>}
+                                    onChange={e => setEmail(e.target.value)} placeholder="nome@aquatex.ao"
+                                    {...fieldAria('tec-email-err', errors.email)} />
+                                <FieldError id="tec-email-err" message={errors.email} />
                             </div>
                         </div>
                         {/* Issue #68 — credenciais de acesso (criação automática do User) */}
@@ -634,15 +653,17 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
                                         <label className="form-label req">Password</label>
                                         <input type="password" className={`form-input${errors.password ? ' err' : ''}`}
                                             value={password} onChange={e => setPassword(e.target.value)}
-                                            placeholder="Mínimo 6 caracteres" autoComplete="new-password" />
-                                        {errors.password && <span className="form-error"><AlertCircle size={11} /> {errors.password}</span>}
+                                            placeholder="Mínimo 6 caracteres" autoComplete="new-password"
+                                            {...fieldAria('tec-password-err', errors.password)} />
+                                        <FieldError id="tec-password-err" message={errors.password} />
                                     </div>
                                     <div className="form-group">
                                         <label className="form-label req">Confirmar password</label>
                                         <input type="password" className={`form-input${errors.passwordConfirm ? ' err' : ''}`}
                                             value={passwordConfirm} onChange={e => setPasswordConfirm(e.target.value)}
-                                            autoComplete="new-password" />
-                                        {errors.passwordConfirm && <span className="form-error"><AlertCircle size={11} /> {errors.passwordConfirm}</span>}
+                                            autoComplete="new-password"
+                                            {...fieldAria('tec-passwordConfirm-err', errors.passwordConfirm)} />
+                                        <FieldError id="tec-passwordConfirm-err" message={errors.passwordConfirm} />
                                     </div>
                                 </div>
                             </div>
@@ -654,18 +675,20 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
                                     setFuncaoId(e.target.value);
                                     const f = funcoes.find(x => x.id === e.target.value);
                                     if (f) setCustoHora(String(f.custo));
-                                }}>
+                                }}
+                                {...fieldAria('tec-funcao-err', errors.funcao)}>
                                 <option value="">Seleccionar...</option>
                                 {funcoes.map(f => <option key={f.id} value={f.id}>{f.descricao}</option>)}
                             </select>
-                            {errors.funcao && <span className="form-error"><AlertCircle size={11} /> {errors.funcao}</span>}
+                            <FieldError id="tec-funcao-err" message={errors.funcao} />
                         </div>
                         <div className="form-row">
                             <div className="form-group">
                                 <label className="form-label req">Custo/Hora ({simboloMoeda})</label>
                                 <input type="number" min={0} className={`form-input${errors.custo ? ' err' : ''}`}
-                                    value={custoHora} onChange={e => setCustoHora(e.target.value)} />
-                                {errors.custo && <span className="form-error"><AlertCircle size={11} /> {errors.custo}</span>}
+                                    value={custoHora} onChange={e => setCustoHora(e.target.value)}
+                                    {...fieldAria('tec-custo-err', errors.custo)} />
+                                <FieldError id="tec-custo-err" message={errors.custo} />
                             </div>
                             <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 20 }}>
                                 <input type="checkbox" id="tec-ativo" checked={ativo} onChange={e => setAtivo(e.target.checked)} style={{ width: 14, height: 14 }} />
@@ -692,8 +715,8 @@ const TecnicoModal: React.FC<TecnicoModalProps> = ({ tecnico, funcoes, onClose, 
                         </div>
                     </div>
                     <div className="modal-footer">
-                        <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
-                        <button type="submit" className="abtn abtn-primary"><Check size={12} /> Guardar</button>
+                        <button type="button" className="abtn abtn-secondary" onClick={onClose} disabled={submitting}>Cancelar</button>
+                        <SubmitButton submitting={submitting} icon={<Check size={12} />}>Guardar</SubmitButton>
                     </div>
                 </form>
             </div>
@@ -754,18 +777,16 @@ const TecnicosPage: React.FC = () => {
     const viewTarget = viewId ? tecnicos.find(t => t.id === viewId) : undefined;
 
     const handleSave = async (data: Omit<Tecnico, 'id'> & { password?: string; passwordConfirm?: string }) => {
-        try {
-            if (typeof modal === 'string' && modal !== 'new') {
-                await updateTecnico(modal, data);
-                showToast('Técnico actualizado.', 'success');
-            } else {
-                const t = await addTecnico(data);
-                showToast(`Técnico ${t.id} registado.`, 'success');
-            }
-            setModal(null);
-        } catch {
-            /* erro já apresentado pelo interceptor global (api.ts) */
+        // #49 — o toast global é tratado pelo interceptor (api.ts); propagamos o
+        // erro para o modal mapear a validação inline e manter-se aberto.
+        if (typeof modal === 'string' && modal !== 'new') {
+            await updateTecnico(modal, data);
+            showToast('Técnico actualizado.', 'success');
+        } else {
+            const t = await addTecnico(data);
+            showToast(`Técnico ${t.id} registado.`, 'success');
         }
+        setModal(null);
     };
 
     const EXPORT_COLS: ExportCol[] = [

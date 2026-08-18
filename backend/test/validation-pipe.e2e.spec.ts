@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe, Controller, Post, Put, Body, Get } from '@nestjs/common';
+import { INestApplication, Controller, Post, Put, Body, Get } from '@nestjs/common';
+import { buildValidationPipe } from '../src/config/validation-pipe';
 import * as request from 'supertest';
 import { CreateClienteDto } from '../src/modules/clientes/dto/create-cliente.dto';
 import { CreateFornecedorDto } from '../src/modules/fornecedores/dto/create-fornecedor.dto';
@@ -61,13 +62,8 @@ describe('ValidationPipe E2E — validação de dados de entrada', () => {
     }).compile();
 
     app = module.createNestApplication();
-    // Mesmo pipe configurado no main.ts
-    app.useGlobalPipes(new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: { enableImplicitConversion: true },
-    }));
+    // Mesmo pipe configurado no main.ts (factory partilhado — #49)
+    app.useGlobalPipes(buildValidationPipe());
     await app.init();
   });
 
@@ -117,6 +113,30 @@ describe('ValidationPipe E2E — validação de dados de entrada', () => {
           expect(res.body.message).toEqual(
             expect.arrayContaining([expect.stringContaining('nome')]),
           );
+        });
+    });
+
+    it('POST /test-clientes — devolve mapa `errors` { campo: mensagem } (#49)', () => {
+      return request(app.getHttpServer())
+        .post('/test-clientes')
+        .send({ nif: '123456' }) // falta nome
+        .expect(400)
+        .expect((res) => {
+          expect(res.body.errors).toBeDefined();
+          expect(typeof res.body.errors).toBe('object');
+          expect(res.body.errors.nome).toEqual(expect.stringContaining('nome'));
+        });
+    });
+
+    it('POST /test-clientes — `errors` inclui caminho nested (endereços)  (#49)', () => {
+      return request(app.getHttpServer())
+        .post('/test-clientes')
+        .send({ nome: 'Teste', enderecos: [{ descricao: 'Sede' }] })
+        .expect(400)
+        .expect((res) => {
+          expect(res.body.errors).toBeDefined();
+          const keys = Object.keys(res.body.errors);
+          expect(keys.some((k) => k.includes('morada') || k.includes('cidade'))).toBe(true);
         });
     });
 
