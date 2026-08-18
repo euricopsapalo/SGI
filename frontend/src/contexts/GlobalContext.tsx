@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../services/queryClient';
 import api from '../services/api';
 
 /* ══════════════════════════════════════════════════════════════
@@ -607,17 +609,49 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [paises, setPaises] = useState<Pais[]>([]);
     const [provincias, setProvincias] = useState<Provincia[]>([]);
     const [municipios, setMunicipios] = useState<Municipio[]>([]);
-    const [clientes, setClientes] = useState<Cliente[]>([]);
-    const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
-    const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
+    // #43 — Estas 5 entidades passam a ser geridas pelo React Query (cache +
+    // dedup entre páginas + invalidação nas mutações). Os `setX` são shims sobre
+    // `setQueryData`, mantendo intactos os ~40 call-sites internos (value/updater)
+    // e a fachada pública `useGlobal()`.
+    const qc = useQueryClient();
+    const authEnabled = !!currentUser;
+    // Fábrica de setters estáveis (dep [qc]) que escrevem na cache do React Query;
+    // aceitam value ou updater, tal como um setState.
+    function useCacheSetter<T>(key: readonly unknown[]) {
+        return React.useCallback((u: React.SetStateAction<T[]>) =>
+            qc.setQueryData<T[]>(key, (old = []) =>
+                typeof u === 'function' ? (u as (p: T[]) => T[])(old) : u), [key]);
+    }
+
+    const clientesQ = useQuery<Cliente[]>({ queryKey: queryKeys.clientes, enabled: authEnabled, queryFn: async () => (await api.get(`/clientes`)).data.map(normCliente) });
+    const clientes = useMemo<Cliente[]>(() => clientesQ.data ?? [], [clientesQ.data]);
+    const setClientes = useCacheSetter<Cliente>(queryKeys.clientes);
+
+    const tecnicosQ = useQuery<Tecnico[]>({ queryKey: queryKeys.tecnicos, enabled: authEnabled, queryFn: async () => (await api.get(`/tecnicos`)).data.map(norm) });
+    const tecnicos = useMemo<Tecnico[]>(() => tecnicosQ.data ?? [], [tecnicosQ.data]);
+    const setTecnicos = useCacheSetter<Tecnico>(queryKeys.tecnicos);
+
+    const fornecedoresQ = useQuery<Fornecedor[]>({ queryKey: queryKeys.fornecedores, enabled: authEnabled, queryFn: async () => (await api.get(`/fornecedores`)).data.map(norm) });
+    const fornecedores = useMemo<Fornecedor[]>(() => fornecedoresQ.data ?? [], [fornecedoresQ.data]);
+    const setFornecedores = useCacheSetter<Fornecedor>(queryKeys.fornecedores);
+
+    const ordensQ = useQuery<OrdemTrabalho[]>({ queryKey: queryKeys.ordens, enabled: authEnabled, queryFn: async () => (await api.get(`/ordens`)).data.map(normOrdem) });
+    const ordens = useMemo<OrdemTrabalho[]>(() => ordensQ.data ?? [], [ordensQ.data]);
+    const setOrdens = useCacheSetter<OrdemTrabalho>(queryKeys.ordens);
+
+    const artigosQ = useQuery<Artigo[]>({ queryKey: queryKeys.artigos, enabled: authEnabled, queryFn: async () => (await api.get(`/artigos`)).data.map(normArtigo) });
+    const artigos = useMemo<Artigo[]>(() => artigosQ.data ?? [], [artigosQ.data]);
+    const setArtigos = useCacheSetter<Artigo>(queryKeys.artigos);
+
     // #48 — true até o carregamento inicial de dados terminar (para skeletons).
-    const [loadingData, setLoadingData] = useState(true);
+    // Combina o lote legado com o carregamento inicial das queries do React Query.
+    const [loadingBatch, setLoadingBatch] = useState(true);
+    const loadingData = loadingBatch
+        || (authEnabled && (clientesQ.isLoading || tecnicosQ.isLoading || fornecedoresQ.isLoading || ordensQ.isLoading || artigosQ.isLoading));
     const [modelosEquipamento, setModelosEquipamento] = useState<ModeloEquipamento[]>([]);
     const [equipInstalados, setEquipInstalados] = useState<EquipInstalado[]>([]);
     const [planos, setPlanos] = useState<PlanoManutencao[]>([]);
-    const [ordens, setOrdens] = useState<OrdemTrabalho[]>([]);
     const [armazens, setArmazens] = useState<Armazem[]>([]);
-    const [artigos, setArtigos] = useState<Artigo[]>([]);
     const [taxasIva, setTaxasIva] = useState<TaxaIva[]>([]);
     const [classesArtigo, setClassesArtigo] = useState<ClasseArtigo[]>([]);
     const [familiasArtigo, setFamiliasArtigo] = useState<FamiliaArtigo[]>([]);
@@ -633,9 +667,18 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     /* ── Initial data load ──────────────────────────────────── */
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const reloadData = React.useCallback(async () => {
-            setLoadingData(true);
+            setLoadingBatch(true);
+            // #43 — clientes/tecnicos/fornecedores/ordens/artigos são geridos pelo
+            // React Query; invalidamos as suas queries e removemo-los deste lote
+            // (placeholders para preservar os índices posicionais).
+            qc.invalidateQueries({ queryKey: queryKeys.clientes });
+            qc.invalidateQueries({ queryKey: queryKeys.tecnicos });
+            qc.invalidateQueries({ queryKey: queryKeys.fornecedores });
+            qc.invalidateQueries({ queryKey: queryKeys.ordens });
+            qc.invalidateQueries({ queryKey: queryKeys.artigos });
             const ok = (r: PromiseSettledResult<any>) =>
                 r.status === 'fulfilled' ? r.value.data : [];
+            const skip = Promise.resolve({ data: [] as any[] });
 
             const results = await Promise.allSettled([
                 api.get(`/tipos-trabalho`),       // 0
@@ -646,15 +689,15 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 api.get(`/paises`),               // 5
                 api.get(`/provincias`),           // 6
                 api.get(`/municipios`),           // 7
-                api.get(`/clientes`),             // 8
-                api.get(`/tecnicos`),             // 9
-                api.get(`/fornecedores`),         // 10
+                skip,                             // 8  clientes → React Query
+                skip,                             // 9  tecnicos → React Query
+                skip,                             // 10 fornecedores → React Query
                 api.get(`/modelos-equipamento`),  // 11
                 api.get(`/equip-instalados`),     // 12
                 api.get(`/planos`),               // 13
-                api.get(`/ordens`),               // 14
+                skip,                             // 14 ordens → React Query
                 api.get(`/armazens`),             // 15
-                api.get(`/artigos`),              // 16
+                skip,                             // 16 artigos → React Query
                 api.get(`/movimentos-stock`),      // 17
                 api.get(`/compras`),            // 18
                 api.get(`/faturas`),               // 19
@@ -678,15 +721,12 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             try { setPaises(ok(results[5]).map(norm)); } catch {}
             try { setProvincias(ok(results[6]).map(normProvincia)); } catch {}
             try { setMunicipios(ok(results[7]).map(normMunicipio)); } catch {}
-            try { setClientes(ok(results[8]).map(normCliente)); } catch {}
-            try { setTecnicos(ok(results[9]).map(norm)); } catch {}
-            try { setFornecedores(ok(results[10]).map(norm)); } catch {}
+            // #43 — clientes[8]/tecnicos[9]/fornecedores[10]/ordens[14]/artigos[16]
+            // são geridos pelo React Query (ver useQuery acima); não são tratados aqui.
             try { setModelosEquipamento(ok(results[11]).map(norm)); } catch {}
             try { setEquipInstalados(ok(results[12]).map(normEquip)); } catch {}
             try { setPlanos(ok(results[13]).map(normPlano)); } catch {}
-            try { setOrdens(ok(results[14]).map(normOrdem)); } catch {}
             try { setArmazens(ok(results[15]).map(norm)); } catch {}
-            try { setArtigos(ok(results[16]).map(normArtigo)); } catch {}
             try { setMovimentosStock(ok(results[17]).map(normMovimento)); } catch {}
             try { setEncomendas(ok(results[18]).map(normEncomenda)); } catch {}
             try { setFaturas(ok(results[19]).map(normFatura)); } catch {}
@@ -727,7 +767,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     setTaxaIvaGlobal(Number(c.taxaIva ?? 0));
                 }
             } catch {}
-            setLoadingData(false);
+            setLoadingBatch(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -1017,7 +1057,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const { data } = await api.get(`/clientes`);
             setClientes(data.map(normCliente));
         } catch {}
-    }, []);
+    }, [setClientes]);
 
     /* ── Entities ───────────────────────────────────────────── */
     const addCliente = (c: Omit<Cliente, 'id'>): Cliente => {
