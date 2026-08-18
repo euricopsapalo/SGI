@@ -5,9 +5,11 @@ import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { Search, Plus, Pencil, Eye, Phone, Mail, MapPin, Building2, User, X, Check, AlertCircle, Trash2, Download, Printer } from 'lucide-react';
 import SearchableSelect from '../../components/SearchableSelect';
 import api from '../../services/api';
-import { showToast } from '../../utils/errorHandler';
+import { showToast, extractFieldErrors } from '../../utils/errorHandler';
 import { useGlobal, EquipInstalado, OrdemTrabalho, ModeloEquipamento } from '../../contexts/GlobalContext';
 import { useConfirm } from '../../components/useConfirm';
+import FieldError, { fieldAria } from '../../components/FieldError';
+import SubmitButton from '../../components/SubmitButton';
 
 /* ══════════════════════════════════════════
    Types
@@ -75,15 +77,16 @@ const Field: React.FC<FieldProps> = ({ k, label, placeholder, type = 'text', req
             value={form[k]}
             onChange={onChange(k)}
             placeholder={placeholder}
+            {...fieldAria(`cliente-${k}-err`, errors[k])}
         />
-        {errors[k] && <span className="form-error"><AlertCircle size={11} /> {errors[k]}</span>}
+        <FieldError id={`cliente-${k}-err`} message={errors[k]} />
     </div>
 );
 
 /* ══════════════════════════════════════════
    MODAL — Criar / Editar Cliente
 ══════════════════════════════════════════ */
-interface ModalProps { initial: Cliente | null; onClose: () => void; onSave: (data: FormData) => void; }
+interface ModalProps { initial: Cliente | null; onClose: () => void; onSave: (data: FormData) => Promise<void>; }
 
 const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
     const isEdit = Boolean(initial);
@@ -92,6 +95,7 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
     const [form, setForm] = useState<FormData>(BLANK);
     const [errors, setErrors] = useState<FormErrors>({});
     const [endErrors, setEndErrors] = useState<EndErrors>([]);
+    const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
         if (initial) {
@@ -176,9 +180,22 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
         return Object.keys(e).length === 0 && ee.every(err => !err.morada && !err.cidade);
     };
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (validate()) onSave(form);
+        if (submitting || !validate()) return;
+        setSubmitting(true);
+        try {
+            await onSave(form);
+        } catch (err) {
+            // #49 — mapeia erros de validação do backend aos campos (tab geral)
+            const fe = extractFieldErrors(err);
+            const mapped = Object.fromEntries(
+                Object.entries(fe).filter(([key]) => !key.includes('.'))
+            ) as FormErrors;
+            if (Object.keys(mapped).length) { setErrors(prev => ({ ...prev, ...mapped })); setTab('geral'); }
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const isEmpresa = form.tipo === 'empresa';
@@ -367,10 +384,10 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
                     </div>
 
                     <div className="modal-footer">
-                        <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
-                        <button type="submit" className="abtn abtn-primary">
+                        <button type="button" className="abtn abtn-secondary" onClick={onClose} disabled={submitting}>Cancelar</button>
+                        <SubmitButton submitting={submitting}>
                             {isEdit ? 'Guardar Alterações' : 'Criar Cliente'}
-                        </button>
+                        </SubmitButton>
                     </div>
                 </form>
             </div>
@@ -1156,8 +1173,10 @@ const ClientesPage: React.FC = () => {
             refreshClientes();
             closeModal();
         } catch (e) {
+            // #49 — o toast global é tratado pelo interceptor (api.ts); propaga
+            // para o modal mapear a validação inline e manter-se aberto.
             console.error('Erro ao guardar cliente', e);
-            /* erro já apresentado pelo interceptor global (api.ts) — modal fica aberto */
+            throw e;
         }
     };
 

@@ -162,11 +162,13 @@ const UtilizadoresPage: React.FC = () => {
             }
             await loadUsers();
             setModalOpen(false);
+            setEditUser(null);
         } catch (e) {
+            // #49 — o toast global é tratado pelo interceptor (api.ts); propaga
+            // para o modal mapear a validação inline e manter-se aberto.
             console.error('Erro ao guardar utilizador', e);
-            /* erro já apresentado pelo interceptor global (api.ts) — modal fica aberto */
+            throw e;
         }
-        setEditUser(null);
     };
 
     const handleToggle = async (id: number) => {

@@ -4,8 +4,10 @@ import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { useGlobal, Fornecedor, Encomenda, Artigo, EmpresaConfig, Provincia, Municipio } from '../../contexts/GlobalContext';
 import { useConfirm } from '../../components/useConfirm';
-import { showToast } from '../../utils/errorHandler';
-import { Search, Plus, Edit2, Eye, X, AlertCircle, Check, Truck, Download, Trash2, MapPin, Printer } from 'lucide-react';
+import { showToast, extractFieldErrors } from '../../utils/errorHandler';
+import FieldError, { fieldAria } from '../../components/FieldError';
+import SubmitButton from '../../components/SubmitButton';
+import { Search, Plus, Edit2, Eye, X, Check, Truck, Download, Trash2, MapPin, Printer } from 'lucide-react';
 
 /* ══ Print helpers ═══════════════════════════════════════════ */
 const RF_CSS = `
@@ -354,7 +356,7 @@ const FornecedorViewModal: React.FC<FornecedorViewModalProps> = ({ fornecedor: f
 interface FornecedorModalProps {
     fornecedor?: Fornecedor;
     onClose: () => void;
-    onSave: (f: Omit<Fornecedor, 'id'>) => void;
+    onSave: (f: Omit<Fornecedor, 'id'>) => Promise<void>;
 }
 const FornecedorModal: React.FC<FornecedorModalProps> = ({ fornecedor, onClose, onSave }) => {
     const { provincias, municipios, condicoesPagamento, modosPagamento } = useGlobal();
@@ -370,6 +372,7 @@ const FornecedorModal: React.FC<FornecedorModalProps> = ({ fornecedor, onClose, 
     const [condicaoPagId, setCondId] = useState(fornecedor?.condicaoPagamentoId ?? '');
     const [modoPagId, setModoId]    = useState(fornecedor?.modoPagamentoId ?? '');
     const [errors, setErrors]       = useState<Record<string, string>>({});
+    const [submitting, setSubmitting] = useState(false);
 
     const munsFiltrados = municipios.filter(m => m.provinciaId === provinciaId);
 
@@ -381,10 +384,20 @@ const FornecedorModal: React.FC<FornecedorModalProps> = ({ fornecedor, onClose, 
         return Object.keys(e).length === 0;
     };
 
-    const handleSave = (ev: React.FormEvent) => {
+    const handleSave = async (ev: React.FormEvent) => {
         ev.preventDefault();
-        if (!validate()) return;
-        onSave({ nome, nif, telefone, email, morada, ativo, provinciaId: provinciaId || undefined, municipioId: municipioId || undefined, condicaoPagamentoId: condicaoPagId || undefined, modoPagamentoId: modoPagId || undefined });
+        if (!validate() || submitting) return;
+        // Erro geral em NIF (campo obrigatório) vive na tab "geral"
+        if (Object.keys(errors).length) setTab('geral');
+        setSubmitting(true);
+        try {
+            await onSave({ nome, nif, telefone, email, morada, ativo, provinciaId: provinciaId || undefined, municipioId: municipioId || undefined, condicaoPagamentoId: condicaoPagId || undefined, modoPagamentoId: modoPagId || undefined });
+        } catch (err) {
+            const fe = extractFieldErrors(err);
+            if (Object.keys(fe).length) { setErrors(prev => ({ ...prev, ...fe })); setTab('geral'); }
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -408,15 +421,17 @@ const FornecedorModal: React.FC<FornecedorModalProps> = ({ fornecedor, onClose, 
                             <div className="form-group">
                                 <label className="form-label req">Nome / Razão Social</label>
                                 <input className={`form-input${errors.nome ? ' err' : ''}`} value={nome}
-                                    onChange={e => setNome(e.target.value)} placeholder="Ex: Grundfos Angola, LDA" />
-                                {errors.nome && <span className="form-error"><AlertCircle size={11} /> {errors.nome}</span>}
+                                    onChange={e => setNome(e.target.value)} placeholder="Ex: Grundfos Angola, LDA"
+                                    {...fieldAria('forn-nome-err', errors.nome)} />
+                                <FieldError id="forn-nome-err" message={errors.nome} />
                             </div>
                             <div className="form-row">
                                 <div className="form-group">
                                     <label className="form-label req">NIF</label>
                                     <input className={`form-input${errors.nif ? ' err' : ''}`} value={nif}
-                                        onChange={e => setNif(e.target.value)} placeholder="5XXXXXXXXX" />
-                                    {errors.nif && <span className="form-error"><AlertCircle size={11} /> {errors.nif}</span>}
+                                        onChange={e => setNif(e.target.value)} placeholder="5XXXXXXXXX"
+                                        {...fieldAria('forn-nif-err', errors.nif)} />
+                                    <FieldError id="forn-nif-err" message={errors.nif} />
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Telefone</label>
@@ -475,8 +490,8 @@ const FornecedorModal: React.FC<FornecedorModalProps> = ({ fornecedor, onClose, 
                         </>}
                     </div>
                     <div className="modal-footer">
-                        <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
-                        <button type="submit" className="abtn abtn-primary"><Check size={12} /> Guardar</button>
+                        <button type="button" className="abtn abtn-secondary" onClick={onClose} disabled={submitting}>Cancelar</button>
+                        <SubmitButton submitting={submitting} icon={<Check size={12} />}>Guardar</SubmitButton>
                     </div>
                 </form>
             </div>
@@ -533,12 +548,12 @@ const FornecedoresPage: React.FC = () => {
     const editTarget = typeof modal === 'string' && modal !== 'new' ? fornecedores.find(f => f.id === modal) : undefined;
     const viewTarget = viewId ? fornecedores.find(f => f.id === viewId) : undefined;
 
-    const handleSave = (data: Omit<Fornecedor, 'id'>) => {
+    const handleSave = async (data: Omit<Fornecedor, 'id'>) => {
         if (typeof modal === 'string' && modal !== 'new') {
-            updateFornecedor(modal, data);
+            await updateFornecedor(modal, data);
             showToast('Fornecedor actualizado.', 'success');
         } else {
-            addFornecedor(data);
+            await addFornecedor(data);
             showToast('Fornecedor registado.', 'success');
         }
         setModal(null);

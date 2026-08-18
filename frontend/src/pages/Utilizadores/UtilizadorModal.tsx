@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { X, Eye, EyeOff, AlertCircle, Link } from 'lucide-react';
+import { X, Eye, EyeOff, Link } from 'lucide-react';
 import { Utilizador } from './UtilizadoresPage';
 import { Tecnico } from '../../contexts/GlobalContext';
 import SearchableSelect from '../../components/SearchableSelect';
+import FieldError, { fieldAria } from '../../components/FieldError';
+import SubmitButton from '../../components/SubmitButton';
+import { extractFieldErrors } from '../../utils/errorHandler';
 
 interface Props {
     initial: Utilizador | null;
     tecnicos: Tecnico[];
     onClose: () => void;
-    onSave: (data: Omit<Utilizador, 'id' | 'ultimoAcesso' | 'iniciais'> & { password?: string }) => void;
+    onSave: (data: Omit<Utilizador, 'id' | 'ultimoAcesso' | 'iniciais'> & { password?: string }) => Promise<void>;
 }
 
 type FormData = {
@@ -33,6 +36,7 @@ const BLANK: FormData = {
 const UtilizadorModal: React.FC<Props> = ({ initial, tecnicos, onClose, onSave }) => {
     const [form, setForm] = useState<FormData>(BLANK);
     const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
+    const [submitting, setSubmitting] = useState(false);
     const [showPw, setShowPw] = useState(false);
     const [showCpw, setShowCpw] = useState(false);
 
@@ -100,20 +104,30 @@ const UtilizadorModal: React.FC<Props> = ({ initial, tecnicos, onClose, onSave }
         return e;
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (submitting) return;
         const errs = validate();
         if (Object.keys(errs).length) { setErrors(errs); return; }
-        onSave({
-            nome: form.nome.trim(),
-            email: form.email.trim(),
-            telefone: form.telefone.trim(),
-            perfil: form.perfil,
-            ativo: form.ativo,
-            tecnicoId: form.tecnicoId || undefined,
-            tecnicoNome: form.tecnicoNome || undefined,
-            password: form.password || undefined,
-        });
+        setSubmitting(true);
+        try {
+            await onSave({
+                nome: form.nome.trim(),
+                email: form.email.trim(),
+                telefone: form.telefone.trim(),
+                perfil: form.perfil,
+                ativo: form.ativo,
+                tecnicoId: form.tecnicoId || undefined,
+                tecnicoNome: form.tecnicoNome || undefined,
+                password: form.password || undefined,
+            });
+        } catch (err) {
+            // #49 — validação inline a partir dos erros do backend
+            const fe = extractFieldErrors(err);
+            if (Object.keys(fe).length) setErrors(prev => ({ ...prev, ...fe }));
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const tecOptions = tecnicos
@@ -196,8 +210,9 @@ const UtilizadorModal: React.FC<Props> = ({ initial, tecnicos, onClose, onSave }
                                 onChange={set('nome')}
                                 placeholder="Ex: Ana Ferreira"
                                 readOnly={isTecnicoCampo && !!form.tecnicoId}
+                                {...fieldAria('user-nome-err', errors.nome)}
                             />
-                            {errors.nome && <span className="form-error"><AlertCircle size={11} /> {errors.nome}</span>}
+                            <FieldError id="user-nome-err" message={errors.nome} />
                         </div>
 
                         {/* Email + Telefone */}
@@ -211,8 +226,9 @@ const UtilizadorModal: React.FC<Props> = ({ initial, tecnicos, onClose, onSave }
                                     onChange={set('email')}
                                     placeholder="utilizador@aquatex.ao"
                                     readOnly={isTecnicoCampo && !!form.tecnicoId}
+                                    {...fieldAria('user-email-err', errors.email)}
                                 />
-                                {errors.email && <span className="form-error"><AlertCircle size={11} /> {errors.email}</span>}
+                                <FieldError id="user-email-err" message={errors.email} />
                             </div>
                             <div className="form-group">
                                 <label className="form-label">Telefone</label>
@@ -235,22 +251,22 @@ const UtilizadorModal: React.FC<Props> = ({ initial, tecnicos, onClose, onSave }
                                 <div className="form-group">
                                     <label className="form-label">Password</label>
                                     <div className="pw-wrap">
-                                        <input type={showPw ? 'text' : 'password'} className={`form-input${errors.password ? ' err' : ''}`} value={form.password} onChange={set('password')} placeholder={isEdit ? '(sem alteração)' : '••••••••'} />
+                                        <input type={showPw ? 'text' : 'password'} className={`form-input${errors.password ? ' err' : ''}`} value={form.password} onChange={set('password')} placeholder={isEdit ? '(sem alteração)' : '••••••••'} {...fieldAria('user-password-err', errors.password)} />
                                         <button type="button" className="pw-eye" onClick={() => setShowPw(p => !p)}>
                                             {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
                                         </button>
                                     </div>
-                                    {errors.password && <span className="form-error"><AlertCircle size={11} /> {errors.password}</span>}
+                                    <FieldError id="user-password-err" message={errors.password} />
                                 </div>
                                 <div className="form-group">
                                     <label className="form-label">Confirmar Password</label>
                                     <div className="pw-wrap">
-                                        <input type={showCpw ? 'text' : 'password'} className={`form-input${errors.confirmPassword ? ' err' : ''}`} value={form.confirmPassword} onChange={set('confirmPassword')} placeholder="••••••••" />
+                                        <input type={showCpw ? 'text' : 'password'} className={`form-input${errors.confirmPassword ? ' err' : ''}`} value={form.confirmPassword} onChange={set('confirmPassword')} placeholder="••••••••" {...fieldAria('user-confirmPassword-err', errors.confirmPassword)} />
                                         <button type="button" className="pw-eye" onClick={() => setShowCpw(p => !p)}>
                                             {showCpw ? <EyeOff size={14} /> : <Eye size={14} />}
                                         </button>
                                     </div>
-                                    {errors.confirmPassword && <span className="form-error"><AlertCircle size={11} /> {errors.confirmPassword}</span>}
+                                    <FieldError id="user-confirmPassword-err" message={errors.confirmPassword} />
                                 </div>
                             </div>
                         </div>
@@ -259,8 +275,8 @@ const UtilizadorModal: React.FC<Props> = ({ initial, tecnicos, onClose, onSave }
 
                     {/* Footer */}
                     <div className="modal-footer">
-                        <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
-                        <button type="submit" className="abtn abtn-primary">{isEdit ? 'Guardar Alterações' : 'Criar Utilizador'}</button>
+                        <button type="button" className="abtn abtn-secondary" onClick={onClose} disabled={submitting}>Cancelar</button>
+                        <SubmitButton submitting={submitting}>{isEdit ? 'Guardar Alterações' : 'Criar Utilizador'}</SubmitButton>
                     </div>
                 </form>
             </div>

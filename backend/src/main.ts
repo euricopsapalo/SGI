@@ -1,10 +1,10 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import * as compression from 'compression';
 import { AppModule } from './app.module';
 import { assertJwtSecret } from './config/read-secret';
+import { buildValidationPipe } from './config/validation-pipe';
 
 async function bootstrap() {
   // #53/#24 — valida o JWT_SECRET resolvido (env ou ficheiro Docker secret)
@@ -19,12 +19,7 @@ async function bootstrap() {
   const corsOrigins = process.env.CORS_ORIGIN?.split(',').map(o => o.trim()).filter(Boolean);
   app.enableCors({ origin: corsOrigins ?? ['http://localhost:3000'], credentials: true });
   app.setGlobalPrefix('api');
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    forbidNonWhitelisted: true,
-    transform: true,
-    transformOptions: { enableImplicitConversion: true },
-  }));
+  app.useGlobalPipes(buildValidationPipe());
 
   // Documentação OpenAPI/Swagger — apenas fora de produção (issue #40)
   if (process.env.NODE_ENV !== 'production') {

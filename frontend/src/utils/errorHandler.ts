@@ -25,6 +25,26 @@ export function showToast(message: string, type: ToastType = 'info') {
     toastEvents.emit({ message, type });
 }
 
+/**
+ * #49 — Extrai o mapa de erros de validação por campo devolvido pelo backend
+ * (`error.response.data.errors`, ver `buildValidationPipe`). Devolve `{}` se a
+ * resposta não trouxer erros por campo. As chaves podem vir aninhadas
+ * (`enderecos.0.morada`); o consumidor decide como as mapear aos seus inputs.
+ */
+export function extractFieldErrors(error: unknown): Record<string, string> {
+    if (error instanceof AxiosError) {
+        const errors = error.response?.data?.errors;
+        if (errors && typeof errors === 'object' && !Array.isArray(errors)) {
+            const out: Record<string, string> = {};
+            for (const [k, v] of Object.entries(errors as Record<string, unknown>)) {
+                if (typeof v === 'string') out[k] = v;
+            }
+            return out;
+        }
+    }
+    return {};
+}
+
 export function extractErrorMessage(error: unknown): string {
     if (error instanceof AxiosError) {
         const data = error.response?.data;
