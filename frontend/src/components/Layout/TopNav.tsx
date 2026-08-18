@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
     LayoutDashboard, Users, Wrench, Package,
     CalendarDays, FileText, BarChart3, Settings, Bell,
     Truck, MapPin, ClipboardList, ShoppingCart, ChevronDown,
-    LogOut, ScrollText, RefreshCw, UserCog,
+    LogOut, ScrollText, RefreshCw, UserCog, Menu, X,
     type LucideIcon,
 } from 'lucide-react';
 import AquatexLogo from '../AquatexLogo';
@@ -159,8 +159,14 @@ const TECNICO_CAMPO_GROUPS = new Set(['Início', 'Operações']);
 const TopNav: React.FC = () => {
     const { currentUser, logout, addLog, reloadData } = useGlobal();
     const navigate = useNavigate();
+    const location = useLocation();
     const [reloading, setReloading] = useState(false);
+    // #44 — menu móvel (hambúrguer) para tablet/telemóvel (< 1024px)
+    const [menuOpen, setMenuOpen] = useState(false);
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
+
+    // Fecha o menu móvel ao mudar de rota
+    useEffect(() => { setMenuOpen(false); }, [location.pathname]);
 
     const handleReload = async () => {
         setReloading(true);
@@ -179,13 +185,25 @@ const TopNav: React.FC = () => {
 
     return (
         <nav className="topnav" role="navigation" aria-label="Navegação principal">
+            {/* Hambúrguer — só visível < 1024px (#44) */}
+            <button
+                type="button"
+                className="topnav-burger"
+                aria-label={menuOpen ? 'Fechar menu de navegação' : 'Abrir menu de navegação'}
+                aria-expanded={menuOpen}
+                aria-controls="topnav-mobile-drawer"
+                onClick={() => setMenuOpen(o => !o)}
+            >
+                {menuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+
             {/* Logo */}
             <div className="topnav-logo">
                 <AquatexLogo height={30} />
                 <span className="topnav-logo-sub">SGI</span>
             </div>
 
-            {/* Modules */}
+            {/* Modules (desktop) */}
             <div className="topnav-modules">
                 {visibleGroups.map(group => {
                     if (group.direct) {
@@ -247,6 +265,39 @@ const TopNav: React.FC = () => {
                     <LogOut size={16} strokeWidth={1.75} />
                 </button>
             </div>
+
+            {/* Drawer de navegação móvel (#44) — só < 1024px via CSS */}
+            {menuOpen && (
+                <div className="topnav-drawer-overlay" onClick={() => setMenuOpen(false)}>
+                    <div
+                        id="topnav-mobile-drawer"
+                        className="topnav-drawer"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {currentUser && (
+                            <div className="topnav-drawer-user">
+                                <span className="topnav-drawer-user__name">{currentUser.nome}</span>
+                                <span className="topnav-drawer-user__role">{currentUser.role}</span>
+                            </div>
+                        )}
+                        {visibleGroups.map(group => (
+                            <div key={group.label} className="topnav-drawer-group">
+                                <div className="topnav-drawer-group__label">{group.label}</div>
+                                {group.items.map(item => (
+                                    <NavLink
+                                        key={item.to}
+                                        to={item.to}
+                                        className={({ isActive }) => `topnav-drawer-item${isActive ? ' active' : ''}`}
+                                    >
+                                        <item.icon size={16} strokeWidth={1.75} />
+                                        {item.label}
+                                    </NavLink>
+                                ))}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </nav>
     );
 };
