@@ -4,6 +4,8 @@ import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
+import EmptyState from '../../components/EmptyState';
+import TableSkeleton from '../../components/TableSkeleton';
 import {
     useGlobal, PlanoManutencao, PlanoMaoObra, PlanoArtigo,
 } from '../../contexts/GlobalContext';
@@ -233,7 +235,7 @@ const RepetirModal: React.FC<RepetirModalProps> = ({ plano, onClose, onRepetir }
 
 /* ══ Page ════════════════════════════════════════════════ */
 const PlanosPage: React.FC = () => {
-    const { planos, addPlano, updatePlano, equipInstalados, clientes, modelosEquipamento } = useGlobal();
+    const { planos, addPlano, updatePlano, equipInstalados, clientes, modelosEquipamento, loadingData } = useGlobal();
 
     const [search, setSearch]     = useState('');
     const [modal, setModal]       = useState<'new' | string | null>(null);
@@ -348,10 +350,11 @@ const PlanosPage: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.length === 0 && (
-                                    <tr><td colSpan={9}><div className="empty-state"><ClipboardList size={28} /><br />Nenhum plano encontrado.</div></td></tr>
+                                {loadingData && <TableSkeleton cols={9} />}
+                                {!loadingData && filtered.length === 0 && (
+                                    <tr><td colSpan={9}><EmptyState icon={<ClipboardList size={28} />} title="Nenhum plano encontrado" description="Crie planos de manutenção para gerar ordens de trabalho periódicas automaticamente." /></td></tr>
                                 )}
-                                {filtered.map(p => (
+                                {!loadingData && filtered.map(p => (
                                     <tr key={p.id}>
                                         <td style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--text-muted)' }}>{p.id}</td>
                                         <td style={{ fontSize: '0.8rem', fontWeight: 600 }}>{getEquipLabel(p.equipInstaladoId)}</td>

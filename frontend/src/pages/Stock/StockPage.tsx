@@ -11,6 +11,8 @@ import {
     ChevronRight, ChevronDown, Warehouse, Eye, Printer,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
+import EmptyState from '../../components/EmptyState';
+import TableSkeleton from '../../components/TableSkeleton';
 
 /* ══ Helpers (fmt e fmtMoney vêm do GlobalContext) ══════════ */
 
@@ -1136,7 +1138,7 @@ const StatsModal: React.FC<{ artigos: Artigo[]; onClose: () => void }> = ({ arti
 type OpState = 'inventario' | 'transferencia' | 'reposicao' | 'devolucao' | 'guia' | 'stats' | null;
 
 const StockPage: React.FC = () => {
-    const { artigos, addArtigo, updateArtigo, adjustExistencia, armazens, addMovimento, currentUser, stockArmazem, fmt, fmtMoney, classesArtigo, familiasArtigo } = useGlobal();
+    const { artigos, addArtigo, updateArtigo, adjustExistencia, armazens, addMovimento, currentUser, stockArmazem, fmt, fmtMoney, classesArtigo, familiasArtigo, loadingData } = useGlobal();
 
     // Resolve warehouse code from either a code string or a numeric ID (legacy data)
     const resolveArmazem = (val: string) =>
@@ -1309,10 +1311,11 @@ const StockPage: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.length === 0 && (
-                                    <tr><td colSpan={12}><div className="empty-state"><Package size={28} /><br />Nenhum artigo encontrado.</div></td></tr>
+                                {loadingData && <TableSkeleton cols={12} />}
+                                {!loadingData && filtered.length === 0 && (
+                                    <tr><td colSpan={12}><EmptyState icon={<Package size={28} />} title="Nenhum artigo encontrado" description="Registe artigos no catálogo para gerir stock, encomendas e consumos." /></td></tr>
                                 )}
-                                {filtered.map(a => {
+                                {!loadingData && filtered.map(a => {
                                     const lvl = stockLevel(a);
                                     const saRows = stockArmazem.filter(sa => sa.artigoId === a.id);
                                     const isExpanded = expanded.has(a.id);

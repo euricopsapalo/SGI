@@ -2,12 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
-import { Search, Plus, Pencil, Eye, Phone, Mail, MapPin, Building2, User, X, Check, AlertCircle, Trash2, Download, Printer } from 'lucide-react';
+import { Search, Plus, Pencil, Eye, Phone, Mail, MapPin, Building2, User, Users, X, Check, AlertCircle, Trash2, Download, Printer } from 'lucide-react';
 import SearchableSelect from '../../components/SearchableSelect';
 import api from '../../services/api';
 import { showToast } from '../../utils/errorHandler';
 import { useGlobal, EquipInstalado, OrdemTrabalho, ModeloEquipamento } from '../../contexts/GlobalContext';
 import { useConfirm } from '../../components/useConfirm';
+import EmptyState from '../../components/EmptyState';
+import TableSkeleton from '../../components/TableSkeleton';
 
 /* ══════════════════════════════════════════
    Types
@@ -1264,13 +1266,11 @@ const ClientesPage: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {loading && (
-                                    <tr><td colSpan={11}><div className="empty-state">A carregar...</div></td></tr>
-                                )}
+                                {loading && <TableSkeleton cols={11} />}
                                 {!loading && filtered.length === 0 && (
-                                    <tr><td colSpan={11}><div className="empty-state">Nenhum cliente encontrado.</div></td></tr>
+                                    <tr><td colSpan={11}><EmptyState icon={<Users size={28} />} title="Nenhum cliente encontrado" description="Registe clientes para associar equipamentos, ordens de trabalho e faturação." /></td></tr>
                                 )}
-                                {filtered.map(c => {
+                                {!loading && filtered.map(c => {
                                     const principal = endPrincipal(c);
                                     const maquinas = getMaquinas(c.id);
                                     const otTotal = getOsTotal(c.id);

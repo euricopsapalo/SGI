@@ -540,6 +540,7 @@ interface GlobalContextType {
     // Supplier Invoices
     faturasFornecedor: FaturaFornecedor[]; addFaturaFornecedor: (f: Omit<FaturaFornecedor, 'id'> & { faturasAssociadasIds?: string[] }) => Promise<FaturaFornecedor>; updateFaturaFornecedor: (id: string, f: Partial<FaturaFornecedor>) => void; updateEstadoVNC: (id: string, estado: string, usuario?: string) => Promise<void>;
     // Reload
+    loadingData: boolean;
     reloadData: () => Promise<void>;
     refreshClientes: () => Promise<void>;
 }
@@ -609,6 +610,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [clientes, setClientes] = useState<Cliente[]>([]);
     const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
     const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
+    // #48 — true até o carregamento inicial de dados terminar (para skeletons).
+    const [loadingData, setLoadingData] = useState(true);
     const [modelosEquipamento, setModelosEquipamento] = useState<ModeloEquipamento[]>([]);
     const [equipInstalados, setEquipInstalados] = useState<EquipInstalado[]>([]);
     const [planos, setPlanos] = useState<PlanoManutencao[]>([]);
@@ -630,6 +633,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     /* ── Initial data load ──────────────────────────────────── */
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const reloadData = React.useCallback(async () => {
+            setLoadingData(true);
             const ok = (r: PromiseSettledResult<any>) =>
                 r.status === 'fulfilled' ? r.value.data : [];
 
@@ -723,6 +727,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     setTaxaIvaGlobal(Number(c.taxaIva ?? 0));
                 }
             } catch {}
+            setLoadingData(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -1549,6 +1554,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao,
             faturas, addFatura, updateFatura,
             faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC,
+            loadingData,
             reloadData,
         }}>
             {children}

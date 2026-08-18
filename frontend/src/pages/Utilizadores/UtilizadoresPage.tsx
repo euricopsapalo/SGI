@@ -5,10 +5,12 @@ import ActionBar from '../../components/Layout/ActionBar';
 import UtilizadorModal from './UtilizadorModal';
 import { useGlobal } from '../../contexts/GlobalContext';
 import { useConfirm } from '../../components/useConfirm';
+import EmptyState from '../../components/EmptyState';
+import TableSkeleton from '../../components/TableSkeleton';
 import api from '../../services/api';
 import {
     Search, Plus, Filter, Pencil, Trash2,
-    ToggleLeft, ToggleRight, MoreVertical,
+    ToggleLeft, ToggleRight, MoreVertical, Users,
 } from 'lucide-react';
 
 
@@ -294,17 +296,15 @@ const UtilizadoresPage: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {loading && (
-                                    <tr><td colSpan={9}><div className="empty-state">A carregar...</div></td></tr>
-                                )}
+                                {loading && <TableSkeleton cols={9} />}
                                 {!loading && filtered.length === 0 && (
                                     <tr>
                                         <td colSpan={9}>
-                                            <div className="empty-state">Nenhum utilizador encontrado.</div>
+                                            <EmptyState icon={<Users size={28} />} title="Nenhum utilizador encontrado" description="Crie utilizadores para dar acesso à plataforma e associar técnicos de campo." />
                                         </td>
                                     </tr>
                                 )}
-                                {filtered.map(u => (
+                                {!loading && filtered.map(u => (
                                     <tr key={u.id}>
                                         <td style={{ textAlign: 'center', paddingLeft: 8 }}>
                                             <span className={`dot ${u.ativo ? 'dot-green' : 'dot-gray'}`} title={u.ativo ? 'Ativo' : 'Inativo'} />
