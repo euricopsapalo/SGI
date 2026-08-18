@@ -3,6 +3,8 @@ import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { useGlobal, SysLog } from '../../contexts/GlobalContext';
+import EmptyState from '../../components/EmptyState';
+import TableSkeleton from '../../components/TableSkeleton';
 import { Search, AlertCircle, Info, AlertTriangle, ScrollText, Download } from 'lucide-react';
 
 const TIPO_CFG: Record<SysLog['tipo'], { icon: React.ReactNode; color: string; label: string }> = {
@@ -12,7 +14,7 @@ const TIPO_CFG: Record<SysLog['tipo'], { icon: React.ReactNode; color: string; l
 };
 
 const LogsPage: React.FC = () => {
-    const { logs, currentUser, fmtDate } = useGlobal();
+    const { logs, currentUser, fmtDate, loadingData } = useGlobal();
     const fmtTs = (ts: string) => {
         const d = new Date(ts);
         return fmtDate(ts) + ' ' + d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -104,10 +106,11 @@ const LogsPage: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.length === 0 && (
-                                    <tr><td colSpan={6}><div className="empty-state"><ScrollText size={28} /><br />Sem registos de log.</div></td></tr>
+                                {loadingData && <TableSkeleton cols={6} />}
+                                {!loadingData && filtered.length === 0 && (
+                                    <tr><td colSpan={6}><EmptyState icon={<ScrollText size={28} />} title="Sem registos de log" description="As atividades do sistema aparecem aqui à medida que os utilizadores operam a plataforma." /></td></tr>
                                 )}
-                                {filtered.map(l => {
+                                {!loadingData && filtered.map(l => {
                                     const cfg = TIPO_CFG[l.tipo];
                                     return (
                                         <tr key={l.id}>

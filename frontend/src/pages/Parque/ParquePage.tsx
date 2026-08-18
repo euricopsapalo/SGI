@@ -7,6 +7,8 @@ import {
     useGlobal, EquipInstalado, EstadoEquip, ModeloEquipamento, Cliente, OrdemTrabalho,
 } from '../../contexts/GlobalContext';
 import { useConfirm } from '../../components/useConfirm';
+import EmptyState from '../../components/EmptyState';
+import TableSkeleton from '../../components/TableSkeleton';
 import {
     Search, Plus, Edit2, X, AlertCircle, Check, MapPin,
     Eye, AlertTriangle, RefreshCw, Package, Printer, Download, Trash2,
@@ -839,7 +841,7 @@ const ParquePage: React.FC = () => {
     const {
         equipInstalados, addEquipInstalado, updateEquipInstalado, removeEquipInstalado,
         modelosEquipamento, addModelo, updateModelo, removeModelo,
-        clientes, addOrdem, ordens, fmtDate, empresaConfig,
+        clientes, addOrdem, ordens, fmtDate, empresaConfig, loadingData,
     } = useGlobal();
     const confirm = useConfirm();
 
@@ -1111,10 +1113,11 @@ const ParquePage: React.FC = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filtered.length === 0 && (
-                                            <tr><td colSpan={10}><div className="empty-state"><MapPin size={28} /><br />Nenhum equipamento encontrado.</div></td></tr>
+                                        {loadingData && <TableSkeleton cols={10} />}
+                                        {!loadingData && filtered.length === 0 && (
+                                            <tr><td colSpan={10}><EmptyState icon={<MapPin size={28} />} title="Nenhum equipamento encontrado" description="Registe equipamentos instalados nos clientes para gerir manutenções e intervenções." /></td></tr>
                                         )}
-                                        {filtered.map(e => {
+                                        {!loadingData && filtered.map(e => {
                                             const mod  = getModelo(e.modeloId);
                                             const stats = equipStats.get(e.id);
                                             const effective = stats?.effectiveEstado ?? e.estado;
@@ -1193,10 +1196,11 @@ const ParquePage: React.FC = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredModelos.length === 0 && (
-                                            <tr><td colSpan={6}><div className="empty-state"><Package size={28} /><br />Nenhum modelo registado.</div></td></tr>
+                                        {loadingData && <TableSkeleton cols={6} />}
+                                        {!loadingData && filteredModelos.length === 0 && (
+                                            <tr><td colSpan={6}><EmptyState icon={<Package size={28} />} title="Nenhum modelo registado" description="Crie modelos de equipamento para catalogar o parque instalado." /></td></tr>
                                         )}
-                                        {filteredModelos.map(m => {
+                                        {!loadingData && filteredModelos.map(m => {
                                             const count = equipInstalados.filter(e => e.modeloId === m.id).length;
                                             return (
                                                 <tr key={m.id}>

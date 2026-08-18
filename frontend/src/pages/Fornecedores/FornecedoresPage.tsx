@@ -7,6 +7,8 @@ import { useConfirm } from '../../components/useConfirm';
 import { showToast, extractFieldErrors } from '../../utils/errorHandler';
 import FieldError, { fieldAria } from '../../components/FieldError';
 import SubmitButton from '../../components/SubmitButton';
+import EmptyState from '../../components/EmptyState';
+import TableSkeleton from '../../components/TableSkeleton';
 import { Search, Plus, Edit2, Eye, X, Check, Truck, Download, Trash2, MapPin, Printer } from 'lucide-react';
 
 /* ══ Print helpers ═══════════════════════════════════════════ */
@@ -501,7 +503,7 @@ const FornecedorModal: React.FC<FornecedorModalProps> = ({ fornecedor, onClose, 
 
 /* ══ Page ════════════════════════════════════════════════ */
 const FornecedoresPage: React.FC = () => {
-    const { fornecedores, addFornecedor, updateFornecedor, removeFornecedor, encomendas, artigos, provincias, municipios, empresaConfig } = useGlobal();
+    const { fornecedores, addFornecedor, updateFornecedor, removeFornecedor, encomendas, artigos, provincias, municipios, empresaConfig, loadingData } = useGlobal();
     const confirm = useConfirm();
 
     const [search, setSearch]         = useState('');
@@ -624,10 +626,11 @@ const FornecedoresPage: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.length === 0 && (
-                                    <tr><td colSpan={9}><div className="empty-state"><Truck size={28} /><br />Nenhum fornecedor encontrado.</div></td></tr>
+                                {loadingData && <TableSkeleton cols={9} />}
+                                {!loadingData && filtered.length === 0 && (
+                                    <tr><td colSpan={9}><EmptyState icon={<Truck size={28} />} title="Nenhum fornecedor encontrado" description="Registe fornecedores para gerir encomendas e faturas de compra." /></td></tr>
                                 )}
-                                {filtered.map(f => (
+                                {!loadingData && filtered.map(f => (
                                     <tr key={f.id} style={{ opacity: f.ativo ? 1 : 0.5 }}>
                                         <td style={{ paddingLeft: 10 }}>
                                             <span className={`dot ${f.ativo ? 'dot-green' : 'dot-gray'}`} />

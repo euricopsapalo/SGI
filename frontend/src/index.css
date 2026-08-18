@@ -908,6 +908,59 @@ a:hover {
   font-size: 0.85rem;
 }
 
+/* #48 — EmptyState (ícone + título + descrição + CTA) */
+.empty-state--rich {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 48px 24px;
+}
+.empty-state__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: var(--sp-1);
+  border-radius: var(--r-full);
+  background: var(--gray-s-bg);
+  color: var(--text-muted);
+}
+.empty-state__title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.empty-state__desc {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  max-width: 340px;
+}
+.empty-state__cta {
+  margin-top: var(--sp-3);
+}
+
+/* #48 — Skeleton de tabela (shimmer) durante o load */
+.skeleton-row td {
+  padding: 10px 12px;
+}
+.skeleton-bar {
+  display: block;
+  height: 12px;
+  border-radius: var(--r-sm);
+  background: linear-gradient(90deg, var(--border-light) 25%, var(--gray-s-bg) 37%, var(--border-light) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+@keyframes skeleton-shimmer {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar { animation: none; }
+}
+
 /* ════════════════════════════════════════════════
    DROPDOWN MENU
 ════════════════════════════════════════════════ */

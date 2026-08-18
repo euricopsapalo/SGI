@@ -12,6 +12,8 @@ import {
     Eye,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
+import EmptyState from '../../components/EmptyState';
+import TableSkeleton from '../../components/TableSkeleton';
 
 /* ── Helpers (fmtDate e fmtMoney vêm do GlobalContext) ── */
 
@@ -560,7 +562,7 @@ const COLS_FATURA: ExportCol[] = [
 
 /* ══ Page ════════════════════════════════════════════════════ */
 const FaturacaoPage: React.FC = () => {
-    const { faturas, addFatura, updateFatura, clientes, ordens, empresaConfig, fmtMoney, fmtDate } = useGlobal();
+    const { faturas, addFatura, updateFatura, clientes, ordens, empresaConfig, fmtMoney, fmtDate, loadingData } = useGlobal();
 
     const [search,       setSearch]       = useState('');
     const [filterEstado, setFilterEstado] = useState('');
@@ -687,10 +689,11 @@ const FaturacaoPage: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filtered.length === 0 && (
-                                    <tr><td colSpan={12}><div className="empty-state"><FileText size={28} /><br />Nenhum documento encontrado.</div></td></tr>
+                                {loadingData && <TableSkeleton cols={12} />}
+                                {!loadingData && filtered.length === 0 && (
+                                    <tr><td colSpan={12}><EmptyState icon={<FileText size={28} />} title="Nenhum documento encontrado" description="Emita faturas a partir de ordens de trabalho concluídas." /></td></tr>
                                 )}
-                                {filtered.map(f => {
+                                {!loadingData && filtered.map(f => {
                                     const eb = ESTADO_BADGE[f.estado];
                                     return (
                                         <tr key={f.id}>
