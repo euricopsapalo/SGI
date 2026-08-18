@@ -1658,6 +1658,104 @@ a:hover {
 
 
 /* ════════════════════════════════════════════════
+   MOBILE NAV — Hambúrguer + Drawer (#44)
+════════════════════════════════════════════════ */
+.topnav-burger {
+  display: none; /* visível só < 1024px (ver media query) */
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  border-right: 1px solid var(--topnav-border);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+.topnav-burger:hover {
+  background: var(--topnav-hover-bg);
+  color: #fff;
+}
+
+.topnav-drawer-overlay {
+  position: fixed;
+  inset: var(--topnav-h) 0 0 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  animation: fadeIn 0.15s ease;
+}
+.topnav-drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 82%;
+  max-width: 320px;
+  background: var(--topnav-bg);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--sp-2) 0 var(--sp-6);
+  box-shadow: var(--shadow-lg);
+  animation: slideInLeft 0.18s ease;
+}
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.topnav-drawer-user {
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--topnav-border);
+  margin-bottom: var(--sp-2);
+}
+.topnav-drawer-user__name { color: #fff; font-weight: 700; font-size: 0.9rem; }
+.topnav-drawer-user__role { color: rgba(255, 255, 255, 0.55); font-size: 0.72rem; font-style: italic; }
+.topnav-drawer-group { margin-bottom: var(--sp-2); }
+.topnav-drawer-group__label {
+  padding: var(--sp-2) var(--sp-4) 4px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.4);
+}
+.topnav-drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px var(--sp-4);
+  color: rgba(255, 255, 255, 0.82);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.topnav-drawer-item:hover {
+  background: var(--topnav-hover-bg);
+  color: #fff;
+  text-decoration: none;
+}
+.topnav-drawer-item.active {
+  background: var(--topnav-active-bg);
+  color: #fff;
+  font-weight: 600;
+}
+.topnav-drawer-item svg { flex-shrink: 0; opacity: 0.9; }
+
+/* ════════════════════════════════════════════════
+   RESPONSIVE — Tablet (≤ 1024px): nav vira hambúrguer (#44)
+════════════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  .topnav-modules { display: none; }
+  .topnav-burger { display: flex; }
+  .topnav-logo { flex: 1; }
+  .form-row { grid-template-columns: 1fr; }
+}
+/* Acima de 1024px o drawer nunca aparece, mesmo que fique aberto ao redimensionar */
+@media (min-width: 1025px) {
+  .topnav-drawer-overlay { display: none; }
+}
+
+/* ════════════════════════════════════════════════
    RESPONSIVE — Tablets (≤ 900px)
 ════════════════════════════════════════════════ */
 @media (max-width: 900px) {
