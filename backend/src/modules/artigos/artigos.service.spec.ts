@@ -246,4 +246,43 @@ describe('ArtigosService.transferencia (#37)', () => {
         expect(origem.quantidade).toBe(6);
         expect(saRepo.create).toHaveBeenCalledWith(expect.objectContaining({ quantidade: 2 }));
     });
+
+    // #37 — rollback: falha a meio (gravação do movimento) desfaz o débito/crédito.
+    // A transação faz snapshot das quantidades mutáveis e restaura-as em caso de erro,
+    // como no adaptador real do TypeORM.
+    it('rollback: falha ao gravar o movimento repõe origem e destino', async () => {
+        const origem = { quantidade: 10 };
+        const destino = { quantidade: 4 };
+        const saRepo = {
+            findOne: jest.fn()
+                .mockResolvedValueOnce(origem)
+                .mockResolvedValueOnce(destino),
+            create: jest.fn((e: any) => ({ ...e })),
+            save: jest.fn(async (e: any) => e),
+        };
+        const movRepo = {
+            create: jest.fn((e: any) => ({ ...e })),
+            save: jest.fn(async () => { throw new Error('falha simulada ao gravar movimento'); }),
+        };
+        const manager = {
+            getRepository: jest.fn((ent: any) => (ent === StockArmazem ? saRepo : movRepo)),
+        };
+        const dataSource: any = {
+            transaction: jest.fn(async (cb: any) => {
+                const snap = [origem.quantidade, destino.quantidade];
+                try {
+                    return await cb(manager);
+                } catch (err) {
+                    [origem.quantidade, destino.quantidade] = snap;
+                    throw err;
+                }
+            }),
+        };
+        const svc = new ArtigosService({} as any, movRepo as any, saRepo as any, dataSource);
+
+        await expect(svc.transferencia(1, 1, 2, 6, 'ana@x.pt')).rejects.toThrow(/movimento/i);
+        // estado reposto: nenhuma quantidade alterada
+        expect(origem.quantidade).toBe(10);
+        expect(destino.quantidade).toBe(4);
+    });
 });
