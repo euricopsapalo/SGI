@@ -4,6 +4,13 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(db): migration para as FKs de lookup do #36 elimina drift entities↔schema (closes #31)
+
+Fecha o #31. O schema versionado por migrações (`InitialSchema`/`InitialSeed`/`AddOtAnexos`), o `synchronize: false`, os scripts e a documentação já tinham sido entregues no PR #135. Com o `synchronize` desligado, porém, as 11 FKs de lookup adicionadas às entities no #36 (PR #146) **não estavam em nenhuma migração** — a `InitialSchema` tem as colunas mas não as constraints —, deixando as entities à frente do schema versionado.
+
+- **Nova migração `LookupFksManyToOne`** (gerada por `migration:generate` contra uma BD ao nível das migrações): adiciona as 11 FKs `ON DELETE SET NULL` — `clientes`/`fornecedores`/`faturas_fornecedor` → condição/modo de pagamento; `fornecedores`/`tecnicos` → província/município; `faturas` → `ordens_trabalho`.
+- **Verificação:** numa BD limpa, `migration:run` aplica tudo e `migration:generate --check` reporta **"No changes"** — entities e schema versionado 100% sincronizados.
+
 ### test(integridade): cobre estados válidos e FK ot_maos_obra, fecha #35 (closes #35)
 
 Fecha o #35. As CHECK constraints, FKs em falta, índices e timestamps já tinham sido aplicados via decorators (mantidos pelo `synchronize`) no PR #134 — que, no entanto, não usou `Closes #35`. O `integridade-bd.spec` cobria a maioria dos itens; completam-se os dois itens explicitamente nomeados no critério que ainda não eram testados:
