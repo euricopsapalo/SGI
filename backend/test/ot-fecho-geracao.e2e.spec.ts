@@ -61,7 +61,25 @@ describe('OT Fecho e Geração Periódica (RF-OT-006) E2E', () => {
             update: (_e: any, id: any, patch: any) => repo.update(id, patch),
             save: (e: any) => repo.save(e),
         };
-        const dataSource: any = { transaction: async (cb: any) => cb(manager) };
+        // Snapshot/rollback: replica o commit/rollback do TypeORM — em caso de erro
+        // repõe o estado de cada OT e remove as OTs criadas dentro da transação (#37).
+        const dataSource: any = {
+            transaction: async (cb: any) => {
+                const snap = Object.fromEntries(
+                    (Object.entries(ots) as any[]).map(([k, v]) => [k, { ...v }]),
+                );
+                const idsAntes = new Set(Object.keys(ots));
+                try {
+                    return await cb(manager);
+                } catch (err) {
+                    for (const k of Object.keys(ots)) {
+                        if (!idsAntes.has(k)) { delete ots[k]; continue; }
+                        ots[k] = snap[k];
+                    }
+                    throw err;
+                }
+            },
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             controllers: [OrdensTrabalhoController],
@@ -171,5 +189,16 @@ describe('OT Fecho e Geração Periódica (RF-OT-006) E2E', () => {
         ots[1] = baseOt({ tipo: 'periodica', dataAgendada: addMonths(today(), -12) });
         await request(srv()).put('/ordens/1/finalizar').send({ assinadaCliente: true }).expect(200);
         expect(gerada().dataAgendada).toBe(today());
+    });
+
+    // #37 — rollback: se a baixa de stock falhar a meio, a transição de estado e a
+    // geração periódica são desfeitas (nada de estado parcial).
+    it('CA-8: falha na baixa de stock faz rollback total (estado e filha)', async () => {
+        ots[1] = baseOt({ tipo: 'periodica', dataAgendada: addMonths(today(), -1) });
+        consumir.mockRejectedValueOnce(new Error('falha simulada na baixa de stock'));
+        await request(srv()).put('/ordens/1/finalizar').send({ assinadaCliente: true }).expect(500);
+        // rollback: OT mantém-se 'Em execução' e nenhuma filha foi criada.
+        expect(ots[1].estado).toBe('Em execução');
+        expect(gerada()).toBeUndefined();
     });
 });
