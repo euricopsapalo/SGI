@@ -4,9 +4,13 @@ import {
     Column,
     CreateDateColumn,
     OneToMany,
+    ManyToOne,
+    JoinColumn,
     Check,
 } from 'typeorm';
 import { ClienteEndereco } from './cliente-endereco.entity';
+import { CondicaoPagamento } from '../tabelas-sistema/condicao-pagamento.entity';
+import { ModoPagamento } from '../tabelas-sistema/modo-pagamento.entity';
 
 export enum TipoCliente {
     EMPRESA = 'empresa',
@@ -37,8 +41,18 @@ export class Cliente {
     @Column({ default: true })
     ativo: boolean;
 
+    // #36 — condições/modos de pagamento são lookups sem FK no init.sql;
+    // relação aditiva (ON DELETE SET NULL) mantendo o escalar para o shape do frontend.
+    @ManyToOne(() => CondicaoPagamento, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'condicao_pagamento_id' })
+    condicaoPagamento: CondicaoPagamento;
+
     @Column({ name: 'condicao_pagamento_id', nullable: true })
     condicaoPagamentoId: number;
+
+    @ManyToOne(() => ModoPagamento, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'modo_pagamento_id' })
+    modoPagamento: ModoPagamento;
 
     @Column({ name: 'modo_pagamento_id', nullable: true })
     modoPagamentoId: number;

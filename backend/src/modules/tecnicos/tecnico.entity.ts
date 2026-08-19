@@ -8,6 +8,8 @@ import {
 } from 'typeorm';
 import { User } from '../users/user.entity';
 import { FuncaoTecnico } from '../tabelas-sistema/funcao-tecnico.entity';
+import { Provincia } from '../tabelas-sistema/provincia.entity';
+import { Municipio } from '../tabelas-sistema/municipio.entity';
 
 @Entity('tecnicos')
 export class Tecnico {
@@ -37,8 +39,18 @@ export class Tecnico {
     @Column({ default: true })
     ativo: boolean;
 
+    // #36 — geografia é lookup sem FK no init.sql; relações aditivas
+    // (ON DELETE SET NULL) mantendo os escalares para o shape do frontend.
+    @ManyToOne(() => Provincia, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'provincia_id' })
+    provincia: Provincia;
+
     @Column({ name: 'provincia_id', nullable: true })
     provinciaId: number;
+
+    @ManyToOne(() => Municipio, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'municipio_id' })
+    municipio: Municipio;
 
     @Column({ name: 'municipio_id', nullable: true })
     municipioId: number;
