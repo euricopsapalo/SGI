@@ -4,7 +4,14 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
-### test(transacoes): cobertura de rollback fecha as transações multi-tabela (closes #37)
+### test(integridade): cobre estados válidos e FK ot_maos_obra, fecha #35 (closes #35)
+
+Fecha o #35. As CHECK constraints, FKs em falta, índices e timestamps já tinham sido aplicados via decorators (mantidos pelo `synchronize`) no PR #134 — que, no entanto, não usou `Closes #35`. O `integridade-bd.spec` cobria a maioria dos itens; completam-se os dois itens explicitamente nomeados no critério que ainda não eram testados:
+
+- **CHECK de estados válidos:** `chk_ot_estado` (ciclo de vida da OT) e `chk_faturas_estado`.
+- **FK em falta `ot_maos_obra`:** relação `ordemTrabalho` (`ON DELETE CASCADE`) + índice `idx_ot_maos_obra_ot`.
+
+A migração única equivalente fica para o #31 (desactivar `synchronize`), por decisão de arquitetura. **Validação:** `integridade-bd` 21/21 verde.
 
 Fecha o #37. As três operações multi-tabela já eram atómicas (`DataSource.transaction`) desde os PRs #123 (receção de encomenda) e #133 (transferência de stock + fecho de OT), mas só a receção tinha teste explícito de **rollback a meio**. Completa-se a cobertura exigida pelo critério de aceitação:
 

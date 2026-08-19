@@ -8,6 +8,7 @@ import { Encomenda } from '../modules/encomendas/encomenda.entity';
 import { Fatura } from '../modules/faturas/fatura.entity';
 import { FaturaLinha } from '../modules/faturas/fatura-linha.entity';
 import { SysLog } from '../modules/sys-logs/sys-log.entity';
+import { OrdemTrabalho } from '../modules/ordens-trabalho/ordem-trabalho.entity';
 import { OtArtigo } from '../modules/ordens-trabalho/ot-artigo.entity';
 import { OtMaoObra } from '../modules/ordens-trabalho/ot-mao-obra.entity';
 import { LinhaFaturaFornecedor } from '../modules/faturas-fornecedor/linha-fatura-fornecedor.entity';
@@ -45,6 +46,17 @@ describe('Integridade de BD (#35)', () => {
         });
     });
 
+    describe('CHECK de estados válidos', () => {
+        it('ordens_trabalho: estado ∈ ciclo de vida', () => {
+            expect(checkNames(OrdemTrabalho)).toContain('chk_ot_estado');
+            expect(checkExprs(OrdemTrabalho).join(' ')).toMatch(/"estado" IN \('Registada'/);
+        });
+        it('faturas: estado ∈ conjunto válido', () => {
+            expect(checkNames(Fatura)).toContain('chk_faturas_estado');
+            expect(checkExprs(Fatura).join(' ')).toMatch(/"estado" IN \('Pendente'/);
+        });
+    });
+
     describe('Índices em colunas críticas', () => {
         it('movimentos_stock.artigo_id', () => {
             expect(indexNames(MovimentoStock)).toContain('idx_mov_stock_artigo');
@@ -68,6 +80,13 @@ describe('Integridade de BD (#35)', () => {
         it('linhaEncomenda: relação SET NULL + escalar idLinhaEncomenda', () => {
             expect(columns(LinhaFaturaFornecedor)).toContain('idLinhaEncomenda');
             expect(relation(LinhaFaturaFornecedor, 'linhaEncomenda')?.options.onDelete).toBe('SET NULL');
+        });
+    });
+
+    describe('FKs em falta — ot_maos_obra', () => {
+        it('ordemTrabalho: relação CASCADE + índice na FK', () => {
+            expect(relation(OtMaoObra, 'ordemTrabalho')?.options.onDelete).toBe('CASCADE');
+            expect(indexNames(OtMaoObra)).toContain('idx_ot_maos_obra_ot');
         });
     });
 
