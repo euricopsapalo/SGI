@@ -42,6 +42,38 @@ O SGI está dividido em módulos estratégicos que cobrem toda a cadeia de valor
 - **Base de Dados:** PostgreSQL 15 (via Docker, admin em Adminer porta 8080)
 - **Autenticação:** JWT real com Passport (`@nestjs/jwt`, token válido 8h) e palavras-passe cifradas com bcrypt; `JwtAuthGuard` e `RolesGuard` globais (`APP_GUARD`) protegem a API por perfil. Login e recuperação de palavra-passe persistem na base de dados.
 
+## ⚙️ Configuração de ambiente
+
+Antes do primeiro arranque, copie o template `.env.example` para `.env` e preencha com valores reais:
+
+```bash
+cp .env.example .env
+```
+
+> ⚠️ **NUNCA** commitar o `.env`. Já está no `.gitignore`.
+
+### Variáveis obrigatórias
+
+| Variável | Descrição | Exemplo |
+|---|---|---|
+| `DB_HOST` | Host do PostgreSQL | `postgres` (Docker) |
+| `DB_PORT` | Porta do PostgreSQL | `5432` |
+| `DB_NAME` | Nome da BD | `app_development` |
+| `DB_USER` | Utilizador da BD | `app_user` |
+| `DB_PASSWORD` | Password da BD | gerada por ambiente |
+| `JWT_SECRET` | Segredo de assinatura JWT (≥ 32 chars) | `openssl rand -hex 32` |
+| `CORS_ORIGIN` | Origens permitidas (CSV) | `http://localhost:3000` |
+| `MAIL_USER` | Conta SMTP para recuperação de senha | conta Gmail/Outlook |
+| `MAIL_PASS` | App Password SMTP | gerar em [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) |
+| `NODE_ENV` | Ambiente | `development` \| `production` |
+
+### Rotação de credenciais
+
+Em produção, **rotacionar regularmente**:
+- `JWT_SECRET` — invalida todas as sessões activas (esperado em rotação)
+- `MAIL_PASS` — revogar a App Password antiga após gerar a nova
+- `DB_PASSWORD` — coordenar com migração do serviço
+
 ## Comandos
 
 ### Iniciar ambiente

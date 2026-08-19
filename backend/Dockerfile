@@ -14,10 +14,16 @@ RUN npm config set fetch-retries 5 \
 # Copia o restante do código da aplicação (o .dockerignore vai barrar a node_modules local)
 COPY . .
 
+# Torna o entrypoint executável
+RUN chmod +x docker-entrypoint.sh
+
 # Faz o build inicial (útil para garantir que a imagem base funciona isoladamente)
 RUN npm run build
 
 EXPOSE 3001
+
+# Entrypoint auto-sincroniza node_modules quando package.json muda
+ENTRYPOINT ["./docker-entrypoint.sh"]
 
 # Comando padrão (será sobrescrito no ambiente de Dev)
 CMD ["node", "dist/main.js"]
