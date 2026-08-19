@@ -2,6 +2,8 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColum
 import { Fornecedor } from '../fornecedores/fornecedor.entity';
 import { LinhaFaturaFornecedor } from './linha-fatura-fornecedor.entity';
 import { VncFaturaAssociada } from './vnc-fatura-associada.entity';
+import { CondicaoPagamento } from '../tabelas-sistema/condicao-pagamento.entity';
+import { ModoPagamento } from '../tabelas-sistema/modo-pagamento.entity';
 
 @Entity('faturas_fornecedor')
 export class FaturaFornecedor {
@@ -51,8 +53,18 @@ export class FaturaFornecedor {
     @Column({ name: 'estado_pagamento', length: 20, default: 'Pendente' })
     estadoPagamento: string;
 
+    // #36 — condições/modos de pagamento são lookups sem FK no init.sql;
+    // relação aditiva (ON DELETE SET NULL) mantendo o escalar para o shape do frontend.
+    @ManyToOne(() => CondicaoPagamento, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'condicao_pagamento_id' })
+    condicaoPagamento: CondicaoPagamento;
+
     @Column({ name: 'condicao_pagamento_id', nullable: true })
     condicaoPagamentoId: number;
+
+    @ManyToOne(() => ModoPagamento, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'modo_pagamento_id' })
+    modoPagamento: ModoPagamento;
 
     @Column({ name: 'modo_pagamento_id', nullable: true })
     modoPagamentoId: number;

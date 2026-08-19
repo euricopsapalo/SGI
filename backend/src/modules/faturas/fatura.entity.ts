@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, Check, Index, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { Cliente } from '../clientes/cliente.entity';
 import { FaturaLinha } from './fatura-linha.entity';
+import { OrdemTrabalho } from '../ordens-trabalho/ordem-trabalho.entity';
 
 export enum EstadoFatura {
     PENDENTE = 'Pendente',
@@ -24,6 +25,12 @@ export class Fatura {
 
     @Column({ name: 'tipo_documento', length: 20, default: 'FAT' })
     tipoDocumento: string;
+
+    // #36 — faturas.ot_id é INTEGER sem FK no init.sql; relação aditiva
+    // (ON DELETE SET NULL) mantendo o escalar para o shape do frontend.
+    @ManyToOne(() => OrdemTrabalho, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'ot_id' })
+    ot: OrdemTrabalho;
 
     @Column({ name: 'ot_id', nullable: true })
     otId: number;

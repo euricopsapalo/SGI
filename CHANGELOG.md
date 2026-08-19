@@ -11,8 +11,8 @@ Converte as FKs de domínio operacional de colunas escalares soltas para relaç�
 - **Relações adicionadas** (todas com o `ON DELETE` a espelhar o `init.sql`, logo aditivas — o `synchronize` não altera a BD): `OrdemTrabalho.equipInstalado`/`plano`; `OtArtigo.artigo`; `EncomendaLinha.artigo`; `PlanoArtigo.artigo`; `PlanoManutencao.tipoTrabalho`; `PlanoMaoObra.funcao`; `Tecnico.funcao`.
 - **Shape preservado:** as queries dos services mantêm-se (não carregam as novas relações), pelo que os payloads existentes não mudam; as relações ficam disponíveis para `relations: [...]` quando precisar.
 - **Teste dedicado** (`fk-dual-pattern.spec`): valida via metadados TypeORM que cada FK tem relação **e** escalar, e que o `ON DELETE` bate certo.
-- **Fora de âmbito (follow-up):** FKs de lookup sem constraint no `init.sql` (`municipio_id`, `condicao_pagamento_id`, `modo_pagamento_id`, `faturas.ot_id`) — exigem adicionar a FK ao schema primeiro (risco de dados órfãos), pelo que não são convertidas aqui.
-- **Validação:** 300 testes unit + 108 E2E verdes; `nest build` limpo; gate de cobertura passa.
+- **Follow-up concluído — FKs de lookup:** as FKs de lookup sem constraint no `init.sql` passam também a relação `@ManyToOne` (padrão dual, `ON DELETE SET NULL` por serem escalares nullable e lookups não críticos): `Cliente.condicaoPagamento`/`modoPagamento`; `Fornecedor.provincia`/`municipio`/`condicaoPagamento`/`modoPagamento`; `Tecnico.provincia`/`municipio`; `FaturaFornecedor.condicaoPagamento`/`modoPagamento`; `Fatura.ot`. Como estas colunas não existem no `init.sql` (são criadas pelo `synchronize` e ficam a NULL nos dados de seed), a nova constraint é aditiva e sem risco de órfãos; o `fk-dual-pattern.spec` cobre-as.
+- **Validação:** testes unit verdes (`fk-dual-pattern` 10/10; suíte 345/345); `tsc --noEmit` limpo; E2E validados no CI.
 
 ### feat(ot): fecho, assinatura e geração automática periódica (closes #59)
 
