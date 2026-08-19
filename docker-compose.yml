@@ -62,9 +62,11 @@
     container_name: sgi_frontend
     environment:
       REACT_APP_API_URL: http://localhost:3001
+      NODE_OPTIONS: "--max-old-space-size=512"
       # Estas duas variáveis forçam o hot-reload a funcionar dentro do Docker:
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
+    mem_limit: 1g
     ports:
       - "3000:3000"
     volumes:
