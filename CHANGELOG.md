@@ -13,11 +13,15 @@ Fecha o #35. As CHECK constraints, FKs em falta, índices e timestamps já tinha
 
 A migração única equivalente fica para o #31 (desactivar `synchronize`), por decisão de arquitetura. **Validação:** `integridade-bd` 21/21 verde.
 
+### test(transacoes): cobertura de rollback fecha as transações multi-tabela (closes #37)
+
 Fecha o #37. As três operações multi-tabela já eram atómicas (`DataSource.transaction`) desde os PRs #123 (receção de encomenda) e #133 (transferência de stock + fecho de OT), mas só a receção tinha teste explícito de **rollback a meio**. Completa-se a cobertura exigida pelo critério de aceitação:
 
 - **`ArtigosService.transferencia`** (unit): novo caso — falha ao gravar o movimento (último passo) → o débito da origem e o crédito do destino são repostos (transação com snapshot/restore, como o adaptador real do TypeORM).
 - **`OrdensTrabalho.finalizar`** (E2E `ot-fecho-geracao`): o mock de transação passa a fazer snapshot/rollback; novo **CA-8** — falha na baixa de stock (`StockReservaService.consumir`) reverte a transição de estado **e** a geração da OT periódica (nada de estado parcial).
 - **Validação:** suíte unit 346/346; E2E 111/111 verdes.
+
+### refactor(entities): FKs de domínio raw → `@ManyToOne` (padrão dual) (#36)
 
 Converte as FKs de domínio operacional de colunas escalares soltas para relações `@ManyToOne` + `@JoinColumn`, **mantendo o escalar `xxxId`** (padrão dual já usado em `registadoPor`/`user`) para preservar o shape esperado pelo frontend/DTOs.
 
