@@ -131,7 +131,10 @@ export class AuthService {
     }
 
     async resetPassword(token: string, newPassword: string) {
-        const user = await this.userRepo.findOne({ where: { resetToken: token } });
+        // O token é gerado em hex minúsculo; normalizar aqui torna a comparação
+        // tolerante a espaços/case introduzidos ao colar o token (#153).
+        const normalized = (token ?? '').trim().toLowerCase();
+        const user = await this.userRepo.findOne({ where: { resetToken: normalized } });
         if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
             throw new BadRequestException('Token inválido ou expirado.');
         }

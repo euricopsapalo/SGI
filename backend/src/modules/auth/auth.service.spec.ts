@@ -200,6 +200,12 @@ describe('AuthService — segurança (issue #100)', () => {
       expect(patch.passwordHash).toEqual(expect.any(String));
     });
 
+    it('resetPassword normaliza o token (case/whitespace) antes da consulta', async () => {
+      userRepo.findOne.mockResolvedValue(baseUser({ resetToken: 'abc123', resetTokenExpiry: new Date(Date.now() + 100000) }));
+      await service.resetPassword('  ABC123  ', 'password-nova-123');
+      expect(userRepo.findOne).toHaveBeenCalledWith({ where: { resetToken: 'abc123' } });
+    });
+
     it('resetPassword com token inválido/expirado lança 400', async () => {
       userRepo.findOne.mockResolvedValue(null);
       await expect(service.resetPassword('X', 'password-nova-123')).rejects.toBeInstanceOf(BadRequestException);

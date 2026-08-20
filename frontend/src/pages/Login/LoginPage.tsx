@@ -159,7 +159,7 @@ const LoginPage: React.FC = () => {
                                 {success && <Msg type="success" text={success} />}
                                 <div style={{ marginBottom: 14 }}>
                                     <label style={lSt}>Token de Recuperação</label>
-                                    <input type="text" aria-label="Token de recuperação" value={resetToken} onChange={e => setResetToken(e.target.value.toUpperCase())} placeholder="Ex: A3B9F2KX" style={{ ...iSt, fontFamily: 'monospace', letterSpacing: '0.1em' }} onFocus={hFocus} onBlur={hBlur} />
+                                    <input type="text" aria-label="Token de recuperação" value={resetToken} onChange={e => setResetToken(e.target.value.trim())} placeholder="Cole aqui o token recebido por email" style={{ ...iSt, fontFamily: 'monospace', letterSpacing: '0.1em' }} onFocus={hFocus} onBlur={hBlur} />
                                 </div>
                                 <div style={{ marginBottom: 20 }}>
                                     <label style={lSt}>Nova Password</label>
