@@ -4,6 +4,15 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(backend): arranque robusto a BD legada — baseline automático das migrações (closes #152)
+
+Fecha o #152. Com o `synchronize` desligado (#31), um volume `postgres_data` herdado do antigo `init.sql` traz o schema mas com a tabela `migrations` vazia: a `InitialSchema` tentava recriar tabelas existentes → `42P07 relation "users" already exists` → `onModuleInit` rebentava → backend nunca ficava *healthy* e o login ficava inacessível.
+
+- **Baseline automático no `MigrationService`:** antes de correr as migrações, deteta o cenário "schema existe mas registo de migrações vazio" e marca como executadas **apenas** as migrações cujos objetos já existem (probe por `to_regclass`/sentinel), deixando as genuinamente pendentes correr. BD nova (sem `users`) e BD saudável (já com registos) não são afetadas.
+- **Sem editar migrações já aplicadas:** a lógica vive no serviço de arranque; a `InitialSchema`/`InitialSeed`/`AddOtAnexos` ficam intactas.
+- **Aviso claro** nos logs quando faz baseline, lembrando que o caminho limpo em dev continua a ser `docker compose down -v`.
+- **Validação:** `migration.service.spec` cobre BD nova (no-op), BD saudável (no-op), BD legada sem/`com ot_anexos` e a criação da tabela `migrations` antes dos inserts.
+
 ### fix(db): migration para as FKs de lookup do #36 elimina drift entities↔schema (closes #31)
 
 Fecha o #31. O schema versionado por migrações (`InitialSchema`/`InitialSeed`/`AddOtAnexos`), o `synchronize: false`, os scripts e a documentação já tinham sido entregues no PR #135. Com o `synchronize` desligado, porém, as 11 FKs de lookup adicionadas às entities no #36 (PR #146) **não estavam em nenhuma migração** — a `InitialSchema` tem as colunas mas não as constraints —, deixando as entities à frente do schema versionado.
