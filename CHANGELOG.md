@@ -4,6 +4,16 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### chore(db): seed/restore de dados — snapshot completo reponível após reconstruir a BD
+
+Mecanismo para **repor os dados** de todas as tabelas sempre que a BD é reconstruída (`docker compose down -v`). Complementa o schema (migrações TypeORM, #31) e o seed de referência (`InitialSeed`) com um **snapshot dos dados atuais** (clientes, fornecedores, equipamentos instalados, modelos, técnicos, utilizadores… e todas as restantes tabelas).
+
+- **`postgres/seed-data.sql`** — snapshot gerado (`pg_dump --data-only --column-inserts`), **idempotente**: corre dentro de `BEGIN…COMMIT`, faz `TRUNCATE … RESTART IDENTITY CASCADE` (exceto `migrations`), carrega com `session_replication_role = replica` (FKs desligadas → sem problemas de ordem) e realinha as sequências por `setval`.
+- **`postgres/dump-data.(sh|ps1)`** — regenera o snapshot a partir da BD em execução.
+- **`postgres/restore-data.(sh|ps1)`** — repõe o snapshot na BD (após o backend arrancar/migrar).
+- **`postgres/README-seed.md`** — fluxo de utilização.
+- **Validação:** rebuild completo (`down -v` → `up -d` → `restore`) repõe os dados (2 clientes, 1 fornecedor, 3 equipamentos, 5 modelos, 1 técnico, 5 users…), **0 órfãos** de FK e sequências alinhadas.
+
 ### chore(security): npm audit — correções não-disruptivas + risco documentado (closes #151)
 
 Fecha o #151. Aplicadas apenas correções seguras (`npm audit fix` **sem** `--force`); os upgrades *major* que partiriam o build ficam documentados como risco aceite.

@@ -5,3 +5,7 @@
 # no such file or directory" (o kernel procuraria o interpretador "/bin/sh\r").
 *.sh text eol=lf
 docker-entrypoint.sh text eol=lf
+
+# Ficheiros SQL corridos pelo psql dentro do container Linux (ex.: seed-data.sql
+# via pipe). Devem manter LF: um CRLF partiria os meta-comandos \restrict do psql.
+*.sql text eol=lf
