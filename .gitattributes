@@ -1,0 +1,7 @@
+# Normalização de fins de linha.
+# Os scripts shell são executados em containers Linux (Alpine): TÊM de manter LF
+# mesmo em checkouts Windows. Com core.autocrlf=true, sem esta regra o git
+# converteria para CRLF e o entrypoint falharia com "exec ./docker-entrypoint.sh:
+# no such file or directory" (o kernel procuraria o interpretador "/bin/sh\r").
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf

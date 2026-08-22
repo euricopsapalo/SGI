@@ -4,6 +4,16 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(frontend): build falha por deps desatualizadas no volume anónimo — entrypoint robusto (closes #150)
+
+Fecha o #150. O build do frontend falhava com `Module not found` (`@tanstack/react-query`, `signature_pad`): as deps estavam declaradas no `package.json`/`package-lock.json` mas o `node_modules` do container estava desatualizado, porque o `docker-compose` monta `/app/node_modules` como **volume anónimo** que sobrevive a rebuilds da imagem.
+
+- **Mecanismo de auto-sincronização** (`frontend/docker-entrypoint.sh`, introduzido no #22): no arranque compara um checksum de `package.json` + `package-lock.json` com o guardado em `node_modules/.package-json-checksum` e reinstala se divergir — resolvendo o volume anónimo desatualizado sem depender de `--renew-anon-volumes`.
+- **Correção do entrypoint:** o checksum passa a ser **recalculado depois** do `npm install` (antes gravava-se o valor pré-install; como o `npm install` pode reescrever o lockfile, o checksum guardado deixava de bater certo e reinstalava-se em *todos* os arranques). Extraído para a função `compute_checksum`.
+- **`.gitattributes` a forçar LF nos `*.sh`:** com `core.autocrlf=true` no Windows e sem `.gitattributes`, o `git` fazia *checkout* dos entrypoints em **CRLF**, o que fazia o Alpine falhar com `exec ./docker-entrypoint.sh: no such file or directory` (procurava o interpretador `/bin/sh\r`) — derrotando silenciosamente o próprio mecanismo de auto-sync. Agora `*.sh` mantém sempre LF em qualquer plataforma.
+- O `Dockerfile` do frontend continua a fazer `npm install` na build e a usar o entrypoint como ENTRYPOINT.
+- **Validação:** rebuild da imagem → entrypoint sincroniza, `@tanstack/react-query` e `signature_pad` presentes, `Compiled successfully!` sem erros `Module not found`/`TS2307`; backend e frontend voltam a arrancar com os entrypoints em LF.
+
 ### fix(backend): arranque robusto a BD legada — baseline automático das migrações (closes #152)
 
 Fecha o #152. Com o `synchronize` desligado (#31), um volume `postgres_data` herdado do antigo `init.sql` traz o schema mas com a tabela `migrations` vazia: a `InitialSchema` tentava recriar tabelas existentes → `42P07 relation "users" already exists` → `onModuleInit` rebentava → backend nunca ficava *healthy* e o login ficava inacessível.
