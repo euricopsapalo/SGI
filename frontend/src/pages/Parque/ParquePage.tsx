@@ -910,16 +910,22 @@ const ParquePage: React.FC = () => {
         } else {
             const eq = await addEquipInstalado(data);
             const mod = modelosEquipamento.find(m => m.id === data.modeloId);
-            // OT de Montagem é best-effort: usa o id real do equipamento e não bloqueia o registo
-            addOrdem({
-                id: '', tipo: 'pontual', equipInstaladoId: eq.id, clienteId: data.clienteId,
-                descricao: `Montagem e comissionamento — ${mod?.nome ?? 'equipamento'}`,
-                previsaoTempo: 4, naturezaIntervencao: 'Montagem / Instalação',
-                maosDeObra: [], artigos: [],
-                dataAgendada: data.dataInstalacao,
-                estado: 'Registada',
-            } as any).catch(e => console.error('Erro ao criar OT de Montagem', e));
-            showToast(`${eq.id} registado. OT de Montagem criada automaticamente.`, 'success');
+            // OT de Montagem é best-effort: não bloqueia o registo do equipamento,
+            // mas a mensagem reflete o resultado real da criação da OT (#158).
+            try {
+                await addOrdem({
+                    tipo: 'pontual', equipInstaladoId: eq.id, clienteId: data.clienteId,
+                    descricao: `Montagem e comissionamento — ${mod?.nome ?? 'equipamento'}`,
+                    previsaoTempo: 4, naturezaIntervencao: 'Montagem / Instalação',
+                    maosDeObra: [], artigos: [],
+                    dataAgendada: data.dataInstalacao,
+                    estado: 'Registada',
+                } as any);
+                showToast(`Equipamento ${eq.id} registado. OT de Montagem criada automaticamente.`, 'success');
+            } catch (e) {
+                console.error('Erro ao criar OT de Montagem', e);
+                showToast(`Equipamento ${eq.id} registado, mas a OT de Montagem não foi criada.`, 'warning');
+            }
         }
         setModal(null); setEditId(null);
     };

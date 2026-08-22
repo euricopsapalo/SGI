@@ -4,6 +4,14 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(parque): registar equipamento já não mostra "property id should not exist" e a OT de Montagem é mesmo criada (closes #158)
+
+Fecha o #158. Ao registar um equipamento, a criação automática da OT de Montagem enviava um `id: ''` no `POST /ordens`; como o backend usa `forbidNonWhitelisted`, era rejeitado com **`property id should not exist`**. Pior: o `.catch` engolia o erro e mostrava sempre o toast de sucesso — a OT de Montagem **não chegava a ser criada**.
+
+- **`GlobalContext.addOrdem`:** passa a remover o `id` do payload (`const { id, reprogramacoes, maosDeObra, ...rest }`), tornando-o robusto a chamadas com `as any`.
+- **`ParquePage`:** deixa de injetar `id: ''`; a criação da OT é `await` num `try/catch` e o toast passa a ser **honesto** — só diz "OT de Montagem criada automaticamente" se a OT for realmente criada; caso contrário avisa que o equipamento foi registado mas a OT falhou (mantém-se *best-effort*, não bloqueia o registo).
+- **Validação:** `tsc` limpo; via API confirmado que o payload **sem `id`** → `201` (OT criada) e **com `id`** → `400 property id should not exist`; `i18n.spec` mantido.
+
 ### chore(security): npm audit — correções não-disruptivas + risco documentado (closes #151)
 
 Fecha o #151. Aplicadas apenas correções seguras (`npm audit fix` **sem** `--force`); os upgrades *major* que partiriam o build ficam documentados como risco aceite.
