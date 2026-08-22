@@ -4,6 +4,19 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### chore(security): npm audit — correções não-disruptivas + risco documentado (closes #151)
+
+Fecha o #151. Aplicadas apenas correções seguras (`npm audit fix` **sem** `--force`); os upgrades *major* que partiriam o build ficam documentados como risco aceite.
+
+**Backend (33 → 28):** `npm audit fix` resolveu 5 avisos por atualização semver-compatível, sem mexer no `package.json` — com destaque para dependências de **produção**:
+- `typeorm` 0.3.x → **0.3.31** (corrige SQL injection no `orderBy` do `UpdateQueryBuilder` — MySQL/MariaDB — e code injection no `migration:generate`);
+- `form-data`, `path-to-regexp`, `brace-expansion` (high) e `@babel/core` (dev).
+- As 28 restantes exigiriam o salto **major** para NestJS 11 (`@nestjs/*@11`, `@nestjs/cli@11`, `nodemailer@9`, etc.) — breaking; **não aplicadas**. São maioritariamente do toolchain (`@nestjs/cli`/`webpack`/`swagger`) ou mitigáveis, e ficam para um upgrade planeado do NestJS.
+
+**Frontend (28, inalterado):** `npm audit fix` (sem `--force`) é **no-op** — todas as 28 vulnerabilidades estão presas na árvore de dependências do `react-scripts` (CRA) e o único fix disponível é `--force` → `react-scripts@0.0.0` (downgrade breaking). São **exclusivamente do toolchain de build/dev** (`webpack-dev-server`, `svgo`, `postcss`, `nth-check`, `workbox`, `sockjs`…) e **não entram no bundle de produção**. Risco aceite; alternativa real é migrar de CRA (fora de âmbito).
+
+**Validação:** backend `tsc` limpo + suite de testes verde; container do backend arranca (migrações + `GET /api/health` → 200) com `typeorm@0.3.31`.
+
 ### fix(backend): arranque robusto a BD legada — baseline automático das migrações (closes #152)
 
 Fecha o #152. Com o `synchronize` desligado (#31), um volume `postgres_data` herdado do antigo `init.sql` traz o schema mas com a tabela `migrations` vazia: a `InitialSchema` tentava recriar tabelas existentes → `42P07 relation "users" already exists` → `onModuleInit` rebentava → backend nunca ficava *healthy* e o login ficava inacessível.
