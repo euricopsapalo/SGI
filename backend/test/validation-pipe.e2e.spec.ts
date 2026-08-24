@@ -177,20 +177,23 @@ describe('ValidationPipe E2E — validação de dados de entrada', () => {
         .expect(400);
     });
 
-    it('POST /test-artigos — campos obrigatórios em falta → 400', () => {
+    it('POST /test-artigos — campo obrigatório codigo em falta → 400', () => {
       return request(app.getHttpServer())
         .post('/test-artigos')
-        .send({ descricao: 'Apenas descrição' }) // falta codigo, classe, familia
+        .send({ descricao: 'Apenas descrição' }) // falta codigo (classe/familia são opcionais — #159)
         .expect(400)
         .expect((res) => {
           expect(res.body.message).toEqual(
-            expect.arrayContaining([
-              expect.stringContaining('codigo'),
-              expect.stringContaining('classe'),
-              expect.stringContaining('familia'),
-            ]),
+            expect.arrayContaining([expect.stringContaining('codigo')]),
           );
         });
+    });
+
+    it('POST /test-artigos — sem classe/familia (opcionais, #159) → 201', () => {
+      return request(app.getHttpServer())
+        .post('/test-artigos')
+        .send({ codigo: 'ART-OPC', descricao: 'Sem classe nem familia' })
+        .expect(201);
     });
 
     it('POST /test-ordens — campo obrigatório descricao em falta → 400', () => {
