@@ -3,8 +3,8 @@ import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-val
 export class CreateArtigoDto {
   @IsString() @IsNotEmpty() codigo: string;
   @IsString() @IsNotEmpty() descricao: string;
-  @IsString() @IsNotEmpty() classe: string;
-  @IsString() @IsNotEmpty() familia: string;
+  @IsOptional() @IsString() classe?: string;
+  @IsOptional() @IsString() familia?: string;
   @IsOptional() @IsString() imagem?: string;
   @IsOptional() @IsNumber() precoUnitario?: number;
   @IsOptional() @IsString() moeda?: string;

@@ -47,16 +47,23 @@ describe('Artigos DTOs', () => {
       expect(errors.some(e => e.property === 'descricao')).toBe(true);
     });
 
-    it('should fail without classe', async () => {
+    // #159 — classe/familia deixaram de ser obrigatórias.
+    it('should pass without classe', async () => {
       const dto = plainToInstance(CreateArtigoDto, { codigo: 'X', descricao: 'Y', familia: 'Z' });
       const errors = await validate(dto);
-      expect(errors.some(e => e.property === 'classe')).toBe(true);
+      expect(errors.some(e => e.property === 'classe')).toBe(false);
     });
 
-    it('should fail without familia', async () => {
+    it('should pass without familia', async () => {
       const dto = plainToInstance(CreateArtigoDto, { codigo: 'X', descricao: 'Y', classe: 'Z' });
       const errors = await validate(dto);
-      expect(errors.some(e => e.property === 'familia')).toBe(true);
+      expect(errors.some(e => e.property === 'familia')).toBe(false);
+    });
+
+    it('should pass without classe nor familia', async () => {
+      const dto = plainToInstance(CreateArtigoDto, { codigo: 'X', descricao: 'Y' });
+      const errors = await validate(dto);
+      expect(errors.length).toBe(0);
     });
   });
 
