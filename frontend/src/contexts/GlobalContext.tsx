@@ -1203,8 +1203,11 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     /* ── Work Orders ────────────────────────────────────────── */
     const addOrdem = async (o: Omit<OrdemTrabalho, 'id'>): Promise<OrdemTrabalho> => {
+        // Remove campos que o CreateOrdemTrabalhoDto não aceita (#158): o backend
+        // usa forbidNonWhitelisted, por isso um `id` no payload (ex.: id:'' vindo
+        // de chamadas com `as any`) rebentava com "property id should not exist".
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { reprogramacoes, maosDeObra, ...rest } = o as any;
+        const { id, reprogramacoes, maosDeObra, ...rest } = o as any;
         const payload = { ...rest, ...(maosDeObra !== undefined ? { maosObra: maosDeObra } : {}) };
         const { data } = await api.post(`/ordens`, payload);
         const n = normOrdem(data);
