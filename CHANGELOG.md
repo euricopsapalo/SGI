@@ -12,6 +12,16 @@ Fecha o #158. Ao registar um equipamento, a criação automática da OT de Monta
 - **`ParquePage`:** deixa de injetar `id: ''`; a criação da OT é `await` num `try/catch` e o toast passa a ser **honesto** — só diz "OT de Montagem criada automaticamente" se a OT for realmente criada; caso contrário avisa que o equipamento foi registado mas a OT falhou (mantém-se *best-effort*, não bloqueia o registo).
 - **Validação:** `tsc` limpo; via API confirmado que o payload **sem `id`** → `201` (OT criada) e **com `id`** → `400 property id should not exist`; `i18n.spec` mantido.
 
+### chore(db): seed/restore de dados — snapshot completo reponível após reconstruir a BD
+
+Mecanismo para **repor os dados** de todas as tabelas sempre que a BD é reconstruída (`docker compose down -v`). Complementa o schema (migrações TypeORM, #31) e o seed de referência (`InitialSeed`) com um **snapshot dos dados atuais** (clientes, fornecedores, equipamentos instalados, modelos, técnicos, utilizadores… e todas as restantes tabelas).
+
+- **`postgres/seed-data.sql`** — snapshot gerado (`pg_dump --data-only --column-inserts`), **idempotente**: corre dentro de `BEGIN…COMMIT`, faz `TRUNCATE … RESTART IDENTITY CASCADE` (exceto `migrations`), carrega com `session_replication_role = replica` (FKs desligadas → sem problemas de ordem) e realinha as sequências por `setval`.
+- **`postgres/dump-data.(sh|ps1)`** — regenera o snapshot a partir da BD em execução.
+- **`postgres/restore-data.(sh|ps1)`** — repõe o snapshot na BD (após o backend arrancar/migrar).
+- **`postgres/README-seed.md`** — fluxo de utilização.
+- **Validação:** rebuild completo (`down -v` → `up -d` → `restore`) repõe os dados (2 clientes, 1 fornecedor, 3 equipamentos, 5 modelos, 1 técnico, 5 users…), **0 órfãos** de FK e sequências alinhadas.
+
 ### chore(security): npm audit — correções não-disruptivas + risco documentado (closes #151)
 
 Fecha o #151. Aplicadas apenas correções seguras (`npm audit fix` **sem** `--force`); os upgrades *major* que partiriam o build ficam documentados como risco aceite.
