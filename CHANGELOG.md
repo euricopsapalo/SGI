@@ -22,6 +22,16 @@ Mecanismo para **repor os dados** de todas as tabelas sempre que a BD é reconst
 - **`postgres/README-seed.md`** — fluxo de utilização.
 - **Validação:** rebuild completo (`down -v` → `up -d` → `restore`) repõe os dados (2 clientes, 1 fornecedor, 3 equipamentos, 5 modelos, 1 técnico, 5 users…), **0 órfãos** de FK e sequências alinhadas.
 
+### fix(stock): classe e família deixam de ser obrigatórias no registo de artigo (closes #159)
+
+Fecha o #159. Registar um artigo sem preencher a classe rejeitava com **`classe should not be empty`**, apesar de a classe (e a família) não deverem ser obrigatórias. Alinhadas as três camadas (evita drift, #31):
+
+- **DTO** (`create-artigo.dto.ts`): `classe`/`familia` passam de `@IsNotEmpty()` para `@IsOptional() @IsString()` (o `update` herda via `PartialType`).
+- **Entity** (`artigo.entity.ts`): colunas `nullable: true`.
+- **Migração `ArtigoClasseFamiliaNullable`**: `ALTER COLUMN … DROP NOT NULL` em `artigos.classe`/`familia` (`down` repõe `SET NOT NULL`).
+- **Frontend** (`normArtigo`): normaliza `classe`/`familia` `null → ''` na desserialização, para o resto do UI (pesquisas, filtros, impressões) continuar a tratar strings sem alterações.
+- **Validação:** `tsc` limpo; specs de artigos 37/37; migração aplicada (colunas `is_nullable=YES`); via API, `POST /artigos` **sem classe** → `201` (guarda `null`) e com `classe:""` → `201`; `migration:generate --check` → **"No changes"** (sem drift).
+
 ### chore(security): npm audit — correções não-disruptivas + risco documentado (closes #151)
 
 Fecha o #151. Aplicadas apenas correções seguras (`npm audit fix` **sem** `--force`); os upgrades *major* que partiriam o build ficam documentados como risco aceite.

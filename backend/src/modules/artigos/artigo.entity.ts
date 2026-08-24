@@ -17,11 +17,12 @@ export class Artigo {
     @Column({ length: 300 })
     descricao: string;
 
-    @Column({ length: 100 })
-    classe: string;
+    // #159 — classe/familia deixam de ser obrigatórias no registo de artigo.
+    @Column({ length: 100, nullable: true })
+    classe: string | null;
 
-    @Column({ length: 100 })
-    familia: string;
+    @Column({ length: 100, nullable: true })
+    familia: string | null;
 
     @Column({ nullable: true, type: 'text' })
     imagem: string;
