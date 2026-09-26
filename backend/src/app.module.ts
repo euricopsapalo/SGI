@@ -25,6 +25,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { SeedModule } from './modules/seed/seed.module';
 import { FaturasFornecedorModule } from './modules/faturas-fornecedor/faturas-fornecedor.module';
 import { HealthModule } from './modules/health/health.module';
+import { VendasConfigModule } from './modules/vendas-config/vendas-config.module';
 import { readSecret } from './config/read-secret';
 
 @Module({
@@ -86,6 +87,7 @@ import { readSecret } from './config/read-secret';
     SeedModule,
     FaturasFornecedorModule,
     HealthModule,
+    VendasConfigModule,
   ],
   providers: [
     // Aplica o ThrottlerGuard globalmente (issue #41)
