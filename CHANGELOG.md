@@ -4,6 +4,20 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(vendas): fase 1 — matriz de configuração em metadados, documentos configurados e séries (closes #164)
+
+Primeira fase do **Módulo de Vendas de Intervenções** (épico #163, especificação `docs/reformulacao-vendas-intervencoes-v11.md`). Cria o motor de configuração de documentos: o comportamento de cada documento (`FT`, `FR`, `NC`, `RE`, `MC`, …) resulta da sua configuração, validada contra uma **matriz de metadados de três níveis** — não há regras por tipo de documento no código (R3).
+
+- **Matriz (metadados, só leitura):** `doc_tipos` (6 tipos), `doc_campos` (17 campos configuráveis, com o tipo de valor e o documento que podem apontar), `doc_matriz_campos` (nível 1 — campos por tipo), `doc_matriz_condicoes` (nível 2 — sub-campos condicionais, em cadeia) e `doc_matriz_dominios` (nível 3 — naturezas, entidade e tipos fiscais SAFT-AO elegíveis por tipo). Acrescentar um tipo fiscal elegível é uma linha de dados. Domínios sem `CHECK` na BD pela mesma razão.
+- **Motor puro** (`matriz.rules.ts`): disponibilidade de campos, obrigatoriedade, domínios e **R4** (documento apontado existe, está activo, tem o tipo exigido; estorno do mesmo tipo com **natureza inversa**; série de estorno do documento de estorno; estado da CC da conta indicada; CC da entidade do documento).
+- **Documentos configurados, séries, contas correntes (+ estados), contas bancárias/caixas e motivos de estorno** — CRUD em `/api/config/*` (leitura autenticada, escrita `admin`); `GET /api/config/matriz` serve os metadados ao ecrã.
+- **Séries** (`series.rules.ts`): ano civil (datas derivadas), uma série por defeito por documento (índice único parcial), e o motor de emissão para a fase 2 — sequência estrita por data-hora no fuso de Luanda, sem registo retroactivo, limite superior.
+- **R2:** um documento está "em uso" quando uma das suas séries já emitiu (`ultimo_numero`); a partir daí a configuração comportamental, o código e os limites/ano da série ficam bloqueados (422); descrição e estado activo continuam editáveis. Documentos/séries/contas em uso ou apontados não se eliminam.
+- **Parametrização inicial** (§3.4): `CCC`/`PEN`, caixa `CXAOA`, motivos base e os documentos FT, FR, NC, ND, RE, ERE, MC, ACS, ACQ, ABC, SDC, FCC com série do ano corrente — todos válidos pela matriz.
+- **Frontend:** novo separador **Configurações → Documentos de Venda** — formulário do documento gerado pela matriz (sub-campos indentados, listas filtradas pelos metadados, limpeza em cadeia ao desligar um campo-pai), gestão de séries, contas correntes, contas e motivos; bloqueio R2 visível; erros por campo.
+- **Migrações:** `CreateVendasConfig` (schema, gerado contra BD fresca, `--check` sem drift), `SeedVendasMatriz`, `SeedVendasParametrizacao` (up/down testados).
+- **Validação:** 70 testes novos (motores, serviços, frontend); suite backend 423/423 com os novos ficheiros no gate de cobertura (#38); verificação HTTP contra a BD real (33 verificações: seed válido, recusas dos níveis 1/3 e R4, R2, permissões).
+
 ### fix(parque): registar equipamento já não mostra "property id should not exist" e a OT de Montagem é mesmo criada (closes #158)
 
 Fecha o #158. Ao registar um equipamento, a criação automática da OT de Montagem enviava um `id: ''` no `POST /ordens`; como o backend usa `forbidNonWhitelisted`, era rejeitado com **`property id should not exist`**. Pior: o `.catch` engolia o erro e mostrava sempre o toast de sucesso — a OT de Montagem **não chegava a ser criada**.

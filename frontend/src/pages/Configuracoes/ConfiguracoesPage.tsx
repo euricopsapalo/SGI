@@ -6,19 +6,21 @@ import { useGlobal } from '../../contexts/GlobalContext';
 import { useConfirm } from '../../components/useConfirm';
 import api from '../../services/api';
 import { extractErrorMessage, showToast } from '../../utils/errorHandler';
+import DocumentosVendasTab from './DocumentosVendasTab';
 import {
     Building2, DollarSign, TrendingUp, Shield, Upload, Check,
-    Table2, Plus, X, Edit2, Smartphone, AlertCircle,
+    Table2, Plus, X, Edit2, Smartphone, AlertCircle, FileText,
 } from 'lucide-react';
 
 /* ── Types ── */
-type Tab = 'empresa' | 'moeda' | 'comissoes' | 'seguranca' | 'tabelas';
+type Tab = 'empresa' | 'moeda' | 'comissoes' | 'seguranca' | 'tabelas' | 'documentos';
 
 const TABS: { id: Tab; label: string; icon: React.FC<any> }[] = [
     { id: 'empresa',  label: 'Empresa',          icon: Building2 },
     { id: 'moeda',    label: 'Moeda & Financeiro', icon: DollarSign },
     { id: 'comissoes',label: 'Comissões',          icon: TrendingUp },
     { id: 'tabelas',  label: 'Tabelas do Sistema', icon: Table2 },
+    { id: 'documentos', label: 'Documentos de Venda', icon: FileText },
     { id: 'seguranca',label: 'Segurança',           icon: Shield },
 ];
 
@@ -882,6 +884,9 @@ const ConfiguracoesPage: React.FC = () => {
 
                             <TwoFactorSection allowed={!!empresaConfig.twoFactorEnabled} />
                         </>}
+
+                        {/* ── DOCUMENTOS DE VENDA (#164) ── */}
+                        {tab === 'documentos' && <DocumentosVendasTab />}
 
                     </div>
                 </div>
