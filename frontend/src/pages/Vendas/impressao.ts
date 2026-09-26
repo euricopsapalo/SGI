@@ -3,7 +3,7 @@ import type { ReciboImpressao } from '../../services/tesouraria';
 import { valorPorExtenso } from '../../utils/valorPorExtenso';
 
 /**
- * #178 — Impressão da Fatura (A4) e do Recibo (A5) com a informação dos modelos
+ * #178 — Impressão da Fatura e do Recibo (ambos em A4 — #180) com a informação dos modelos
  * de referência. Geradores de HTML puros (testados) + abertura da janela de
  * impressão, no mesmo padrão das restantes impressões do SGI.
  */
@@ -62,9 +62,37 @@ function tituloDocumento(doc: { descricao: string; codigo: string; tipoFiscal: s
     return `${esc(doc.descricao)}${fiscal} ${esc(doc.numeroDocumento)}`;
 }
 
+/**
+ * #180 — folha A4 (210 × 297 mm) para os dois documentos.
+ * - Ecrã: folha branca centrada, com as margens do documento e sombra, sobre fundo cinzento.
+ * - Impressão/PDF: o `@page` define o A4 e as margens; a folha deixa de ter
+ *   largura, padding, sombra e altura mínima próprios (senão as margens duplicavam
+ *   e a altura mínima podia gerar uma página em branco no fim).
+ */
+const MARGENS = { cima: 14, lados: 12, baixo: 16 }; // mm
+
 const CSS_BASE = `
+    @page {
+        size: A4 portrait;
+        margin: ${MARGENS.cima}mm ${MARGENS.lados}mm ${MARGENS.baixo}mm;
+        @top-right { content: "Pág. " counter(page) "/" counter(pages); font: 9px Arial; }
+    }
     * { box-sizing: border-box; }
-    body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0; }
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #111; margin: 0; }
+    @media screen {
+        body { background: #e5e7eb; padding: 10mm 0; }
+        .folha {
+            width: 210mm; min-height: 297mm; margin: 0 auto;
+            padding: ${MARGENS.cima}mm ${MARGENS.lados}mm ${MARGENS.baixo}mm;
+            background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+        }
+    }
+    @media print {
+        body { background: none; padding: 0; }
+        .folha { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+    }
+    .resumo, .extenso, .rodape, .recebido, .quadro { break-inside: avoid; page-break-inside: avoid; }
     .topo { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
     .logo { max-height: 60px; max-width: 180px; display: block; margin-bottom: 6px; }
     .empresa-nome, .cliente-nome { font-weight: 700; }
@@ -128,9 +156,7 @@ export function buildFaturaHtml(d: FaturaImpressao): string {
     return `<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8">
 <title>${esc(doc.descricao)} ${esc(doc.numeroDocumento)}</title>
 <style>
-    @page { size: A4; margin: 14mm 12mm 16mm; @top-right { content: "Pág. " counter(page) "/" counter(pages); font: 9px Arial; } }
     ${CSS_BASE}
-    body { font-size: 11px; }
     .dados { margin-bottom: 8px; }
     .linhas { margin-top: 6px; }
     .resumo { display: flex; gap: 20px; margin-top: 12px; align-items: flex-start; }
@@ -138,7 +164,7 @@ export function buildFaturaHtml(d: FaturaImpressao): string {
     .totais td { padding: 2px 4px; }
     .totais .total td { font-weight: 800; font-size: 1.15em; border-top: 2px solid #111; }
     .motivo { font-size: 0.9em; color: #333; }
-</style></head><body>
+</style></head><body><main class="folha">
     <div class="topo">
         <div>${blocoEmpresa(d.empresa)}</div>
         ${blocoCliente(d.cliente)}
@@ -201,10 +227,10 @@ export function buildFaturaHtml(d: FaturaImpressao): string {
         ${hash}Documento processado por computador | Os bens e/ou serviços foram colocados à disposição na data ${esc(doc.dataDisposicao ?? doc.data)} / © SGI /
         ${d.empresa.rodapeDocumentos ? `<div>${esc(d.empresa.rodapeDocumentos)}</div>` : ''}
     </div>
-</body></html>`;
+</main></body></html>`;
 }
 
-/* ══ Recibo (A5) ═══════════════════════════════════════════════ */
+/* ══ Recibo (A4 — #180) ════════════════════════════════════════ */
 export function buildReciboHtml(d: ReciboImpressao): string {
     const doc = d.documento;
     const moeda = doc.moeda;
@@ -220,14 +246,11 @@ export function buildReciboHtml(d: ReciboImpressao): string {
     return `<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8">
 <title>${esc(doc.descricao)} ${esc(doc.numeroDocumento)}</title>
 <style>
-    @page { size: A5 portrait; margin: 10mm 9mm 12mm; @top-right { content: "Pág. " counter(page) "/" counter(pages); font: 8px Arial; } }
     ${CSS_BASE}
-    body { font-size: 9.5px; }
-    .logo { max-height: 42px; }
-    .bloco { margin-top: 8px; }
+    .bloco { margin-top: 10px; }
     .linha-total td { font-weight: 700; border-top: 1px solid #111; }
-    .recebido { margin-top: 8px; font-size: 1.15em; font-weight: 800; }
-</style></head><body>
+    .recebido { margin-top: 12px; font-size: 1.15em; font-weight: 800; text-align: right; }
+</style></head><body><main class="folha">
     <div class="topo">
         <div>${blocoEmpresa(d.empresa)}</div>
         ${blocoCliente(d.cliente)}
@@ -269,7 +292,7 @@ export function buildReciboHtml(d: ReciboImpressao): string {
         Documento processado por computador / © SGI
         ${d.empresa.rodapeDocumentos ? `<div>${esc(d.empresa.rodapeDocumentos)}</div>` : ''}
     </div>
-</body></html>`;
+</main></body></html>`;
 }
 
 /**
@@ -277,7 +300,8 @@ export function buildReciboHtml(d: ReciboImpressao): string {
  * por já não estar ligada ao clique) e depois escreve o HTML e imprime.
  */
 export async function imprimirDocumento(obterHtml: () => Promise<string>): Promise<void> {
-    const w = window.open('', '_blank', 'width=900,height=1000');
+    // Largura para a folha A4 inteira (210 mm ≈ 794 px) com o fundo à volta (#180).
+    const w = window.open('', '_blank', 'width=960,height=1000');
     if (!w) throw new Error('O navegador bloqueou a janela de impressão — permita pop-ups para este site.');
     w.document.write('<p style="font:14px Arial;padding:20px">A preparar o documento…</p>');
     try {

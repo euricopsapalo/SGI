@@ -65,7 +65,7 @@ describe('impressão — Fatura', () => {
         expect(html).toContain('VALOR POR EXTENSO: Cento e seis mil, novecentos e cinquenta e um Kwanzas e oitenta e sete Cêntimos.');
         expect(html).toContain('X8Fj-Documento processado por computador | Os bens e/ou serviços foram colocados à disposição na data 2026-09-07 / © SGI /');
         expect(html).toContain('Obrigado pela preferência');
-        expect(html).toContain('@page { size: A4');
+        expect(html).toContain('size: A4 portrait');
     });
 
     it('o tipo fiscal não se repete quando é igual ao código do documento', () => {
@@ -108,9 +108,24 @@ describe('impressão — Recibo', () => {
             'Movimento', 'Número', 'Balcão', 'TCHQ', 'CH-1', 'Transferência de Cheques', 'BAI — Maianga',
             'Para pagamento do(s) seguinte(s) documento(s):', 'Prt.', 'Valor Documento', 'Valor Atribuído', 'Retenção', 'Pendente',
             'FT 2026/6', '2 902,80', 'NC 2026/2', '-61,50', 'Total Recebido (AOA)', 'Respeitosos Cumprimentos,',
-            'Documento processado por computador / © SGI', '@page { size: A5 portrait']) {
+            'Documento processado por computador / © SGI']) {
             expect(html).toContain(t);
         }
+    });
+});
+
+/** #180 — os dois documentos em folha A4 centrada no ecrã e A4 na impressão. */
+describe('impressão — folha A4', () => {
+    it.each([
+        ['Fatura', buildFaturaHtml(fatura)],
+        ['Recibo', buildReciboHtml(recibo)],
+    ])('%s: @page A4 vertical, folha de 210 × 297 mm centrada no ecrã e sem margens duplicadas na impressão', (_n, html) => {
+        expect(html).toMatch(/@page \{\s*size: A4 portrait;\s*margin: 14mm 12mm 16mm;/);
+        expect(html).not.toContain('A5');
+        expect(html).toMatch(/<body><main class="folha">[\s\S]*<\/main><\/body><\/html>$/);
+        expect(html).toMatch(/@media screen \{[\s\S]*\.folha \{[\s\S]*width: 210mm; min-height: 297mm; margin: 0 auto;/);
+        expect(html).toMatch(/@media print \{[\s\S]*\.folha \{ width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; \}/);
+        expect(html).toContain('counter(page) "/" counter(pages)');
     });
 });
 

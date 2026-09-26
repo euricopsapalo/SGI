@@ -4,6 +4,23 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(vendas): pré-visualização e impressão da Fatura e do Recibo em folha A4 centrada (closes #180)
+
+A janela de impressão mostrava o documento à largura toda, sem folha, porque o formato só estava no `@page`, que só é aplicado ao imprimir. O Recibo estava em A5.
+
+- **Ecrã:** os dois documentos aparecem numa **folha A4 (210 × 297 mm) branca e centrada**, com as margens do documento e sombra, sobre fundo cinzento. A janela abre com largura para a folha inteira.
+- **Impressão/PDF:**
+  - `@page { size: A4 portrait }` com margens 14/12/16 mm, igual nos dois documentos;
+  - a folha perde largura, padding, sombra e altura mínima próprios, para não duplicar as margens nem criar página em branco;
+  - totais, quadros, valor por extenso e rodapé não se partem a meio.
+- **Recibo em A4:** mesmo cabeçalho, tipografia e margens da Fatura (deixa o A5); o Total Recebido fica alinhado à direita.
+- **CSS partilhado** pelos dois templates.
+- **Validação:**
+  - testes dos templates: A4, folha no ecrã e reposição na impressão, para os dois documentos;
+  - PDFs gerados pelo motor de impressão do Edge e medidos: páginas 210 × 297 mm, margens laterais de 12 mm, sem páginas em branco;
+  - fatura de 60 linhas em 2 páginas, com "Pág. 1/2" e "Pág. 2/2" e o cabeçalho da tabela repetido;
+  - capturas do ecrã com a folha centrada.
+
 ### feat(vendas): imprimir Fatura (FT) e Recibo (RE) com a informação dos modelos de referência (closes #178)
 
 Impressão (e PDF pelo diálogo do navegador) da **Fatura em A4** e do **Recibo em A5**, com os blocos dos modelos de referência (Primavera) e as decisões registadas no #178.
