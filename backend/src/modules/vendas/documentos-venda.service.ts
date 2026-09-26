@@ -15,8 +15,9 @@ import { ConfiguracaoEmpresa } from '../configuracao/configuracao-empresa.entity
 import { EstadoFatura, Fatura } from '../faturas/fatura.entity';
 import { SysLogsService } from '../sys-logs/sys-logs.service';
 import {
-    calcularTotais, dataLocal, dataVencimento, estadoFaturacao, naturezaMovimento, numeroDocumento,
+    calcularTotais, dataLocal, dataVencimento, estadoFaturacao, hashDocumento, naturezaMovimento, numeroDocumento,
 } from './vendas.rules';
+import { snapshotCliente, snapshotEmpresa } from './snapshot';
 import { CreateDocumentoVendaDto, EmitirDocumentoVendaDto, UpdateDocumentoVendaDto } from './dto/documento-venda.dto';
 
 /** Tipos fiscais que podem nascer de uma OT (D2): as faturas. */
@@ -254,6 +255,7 @@ export class DocumentosVendaService {
             await m.update(DocumentoVenda, id, {
                 ...(dto.observacoes !== undefined ? { observacoes: dto.observacoes } : {}),
                 ...(dto.modoPagamentoId !== undefined ? { modoPagamentoId: dto.modoPagamentoId } : {}),
+                ...(dto.requisicao !== undefined ? { requisicao: dto.requisicao || null } : {}),
                 descontoGlobal,
                 subtotal: totais.subtotal,
                 desconto: totais.desconto,
@@ -342,6 +344,20 @@ export class DocumentosVendaService {
                 })), Number(doc.descontoGlobal));
                 if (totais.total <= 0) throw erroValidacao({ total: 'O total do documento tem de ser superior a zero' });
 
+                // #178 — hash encadeado com o documento anterior da série (bloqueada) e
+                // cópia dos dados do cliente e da empresa, para a segunda via sair igual.
+                const anterior = numero > serie.limiteInferior + 1
+                    ? await m.findOne(DocumentoVenda, { where: { serieId: serie.id, numero: numero - 1 }, select: ['id', 'hash'] })
+                    : null;
+                const hash = hashDocumento({
+                    dataDocumento: dataLocal(dataHora),
+                    dataHora,
+                    numeroDocumento: numeroDocumento(config!.codigo, serie.codigo, numero)!,
+                    total: totais.total,
+                    hashAnterior: anterior?.hash ?? null,
+                });
+                const [snapCliente, snapEmpresa] = await Promise.all([snapshotCliente(m, doc.clienteId), snapshotEmpresa(m)]);
+
                 for (const [i, l] of linhas.entries()) {
                     await m.update(DocumentoVendaLinha, l.id, { totalLiquido: totais.linhas[i] });
                 }
@@ -356,6 +372,10 @@ export class DocumentosVendaService {
                     desconto: totais.desconto,
                     valorIva: totais.valorIva,
                     total: totais.total,
+                    hash,
+                    dataDisposicao: ot.dataFim ?? dataLocal(dataHora),
+                    snapshotCliente: snapCliente as any,
+                    snapshotEmpresa: snapEmpresa as any,
                 });
                 await m.update(Serie, serie.id, { ultimoNumero: numero, ultimaDataHora: dataHora });
                 await m.update(OrdemTrabalho, ot.id, { documentoVendaId: id });

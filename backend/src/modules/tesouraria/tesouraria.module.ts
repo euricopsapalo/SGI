@@ -5,6 +5,7 @@ import { MovimentoConta } from './movimento-conta.entity';
 import { SysLogsModule } from '../sys-logs/sys-logs.module';
 import { ContaCorrenteService } from './conta-corrente.service';
 import { LiquidacoesService } from './liquidacoes.service';
+import { ImpressaoReciboService } from './impressao-recibo.service';
 import { ContaCorrenteController, LiquidacoesController } from './tesouraria.controller';
 
 /**
@@ -14,6 +15,6 @@ import { ContaCorrenteController, LiquidacoesController } from './tesouraria.con
 @Module({
     imports: [TypeOrmModule.forFeature([Liquidacao, LiquidacaoLinha, MovimentoConta]), SysLogsModule],
     controllers: [ContaCorrenteController, LiquidacoesController],
-    providers: [ContaCorrenteService, LiquidacoesService],
+    providers: [ContaCorrenteService, LiquidacoesService, ImpressaoReciboService],
 })
 export class TesourariaModule {}

@@ -27,6 +27,10 @@ export class CreateLiquidacaoDto {
     @IsOptional() @IsString() @MaxLength(5000)
     observacoes?: string;
 
+    /** #178 — referência do meio de pagamento (n.º de cheque/transferência). */
+    @IsOptional() @IsString() @MaxLength(50)
+    referenciaPagamento?: string;
+
     @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => LinhaLiquidacaoDto)
     linhas: LinhaLiquidacaoDto[];
 }

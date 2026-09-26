@@ -23,6 +23,8 @@ export interface Endereco {
     descricao: string;
     morada: string;
     cidade: string;
+    /** #178 — impresso no bloco do cliente das faturas e recibos. */
+    codigoPostal?: string | null;
     principal: boolean;
     provinciaId?: string;
     municipioId?: string;
@@ -361,6 +363,14 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
                                                 placeholder="Cidade"
                                             />
                                             {endErrors[i]?.cidade && <span className="form-error"><AlertCircle size={11} /> {endErrors[i]!.cidade}</span>}
+                                        </div>
+                                        <div className="form-group" style={{ marginBottom: 0, maxWidth: 130 }}>
+                                            <input type="text" className="form-input" maxLength={20}
+                                                aria-label="Código postal"
+                                                value={en.codigoPostal ?? ''}
+                                                onChange={setEnd(i, 'codigoPostal')}
+                                                placeholder="Cód. postal"
+                                            />
                                         </div>
                                     </div>
                                     <div className="form-row" style={{ marginBottom: 0, marginTop: 6 }}>

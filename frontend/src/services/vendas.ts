@@ -25,7 +25,7 @@ export interface DocumentoVenda {
     serieId: number | null; serieCodigo: string | null; numero: number | null; numeroDocumento: string | null;
     dataHora: string | null; estado: EstadoDocumentoVenda;
     clienteId: number; clienteNome: string; clienteNif: string | null;
-    otId: number; otNumero: string | null; referencia: string | null; observacoes: string | null;
+    otId: number; otNumero: string | null; referencia: string | null; observacoes: string | null; requisicao: string | null;
     modoPagamentoId: number | null; modoPagamentoDescricao: string | null;
     descontoGlobal: number; subtotal: number; desconto: number; valorIva: number; total: number; moeda: string;
     emitidoEm: string | null; createdAt: string;
@@ -43,6 +43,46 @@ export interface ConsumivelOt {
 export interface LinhaRascunho { otArtigoId: number; descricao?: string; quantidade?: number; desconto?: number }
 export interface AtualizarRascunho {
     observacoes?: string | null; modoPagamentoId?: number | null; descontoGlobal?: number; linhas?: LinhaRascunho[];
+    /** #178 — n.º de requisição/encomenda do cliente. */
+    requisicao?: string | null;
+}
+
+/* ── #178 — dados de impressão (Fatura e Recibo) ─────────────────────────── */
+
+export type Via = 'Original' | 'Segunda via';
+
+export interface ClienteImpressao {
+    id: number; nome: string; nif: string | null; telefone: string | null; email: string | null;
+    morada: string | null; localidade: string | null; codigoPostal: string | null;
+    municipio: string | null; provincia: string | null; condicaoPagamento: string | null;
+}
+
+export interface EmpresaImpressao {
+    nome: string | null; nif: string | null; morada: string | null; telefone: string | null; fax: string | null;
+    email: string | null; website: string | null; capitalSocial: string | null; conservatoriaRegisto: string | null;
+    matricula: string | null; logoUrl: string | null; rodapeDocumentos: string | null;
+}
+
+export interface FaturaImpressao {
+    via: Via;
+    empresa: EmpresaImpressao;
+    coordenadasBancarias: { banco: string | null; numero: string | null; iban: string | null }[];
+    cliente: ClienteImpressao | null;
+    documento: {
+        descricao: string; codigo: string; tipoFiscal: string | null; numeroDocumento: string | null;
+        dataHora: string | null; data: string | null; dataVencimento: string | null; condicaoPagamento: string | null;
+        modoPagamento: string | null; requisicao: string | null; moeda: string; descontoCliente: number;
+        referencia: string | null; otNumero: string | null; nrSerieEquipamento: string | null;
+        dataDisposicao: string | null; observacoes: string | null;
+    };
+    linhas: {
+        artigoCodigo: string | null; descricao: string; quantidade: number; unidade: string; precoUnitario: number;
+        desconto: number; codigoIva: string | null; taxaIva: number; valor: number;
+    }[];
+    totais: { mercadoriaServicos: number; descontosComerciais: number; valorIva: number; total: number; valorPendente: number | null };
+    impostos: { codigoIva: string | null; taxa: number; incidencia: number; valor: number; motivoIsencao: string | null }[];
+    retencao: { entidade: string; incidencia: number; percentagem: number; valor: number } | null;
+    codigoHash: string | null;
 }
 
 export const vendasApi = {
@@ -58,6 +98,8 @@ export const vendasApi = {
     eliminarRascunho: (id: number) => api.delete(`/vendas/documentos/${id}`),
     emitir: (id: number, dto: { serieId?: number; dataHora?: string }) =>
         api.post<DocumentoVenda>(`/vendas/documentos/${id}/emitir`, dto).then(r => r.data),
+    /** #178 — dados para imprimir a fatura (conta a impressão: Original / Segunda via). */
+    imprimir: (id: number) => api.post<FaturaImpressao>(`/vendas/documentos/${id}/imprimir`).then(r => r.data),
 };
 
 /** Perfis (etiqueta do frontend) que podem faturar — espelha o `@Roles` do backend. */

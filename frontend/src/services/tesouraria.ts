@@ -1,4 +1,5 @@
 import api from './api';
+import type { ClienteImpressao, EmpresaImpressao, Via } from './vendas';
 
 /**
  * #174 / #166 — Cliente da conta corrente e da tesouraria: pendentes filtráveis,
@@ -44,6 +45,8 @@ export interface LinhaLiquidacaoPedido { movimentoCcId: number; valorPago: numbe
 export interface LiquidacaoPedido {
     documentoConfigId: number; clienteId: number; contaBancariaId: number;
     serieId?: number; dataHora?: string; observacoes?: string;
+    /** #178 — referência do meio de pagamento (n.º de cheque/transferência). */
+    referenciaPagamento?: string;
     linhas: LinhaLiquidacaoPedido[];
 }
 
@@ -83,7 +86,26 @@ export const tesourariaApi = {
     liquidacoes: (clienteId?: number) => api.get<Liquidacao[]>('/liquidacoes', { params: limpo({ clienteId }) }).then(r => r.data),
     liquidacao: (id: number) => api.get<Liquidacao>(`/liquidacoes/${id}`).then(r => r.data),
     liquidar: (dto: LiquidacaoPedido) => api.post<Liquidacao>('/liquidacoes', dto).then(r => r.data),
+    /** #178 — dados para imprimir o recibo (conta a impressão: Original / Segunda via). */
+    imprimir: (id: number) => api.post<ReciboImpressao>(`/liquidacoes/${id}/imprimir`).then(r => r.data),
 };
+
+export interface ReciboImpressao {
+    via: Via;
+    empresa: EmpresaImpressao;
+    cliente: ClienteImpressao | null;
+    documento: {
+        descricao: string; codigo: string; tipoFiscal: string | null; numeroDocumento: string | null;
+        dataHora: string; data: string; moeda: string; observacoes: string | null;
+    };
+    total: number;
+    meios: { movimento: string | null; descricao: string | null; numero: string | null; balcao: string | null; valor: number }[];
+    documentos: {
+        numeroDocumento: string; prestacao: number; valorDocumento: number; valorAtribuido: number;
+        desconto: number; retencao: number; pendente: number;
+    }[];
+    totais: { valorDocumento: number; valorAtribuido: number; desconto: number; retencao: number; pendente: number };
+}
 
 /** Filtros de pendentes ⇄ query string (os filtros ficam no URL — #174). */
 export const CHAVES_FILTRO: (keyof PendentesFiltros)[] = [

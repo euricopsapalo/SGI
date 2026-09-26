@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateClienteEnderecoDto {
@@ -13,6 +13,12 @@ export class CreateClienteEnderecoDto {
   @IsString()
   @IsNotEmpty()
   cidade: string;
+
+  /** #178 — impresso no bloco do cliente das faturas e recibos. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  codigoPostal?: string;
 
   @IsOptional()
   @IsBoolean()

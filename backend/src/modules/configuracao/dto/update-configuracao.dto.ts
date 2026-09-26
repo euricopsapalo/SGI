@@ -1,4 +1,4 @@
-import { IsBoolean, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class UpdateConfiguracaoDto {
   @IsOptional() @IsString() nome?: string;
@@ -9,6 +9,11 @@ export class UpdateConfiguracaoDto {
   @IsOptional() @IsString() website?: string;
   @IsOptional() @IsString() logoUrl?: string;
   @IsOptional() @IsString() rodapeDocumentos?: string;
+  // #178 — identificação legal impressa nas faturas e recibos
+  @IsOptional() @IsString() @MaxLength(30) fax?: string;
+  @IsOptional() @IsString() @MaxLength(50) capitalSocial?: string;
+  @IsOptional() @IsString() @MaxLength(150) conservatoriaRegisto?: string;
+  @IsOptional() @IsString() @MaxLength(50) matricula?: string;
   @IsOptional() @IsString() iban?: string;
   @IsOptional() @IsString() banco?: string;
   @IsOptional() @IsNumber() mesesManutencaoPreventiva?: number;

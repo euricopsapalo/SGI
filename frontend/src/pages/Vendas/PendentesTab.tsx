@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Filter, HandCoins, Lock, Wallet } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Filter, HandCoins, Lock, Printer, Wallet } from 'lucide-react';
 import EmptyState from '../../components/EmptyState';
 import SearchableSelect from '../../components/SearchableSelect';
 import SubmitButton from '../../components/SubmitButton';
@@ -13,7 +13,8 @@ import {
 } from '../../services/tesouraria';
 import { paraDataHoraLocal } from '../../services/vendas';
 import { vendasConfigApi, type ContaBancaria, type DocumentoConfig } from '../../services/vendasConfig';
-import { Modal, mono, muted, num } from './ui';
+import { adiado, CANCELADO, Modal, mono, muted, num } from './ui';
+import { buildReciboHtml, imprimirDocumento } from './impressao';
 
 /**
  * #174 — Pendentes da conta corrente de clientes, filtráveis por n.º de documento,
@@ -40,6 +41,7 @@ const ResumoLiquidacao: React.FC<{ selecionados: Pendente[]; onClose: () => void
     const [contaId, setContaId] = useState('');
     const [dataHora, setDataHora] = useState(paraDataHoraLocal(new Date()));
     const [observacoes, setObservacoes] = useState('');
+    const [referencia, setReferencia] = useState('');
     const [linhas, setLinhas] = useState<LinhaPagar[]>(selecionados.map(p => ({ p, valorPago: p.valorPendente, desconto: 0 })));
     const [erros, setErros] = useState<Record<string, string>>({});
     const [aGravar, setAGravar] = useState(false);
@@ -73,7 +75,14 @@ const ResumoLiquidacao: React.FC<{ selecionados: Pendente[]; onClose: () => void
     const desconto = linhas.reduce((s, l) => s + (Number(l.desconto) || 0), 0);
     const set = (i: number, patch: Partial<LinhaPagar>) => setLinhas(ls => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
 
-    const gravar = async () => {
+    const gravar = async (comImpressao = false) => {
+        // #178 — a janela de impressão abre já (ligada ao clique) e só é preenchida depois de gravar.
+        const gravado = adiado();
+        let reciboId = 0;
+        if (comImpressao) {
+            imprimirDocumento(async () => { await gravado.promise; return buildReciboHtml(await tesourariaApi.imprimir(reciboId)); })
+                .catch(e => { if (e !== CANCELADO) showToast(extractErrorMessage(e), 'error'); });
+        }
         setAGravar(true); setErros({});
         try {
             const r = await tesourariaApi.liquidar({
@@ -83,11 +92,15 @@ const ResumoLiquidacao: React.FC<{ selecionados: Pendente[]; onClose: () => void
                 serieId: serieId ? Number(serieId) : undefined,
                 dataHora: new Date(dataHora).toISOString(),
                 observacoes: observacoes || undefined,
+                referenciaPagamento: referencia.trim() || undefined,
                 linhas: linhas.map(l => ({ movimentoCcId: l.p.movimentoCcId, valorPago: Number(l.valorPago) || 0, desconto: Number(l.desconto) || 0 })),
             });
+            reciboId = r.id;
+            gravado.resolver();
             showToast(`${r.numeroDocumento} registado — ${fmtMoney(r.total, r.moeda)} em ${r.contaCodigo}`, 'success');
             onGravado();
         } catch (e) {
+            gravado.rejeitar(CANCELADO);
             setErros(extractFieldErrors(e));
             showToast(extractErrorMessage(e), 'error');
         } finally { setAGravar(false); }
@@ -96,8 +109,10 @@ const ResumoLiquidacao: React.FC<{ selecionados: Pendente[]; onClose: () => void
     return (
         <Modal titulo={`Recebimento — ${selecionados[0].clienteNome}`} onClose={onClose} footer={<>
             <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
-            <SubmitButton type="button" submitting={aGravar} loadingLabel="A gravar…" icon={<HandCoins size={12} />}
-                disabled={!docId || !contaId || caixaFechada || total <= 0} onClick={gravar}>Gravar recebimento</SubmitButton>
+            <SubmitButton type="button" className="abtn abtn-secondary" submitting={aGravar} loadingLabel="A gravar…" icon={<HandCoins size={12} />}
+                disabled={!docId || !contaId || caixaFechada || total <= 0} onClick={() => gravar(false)}>Gravar recebimento</SubmitButton>
+            <SubmitButton type="button" submitting={aGravar} loadingLabel="A gravar…" icon={<Printer size={12} />}
+                disabled={!docId || !contaId || caixaFechada || total <= 0} onClick={() => gravar(true)}>Gravar e imprimir</SubmitButton>
         </>}>
             {configs.length > 0 && !recebimentos.length && (
                 <div role="alert" style={{ color: 'var(--red, #dc2626)', marginBottom: 10 }}>
@@ -162,6 +177,12 @@ const ResumoLiquidacao: React.FC<{ selecionados: Pendente[]; onClose: () => void
             <FieldError id="rl-linhas" message={erros.linhas} />
 
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start', marginTop: 12 }}>
+                <div className="form-group" style={{ margin: 0, flex: '0 1 200px' }}>
+                    <label className="form-label" htmlFor="rl-ref">Referência do pagamento</label>
+                    <input id="rl-ref" className="form-control" maxLength={50} placeholder="N.º cheque / transferência"
+                        value={referencia} onChange={e => setReferencia(e.target.value)} {...fieldAria('rl-ref-e', erros.referenciaPagamento)} />
+                    <FieldError id="rl-ref-e" message={erros.referenciaPagamento} />
+                </div>
                 <div className="form-group" style={{ margin: 0, flex: '1 1 300px' }}>
                     <label className="form-label" htmlFor="rl-obs">Observações</label>
                     <textarea id="rl-obs" className="form-control" rows={2} value={observacoes} onChange={e => setObservacoes(e.target.value)} />

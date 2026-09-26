@@ -28,6 +28,8 @@ const TABS: { id: Tab; label: string; icon: React.FC<any> }[] = [
 const initEmpresa = {
     nome: '', nif: '', morada: '', telefone: '', email: '', website: '',
     iban: '', banco: '', latitude: '', longitude: '', rodapeDocumentos: '',
+    // #178 — identificação legal impressa nas faturas e recibos
+    fax: '', capitalSocial: '', conservatoriaRegisto: '', matricula: '',
     logo: null as string | null,
 };
 
@@ -282,6 +284,8 @@ const ConfiguracoesPage: React.FC = () => {
         latitude: empresaConfig.latitude?.toString() ?? '',
         longitude: empresaConfig.longitude?.toString() ?? '',
         rodapeDocumentos: empresaConfig.rodapeDocumentos ?? '',
+        fax: empresaConfig.fax ?? '', capitalSocial: empresaConfig.capitalSocial ?? '',
+        conservatoriaRegisto: empresaConfig.conservatoriaRegisto ?? '', matricula: empresaConfig.matricula ?? '',
         logo: empresaConfig.logoUrl ?? null,
     }));
     const [moeda, setMoeda] = useState(() => ({
@@ -331,6 +335,8 @@ const ConfiguracoesPage: React.FC = () => {
                 latitude: empresa.latitude ? Number(empresa.latitude) : undefined,
                 longitude: empresa.longitude ? Number(empresa.longitude) : undefined,
                 rodapeDocumentos: empresa.rodapeDocumentos,
+                fax: empresa.fax, capitalSocial: empresa.capitalSocial,
+                conservatoriaRegisto: empresa.conservatoriaRegisto, matricula: empresa.matricula,
                 logoUrl: empresa.logo ?? undefined,
                 moeda: moeda.currency,
                 casasDecimais: Number(moeda.decimals),
@@ -361,6 +367,8 @@ const ConfiguracoesPage: React.FC = () => {
             latitude: empresaConfig.latitude?.toString() ?? '',
             longitude: empresaConfig.longitude?.toString() ?? '',
             rodapeDocumentos: empresaConfig.rodapeDocumentos ?? '',
+            fax: empresaConfig.fax ?? '', capitalSocial: empresaConfig.capitalSocial ?? '',
+            conservatoriaRegisto: empresaConfig.conservatoriaRegisto ?? '', matricula: empresaConfig.matricula ?? '',
             logo: empresaConfig.logoUrl ?? null,
         });
         setMoeda({
@@ -466,6 +474,15 @@ const ConfiguracoesPage: React.FC = () => {
                                         <Field label="Email Institucional" value={empresa.email} onChange={setE('email')} type="email" />
                                     </div>
                                     <Field label="Website" value={empresa.website} onChange={setE('website')} placeholder="www.empresa.ao" />
+                                    {/* #178 — identificação legal impressa nas faturas e recibos */}
+                                    <div className="form-row">
+                                        <Field label="Fax" value={empresa.fax} onChange={setE('fax')} placeholder="+244 222 XXX XXX" />
+                                        <Field label="Capital Social" value={empresa.capitalSocial} onChange={setE('capitalSocial')} placeholder="100 000,00" />
+                                    </div>
+                                    <div className="form-row">
+                                        <Field label="Conservatória do Registo Comercial" value={empresa.conservatoriaRegisto} onChange={setE('conservatoriaRegisto')} placeholder="Luanda" />
+                                        <Field label="Matrícula N.º" value={empresa.matricula} onChange={setE('matricula')} />
+                                    </div>
                                 </div>
                             </div>
 
@@ -612,9 +629,11 @@ const ConfiguracoesPage: React.FC = () => {
                                             { key: 'codigo',    label: 'Código' },
                                             { key: 'descricao', label: 'Descrição' },
                                             { key: 'taxa',      label: 'Taxa (%)', type: 'number' },
+                                            // #178 — impresso no quadro de impostos das faturas (taxas a 0 %)
+                                            { key: 'motivoIsencao', label: 'Motivo de isenção' },
                                         ]}
                                         rows={taxasIva}
-                                        onAdd={r => addTaxaIva({ codigo: r.codigo, descricao: r.descricao, taxa: Number(r.taxa) })}
+                                        onAdd={r => addTaxaIva({ codigo: r.codigo, descricao: r.descricao, taxa: Number(r.taxa), motivoIsencao: r.motivoIsencao || undefined })}
                                         onUpdate={(id, field, val) => updateTaxaIva(id, { [field]: field === 'taxa' ? Number(val) : val })}
                                         onRemove={id => removeTaxaIva(id)}
                                     />

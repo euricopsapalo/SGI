@@ -24,5 +24,17 @@ export const Modal: React.FC<{ titulo: string; largura?: number; onClose: () => 
     );
 };
 
+/** Motivo de rejeição de um `adiado` quando a operação não chegou a acontecer (não é um erro a mostrar). */
+export const CANCELADO = Symbol('cancelado');
+
+/** Promessa resolvida por fora — usada para abrir a janela de impressão no clique e preenchê-la depois de gravar. */
+export function adiado() {
+    let resolver!: () => void;
+    let rejeitar!: (motivo: unknown) => void;
+    const promise = new Promise<void>((res, rej) => { resolver = res; rejeitar = rej; });
+    promise.catch(() => undefined); // evita "unhandled rejection" quando ninguém está à espera
+    return { promise, resolver, rejeitar };
+}
+
 /** Data-hora de um instante em hora local (pt-PT). */
 export const fmtDataHora = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString('pt-PT') : '—');

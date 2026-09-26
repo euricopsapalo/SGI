@@ -1,5 +1,6 @@
 import {
-    calcularTotais, dataLocal, dataVencimento, EstadoFaturacao, estadoFaturacao, naturezaMovimento, numeroDocumento, round2,
+    calcularTotais, codigoHash, dataLocal, dataVencimento, EstadoFaturacao, estadoFaturacao, hashDocumento, naturezaMovimento,
+    numeroDocumento, round2,
 } from './vendas.rules';
 
 /** #165 — Regras puras do documento de venda (v11 §4–§5.1). */
@@ -59,6 +60,26 @@ describe('vendas.rules', () => {
         expect(numeroDocumento('FT', '2026', 7)).toBe('FT 2026/7');
         expect(numeroDocumento('FT', null, null)).toBeNull();
         expect(numeroDocumento('FT', '2026', null)).toBeNull();
+    });
+
+    describe('#178 — hash do documento', () => {
+        const base = { dataDocumento: '2026-01-01', dataHora: new Date('2026-01-01T10:00:00Z'), numeroDocumento: 'FT 2026/1', total: 114000, hashAnterior: null };
+
+        it('é SHA-256 em base64, determinístico e muda com qualquer campo ou com o hash anterior', () => {
+            const h = hashDocumento(base);
+            expect(h).toMatch(/^[A-Za-z0-9+/]{43}=$/);
+            expect(hashDocumento(base)).toBe(h);
+            expect(hashDocumento({ ...base, total: 114000.01 })).not.toBe(h);
+            expect(hashDocumento({ ...base, numeroDocumento: 'FT 2026/2' })).not.toBe(h);
+            expect(hashDocumento({ ...base, hashAnterior: h })).not.toBe(h);
+        });
+
+        it('codigoHash: 1.º, 11.º, 21.º e 31.º caracteres', () => {
+            const h = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq=';
+            expect(codigoHash(h)).toBe('AKUe');
+            expect(codigoHash(null)).toBeNull();
+            expect(codigoHash('curto')).toBeNull();
+        });
     });
 
     describe('estadoFaturacao (v11 §4.4)', () => {

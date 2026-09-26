@@ -13,4 +13,8 @@ export class TaxaIva {
 
     @Column({ type: 'numeric', precision: 5, scale: 2, default: 0 })
     taxa: number;
+
+    /** #178 — motivo de isenção impresso no quadro de impostos das faturas (taxas a 0 %). */
+    @Column({ name: 'motivo_isencao', type: 'varchar', length: 200, nullable: true })
+    motivoIsencao: string | null;
 }

@@ -11,6 +11,7 @@ import { OtArtigo } from '../ordens-trabalho/ot-artigo.entity';
 import { Artigo } from '../artigos/artigo.entity';
 import { ModoPagamento } from '../tabelas-sistema/modo-pagamento.entity';
 import { User } from '../users/user.entity';
+import type { SnapshotCliente, SnapshotEmpresa } from './snapshot';
 
 export enum EstadoDocumentoVenda {
     RASCUNHO = 'RASCUNHO',
@@ -98,6 +99,34 @@ export class DocumentoVenda {
 
     @Column({ type: 'text', nullable: true })
     observacoes: string | null;
+
+    /** #178 — n.º de requisição/encomenda do cliente (impresso na fatura). */
+    @Column({ type: 'varchar', length: 50, nullable: true })
+    requisicao: string | null;
+
+    /**
+     * #178 — hash do documento (SHA-256, base64), gerado na emissão e encadeado
+     * com o do documento anterior da mesma série. Mecanismo próprio do SGI, não
+     * a assinatura certificada pela AGT (fora de âmbito — v11 §10).
+     */
+    @Column({ type: 'varchar', length: 64, nullable: true })
+    hash: string | null;
+
+    /** #178 — data em que os bens/serviços foram colocados à disposição (fim da OT). */
+    @Column({ name: 'data_disposicao', type: 'date', nullable: true })
+    dataDisposicao: string | null;
+
+    /** #178 — cópia dos dados do cliente na emissão (a segunda via sai igual ao original). */
+    @Column({ name: 'snapshot_cliente', type: 'jsonb', nullable: true })
+    snapshotCliente: SnapshotCliente | null;
+
+    /** #178 — cópia dos dados da empresa na emissão. */
+    @Column({ name: 'snapshot_empresa', type: 'jsonb', nullable: true })
+    snapshotEmpresa: SnapshotEmpresa | null;
+
+    /** #178 — n.º de impressões: a 1.ª é o Original, as seguintes são Segunda via. */
+    @Column({ type: 'int', default: 0 })
+    impressoes: number;
 
     /** Desconto global em percentagem, aplicado depois dos descontos de linha. */
     @Column({ name: 'desconto_global', type: 'numeric', precision: 5, scale: 2, default: 0 })

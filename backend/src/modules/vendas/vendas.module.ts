@@ -9,6 +9,7 @@ import { ConfiguracaoEmpresa } from '../configuracao/configuracao-empresa.entity
 import { SysLogsModule } from '../sys-logs/sys-logs.module';
 import { DocumentosVendaService } from './documentos-venda.service';
 import { VendasController } from './vendas.controller';
+import { ImpressaoFaturaService } from './impressao-fatura.service';
 
 /**
  * #165 — Fase 2 do Módulo de Vendas de Intervenções (épico #163):
@@ -22,6 +23,6 @@ import { VendasController } from './vendas.controller';
         SysLogsModule,
     ],
     controllers: [VendasController],
-    providers: [DocumentosVendaService],
+    providers: [DocumentosVendaService, ImpressaoFaturaService],
 })
 export class VendasModule {}

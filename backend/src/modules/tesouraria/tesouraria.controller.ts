@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, Request } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseIntPipe, Post, Query, Request } from '@nestjs/common';
+import { ImpressaoReciboService } from './impressao-recibo.service';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/roles.decorator';
 import { ContaCorrenteService } from './conta-corrente.service';
@@ -27,7 +28,10 @@ export class ContaCorrenteController {
 @ApiBearerAuth('access-token')
 @Controller('liquidacoes')
 export class LiquidacoesController {
-    constructor(private readonly svc: LiquidacoesService) {}
+    constructor(
+        private readonly svc: LiquidacoesService,
+        private readonly impressao: ImpressaoReciboService,
+    ) {}
 
     @Get()
     findAll(@Query('clienteId') clienteId?: string) { return this.svc.findAll({ clienteId }); }
@@ -37,4 +41,8 @@ export class LiquidacoesController {
 
     @Post() @Roles(...TESOURARIA)
     create(@Body() dto: CreateLiquidacaoDto, @Request() req: any) { return this.svc.create(dto, req?.user); }
+
+    /** #178 — dados para imprimir o recibo; conta a impressão (Original / Segunda via). */
+    @Post(':id/imprimir') @HttpCode(200)
+    imprimir(@Param('id', ParseIntPipe) id: number) { return this.impressao.imprimir(id); }
 }

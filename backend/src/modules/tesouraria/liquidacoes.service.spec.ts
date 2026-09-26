@@ -76,6 +76,8 @@ describe('LiquidacoesService', () => {
             create: jest.fn((_e: any, o: any) => ({ ...o })),
             save: jest.fn(async (e: any, o: any) => (e === Liquidacao ? { id: 9, ...o } : o)),
             update: jest.fn(),
+            // #178 — cópia dos dados do cliente/empresa gravada no recibo.
+            query: jest.fn(async (sql: string) => (sql.includes('FROM clientes') ? [{ id: 3, nome: 'Cliente' }] : [{ nome: 'AQUATEX' }])),
         };
         dataSource = {
             transaction: jest.fn(async (cb: any) => cb(m)),
@@ -85,9 +87,10 @@ describe('LiquidacoesService', () => {
     });
 
     it('emite o RE, abate o pendente, numera a série e gera o MC na conta escolhida', async () => {
-        const r: any = await svc.create(dto({ dataHora: agora }), { id: 5, email: 'u@x' });
+        const r: any = await svc.create(dto({ dataHora: agora, referenciaPagamento: 'TRF-1' }), { id: 5, email: 'u@x' });
         const liq = m.save.mock.calls.find((c: any[]) => c[0] === Liquidacao)[1];
         expect(liq).toMatchObject({ numero: 1, serieId: 200, clienteId: 3, contaBancariaId: 7, total: 50000, desconto: 0, emitidoPorId: 5 });
+        expect(liq).toMatchObject({ referenciaPagamento: 'TRF-1', snapshotCliente: { nome: 'Cliente' }, snapshotEmpresa: { nome: 'AQUATEX' } });
         expect(liq.linhas[0]).toMatchObject({ movimentoCcId: 1, valorPago: 50000, desconto: 0, pendenteAnterior: 114000 });
         expect(m.update).toHaveBeenCalledWith(MovimentoCc, 1, { valorPendente: 64000 });
         expect(m.update).toHaveBeenCalledWith(Serie, 200, { ultimoNumero: 1, ultimaDataHora: new Date(agora) });

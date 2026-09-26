@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { FUSO_EMPRESA } from '../vendas-config/series.rules';
 
 /**
@@ -64,6 +65,25 @@ export function dataVencimento(dataDocumento: string, dias = 0): string {
 export function numeroDocumento(codigo: string, serie: string | null | undefined, numero: number | null | undefined): string | null {
     if (numero === null || numero === undefined || !serie) return null;
     return `${codigo} ${serie}/${numero}`;
+}
+
+/**
+ * #178 — hash do documento: SHA-256 (base64) sobre data, data-hora, identificação,
+ * total e o hash do documento anterior da mesma série — à semelhança do SAF-T,
+ * qualquer alteração ou falha na sequência deixa de bater certo.
+ * Mecanismo próprio do SGI (não é a assinatura certificada pela AGT).
+ */
+export function hashDocumento(p: {
+    dataDocumento: string; dataHora: Date; numeroDocumento: string; total: number; hashAnterior: string | null;
+}): string {
+    const base = [p.dataDocumento, p.dataHora.toISOString(), p.numeroDocumento, Number(p.total).toFixed(2), p.hashAnterior ?? ''].join(';');
+    return createHash('sha256').update(base, 'utf8').digest('base64');
+}
+
+/** Os 4 caracteres impressos no rodapé (1.º, 11.º, 21.º e 31.º do hash, como no SAF-T). */
+export function codigoHash(hash: string | null | undefined): string | null {
+    if (!hash || hash.length < 31) return null;
+    return hash[0] + hash[10] + hash[20] + hash[30];
 }
 
 export enum EstadoFaturacao {
