@@ -45,10 +45,10 @@ export class ClientesService {
             for (const e of enderecos) {
                 await this.dataSource.query(
                     `INSERT INTO cliente_enderecos
-                        (cliente_id, descricao, morada, cidade, principal, provincia_id, municipio_id)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                        (cliente_id, descricao, morada, cidade, principal, provincia_id, municipio_id, codigo_postal)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
                     [id, e.descricao ?? null, e.morada, e.cidade, e.principal ?? false,
-                     e.provinciaId ?? null, e.municipioId ?? null],
+                     e.provinciaId ?? null, e.municipioId ?? null, e.codigoPostal ?? null],
                 );
             }
         }

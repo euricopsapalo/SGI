@@ -4,6 +4,49 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(vendas): imprimir Fatura (FT) e Recibo (RE) com a informação dos modelos de referência (closes #178)
+
+Impressão (e PDF pelo diálogo do navegador) da **Fatura em A4** e do **Recibo em A5**, com os blocos dos modelos de referência (Primavera) e as decisões registadas no #178.
+
+- **Fatura:**
+  - empresa com identificação legal e logótipo; bloco "Exmo.(s) Sr.(s)" do cliente;
+  - título e via;
+  - dados do documento: NIF do cliente, requisição, moeda, data, desconto do cliente, vencimento, condição e modo de pagamento, referência da OT/equipamento;
+  - linhas com código do artigo, unidade, desconto e IVA (código e taxa);
+  - Quadro Resumo de Impostos por taxa, com o motivo de isenção nas taxas a 0 %; Quadro de Retenção (vazio até ao #179);
+  - totais: Mercadoria/Serviços, Descontos Comerciais, IVA e Total;
+  - coordenadas bancárias e valor por extenso;
+  - rodapé `XXXX-Documento processado por computador | Os bens e/ou serviços foram colocados à disposição na data AAAA-MM-DD / © SGI /`.
+- **Recibo:**
+  - empresa e cliente, título e via;
+  - NIF, data e moeda;
+  - meios de pagamento (movimento, número, descrição, balcão, valor), com o total por extenso;
+  - documentos liquidados com prestação, valor, valor atribuído, desconto, retenção, pendente e totais;
+  - Total Recebido e "Respeitosos Cumprimentos".
+- **Decisões do #178:**
+  - sem câmbio nem total em USD;
+  - sem desconto financeiro, portes, adiantamentos nem IEC;
+  - sem carga nem descarga.
+- **Hash único por fatura:** SHA-256 em base64, gravado na emissão e **encadeado** com o hash da fatura anterior da mesma série; o rodapé mostra 4 caracteres (1.º, 11.º, 21.º e 31.º). Mecanismo próprio do SGI, não a assinatura certificada pela AGT.
+- **Cópia dos dados na emissão:** os dados do cliente (com o endereço principal e a condição de pagamento) e da empresa ficam gravados na FT e no RE, para a segunda via sair igual ao original. A data de disponibilização é a do fim da OT.
+- **Vias:** a 1.ª impressão é o **Original**; as seguintes são **Segunda via** (contador atómico).
+- **Campos novos:**
+  - Configurações → Empresa: fax, capital social, conservatória do registo comercial, matrícula;
+  - Clientes: código postal do endereço;
+  - Tabelas do Sistema → Taxas de IVA: motivo de isenção;
+  - rascunho da fatura: requisição do cliente;
+  - recebimento: referência do pagamento.
+- **API:** `POST /api/vendas/documentos/:id/imprimir` e `POST /api/liquidacoes/:id/imprimir`. Os documentos emitidos antes desta versão não têm cópia dos dados e usam os dados atuais.
+- **Frontend:**
+  - "Imprimir" no detalhe da fatura e do recebimento; "Emitir e imprimir" e "Gravar e imprimir";
+  - a janela de impressão abre no clique, para não ser bloqueada como pop-up;
+  - valor por extenso em português de Angola/Portugal (`dezasseis`, "mil e cem", "um milhão de Kwanzas").
+- **Migração `ImpressaoFaturaRecibo`:** só colunas novas e anuláveis; gerada contra BD fresca, `--check` sem drift, up/down testados.
+- **Validação:**
+  - e2e contra BD real (`test/impressao-fatura-recibo.e2e.spec.ts`): hash encadeado e cópia gravada na emissão; blocos da FT; Segunda via igual ao original depois de alterar a ficha do cliente; rascunho não se imprime; meios e prestações do recibo;
+  - unitários do hash, do resumo de impostos, dos serviços de impressão, dos templates e do valor por extenso (gate de cobertura #38);
+  - templates revistos visualmente no navegador.
+
 ### feat(tesouraria): fase 3 — pendentes filtráveis, liquidações (RE), Movimento em conta e extrato (closes #166, closes #174)
 
 Terceira fase do **Módulo de Vendas de Intervenções** (épico #163, spec v11 §5.4–5.5, v10 §6.1–6.5). Os pendentes gerados pelas faturas (#165) passam a poder ser consultados, filtrados e **liquidados**; cada recebimento emite o **Movimento em conta** na conta escolhida.

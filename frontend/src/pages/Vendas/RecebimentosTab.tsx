@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { HandCoins } from 'lucide-react';
+import { HandCoins, Printer } from 'lucide-react';
+import { buildReciboHtml, imprimirDocumento } from './impressao';
 import EmptyState from '../../components/EmptyState';
 import { useGlobal } from '../../contexts/GlobalContext';
 import { extractErrorMessage, showToast } from '../../utils/errorHandler';
@@ -7,6 +8,11 @@ import { tesourariaApi, type Liquidacao } from '../../services/tesouraria';
 import { fmtDataHora, Modal, mono, muted, num } from './ui';
 
 /** #166 — Recebimentos (`RE`) emitidos e os Movimentos em conta que geraram. */
+
+/** #178 — imprime o recibo (a 1.ª impressão é o Original, as seguintes Segunda via). */
+export const imprimirRecibo = (id: number) =>
+    imprimirDocumento(async () => buildReciboHtml(await tesourariaApi.imprimir(id)))
+        .catch(e => showToast(extractErrorMessage(e), 'error'));
 
 const DetalheRecebimento: React.FC<{ id: number; onClose: () => void }> = ({ id, onClose }) => {
     const { fmtMoney } = useGlobal();
@@ -17,7 +23,10 @@ const DetalheRecebimento: React.FC<{ id: number; onClose: () => void }> = ({ id,
     if (!l) return <Modal titulo="Recebimento" onClose={onClose} footer={null}><div style={muted}>A carregar…</div></Modal>;
     return (
         <Modal titulo={`Recebimento ${l.numeroDocumento}`} largura={760} onClose={onClose}
-            footer={<button type="button" className="abtn abtn-secondary" onClick={onClose}>Fechar</button>}>
+            footer={<>
+                <button type="button" className="abtn abtn-secondary" onClick={onClose}>Fechar</button>
+                <button type="button" className="abtn abtn-primary" onClick={() => imprimirRecibo(id)}><Printer size={12} /> Imprimir</button>
+            </>}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginBottom: 12 }}>
                 <div><div style={muted}>Cliente</div><div style={{ fontWeight: 700 }}>{l.clienteNome}</div></div>
                 <div><div style={muted}>Data-hora</div><div>{fmtDataHora(l.dataHora)}</div></div>

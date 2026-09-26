@@ -157,7 +157,7 @@ custo interno e não vai à fatura). **Sem ligação a inventário**: o stock co
 |---|---|---|---|---|---|
 | 1 | [#164](https://github.com/euricopsapalo/SGI/issues/164) | Fase 1 — matriz de configuração em metadados (3 níveis), documentos configurados, séries | — | P1 | 🟢 |
 | 2 | [#165](https://github.com/euricopsapalo/SGI/issues/165) | Fase 2 — faturar OT: rascunho, emissão de `FT`, pendente em CC | #164 | P1 | 🟢 |
-| 3 | [#166](https://github.com/euricopsapalo/SGI/issues/166) | Fase 3 — contas bancárias, liquidações `RE`, Movimento em conta, extrato | #165 | P1 | 🔵 |
+| 3 | [#166](https://github.com/euricopsapalo/SGI/issues/166) | Fase 3 — contas bancárias, liquidações `RE`, Movimento em conta, extrato | #165 | P1 | 🟢 |
 | 4 | [#167](https://github.com/euricopsapalo/SGI/issues/167) | Fase 4 — gestão de caixa (abertura, saída, fecho com apuramento) | #166 | P2 | 🔴 |
 | 5 | [#168](https://github.com/euricopsapalo/SGI/issues/168) | Fase 5 — `FR` com liquidação automática atómica | #166 #167 | P2 | 🔴 |
 | 6 | [#169](https://github.com/euricopsapalo/SGI/issues/169) | Fase 6 — estorno `NC`/`ND` e estorno de liquidações | #166 | P2 | 🔴 |
@@ -252,9 +252,11 @@ Actualizar nesta tabela à medida que as issues avançam. Manter a coluna **PR**
 | #163 | P1 | 7+ | **EPIC** Módulo de Vendas de Intervenções | 🔴 Aberto | — | — | [#172](https://github.com/euricopsapalo/SGI/pull/172) (spec) |
 | #164 | P1 | 7+ | Vendas F1 — matriz, documentos, séries | 🟢 Fechado | — | 2026-09-26 | [#173](https://github.com/euricopsapalo/SGI/pull/173) |
 | #165 | P1 | 7+ | Vendas F2 — faturar OT (`FT` + pendente) | 🟢 Fechado | 2026-09-26 | 2026-09-26 | [#176](https://github.com/euricopsapalo/SGI/pull/176) |
-| #166 | P1 | 7+ | Vendas F3 — liquidações, Mov. em conta, extrato | 🔵 PR aberto | 2026-09-26 | — | — |
-| #174 | P1 | 7+ | Vendas — pendentes filtráveis (documento, OT, entidade, data) | 🔵 PR aberto | 2026-09-26 | — | — |
+| #166 | P1 | 7+ | Vendas F3 — liquidações, Mov. em conta, extrato | 🟢 Fechado | 2026-09-26 | 2026-09-26 | [#177](https://github.com/euricopsapalo/SGI/pull/177) |
+| #174 | P1 | 7+ | Vendas — pendentes filtráveis (documento, OT, entidade, data) | 🟢 Fechado | 2026-09-26 | 2026-09-26 | [#177](https://github.com/euricopsapalo/SGI/pull/177) |
 | #175 | P2 | 7+ | Vendas — imprimir lista de pendentes / um pendente | 🔴 Aberto | — | — | — |
+| #178 | P2 | 7+ | Vendas — imprimir Fatura e Recibo (modelos de referência, hash, 2.ª via) | 🔵 PR aberto | 2026-09-26 | — | — |
+| #179 | P2 | 7+ | Vendas — retenção na fonte na ficha do cliente (Lei 19/14) | 🔴 Aberto | — | — | — |
 | #167 | P2 | 7+ | Vendas F4 — gestão de caixa | 🔴 Aberto | — | — | — |
 | #168 | P2 | 7+ | Vendas F5 — `FR` + liquidação automática | 🔴 Aberto | — | — | — |
 | #169 | P2 | 7+ | Vendas F6 — estorno `NC`/`ND` | 🔴 Aberto | — | — | — |

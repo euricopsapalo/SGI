@@ -21,6 +21,10 @@ export class ClienteEndereco {
     @Column({ length: 100 })
     cidade: string;
 
+    /** #178 — impresso no bloco do cliente das faturas e recibos. */
+    @Column({ name: 'codigo_postal', type: 'varchar', length: 20, nullable: true })
+    codigoPostal: string | null;
+
     @Column({ default: false })
     principal: boolean;
 

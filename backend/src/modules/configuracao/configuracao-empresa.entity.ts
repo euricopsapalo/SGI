@@ -42,6 +42,21 @@ export class ConfiguracaoEmpresa {
     @Column({ name: 'rodape_documentos', type: 'text', nullable: true })
     rodapeDocumentos: string;
 
+    // --- #178 — identificação legal impressa nas faturas e recibos ---
+    @Column({ type: 'varchar', length: 30, nullable: true })
+    fax: string | null;
+
+    @Column({ name: 'capital_social', type: 'varchar', length: 50, nullable: true })
+    capitalSocial: string | null;
+
+    /** Conservatória do Registo Comercial. */
+    @Column({ name: 'conservatoria_registo', type: 'varchar', length: 150, nullable: true })
+    conservatoriaRegisto: string | null;
+
+    /** N.º de matrícula no registo comercial. */
+    @Column({ type: 'varchar', length: 50, nullable: true })
+    matricula: string | null;
+
     // --- Dados Bancários (para faturas) ---
     @Column({ nullable: true, length: 100 })
     iban: string;

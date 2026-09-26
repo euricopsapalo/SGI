@@ -16,7 +16,7 @@ export interface Moeda { id: string; codigo: string; descricao: string; simbolo:
 export interface Pais { id: string; nome: string; codigo: string; }
 export interface Provincia { id: string; nome: string; paisId: string; }
 export interface Municipio { id: string; nome: string; provinciaId: string; }
-export interface TaxaIva { id: string; codigo: string; descricao: string; taxa: number; }
+export interface TaxaIva { id: string; codigo: string; descricao: string; taxa: number; /** #178 */ motivoIsencao?: string | null; }
 export interface ClasseArtigo { id: string; descricao: string; }
 export interface FamiliaArtigo { id: string; descricao: string; }
 export interface DocumentoCompra { id: string; codigo: string; descricao: string; }
@@ -267,6 +267,8 @@ export interface EmpresaConfig {
     email: string; website?: string; logoUrl?: string; iban: string; banco: string;
     moeda: string; taxaIva: number; latitude?: number; longitude?: number;
     rodapeDocumentos?: string; casasDecimais?: number; formatoData?: string;
+    // #178 — identificação legal impressa nas faturas e recibos
+    fax?: string; capitalSocial?: string; conservatoriaRegisto?: string; matricula?: string;
     // Segurança (issue #100)
     minPasswordLength?: number; sessionExpiryMinutes?: number;
     twoFactorEnabled?: boolean; accessLogEnabled?: boolean;
@@ -757,6 +759,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         latitude: c.latitude ? Number(c.latitude) : undefined,
                         longitude: c.longitude ? Number(c.longitude) : undefined,
                         rodapeDocumentos: c.rodapeDocumentos,
+                        fax: c.fax ?? '', capitalSocial: c.capitalSocial ?? '',
+                        conservatoriaRegisto: c.conservatoriaRegisto ?? '', matricula: c.matricula ?? '',
                         casasDecimais: c.casasDecimais !== undefined ? Number(c.casasDecimais) : 2,
                         formatoData: c.formatoData ?? 'DD/MM/YYYY',
                         minPasswordLength: c.minPasswordLength !== undefined ? Number(c.minPasswordLength) : 8,
@@ -1328,6 +1332,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 latitude: data.latitude ? Number(data.latitude) : undefined,
                 longitude: data.longitude ? Number(data.longitude) : undefined,
                 rodapeDocumentos: data.rodapeDocumentos,
+                fax: data.fax ?? '', capitalSocial: data.capitalSocial ?? '',
+                conservatoriaRegisto: data.conservatoriaRegisto ?? '', matricula: data.matricula ?? '',
                 casasDecimais: data.casasDecimais !== undefined ? Number(data.casasDecimais) : 2,
                 formatoData: data.formatoData ?? 'DD/MM/YYYY',
                 minPasswordLength: data.minPasswordLength !== undefined ? Number(data.minPasswordLength) : 8,

@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, ParseIntPipe, Post, Put
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/roles.decorator';
 import { DocumentosVendaService } from './documentos-venda.service';
+import { ImpressaoFaturaService } from './impressao-fatura.service';
 import { CreateDocumentoVendaDto, EmitirDocumentoVendaDto, UpdateDocumentoVendaDto } from './dto/documento-venda.dto';
 
 /** Perfis que faturam. */
@@ -15,7 +16,10 @@ const FATURACAO = ['admin', 'coordenador', 'vendedor'];
 @ApiBearerAuth('access-token')
 @Controller('vendas')
 export class VendasController {
-    constructor(private readonly svc: DocumentosVendaService) {}
+    constructor(
+        private readonly svc: DocumentosVendaService,
+        private readonly impressao: ImpressaoFaturaService,
+    ) {}
 
     /** v11 §4.1 — OTs a faturar; `?semValor=true` lista as que não têm consumíveis. */
     @Get('ots-disponiveis')
@@ -39,6 +43,10 @@ export class VendasController {
 
     @Delete('documentos/:id') @Roles(...FATURACAO)
     remove(@Param('id', ParseIntPipe) id: number, @Request() req: any) { return this.svc.remove(id, req?.user); }
+
+    /** #178 — dados para imprimir a fatura; conta a impressão (Original / Segunda via). */
+    @Post('documentos/:id/imprimir') @HttpCode(200)
+    imprimir(@Param('id', ParseIntPipe) id: number) { return this.impressao.imprimir(id); }
 
     @Post('documentos/:id/emitir') @Roles(...FATURACAO) @HttpCode(200)
     emitir(@Param('id', ParseIntPipe) id: number, @Body() dto: EmitirDocumentoVendaDto, @Request() req: any) {

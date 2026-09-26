@@ -12,6 +12,7 @@ import { erroValidacao, temErros } from '../vendas-config/erros';
 import { Cliente } from '../clientes/cliente.entity';
 import { SysLogsService } from '../sys-logs/sys-logs.service';
 import { numeroDocumento, round2 } from '../vendas/vendas.rules';
+import { snapshotCliente, snapshotEmpresa } from '../vendas/snapshot';
 import { MovimentoLiquidavel, validarLinhasLiquidacao, valorPorModo } from './tesouraria.rules';
 import { CreateLiquidacaoDto } from './dto/tesouraria.dto';
 
@@ -136,6 +137,8 @@ export class LiquidacoesService {
                 const desconto = round2(dto.linhas.reduce((s, l) => s + Number(l.desconto ?? 0), 0));
                 if (total <= 0) throw erroValidacao({ linhas: 'O valor total a receber tem de ser superior a zero' });
 
+                // #178 — cópia dos dados do cliente e da empresa (segunda via igual ao original).
+                const [snapCliente, snapEmpresa] = await Promise.all([snapshotCliente(m, dto.clienteId), snapshotEmpresa(m)]);
                 const liq = await m.save(Liquidacao, m.create(Liquidacao, {
                     documentoConfigId: config!.id,
                     serieId: serie.id,
@@ -147,6 +150,9 @@ export class LiquidacoesService {
                     desconto,
                     moeda: 'AOA',
                     observacoes: dto.observacoes ?? null,
+                    referenciaPagamento: dto.referenciaPagamento || null,
+                    snapshotCliente: snapCliente,
+                    snapshotEmpresa: snapEmpresa,
                     emitidoPorId: user?.id ?? null,
                     linhas: dto.linhas.map((l) => ({
                         movimentoCcId: l.movimentoCcId,

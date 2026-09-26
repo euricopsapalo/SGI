@@ -36,6 +36,10 @@ export class UpdateDocumentoVendaDto {
     @IsOptional() @IsInt()
     modoPagamentoId?: number | null;
 
+    /** #178 — n.º de requisição/encomenda do cliente. */
+    @IsOptional() @IsString() @MaxLength(50)
+    requisicao?: string | null;
+
     @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(100)
     descontoGlobal?: number;
 

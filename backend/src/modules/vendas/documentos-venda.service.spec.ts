@@ -9,6 +9,7 @@ import { OtArtigo } from '../ordens-trabalho/ot-artigo.entity';
 import { Cliente } from '../clientes/cliente.entity';
 import { Fatura } from '../faturas/fatura.entity';
 import { anoLocal } from '../vendas-config/series.rules';
+import { hashDocumento } from './vendas.rules';
 
 /**
  * #165 — DocumentosVendaService: rascunho a partir da OT, edição, imutabilidade
@@ -76,7 +77,8 @@ describe('DocumentosVendaService', () => {
         sysLogs = { create: jest.fn() };
 
         m = {
-            findOne: jest.fn(async (entity: any) => {
+            findOne: jest.fn(async (entity: any, opts?: any) => {
+                if (entity === DocumentoVenda && opts?.where?.numero) return { id: 49, hash: 'HASH-ANTERIOR' };
                 if (entity === DocumentoVenda) return st.docAtivo ?? (st.doc ? { ...st.doc } : null);
                 if (entity === DocumentoConfig) return st.config;
                 if (entity === Serie) return st.serie;
@@ -94,6 +96,10 @@ describe('DocumentosVendaService', () => {
             delete: jest.fn(),
             create: jest.fn((_e: any, o: any) => ({ ...o })),
             save: jest.fn(async (_e: any, o: any) => o),
+            // #178 — cópia dos dados do cliente/empresa lida na emissão.
+            query: jest.fn(async (sql: string) => (sql.includes('FROM clientes')
+                ? [{ id: 3, nome: 'Cliente', nif: '500' }]
+                : [{ nome: 'AQUATEX', nif: '5000' }])),
         };
         dataSource = {
             query: jest.fn(async () => []),
@@ -239,6 +245,14 @@ describe('DocumentosVendaService', () => {
                 estado: 'EMITIDO', serieId: 40, numero: 1, emitidoPorId: 9, total: 114000,
             }));
             expect(m.update).toHaveBeenCalledWith(Serie, 40, { ultimoNumero: 1, ultimaDataHora: new Date(agora) });
+            // #178 — hash (1.º da série: sem anterior), data de disponibilização e cópia dos dados.
+            const emitido = m.update.mock.calls.find((c: any[]) => c[0] === DocumentoVenda)[2];
+            expect(emitido.hash).toBe(hashDocumento({
+                dataDocumento: '2026-05-10', dataHora: new Date(agora), numeroDocumento: 'FT 2026/1', total: 114000, hashAnterior: null,
+            }));
+            expect(emitido).toMatchObject({
+                dataDisposicao: '2026-05-10', snapshotCliente: { nome: 'Cliente' }, snapshotEmpresa: { nome: 'AQUATEX' },
+            });
             expect(m.update).toHaveBeenCalledWith(OrdemTrabalho, 7, { documentoVendaId: 50 });
             const mov = m.save.mock.calls.find((c: any[]) => c[0] === MovimentoCc)[1];
             expect(mov).toMatchObject({
@@ -265,6 +279,18 @@ describe('DocumentosVendaService', () => {
         it('data-hora retroactiva → 422', async () => {
             st.serie.ultimoNumero = 4; st.serie.ultimaDataHora = new Date('2026-06-01T00:00:00Z');
             expect((await erros(svc.emitir(50, { dataHora: agora }))).dataHora).toMatch(/posterior/);
+        });
+
+        it('#178 — o hash encadeia com o do documento anterior da série; a disposição é o fim da OT', async () => {
+            st.serie.ultimoNumero = 4; st.serie.ultimaDataHora = new Date('2026-05-01T00:00:00Z');
+            st.ot.dataFim = '2026-04-30';
+            await svc.emitir(50, { dataHora: agora });
+            expect(m.findOne).toHaveBeenCalledWith(DocumentoVenda, expect.objectContaining({ where: { serieId: 40, numero: 4 } }));
+            const emitido = m.update.mock.calls.find((c: any[]) => c[0] === DocumentoVenda)[2];
+            expect(emitido.hash).toBe(hashDocumento({
+                dataDocumento: '2026-05-10', dataHora: new Date(agora), numeroDocumento: 'FT 2026/5', total: 114000, hashAnterior: 'HASH-ANTERIOR',
+            }));
+            expect(emitido.dataDisposicao).toBe('2026-04-30');
         });
 
         it('série esgotada → 422 no campo série', async () => {

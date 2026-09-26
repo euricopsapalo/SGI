@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertCircle, BookOpen, FileText, Filter, HandCoins, Lock, Receipt, Search, Send, Trash2, Wallet, Wrench } from 'lucide-react';
+import { AlertCircle, BookOpen, FileText, Filter, HandCoins, Lock, Printer, Receipt, Search, Send, Trash2, Wallet, Wrench } from 'lucide-react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import EmptyState from '../../components/EmptyState';
@@ -14,7 +14,8 @@ import {
     type DocumentoVenda, type EstadoFaturacao, type OtDisponivel,
 } from '../../services/vendas';
 import { vendasConfigApi, type DocumentoConfig } from '../../services/vendasConfig';
-import { Modal, mono, muted, num } from './ui';
+import { adiado, CANCELADO, Modal, mono, muted, num } from './ui';
+import { buildFaturaHtml, imprimirDocumento } from './impressao';
 import PendentesTab from './PendentesTab';
 import RecebimentosTab from './RecebimentosTab';
 import ExtratoTab from './ExtratoTab';
@@ -76,6 +77,7 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
     const [linhas, setLinhas] = useState<LinhaEdit[]>([]);
     const [observacoes, setObservacoes] = useState('');
     const [modoPagamentoId, setModoPagamentoId] = useState<string>('');
+    const [requisicao, setRequisicao] = useState('');
     const [descontoGlobal, setDescontoGlobal] = useState(0);
     const [erros, setErros] = useState<Record<string, string>>({});
     const [aGravar, setAGravar] = useState(false);
@@ -98,6 +100,7 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
             }));
             setObservacoes(d.observacoes ?? '');
             setModoPagamentoId(d.modoPagamentoId ? String(d.modoPagamentoId) : '');
+            setRequisicao(d.requisicao ?? '');
             setDescontoGlobal(d.descontoGlobal);
         } catch (e) {
             showToast(extractErrorMessage(e), 'error');
@@ -135,6 +138,7 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
             const d = await vendasApi.atualizarRascunho(id, {
                 observacoes: observacoes || null,
                 modoPagamentoId: modoPagamentoId ? Number(modoPagamentoId) : null,
+                requisicao: requisicao.trim() || null,
                 descontoGlobal: Number(descontoGlobal) || 0,
                 linhas: incluidas.map(l => ({ otArtigoId: l.otArtigoId, descricao: l.descricao, quantidade: Number(l.quantidade), desconto: Number(l.desconto) || 0 })),
             });
@@ -148,15 +152,23 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
         } finally { setAGravar(false); }
     };
 
-    const confirmarEmissao = async () => {
-        if (!(await gravar())) return;
+    const confirmarEmissao = async (comImpressao = false) => {
+        // #178 — a janela de impressão abre já (ligada ao clique) e só é preenchida depois da emissão.
+        const emissao = adiado();
+        if (comImpressao) {
+            imprimirDocumento(async () => { await emissao.promise; return buildFaturaHtml(await vendasApi.imprimir(id)); })
+                .catch(e => { if (e !== CANCELADO) showToast(extractErrorMessage(e), 'error'); });
+        }
+        if (!(await gravar())) { emissao.rejeitar(CANCELADO); return; }
         setAGravar(true);
         try {
             const d = await vendasApi.emitir(id, { serieId: serieId ? Number(serieId) : undefined, dataHora: new Date(dataHora).toISOString() });
+            emissao.resolver();
             showToast(`${d.numeroDocumento} emitida — pendente de ${fmtMoney(d.valorPendente ?? d.total, d.moeda)} na conta corrente`, 'success');
             onMudou();
             onClose();
         } catch (e) {
+            emissao.rejeitar(CANCELADO);
             setErros(errosPorLinha(extractFieldErrors(e)));
             showToast(extractErrorMessage(e), 'error');
         } finally { setAGravar(false); }
@@ -182,12 +194,20 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
                     <SubmitButton type="button" className="abtn abtn-secondary" submitting={aGravar} onClick={async () => { if (await gravar()) showToast('Rascunho guardado', 'success'); }}>Guardar</SubmitButton>
                     <button type="button" className="abtn abtn-primary" onClick={() => setEmitir(true)} disabled={!incluidas.length}><Send size={12} /> Emitir…</button>
                 </>}
-                {podeFaturar && emitir && <SubmitButton type="button" submitting={aGravar} loadingLabel="A emitir…" onClick={confirmarEmissao} icon={<Send size={12} />}>Confirmar emissão</SubmitButton>}
+                {podeFaturar && emitir && <>
+                    <SubmitButton type="button" className="abtn abtn-secondary" submitting={aGravar} loadingLabel="A emitir…" onClick={() => confirmarEmissao(false)} icon={<Send size={12} />}>Confirmar emissão</SubmitButton>
+                    <SubmitButton type="button" submitting={aGravar} loadingLabel="A emitir…" onClick={() => confirmarEmissao(true)} icon={<Printer size={12} />}>Emitir e imprimir</SubmitButton>
+                </>}
             </>}
         >
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 12 }}>
                 <div><div style={muted}>Cliente</div><div style={{ fontWeight: 700 }}>{doc.clienteNome}</div>{doc.clienteNif && <div style={muted}>NIF {doc.clienteNif}</div>}</div>
                 <div><div style={muted}>Referência</div><div>{doc.referencia ?? '—'}</div></div>
+                <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label" htmlFor="vd-req">Requisição do cliente</label>
+                    <input id="vd-req" className="form-control" maxLength={50} value={requisicao} disabled={ro}
+                        placeholder="N.º de requisição/encomenda" onChange={e => setRequisicao(e.target.value)} />
+                </div>
                 <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label" htmlFor="vd-modo">Modo de pagamento</label>
                     <select id="vd-modo" className="form-control" value={modoPagamentoId} disabled={ro} onChange={e => setModoPagamentoId(e.target.value)}>
@@ -286,6 +306,11 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
     );
 };
 
+/** #178 — imprime a fatura emitida (a 1.ª impressão é o Original, as seguintes Segunda via). */
+const imprimirFatura = (id: number) =>
+    imprimirDocumento(async () => buildFaturaHtml(await vendasApi.imprimir(id)))
+        .catch(e => showToast(extractErrorMessage(e), 'error'));
+
 /* ══ Documento emitido (só leitura) ═══════════════════════════ */
 const DocumentoDetalhe: React.FC<{ id: number; onClose: () => void }> = ({ id, onClose }) => {
     const { fmtMoney, fmtDate } = useGlobal();
@@ -296,7 +321,10 @@ const DocumentoDetalhe: React.FC<{ id: number; onClose: () => void }> = ({ id, o
     if (!doc) return <Modal titulo="Documento" onClose={onClose} footer={null}><div style={muted}>A carregar…</div></Modal>;
     return (
         <Modal titulo={`${doc.documentoDescricao} ${doc.numeroDocumento ?? ''}`} onClose={onClose}
-            footer={<button type="button" className="abtn abtn-secondary" onClick={onClose}>Fechar</button>}>
+            footer={<>
+                <button type="button" className="abtn abtn-secondary" onClick={onClose}>Fechar</button>
+                <button type="button" className="abtn abtn-primary" onClick={() => imprimirFatura(id)}><Printer size={12} /> Imprimir</button>
+            </>}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 12 }}>
                 <div><div style={muted}>Cliente</div><div style={{ fontWeight: 700 }}>{doc.clienteNome}</div>{doc.clienteNif && <div style={muted}>NIF {doc.clienteNif}</div>}</div>
                 <div><div style={muted}>Referência</div><div>{doc.referencia ?? '—'}</div></div>

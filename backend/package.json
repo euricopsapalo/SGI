@@ -42,7 +42,9 @@
       "modules/vendas/documentos-venda.service.ts",
       "modules/tesouraria/tesouraria.rules.ts",
       "modules/tesouraria/liquidacoes.service.ts",
-      "modules/tesouraria/conta-corrente.service.ts"
+      "modules/tesouraria/conta-corrente.service.ts",
+      "modules/vendas/impressao-fatura.service.ts",
+      "modules/tesouraria/impressao-recibo.service.ts"
     ],
     "coverageThreshold": {
       "global": {
@@ -82,6 +84,10 @@
       "**/modules/vendas/vendas.rules.ts": {
         "statements": 90,
         "lines": 90
+      },
+      "**/modules/vendas/impressao-fatura.service.ts": {
+        "statements": 80,
+        "lines": 80
       },
       "**/modules/vendas/documentos-venda.service.ts": {
         "statements": 80,

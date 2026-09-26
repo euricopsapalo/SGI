@@ -7,6 +7,7 @@ import { ContaBancaria } from '../vendas-config/conta-bancaria.entity';
 import { Cliente } from '../clientes/cliente.entity';
 import { User } from '../users/user.entity';
 import { MovimentoCc } from '../vendas/movimento-cc.entity';
+import type { SnapshotCliente, SnapshotEmpresa } from '../vendas/snapshot';
 
 /**
  * #166 — Liquidação (`RE`, tipo Liquidações — v10 §6.1–6.3, v11 §5.4).
@@ -72,6 +73,21 @@ export class Liquidacao {
 
     @Column({ type: 'text', nullable: true })
     observacoes: string | null;
+
+    /** #178 — referência do meio de pagamento (n.º de cheque/transferência), impressa no recibo. */
+    @Column({ name: 'referencia_pagamento', type: 'varchar', length: 50, nullable: true })
+    referenciaPagamento: string | null;
+
+    /** #178 — cópia dos dados do cliente e da empresa na emissão. */
+    @Column({ name: 'snapshot_cliente', type: 'jsonb', nullable: true })
+    snapshotCliente: SnapshotCliente | null;
+
+    @Column({ name: 'snapshot_empresa', type: 'jsonb', nullable: true })
+    snapshotEmpresa: SnapshotEmpresa | null;
+
+    /** #178 — n.º de impressões: a 1.ª é o Original, as seguintes são Segunda via. */
+    @Column({ type: 'int', default: 0 })
+    impressoes: number;
 
     @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'emitido_por_id' })
