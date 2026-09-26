@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertCircle, FileText, Filter, Lock, Receipt, Search, Send, Trash2, Wrench, X } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { AlertCircle, BookOpen, FileText, Filter, HandCoins, Lock, Receipt, Search, Send, Trash2, Wallet, Wrench } from 'lucide-react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import EmptyState from '../../components/EmptyState';
 import SubmitButton from '../../components/SubmitButton';
 import FieldError, { fieldAria } from '../../components/FieldError';
 import { useConfirm } from '../../components/useConfirm';
-import { useModalA11y } from '../../components/useModalA11y';
 import { useGlobal } from '../../contexts/GlobalContext';
 import { extractErrorMessage, extractFieldErrors, showToast } from '../../utils/errorHandler';
 import {
@@ -14,6 +14,10 @@ import {
     type DocumentoVenda, type EstadoFaturacao, type OtDisponivel,
 } from '../../services/vendas';
 import { vendasConfigApi, type DocumentoConfig } from '../../services/vendasConfig';
+import { Modal, mono, muted, num } from './ui';
+import PendentesTab from './PendentesTab';
+import RecebimentosTab from './RecebimentosTab';
+import ExtratoTab from './ExtratoTab';
 
 /**
  * #165 — Vendas de Intervenções, fase 2 (v11 §4, §5.1).
@@ -22,11 +26,9 @@ import { vendasConfigApi, type DocumentoConfig } from '../../services/vendasConf
  * que gera o pendente na conta corrente do cliente. Emitido = imutável.
  */
 
-type Tab = 'ots' | 'semValor' | 'documentos';
+type Tab = 'ots' | 'semValor' | 'documentos' | 'pendentes' | 'recebimentos' | 'extrato';
+const TABS_VALIDOS: Tab[] = ['ots', 'semValor', 'documentos', 'pendentes', 'recebimentos', 'extrato'];
 
-const muted: React.CSSProperties = { fontSize: '0.74rem', color: 'var(--text-muted)' };
-const mono: React.CSSProperties = { fontFamily: 'monospace', fontSize: '0.78rem' };
-const num: React.CSSProperties = { textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
 
 const ESTADO_BADGE: Record<EstadoFaturacao | 'Rascunho', { bg: string; color: string }> = {
     'Rascunho':          { bg: '#ECEFF1', color: '#546E7A' },
@@ -45,22 +47,6 @@ const EstadoBadge: React.FC<{ estado: EstadoFaturacao | 'Rascunho' }> = ({ estad
 const eFaturaDeOt = (d: DocumentoConfig) =>
     d.ativo && d.tipoCodigo === 'FINANCEIRO' && d.natureza === 'A_RECEBER'
     && ['FT', 'FR'].includes(d.tipoFiscal ?? '') && !d.liquidacaoAutomatica;
-
-const Modal: React.FC<{ titulo: string; largura?: number; onClose: () => void; children: React.ReactNode; footer: React.ReactNode }> = ({ titulo, largura = 860, onClose, children, footer }) => {
-    const ref = useModalA11y(onClose);
-    return (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: largura, width: '100%' }} ref={ref} role="dialog" aria-modal="true" aria-label={titulo} tabIndex={-1}>
-                <div className="modal-header">
-                    <h3 className="modal-title">{titulo}</h3>
-                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
-                </div>
-                <div className="modal-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>{children}</div>
-                <div className="modal-footer">{footer}</div>
-            </div>
-        </div>
-    );
-};
 
 const Totais: React.FC<{ t: { subtotal: number; desconto: number; valorIva: number; total: number }; moeda: string; extra?: React.ReactNode }> = ({ t, moeda, extra }) => {
     const { fmtMoney } = useGlobal();
@@ -343,7 +329,12 @@ const VendasPage: React.FC = () => {
     const { currentUser, fmtMoney, fmtDate, empresaConfig } = useGlobal();
     const podeFaturar = PERFIS_FATURACAO.includes(currentUser?.role ?? '');
 
-    const [tab, setTab] = useState<Tab>('ots');
+    // O separador fica no URL (?tab=…), tal como os filtros dos pendentes (#174).
+    const [sp, setSp] = useSearchParams();
+    const tab: Tab = TABS_VALIDOS.includes(sp.get('tab') as Tab) ? (sp.get('tab') as Tab) : 'ots';
+    const setTab = (t: Tab) => setSp(prev => { const n = new URLSearchParams(prev); n.set('tab', t); return n; });
+    /** Incrementada quando um recebimento muda a conta corrente, para os outros separadores recarregarem. */
+    const [versao, setVersao] = useState(0);
     const [ots, setOts] = useState<OtDisponivel[] | null>(null);
     const [semValor, setSemValor] = useState<OtDisponivel[] | null>(null);
     const [docs, setDocs] = useState<DocumentoVenda[] | null>(null);
@@ -405,7 +396,11 @@ const VendasPage: React.FC = () => {
         { id: 'ots', label: 'OTs a faturar', icon: Wrench, n: ots?.length },
         { id: 'semValor', label: 'Sem valor a faturar', icon: AlertCircle, n: semValor?.length },
         { id: 'documentos', label: 'Documentos', icon: Receipt, n: docs?.length },
+        { id: 'pendentes', label: 'Pendentes', icon: Wallet },
+        { id: 'recebimentos', label: 'Recebimentos', icon: HandCoins },
+        { id: 'extrato', label: 'Extrato', icon: BookOpen },
     ];
+    const tabVendas = tab === 'ots' || tab === 'semValor' || tab === 'documentos';
 
     const tabelaOts = (lista: OtDisponivel[] | null, comAcao: boolean) => (
         <div className="table-container">
@@ -484,7 +479,7 @@ const VendasPage: React.FC = () => {
                     ))}
                 </div>
 
-                <div className="filters-bar">
+                {tabVendas && <div className="filters-bar">
                     <div className="search-wrap">
                         <Search className="search-icon" />
                         <input className="search-input" placeholder={tab === 'documentos' ? 'Pesquisar documento, cliente, OT…' : 'Pesquisar OT, cliente, N/S…'}
@@ -499,7 +494,14 @@ const VendasPage: React.FC = () => {
                     {(search || filtroEstado) && (
                         <button className="abtn abtn-secondary" type="button" onClick={() => { setSearch(''); setFiltroEstado(''); }}><Filter size={12} /> Limpar</button>
                     )}
-                </div>
+                </div>}
+
+                {tab === 'pendentes' && (
+                    <PendentesTab podeReceber={podeFaturar} onAbrirDocumento={setDetalhe}
+                        onMudou={() => { setVersao(v => v + 1); carregar(); }} />
+                )}
+                {tab === 'recebimentos' && <RecebimentosTab versao={versao} />}
+                {tab === 'extrato' && <ExtratoTab versao={versao} />}
 
                 {tab === 'ots' && tabelaOts(ots, true)}
                 {tab === 'semValor' && tabelaOts(semValor, false)}

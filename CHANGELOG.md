@@ -4,6 +4,18 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(tesouraria): fase 3 — pendentes filtráveis, liquidações (RE), Movimento em conta e extrato (closes #166, closes #174)
+
+Terceira fase do **Módulo de Vendas de Intervenções** (épico #163, spec v11 §5.4–5.5, v10 §6.1–6.5). Os pendentes gerados pelas faturas (#165) passam a poder ser consultados, filtrados e **liquidados**; cada recebimento emite o **Movimento em conta** na conta escolhida.
+
+- **Schema** (migração `CreateLiquidacoes`, gerada contra BD fresca, `--check` sem drift, up/down testados): `liquidacoes` (+ `liquidacoes_linhas` com valor pago, desconto e **pendente anterior**) e `movimentos_conta` (numerados por série, `valor` com sinal, modo de pagamento).
+- **#174 — `GET /api/cc/pendentes`:** só pendentes > 0, com o valor actual; filtros combináveis por **n.º de documento** (`FT 2026/1` ou só o número), **n.º de OT**, **cliente** (id ou nome/NIF), **intervalo de datas** sobre a data do documento ou do vencimento e **só vencidos até**; ordenação, paginação e **totais sobre o filtro inteiro** (documentos, original, pendente, vencido); dias em atraso por linha. Tudo parametrizado (sem SQL injectado).
+- **#166 — `POST /api/liquidacoes` (`RE`):** numa transacção com `FOR UPDATE` na série, nos movimentos de CC e na conta de destino — valida o documento (Liquidações/recebimento, opera sobre a CC/estado, ligação a tesouraria), a conta (associada ao `MC`, activa; **caixa fechada → 422, nada gravado**), as linhas (mesmo cliente, mesma CC/estado, a débito, pago + desconto ≤ pendente); abate o pendente (parcial mantém o estado) e emite **um `MC` por modo de pagamento** (o desconto abate o pendente mas não entra na conta). `GET /api/liquidacoes` e `/:id` (linhas, documentos liquidados e movimentos em conta).
+- **`GET /api/cc/extrato`:** débitos, créditos (documentos a crédito e liquidações pelo pago + desconto), saldo corrido, totais e saldo final; com `de`, começa no saldo anterior.
+- **Estado de faturação da OT** passa naturalmente a *Parcialmente paga* / *Paga* com as liquidações.
+- **Frontend (Vendas):** separadores **Pendentes** (filtros no URL, totais, vencidos a vermelho, paginação, selecção por cliente → **Resumo de recebimento** com documento, série, data-hora, conta de destino, a pagar/desconto por linha e erros por linha), **Recebimentos** (lista e detalhe com os MC gerados) e **Extrato**; o separador activo também fica no URL.
+- **Validação:** e2e contra BD real (`test/tesouraria-liquidacoes.e2e.spec.ts` — passos 8–9 da §7.4 com a caixa aberta por SQL até ao #167, filtros do #174, desconto, extrato); unitários das regras e dos serviços no gate de cobertura (#38).
+
 ### feat(vendas): fase 2 — faturar OT: OTs disponíveis, rascunho, emissão de FT e pendente em conta corrente (closes #165)
 
 Segunda fase do **Módulo de Vendas de Intervenções** (épico #163, spec v11 §4, §5.1, §7). Emite-se uma Fatura (`FT`) a crédito a partir de uma OT finalizada, gerando o pendente na conta corrente do cliente — **sem qualquer efeito em stock** (a baixa continua no `finalizar` da OT, D1).
