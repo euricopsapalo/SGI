@@ -6,7 +6,7 @@ import {
     UnprocessableEntityException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { OrdemTrabalho, OTEstado, OTTipo, OT_TRANSICOES } from './ordem-trabalho.entity';
 import { OtMaoObra } from './ot-mao-obra.entity';
 import { OtArtigo } from './ot-artigo.entity';
@@ -19,6 +19,9 @@ import { EquipInstalado } from '../parque/equip-instalado.entity';
 import { User, UserRole } from '../users/user.entity';
 import { ConfiguracaoEmpresa } from '../configuracao/configuracao-empresa.entity';
 import { PlanoManutencao } from '../planos/plano-manutencao.entity';
+import { DocumentoVenda } from '../vendas/documento-venda.entity';
+import { MovimentoCc, OrigemMovimentoCc } from '../vendas/movimento-cc.entity';
+import { estadoFaturacao, numeroDocumento } from '../vendas/vendas.rules';
 
 export function calcNextDate(fromDate: string, periodicidade: string): string {
     const d = new Date(fromDate);
@@ -162,6 +165,32 @@ export class OrdensTrabalhoService {
         return ot;
     }
 
+    /**
+     * #165 (v11 §4.4) — anexa `estadoFaturacao` (Não faturada / Pendente /
+     * Parcialmente paga / Paga) e o número do documento activo. Dimensão paralela
+     * à máquina de estados; só consulta vendas quando alguma OT foi faturada.
+     */
+    private async withFaturacao(ots: OrdemTrabalho[]): Promise<void> {
+        const docIds = ots.map((o) => o.documentoVendaId).filter((id): id is number => !!id);
+        const docs = docIds.length
+            ? await this.dataSource.getRepository(DocumentoVenda).find({
+                where: { id: In(docIds) }, relations: ['documentoConfig', 'serie'],
+            })
+            : [];
+        const movs = docIds.length
+            ? await this.dataSource.getRepository(MovimentoCc).find({
+                where: { origemTipo: OrigemMovimentoCc.DOCUMENTO_VENDA, origemId: In(docIds) },
+            })
+            : [];
+        for (const o of ots) {
+            const doc = docs.find((d) => d.id === o.documentoVendaId);
+            (o as any).estadoFaturacao = estadoFaturacao(o.documentoVendaId, movs.find((m) => m.origemId === o.documentoVendaId));
+            (o as any).documentoVendaNumero = doc
+                ? numeroDocumento(doc.documentoConfig?.codigo ?? '', doc.serie?.codigo, doc.numero)
+                : null;
+        }
+    }
+
     /** Fetch OT or throw 404, optionally validate current estado */
     private async findOrFail(id: number, expectedEstado?: OTEstado): Promise<OrdemTrabalho> {
         const ot = await this.findOne(id);
@@ -201,6 +230,7 @@ export class OrdensTrabalhoService {
             relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes', 'registadoPor', 'executadoPor', 'aprovadoPor'],
         });
         const limite = await this.getLimiteAdiamentos();
+        await this.withFaturacao(ots);
         return ots.map(o => {
             this.withTransicoes(o);
             (o as any).requerAprovacaoAdiar = (o.adiamentos ?? 0) >= limite;
@@ -218,6 +248,7 @@ export class OrdensTrabalhoService {
         this.withCustos(ot);
         // RF-OT-006 §5 — expõe a OT periódica gerada a partir desta (se existir).
         if (ot) {
+            await this.withFaturacao([ot]);
             const seguinte = await this.repo.findOne({ where: { geradaDeOtId: ot.id }, select: ['id'] });
             (ot as any).otSeguinteId = seguinte?.id ?? null;
         }

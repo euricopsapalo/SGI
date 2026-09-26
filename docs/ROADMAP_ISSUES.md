@@ -155,14 +155,14 @@ custo interno e não vai à fatura). **Sem ligação a inventário**: o stock co
 
 | Ordem | # | Título | Depende de | Prioridade | Estado |
 |---|---|---|---|---|---|
-| 1 | [#164](https://github.com/euricopsapalo/SGI/issues/164) | Fase 1 — matriz de configuração em metadados (3 níveis), documentos configurados, séries | — | P1 | 🔴 |
-| 2 | [#165](https://github.com/euricopsapalo/SGI/issues/165) | Fase 2 — faturar OT: rascunho, emissão de `FT`, pendente em CC | #164 | P1 | 🔴 |
+| 1 | [#164](https://github.com/euricopsapalo/SGI/issues/164) | Fase 1 — matriz de configuração em metadados (3 níveis), documentos configurados, séries | — | P1 | 🟢 |
+| 2 | [#165](https://github.com/euricopsapalo/SGI/issues/165) | Fase 2 — faturar OT: rascunho, emissão de `FT`, pendente em CC | #164 | P1 | 🔵 |
 | 3 | [#166](https://github.com/euricopsapalo/SGI/issues/166) | Fase 3 — contas bancárias, liquidações `RE`, Movimento em conta, extrato | #165 | P1 | 🔴 |
 | 4 | [#167](https://github.com/euricopsapalo/SGI/issues/167) | Fase 4 — gestão de caixa (abertura, saída, fecho com apuramento) | #166 | P2 | 🔴 |
 | 5 | [#168](https://github.com/euricopsapalo/SGI/issues/168) | Fase 5 — `FR` com liquidação automática atómica | #166 #167 | P2 | 🔴 |
 | 6 | [#169](https://github.com/euricopsapalo/SGI/issues/169) | Fase 6 — estorno `NC`/`ND` e estorno de liquidações | #166 | P2 | 🔴 |
 | 7 | [#170](https://github.com/euricopsapalo/SGI/issues/170) | Fase 7 — impressão, relatórios, transição do ecrã de faturação antigo | #165 | P2 | 🔴 |
-| — | [#171](https://github.com/euricopsapalo/SGI/issues/171) | Pontos em aberto da especificação v11 | — | P2 | 🔴 |
+| — | [#171](https://github.com/euricopsapalo/SGI/issues/171) | Pontos em aberto da especificação v11 (D8–D10) | — | P2 | 🟢 |
 
 **Estimativa:** a fazer no planeamento da fase 1.
 **Critério de saída:** o teste e2e de aceitação (§7.4 da especificação) passa na íntegra.
@@ -250,14 +250,14 @@ Actualizar nesta tabela à medida que as issues avançam. Manter a coluna **PR**
 | #48 | P3 | 6 | Upload + assinatura | 🔴 Aberto | — | — | — |
 | #49 | P3 | 6 | Loading inline | 🔴 Aberto | — | — | — |
 | #163 | P1 | 7+ | **EPIC** Módulo de Vendas de Intervenções | 🔴 Aberto | — | — | [#172](https://github.com/euricopsapalo/SGI/pull/172) (spec) |
-| #164 | P1 | 7+ | Vendas F1 — matriz, documentos, séries | 🔴 Aberto | — | — | — |
-| #165 | P1 | 7+ | Vendas F2 — faturar OT (`FT` + pendente) | 🔴 Aberto | — | — | — |
+| #164 | P1 | 7+ | Vendas F1 — matriz, documentos, séries | 🟢 Fechado | — | 2026-09-26 | [#173](https://github.com/euricopsapalo/SGI/pull/173) |
+| #165 | P1 | 7+ | Vendas F2 — faturar OT (`FT` + pendente) | 🔵 PR aberto | 2026-09-26 | — | — |
 | #166 | P1 | 7+ | Vendas F3 — liquidações, Mov. em conta, extrato | 🔴 Aberto | — | — | — |
 | #167 | P2 | 7+ | Vendas F4 — gestão de caixa | 🔴 Aberto | — | — | — |
 | #168 | P2 | 7+ | Vendas F5 — `FR` + liquidação automática | 🔴 Aberto | — | — | — |
 | #169 | P2 | 7+ | Vendas F6 — estorno `NC`/`ND` | 🔴 Aberto | — | — | — |
 | #170 | P2 | 7+ | Vendas F7 — impressão, relatórios, transição | 🔴 Aberto | — | — | — |
-| #171 | P2 | 7+ | Vendas — pontos em aberto v11 | 🔴 Aberto | — | — | — |
+| #171 | P2 | 7+ | Vendas — pontos em aberto v11 (D8–D10) | 🟢 Fechado | — | 2026-09-26 | — |
 
 ---
 

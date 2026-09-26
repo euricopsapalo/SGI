@@ -4,6 +4,20 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(vendas): fase 2 — faturar OT: OTs disponíveis, rascunho, emissão de FT e pendente em conta corrente (closes #165)
+
+Segunda fase do **Módulo de Vendas de Intervenções** (épico #163, spec v11 §4, §5.1, §7). Emite-se uma Fatura (`FT`) a crédito a partir de uma OT finalizada, gerando o pendente na conta corrente do cliente — **sem qualquer efeito em stock** (a baixa continua no `finalizar` da OT, D1).
+
+- **Schema** (migração `CreateDocumentosVenda`, gerada contra BD fresca, `--check` sem drift, up/down testados): `documentos_venda` (RASCUNHO sem série/número; EMITIDO com série, número e data-hora — `CHECK` de coerência e `UNIQUE (serie_id, numero)`), `documentos_venda_linhas` (snapshot de descrição, quantidade, preço, desconto e IVA; `qtd_estornada` para a fase 6), `movimentos_cc` (débito/crédito, `valor_pendente` entre 0 e o original) e `ordens_trabalho.documento_venda_id` (FK nullable, `RESTRICT`).
+- **`GET /api/vendas/ots-disponiveis`:** OTs *Finalizadas*, sem documento activo, sem fatura antiga não anulada (§9) e com ≥1 consumível (`qtd_consumida > 0` e `artigo_id`); `?semValor=true` lista à parte as que não têm consumíveis.
+- **Rascunho** (`POST/PUT/DELETE /api/vendas/documentos`): linhas = consumíveis ao `ot_artigos.preco` gravado no consumo (D9); IVA da linha → código de IVA → IVA global; **mão de obra não entra** (D4). Edita-se descrição, quantidade (≤ consumido), desconto de linha e global, modo de pagamento e observações; remover e repor linhas; artigos fora da OT → 422. O rascunho não reserva a OT nem queima numeração.
+- **Emissão** (`POST /:id/emitir`) numa transacção com `FOR UPDATE` no documento, na **série** (número = último + 1; data-hora > última e dentro do ano → 422) e na **OT** (`documento_venda_id IS NULL`, senão 409 — D5); revalida as linhas contra a OT, grava o snapshot, gera o **movimento de CC a débito** no tipo/estado configurados (vencimento pela condição de pagamento do cliente) e liga a OT ao documento.
+- **Imutabilidade:** escrever/eliminar/reemitir um documento `EMITIDO` → 409.
+- **Estado de faturação** derivado no GET da OT (`estadoFaturacao`: Não faturada / Pendente / Parcialmente paga / Paga, e `documentoVendaNumero`).
+- **D8 (#171) — fim da criação no ecrã antigo:** `POST /api/faturas` → **410 Gone** a apontar para Vendas; as faturas antigas continuam consultáveis, pagáveis e anuláveis. A página `/faturacao` perde o botão de emissão e passa a "Faturação (anterior)".
+- **Frontend:** nova página **Comercial → Vendas** (`/vendas`) — OTs a faturar / sem valor / documentos; editor de rascunho com pré-visualização dos totais, erros por linha e emissão (série + data-hora); detalhe só de leitura do documento emitido; badge do estado de faturação na lista de OTs.
+- **Validação:** e2e de aceitação **contra BD real** (`test/vendas-faturar-ot.e2e.spec.ts`, passos 2–6 da §7.4: 2 linhas sem mão de obra, total 114 000; FT n.º 1; pendente 114 000; 2.ª FT da mesma OT → 409; data-hora retroactiva → 422; stock inalterado) — corre no CI (Postgres migrado) e é ignorado sem `DB_HOST`; testes unitários das regras e do serviço no gate de cobertura (#38).
+
 ### feat(vendas): fase 1 — matriz de configuração em metadados, documentos configurados e séries (closes #164)
 
 Primeira fase do **Módulo de Vendas de Intervenções** (épico #163, especificação `docs/reformulacao-vendas-intervencoes-v11.md`). Cria o motor de configuração de documentos: o comportamento de cada documento (`FT`, `FR`, `NC`, `RE`, `MC`, …) resulta da sua configuração, validada contra uma **matriz de metadados de três níveis** — não há regras por tipo de documento no código (R3).
