@@ -1,6 +1,7 @@
 import type { ClienteImpressao, EmpresaImpressao, FaturaImpressao } from '../../services/vendas';
 import type { ReciboImpressao } from '../../services/tesouraria';
 import { valorPorExtenso } from '../../utils/valorPorExtenso';
+import { cssPagina, MARGENS_PAGINA } from '../../utils/impressaoPagina';
 
 /**
  * #178 — Impressão da Fatura e do Recibo (ambos em A4 — #180) com a informação dos modelos
@@ -69,14 +70,10 @@ function tituloDocumento(doc: { descricao: string; codigo: string; tipoFiscal: s
  *   largura, padding, sombra e altura mínima próprios (senão as margens duplicavam
  *   e a altura mínima podia gerar uma página em branco no fim).
  */
-const MARGENS = { cima: 14, lados: 12, baixo: 16 }; // mm
+const MARGENS = MARGENS_PAGINA;
 
 const CSS_BASE = `
-    @page {
-        size: A4 portrait;
-        margin: ${MARGENS.cima}mm ${MARGENS.lados}mm ${MARGENS.baixo}mm;
-        @top-right { content: "Pág. " counter(page) "/" counter(pages); font: 9px Arial; }
-    }
+    ${cssPagina('A4 portrait')}
     * { box-sizing: border-box; }
     html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #111; margin: 0; }

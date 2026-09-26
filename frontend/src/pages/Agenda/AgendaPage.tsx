@@ -4,6 +4,7 @@ import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
 import { useGlobal, OrdemTrabalho, OTEstado } from '../../contexts/GlobalContext';
 import { ChevronLeft, ChevronRight, Calendar, X, Clock, PlayCircle, CheckCircle, Archive, AlertCircle, GripVertical, Printer, Eye } from 'lucide-react';
+import { comPaginacao } from '../../utils/impressaoPagina';
 
 /* ── Helpers ── */
 const TODAY = new Date();
@@ -429,7 +430,7 @@ ${legend}
         if (!html) return;
         const w = window.open('', '_blank', 'width=1200,height=850');
         if (!w) return;
-        w.document.write(html);
+        w.document.write(comPaginacao(html));
         w.document.close();
         w.focus();
         setTimeout(() => w.print(), 350);

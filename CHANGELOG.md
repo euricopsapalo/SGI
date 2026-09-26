@@ -15,8 +15,14 @@ A janela de impressão mostrava o documento à largura toda, sem folha, porque o
   - totais, quadros, valor por extenso e rodapé não se partem a meio.
 - **Recibo em A4:** mesmo cabeçalho, tipografia e margens da Fatura (deixa o A5); o Total Recebido fica alinhado à direita.
 - **CSS partilhado** pelos dois templates.
+- **Regra uniforme para TODAS as impressões do sistema** (`utils/impressaoPagina.ts` → `comPaginacao()`): fatura, recibo, folha e intervenções da OT, notas de encomenda/entrada, documentos de fornecedor, sugestões de compra, fichas e relatórios de clientes, fornecedores, técnicos e parque, agenda, inventário, faturação anterior e exportação PDF.
+  - Paginação **"Pág. x/y" no canto superior direito**, como no modelo de referência.
+  - As restantes caixas de margem ficam vazias, e o Chrome/Edge **deixa de imprimir o seu cabeçalho** (data e título) **e rodapé** (URL e n.º de página) ao guardar em PDF.
+  - Margens iguais em todos os documentos (14/12/14 mm); o padding que alguns templates usavam para simular margens é anulado na impressão.
+  - Cada documento mantém o tamanho e a orientação que declara (ex.: agenda e intervenções em horizontal).
 - **Validação:**
-  - testes dos templates: A4, folha no ecrã e reposição na impressão, para os dois documentos;
+  - testes dos templates: A4, folha no ecrã e reposição na impressão, para os dois documentos; testes da regra uniforme;
+  - PDFs do Edge **com o cabeçalho/rodapé do navegador activos**: só "Pág. x/y" no canto superior direito, nada nos restantes cantos, também num documento horizontal de 2 páginas;
   - PDFs gerados pelo motor de impressão do Edge e medidos: páginas 210 × 297 mm, margens laterais de 12 mm, sem páginas em branco;
   - fatura de 60 linhas em 2 páginas, com "Pág. 1/2" e "Pág. 2/2" e o cabeçalho da tabela repetido;
   - capturas do ecrã com a folha centrada.

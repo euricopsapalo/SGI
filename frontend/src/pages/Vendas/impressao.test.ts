@@ -120,7 +120,10 @@ describe('impressão — folha A4', () => {
         ['Fatura', buildFaturaHtml(fatura)],
         ['Recibo', buildReciboHtml(recibo)],
     ])('%s: @page A4 vertical, folha de 210 × 297 mm centrada no ecrã e sem margens duplicadas na impressão', (_n, html) => {
-        expect(html).toMatch(/@page \{\s*size: A4 portrait;\s*margin: 14mm 12mm 16mm;/);
+        expect(html).toMatch(/@page \{\s*size: A4 portrait;\s*margin: 14mm 12mm 14mm;/);
+        // regra uniforme: paginação no canto superior direito e restantes cantos vazios
+        expect(html).toContain('@top-left { content: ""; }');
+        expect(html).toContain('@bottom-right { content: ""; }');
         expect(html).not.toContain('A5');
         expect(html).toMatch(/<body><main class="folha">[\s\S]*<\/main><\/body><\/html>$/);
         expect(html).toMatch(/@media screen \{[\s\S]*\.folha \{[\s\S]*width: 210mm; min-height: 297mm; margin: 0 auto;/);
