@@ -37,7 +37,9 @@
       "modules/vendas-config/matriz.rules.ts",
       "modules/vendas-config/series.rules.ts",
       "modules/vendas-config/documentos-config.service.ts",
-      "modules/vendas-config/series.service.ts"
+      "modules/vendas-config/series.service.ts",
+      "modules/vendas/vendas.rules.ts",
+      "modules/vendas/documentos-venda.service.ts"
     ],
     "coverageThreshold": {
       "global": {
@@ -71,6 +73,14 @@
         "lines": 90
       },
       "**/modules/vendas-config/*.service.ts": {
+        "statements": 80,
+        "lines": 80
+      },
+      "**/modules/vendas/vendas.rules.ts": {
+        "statements": 90,
+        "lines": 90
+      },
+      "**/modules/vendas/documentos-venda.service.ts": {
         "statements": 80,
         "lines": 80
       }

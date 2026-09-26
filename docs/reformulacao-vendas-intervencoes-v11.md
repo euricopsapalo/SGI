@@ -336,7 +336,7 @@ Critério de "está provado que funciona": um teste e2e que corre contra BD fres
 O módulo `faturas` (tabelas `faturas`/`fatura_linhas`, página `/faturacao`) **mantém-se** durante a transição. Para evitar dupla faturação:
 
 - Uma OT com fatura **antiga** não anulada (`faturas.ot_id = X AND estado <> 'Anulada'`) é tratada como **já faturada** e não aparece em `ots-disponiveis`.
-- **Em aberto:** o momento em que o ecrã antigo deixa de permitir criar faturas. Enquanto ambos emitirem, a regra acima só protege num sentido. Recomenda-se bloquear a criação no ecrã antigo **quando a fase 2 entrar em produção**.
+- **Decidido (D8, #171):** o ecrã antigo deixa de permitir criar faturas quando a fase 2 entra em produção (#165) — a partir daí só Vendas emite, e a regra acima protege nos dois sentidos.
 
 ---
 
@@ -355,8 +355,10 @@ O módulo `faturas` (tabelas `faturas`/`fatura_linhas`, página `/faturacao`) **
 
 ---
 
-## 11. Pontos em aberto
+## 11. Decisões fechadas em #171 (antes pontos em aberto)
 
-1. **Fim do ecrã de faturação antigo** (§9) — quando bloquear a criação de faturas no ecrã antigo.
-2. **Preço de venda dos consumíveis** — o `ot_artigos.preco` é o `precoUnitario` do artigo **no momento do registo do consumo**. Se o preço de tabela mudar entre a execução e a faturação, fatura-se o preço antigo (snapshot da OT). Confirmar que é o comportamento pretendido; a alternativa é recarregar o preço actual no rascunho.
-3. **OTs de planos/contratos de manutenção** — se algum cliente pagar um valor fixo por plano, D4 (só consumíveis) não o cobre. Confirmar que não há esse caso nesta fase.
+| # | Decisão | Consequência |
+|---|---|---|
+| D8 | **Fim do ecrã de faturação antigo** (§9): a criação de faturas em `/faturacao` é bloqueada quando a fase 2 (#165) entra em produção | Implementado no #165: `POST /api/faturas` → 410; as faturas antigas continuam consultáveis, pagáveis e anuláveis |
+| D9 | **Preço dos consumíveis:** fatura-se o `ot_artigos.preco` gravado no registo do consumo — o preço configurado no artigo nesse momento (snapshot) | Alterações posteriores ao preço de tabela não afectam o rascunho nem a fatura |
+| D10 | **OTs de planos/contratos com valor fixo:** não existe essa modalidade e não deve ser considerada | A regra "só consumíveis" (D4) mantém-se sem excepções |

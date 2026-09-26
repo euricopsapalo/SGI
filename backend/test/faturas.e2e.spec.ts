@@ -8,7 +8,8 @@ import { FaturasService } from '../src/modules/faturas/faturas.service';
 import { Fatura } from '../src/modules/faturas/fatura.entity';
 
 /**
- * E2E — faturação a partir de uma OT (issue #39).
+ * E2E — módulo de faturas antigo (issue #39). Desde o #165 (D8) já não cria
+ * faturas — fatura-se a OT em Vendas; mantém consulta/edição (v11 §9).
  * FaturasController + FaturasService pela camada HTTP; repositório in-memory.
  */
 describe('Faturas E2E — criar a partir de OT', () => {
@@ -45,50 +46,21 @@ describe('Faturas E2E — criar a partir de OT', () => {
         await app.close();
     });
 
-    it('cria uma fatura a partir de uma OT (otId + linhas) → 201 com id', async () => {
+    // #165 / D8 — a criação no módulo antigo está encerrada: fatura-se a OT em Vendas.
+    it('criar fatura no módulo antigo → 410 Gone a apontar para Vendas', async () => {
         const res = await request(app.getHttpServer())
             .post('/faturas')
-            .send({
-                otId: 42,
-                clienteId: 7,
-                dataEmissao: '2026-07-30',
-                taxaIva: 14,
-                valorSubtotal: 10000,
-                valorIva: 1400,
-                valorTotal: 11400,
-                estado: 'Emitido',
-                linhas: [
-                    { descricao: 'Mão de obra', quantidade: 2, precoUnit: 3000 },
-                    { descricao: 'Filtro', quantidade: 1, precoUnit: 4000 },
-                ],
-            })
-            .expect(201);
-
-        expect(res.body.id).toBeDefined();
-        expect(res.body.otId).toBe(42);
-        expect(res.body.valorTotal).toBe(11400);
-        expect(res.body.linhas).toHaveLength(2);
-        // vínculo ao cliente resolvido para relação
-        expect(res.body.cliente).toEqual({ id: 7 });
+            .send({ otId: 42, clienteId: 7, dataEmissao: '2026-07-30', valorTotal: 11400 })
+            .expect(410);
+        expect(res.body.message).toMatch(/\/api\/vendas\/documentos/);
+        expect(Object.keys(store)).toHaveLength(0);
     });
 
-    it('a fatura criada fica persistida e é devolvida no GET :id', async () => {
-        const { body: created } = await request(app.getHttpServer())
-            .post('/faturas')
-            .send({ otId: 99, clienteId: 3, dataEmissao: '2026-07-30', valorTotal: 5000 })
-            .expect(201);
-
-        const res = await request(app.getHttpServer())
-            .get(`/faturas/${created.id}`)
-            .expect(200);
-        expect(res.body.id).toBe(created.id);
+    it('as faturas antigas continuam consultáveis e editáveis', async () => {
+        store[1] = { id: 1, otId: 99, valorTotal: 5000, estado: 'Pendente' };
+        const res = await request(app.getHttpServer()).get('/faturas/1').expect(200);
         expect(res.body.otId).toBe(99);
-    });
-
-    it('body sem dataEmissao (obrigatória) → 400', () => {
-        return request(app.getHttpServer())
-            .post('/faturas')
-            .send({ otId: 1, valorTotal: 100 })
-            .expect(400);
+        await request(app.getHttpServer()).put('/faturas/1').send({ estado: 'Anulada' }).expect(200);
+        expect(store[1].estado).toBe('Anulada');
     });
 });

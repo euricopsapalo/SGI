@@ -8,6 +8,7 @@ import { OtReprogramacao } from './ot-reprogramacao.entity';
 import { OtAnexo } from './ot-anexo.entity';
 import { EquipInstalado } from '../parque/equip-instalado.entity';
 import { PlanoManutencao } from '../planos/plano-manutencao.entity';
+import { DocumentoVenda } from '../vendas/documento-venda.entity';
 
 /**
  * RF-OT-002 §3.1 — natureza da intervenção pedida.
@@ -69,6 +70,7 @@ export const OT_TRANSICOES: Record<OTEstado, OTEstado[]> = {
 @Index('idx_ordens_trabalho_equip', ['equipInstaladoId'])
 @Index('idx_ordens_trabalho_prog', ['dataAgendada'])
 @Index('idx_ot_gerada_de', ['geradaDeOtId'])
+@Index('idx_ot_documento_venda', ['documentoVendaId'])
 export class OrdemTrabalho {
     @PrimaryGeneratedColumn()
     id: number;
@@ -202,6 +204,18 @@ export class OrdemTrabalho {
 
     @Column({ type: 'varchar', length: 30, default: OTEstado.REGISTADA })
     estado: OTEstado;
+
+    /**
+     * #165 (v11 §7.1) — documento de venda activo que faturou esta OT. Preenchido
+     * na emissão, sob `FOR UPDATE` (D5: uma fatura activa por OT); limpo por uma
+     * NC total (fase 6). O estado de faturação deriva daqui e do pendente.
+     */
+    @ManyToOne(() => DocumentoVenda, { nullable: true, onDelete: 'RESTRICT' })
+    @JoinColumn({ name: 'documento_venda_id' })
+    documentoVenda: DocumentoVenda;
+
+    @Column({ name: 'documento_venda_id', type: 'int', nullable: true })
+    documentoVendaId: number | null;
 
     @OneToMany(() => OtMaoObra, (m) => m.ordemTrabalho, { cascade: true })
     maosObra: OtMaoObra[];

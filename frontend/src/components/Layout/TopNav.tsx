@@ -4,7 +4,7 @@ import {
     LayoutDashboard, Users, Wrench, Package,
     CalendarDays, FileText, BarChart3, Settings, Bell,
     Truck, MapPin, ClipboardList, ShoppingCart, ChevronDown,
-    LogOut, ScrollText, RefreshCw, UserCog, Menu, X,
+    LogOut, ScrollText, RefreshCw, UserCog, Menu, X, Receipt,
     type LucideIcon,
 } from 'lucide-react';
 import AquatexLogo from '../AquatexLogo';
@@ -51,7 +51,8 @@ const NAV_GROUPS: NavGroup[] = [
         items: [
             { to: '/compras', icon: ShoppingCart, label: 'Compras'    },
             { to: '/stock',      icon: Package,      label: 'Inventário' },
-            { to: '/faturacao',  icon: FileText,     label: 'Faturação'  },
+            { to: '/vendas',     icon: Receipt,      label: 'Vendas'     },
+            { to: '/faturacao',  icon: FileText,     label: 'Faturação (anterior)' },
         ],
     },
     {

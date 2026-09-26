@@ -133,6 +133,9 @@ export interface OrdemTrabalho {
     registadoPorNome?: string;
     executadoPorId?: string;
     executadoPorNome?: string;
+    /** #165 (v11 §4.4) — derivado no GET: Não faturada / Pendente / Parcialmente paga / Paga. */
+    estadoFaturacao?: 'Não faturada' | 'Pendente' | 'Parcialmente paga' | 'Paga';
+    documentoVendaNumero?: string;
     // RF-OT-003 §4 — ciclo confirmar/adiar + janela 6 meses
     dataAgendada?: string;
     dataExecucao?: string;
@@ -359,6 +362,9 @@ const normOrdem = (o: any): OrdemTrabalho => ({
     registadoPorNome: o.registadoPor?.nome,
     executadoPorId: o.executadoPorId?.toString() ?? o.executadoPor?.id?.toString(),
     executadoPorNome: o.executadoPor?.nome,
+    // #165 — estado de faturação (dimensão paralela, só leitura)
+    estadoFaturacao: o.estadoFaturacao ?? undefined,
+    documentoVendaNumero: o.documentoVendaNumero ?? undefined,
     // RF-OT-003
     dataAgendada: o.dataAgendada,
     dataExecucao: o.dataExecucao,

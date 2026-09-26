@@ -22,6 +22,7 @@ import { User } from '../users/user.entity';
 import { ConfiguracaoEmpresa } from '../configuracao/configuracao-empresa.entity';
 import { PlanoManutencao } from '../planos/plano-manutencao.entity';
 import { UnprocessableEntityException } from '@nestjs/common';
+import { DocumentoVenda } from '../vendas/documento-venda.entity';
 
 describe('OrdensTrabalhoService (regression #15)', () => {
     let service: OrdensTrabalhoService;
@@ -274,5 +275,35 @@ describe('OrdensTrabalhoService (regression #15)', () => {
         expect(call.codigoIva).toBe('I14');
         expect(call.taxaIva).toBe(14);
         expect(call.descricao).toBe('Membrana RO');
+    });
+
+    // ── #165 (v11 §4.4) — estado de faturação derivado ───────────────
+    describe('estado de faturação', () => {
+        const mockVendas = (movs: any[]) => {
+            const ds: any = module.get(DataSource);
+            ds.getRepository = jest.fn((e: any) => ({
+                find: jest.fn(async () => (e === DocumentoVenda
+                    ? [{ id: 50, numero: 1, documentoConfig: { codigo: 'FT' }, serie: { codigo: '2026' } }]
+                    : movs)),
+            }));
+            return ds;
+        };
+
+        it('OT sem documento → Não faturada, sem consultar vendas', async () => {
+            const ds = mockVendas([]);
+            repo.find.mockResolvedValueOnce([{ id: 1, estado: OTEstado.FINALIZADA, documentoVendaId: null, artigos: [] }]);
+            const [ot]: any[] = await service.findAll();
+            expect(ot.estadoFaturacao).toBe('Não faturada');
+            expect(ot.documentoVendaNumero).toBeNull();
+            expect(ds.getRepository).not.toHaveBeenCalled();
+        });
+
+        it('OT faturada → estado pelo pendente e número do documento', async () => {
+            mockVendas([{ origemId: 50, valorOriginal: '114000.00', valorPendente: '114000.00' }]);
+            repo.findOne.mockResolvedValueOnce({ id: 1, estado: OTEstado.FINALIZADA, documentoVendaId: 50, artigos: [] });
+            const ot: any = await service.findOne(1);
+            expect(ot.estadoFaturacao).toBe('Pendente');
+            expect(ot.documentoVendaNumero).toBe('FT 2026/1');
+        });
     });
 });

@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AppLayout from '../../components/Layout/AppLayout';
 import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
-import SearchableSelect from '../../components/SearchableSelect';
 import {
     useGlobal,
-    Fatura, FaturaEstado, FaturaLinha,
+    Fatura, FaturaEstado,
 } from '../../contexts/GlobalContext';
 import {
-    Search, Plus, X, Printer, Check, AlertCircle, FileText, Filter, Download,
-    Eye,
+    Search, X, Printer, Check, AlertCircle, FileText, Filter, Download,
+    Eye, ArrowRight,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import EmptyState from '../../components/EmptyState';
@@ -25,240 +25,6 @@ const ESTADO_BADGE: Record<FaturaEstado, { bg: string; color: string }> = {
     Paga:     { bg: '#E8F5E9', color: '#2E7D32' },
     Anulada:  { bg: '#ECEFF1', color: '#546E7A' },
     Emitido:  { bg: '#EFF6FF', color: '#1565C0' },
-};
-
-/* ══ Emitir Documento Modal ═════════════════════════════════ */
-interface EmitirModalProps { onClose: () => void; onSave: (f: Omit<Fatura, 'id'>) => void; }
-
-const EmitirDocumentoModal: React.FC<EmitirModalProps> = ({ onClose, onSave }) => {
-    const { ordens, clientes, artigos, equipInstalados, tiposDocumento, taxaIvaGlobal, empresaConfig, fmtMoney } = useGlobal();
-
-    const [tipoDoc,       setTipoDoc]    = useState(tiposDocumento[0]?.codigo ?? 'FAT');
-    const [otId,          setOtId]       = useState('');
-    const [linhas,        setLinhas]     = useState<FaturaLinha[]>([]);
-    const [clienteId,     setClienteId]  = useState('');
-    const [fpLinhas,      setFpLinhas]   = useState<(FaturaLinha & { artigoId: string })[]>([]);
-    const taxaIva = taxaIvaGlobal;
-    const [observacoes,   setObs]        = useState('');
-    const [errors,        setErrors]     = useState<Record<string, string>>({});
-
-    const isFAT = tipoDoc === 'FAT';
-    const isFP  = tipoDoc === 'FP';
-
-    const otOpts = ordens
-        .filter(o => o.estado === 'Finalizada')
-        .map(o => {
-            const cli = clientes.find(c => c.id === o.clienteId);
-            return { value: o.id, label: `${o.id} — ${cli?.nome ?? o.clienteId}`, sub: o.naturezaIntervencao };
-        });
-
-    const clienteOpts = clientes.filter(c => c.ativo !== false).map(c => ({ value: c.id, label: c.nome, sub: c.nif }));
-    const artigoOpts  = artigos.filter(a => !a.inativo && a.existencia > 0).map(a => ({
-        value: a.id, label: a.descricao, sub: `${a.codigo} · Stock: ${a.existencia}`,
-    }));
-
-    const otSelected  = ordens.find(o => o.id === otId);
-    const otClienteId = otSelected?.clienteId ?? '';
-
-    const totalLinhasFAT = linhas.reduce((s, l) => s + l.quantidade * l.precoUnit, 0);
-    const subtotalFAT    = totalLinhasFAT;
-    const subtotalFP     = fpLinhas.reduce((s, l) => s + l.quantidade * l.precoUnit, 0);
-    const subtotal       = isFAT ? subtotalFAT : subtotalFP;
-    const ivaVal         = Math.round(subtotal * Number(taxaIva) / 100);
-    const total          = subtotal + ivaVal;
-    const hoje           = new Date().toISOString().split('T')[0];
-
-    const addLinha    = () => setLinhas(p => [...p, { descricao: '', quantidade: 1, precoUnit: 0 }]);
-    const removeLinha = (i: number) => setLinhas(p => p.filter((_, j) => j !== i));
-    const updateLinha = <K extends keyof FaturaLinha>(i: number, k: K, v: FaturaLinha[K]) =>
-        setLinhas(p => p.map((l, j) => j === i ? { ...l, [k]: v } : l));
-
-    const addFpLinha    = () => setFpLinhas(p => [...p, { artigoId: '', descricao: '', quantidade: 1, precoUnit: 0 }]);
-    const removeFpLinha = (i: number) => setFpLinhas(p => p.filter((_, j) => j !== i));
-    const updateFpArtigo = (i: number, artigoId: string) => {
-        const a = artigos.find(x => x.id === artigoId);
-        if (!a) return;
-        setFpLinhas(p => p.map((l, j) => j === i ? { ...l, artigoId, descricao: a.descricao, precoUnit: a.precoUnitario, quantidade: 1 } : l));
-    };
-    const updateFpLinha = <K extends keyof FaturaLinha>(i: number, k: K, v: FaturaLinha[K]) =>
-        setFpLinhas(p => p.map((l, j) => j === i ? { ...l, [k]: v } : l));
-
-    const validate = () => {
-        const e: Record<string, string> = {};
-        if (isFAT) {
-            if (!otId) e.ot = 'Seleccione uma Ordem de Trabalho';
-        }
-        if (isFP) {
-            if (!clienteId)              e.cliente = 'Seleccione um cliente';
-            if (fpLinhas.length === 0)   e.linhas  = 'Adicione pelo menos um artigo';
-        }
-        setErrors(e);
-        return Object.keys(e).length === 0;
-    };
-
-    const getNrSerie = (ot?: typeof otSelected) => {
-        if (!ot?.equipInstaladoId) return undefined;
-        return equipInstalados.find(e => e.id === ot.equipInstaladoId)?.nrSerie;
-    };
-
-    const handleSubmit = (ev: React.FormEvent) => {
-        ev.preventDefault();
-        if (!validate()) return;
-
-        if (isFAT) {
-            const allLinhas: FaturaLinha[] = linhas.filter(l => l.descricao.trim());
-            onSave({
-                tipoDocumento: tipoDoc, otId, clienteId: otClienteId,
-                dataEmissao: hoje, linhas: allLinhas,
-                precoServico: 0, taxaIva: taxaIva,
-                valorSubtotal: subtotal, valorIva: ivaVal, valorTotal: total,
-                moeda: empresaConfig.moeda, estado: 'Pendente',
-                observacoes, nrSerieEquip: getNrSerie(otSelected),
-            });
-        } else {
-            const allLinhas: FaturaLinha[] = fpLinhas.map(l => ({ descricao: l.descricao, quantidade: l.quantidade, precoUnit: l.precoUnit }));
-            onSave({
-                tipoDocumento: tipoDoc, otId: 'N/A', clienteId,
-                dataEmissao: hoje, linhas: allLinhas,
-                precoServico: 0, taxaIva: taxaIva,
-                valorSubtotal: subtotal, valorIva: ivaVal, valorTotal: total,
-                moeda: empresaConfig.moeda, estado: 'Emitido',
-                observacoes,
-            });
-        }
-    };
-
-    return (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 620 }}>
-                <div className="modal-header">
-                    <h3 className="modal-title">Emitir Documento</h3>
-                    <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
-                </div>
-                <form onSubmit={handleSubmit} noValidate>
-                    <div className="modal-body" style={{ maxHeight: '68vh', overflowY: 'auto' }}>
-
-                        {/* Tipo de Documento */}
-                        <div className="form-group">
-                            <label className="form-label req">Tipo de Documento</label>
-                            <select className="form-select" value={tipoDoc} onChange={e => { setTipoDoc(e.target.value); setErrors({}); setOtId(''); setClienteId(''); setFpLinhas([]); setLinhas([]); }}>
-                                {tiposDocumento.map(t => <option key={t.id} value={t.codigo}>{t.codigo} — {t.descricao}</option>)}
-                            </select>
-                        </div>
-
-                        {/* ── FAT: OT select ── */}
-                        {isFAT && (<>
-                            <div className="form-group">
-                                <label className="form-label req">Ordem de Trabalho</label>
-                                <SearchableSelect
-                                    options={otOpts} value={otId}
-                                    onChange={v => {
-                                        setOtId(v);
-                                        const ot = ordens.find(o => o.id === v);
-                                        if (ot?.artigos?.length) {
-                                            setLinhas(ot.artigos.map(a => ({ descricao: a.descricao, quantidade: a.quantidade, precoUnit: a.preco })));
-                                        }
-                                    }}
-                                    placeholder="Seleccionar OT concluída..."
-                                />
-                                {errors.ot && <span className="form-error"><AlertCircle size={11} /> {errors.ot}</span>}
-                            </div>
-
-                            {otSelected && (
-                                <div style={{ padding: '8px 12px', background: '#f8f9fa', border: '1px solid var(--border)', borderRadius: 3, fontSize: '0.81rem', marginBottom: 8 }}>
-                                    <strong>{clientes.find(c => c.id === otSelected.clienteId)?.nome}</strong> · {otSelected.naturezaIntervencao} · {otSelected.descricao}
-                                </div>
-                            )}
-
-                            <div className="form-group">
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                    <label className="form-label" style={{ margin: 0 }}>Artigos / Consumíveis</label>
-                                    <button type="button" className="abtn abtn-secondary" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={addLinha}>
-                                        <Plus size={11} /> Adicionar
-                                    </button>
-                                </div>
-                                {linhas.length === 0 ? (
-                                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sem artigos adicionais.</div>
-                                ) : linhas.map((l, i) => (
-                                    <div key={i} style={{ display: 'grid', gridTemplateColumns: 'minmax(100px,1fr) 60px 100px 28px', gap: 6, marginBottom: 4, alignItems: 'center', minWidth: 300, overflowX: 'auto' }}>
-                                        <input type="text" className="form-input" placeholder="Descrição"
-                                            value={l.descricao} onChange={e => updateLinha(i, 'descricao', e.target.value)} />
-                                        <input type="number" className="form-input" placeholder="Qtd" min={1}
-                                            value={l.quantidade} onChange={e => updateLinha(i, 'quantidade', Number(e.target.value))} />
-                                        <input type="number" className="form-input" placeholder="Preço unit." min={0}
-                                            value={l.precoUnit} onChange={e => updateLinha(i, 'precoUnit', Number(e.target.value))} />
-                                        <button type="button" className="icon-btn" onClick={() => removeLinha(i)}><X size={11} /></button>
-                                    </div>
-                                ))}
-                            </div>
-                        </>)}
-
-                        {/* ── FP: Client + Stock articles ── */}
-                        {isFP && (<>
-                            <div className="form-group">
-                                <label className="form-label req">Cliente</label>
-                                <SearchableSelect options={clienteOpts} value={clienteId} onChange={setClienteId} placeholder="Seleccionar cliente..." />
-                                {errors.cliente && <span className="form-error"><AlertCircle size={11} /> {errors.cliente}</span>}
-                            </div>
-
-                            <div className="form-group">
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                    <label className="form-label req" style={{ margin: 0 }}>Artigos / Consumíveis</label>
-                                    <button type="button" className="abtn abtn-secondary" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={addFpLinha}>
-                                        <Plus size={11} /> Adicionar linha
-                                    </button>
-                                </div>
-                                {errors.linhas && <span className="form-error" style={{ display: 'block', marginBottom: 6 }}><AlertCircle size={11} /> {errors.linhas}</span>}
-                                {fpLinhas.length === 0 ? (
-                                    <div style={{ padding: 12, border: '1px dashed var(--border)', borderRadius: 4, fontSize: '0.78rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                                        Clique em "Adicionar linha" para seleccionar artigos do stock.
-                                    </div>
-                                ) : fpLinhas.map((l, i) => {
-                                    const art = artigos.find(a => a.id === l.artigoId);
-                                    return (
-                                        <div key={i} style={{ display: 'grid', gridTemplateColumns: 'minmax(100px,1fr) 70px 90px 28px', gap: 6, marginBottom: 8, alignItems: 'flex-start', minWidth: 300, overflowX: 'auto' }}>
-                                            <div>
-                                                <SearchableSelect
-                                                    options={artigoOpts.filter(o => !fpLinhas.some((ll, j) => j !== i && ll.artigoId === o.value))}
-                                                    value={l.artigoId}
-                                                    onChange={v => updateFpArtigo(i, v)}
-                                                    placeholder="Artigo..."
-                                                />
-                                                {art && <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>Disponível: {art.existencia} un</div>}
-                                            </div>
-                                            <input type="number" className="form-input" placeholder="Qtd" min={1} max={art?.existencia ?? 9999}
-                                                value={l.quantidade} onChange={e => updateFpLinha(i, 'quantidade', Number(e.target.value))} />
-                                            <input type="number" className="form-input" placeholder="Preço unit." min={0}
-                                                value={l.precoUnit} onChange={e => updateFpLinha(i, 'precoUnit', Number(e.target.value))} />
-                                            <button type="button" className="icon-btn" style={{ marginTop: 2 }} onClick={() => removeFpLinha(i)}><X size={11} /></button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </>)}
-
-                        {/* Totals */}
-                        <div style={{ padding: '8px 12px', background: '#f0fdf4', border: '1px solid #BBF7D0', borderRadius: 4, fontSize: '0.8rem', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                            <span>Subtotal: <strong>{fmtMoney(subtotal)}</strong></span>
-                            <span>IVA ({taxaIva}%): <strong>{fmtMoney(ivaVal)}</strong></span>
-                            <span style={{ fontWeight: 700, color: '#166534' }}>Total: <strong>{fmtMoney(total)}</strong></span>
-                        </div>
-
-                        <div className="form-group" style={{ marginTop: 12 }}>
-                            <label className="form-label">Observações</label>
-                            <textarea className="form-input" rows={2} style={{ resize: 'vertical' }}
-                                value={observacoes} onChange={e => setObs(e.target.value)}
-                                placeholder="Notas adicionais..." />
-                        </div>
-                    </div>
-                    <div className="modal-footer">
-                        <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
-                        <button type="submit" className="abtn abtn-primary"><Plus size={12} /> Emitir {tipoDoc}</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
 };
 
 /* ══ Fatura Detalhe Modal ════════════════════════════════════ */
@@ -562,12 +328,12 @@ const COLS_FATURA: ExportCol[] = [
 
 /* ══ Page ════════════════════════════════════════════════════ */
 const FaturacaoPage: React.FC = () => {
-    const { faturas, addFatura, updateFatura, clientes, ordens, empresaConfig, fmtMoney, fmtDate, loadingData } = useGlobal();
+    const { faturas, updateFatura, clientes, ordens, empresaConfig, fmtMoney, fmtDate, loadingData } = useGlobal();
+    const navigate = useNavigate();
 
     const [search,       setSearch]       = useState('');
     const [filterEstado, setFilterEstado] = useState('');
     const [showExport,    setShowExport]   = useState(false);
-    const [emitirModal,   setEmitirModal]  = useState(false);
     const [detalheId,     setDetalheId]    = useState<string | null>(null);
 
     const showToast = (msg: string) => notify(msg, 'success');
@@ -577,12 +343,6 @@ const FaturacaoPage: React.FC = () => {
         if (otId === 'N/A') return '';
         const ot = ordens.find(o => o.id === otId);
         return ot ? `${ot.naturezaIntervencao ?? "—"} · ${ot.descricao}` : '';
-    };
-
-    const handleEmitir = (f: Omit<Fatura, 'id'>) => {
-        const fat = addFatura(f);
-        setEmitirModal(false);
-        showToast(`Documento ${fat.id} emitido.`);
     };
 
     const handlePagar = (id: string, comprovativo: string, dataPagamento: string) => {
@@ -628,12 +388,17 @@ const FaturacaoPage: React.FC = () => {
                 <button className="abtn abtn-secondary" type="button" onClick={() => setShowExport(true)}>
                     <Download size={13} /> Exportar
                 </button>
-                <button className="abtn abtn-primary" type="button" onClick={() => setEmitirModal(true)}>
-                    <Plus size={13} /> Emitir Documento
+                <button className="abtn abtn-primary" type="button" onClick={() => navigate('/vendas')}>
+                    <ArrowRight size={13} /> Faturar OTs em Vendas
                 </button>
             </ActionBar>
 
             <div className="page-content">
+                {/* #165 / D8 — a emissão passou para Vendas; aqui ficam as faturas antigas (v11 §9). */}
+                <div role="note" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', marginBottom: 12, borderRadius: 6, background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#1565C0', fontSize: '0.8rem' }}>
+                    <AlertCircle size={14} />
+                    A emissão de faturas passou para o módulo <strong>Vendas</strong>, a partir das OTs finalizadas. Aqui ficam as faturas emitidas anteriormente, que continuam a poder ser pagas ou anuladas.
+                </div>
                 <div className="stats-row">
                     {[
                         { label: 'Pendentes',      value: pendentes,                                   cls: pendentes > 0 ? 'orange' : 'muted' },
@@ -691,7 +456,7 @@ const FaturacaoPage: React.FC = () => {
                             <tbody>
                                 {loadingData && <TableSkeleton cols={12} />}
                                 {!loadingData && filtered.length === 0 && (
-                                    <tr><td colSpan={12}><EmptyState icon={<FileText size={28} />} title="Nenhum documento encontrado" description="Emita faturas a partir de ordens de trabalho concluídas." /></td></tr>
+                                    <tr><td colSpan={12}><EmptyState icon={<FileText size={28} />} title="Nenhum documento encontrado" description="As novas faturas emitem-se em Vendas, a partir das OTs finalizadas." /></td></tr>
                                 )}
                                 {!loadingData && filtered.map(f => {
                                     const eb = ESTADO_BADGE[f.estado];
@@ -736,8 +501,6 @@ const FaturacaoPage: React.FC = () => {
                     <div className="table-count">{filtered.length} documento(s)</div>
                 </div>
             </div>
-
-            {emitirModal && <EmitirDocumentoModal onClose={() => setEmitirModal(false)} onSave={handleEmitir} />}
 
             {detalheF && (
                 <FaturaDetalhe

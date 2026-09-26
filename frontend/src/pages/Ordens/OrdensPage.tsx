@@ -1246,6 +1246,13 @@ const OrdensPage: React.FC = () => {
                                                     <span className={`dot ${cfg.dot}`} />
                                                     {cfg.label}
                                                 </div>
+                                                {/* #165 — estado de faturação (v11 §4.4), só em OTs finalizadas */}
+                                                {o.estado === 'Finalizada' && o.estadoFaturacao && (
+                                                    <div title={o.documentoVendaNumero ? `Faturada em ${o.documentoVendaNumero}` : 'Ainda não faturada'}
+                                                        style={{ fontSize: '0.66rem', fontWeight: 700, marginTop: 2, color: o.estadoFaturacao === 'Paga' ? '#2E7D32' : o.estadoFaturacao === 'Não faturada' ? 'var(--text-muted)' : '#E65100' }}>
+                                                        {o.estadoFaturacao}{o.documentoVendaNumero ? ` · ${o.documentoVendaNumero}` : ''}
+                                                    </div>
+                                                )}
                                             </td>
                                             <td>
                                                 <div className="row-actions">
