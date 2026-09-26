@@ -2,8 +2,13 @@
 
 **Repositório:** [euricopsapalo/SGI](https://github.com/euricopsapalo/SGI)
 **Documento base:** [`docs/ANALISE_TECNICA_SGI_2026-05-13.md`](./ANALISE_TECNICA_SGI_2026-05-13.md)
-**Data:** 2026-05-13 — **Última actualização:** 2026-05-18
-**Issues criadas:** #21 → #60 (épico #60 + RF #54–#59 da reformulação OT)
+**Data:** 2026-05-13 — **Última actualização:** 2026-09-26
+**Issues criadas:** #21 → #60 (épico #60 + RF #54–#59 da reformulação OT) · #163 → #171 (épico #163 — Módulo de Vendas de Intervenções)
+**Vendas de Intervenções (2026-09-26):** faturação exclusiva de OTs segundo a reformulação v10
+(documento configurável → pendente → liquidação → movimento em conta), sem ligação a inventário —
+épico [#163](https://github.com/euricopsapalo/SGI/issues/163), fases
+[#164](https://github.com/euricopsapalo/SGI/issues/164)–[#170](https://github.com/euricopsapalo/SGI/issues/170),
+especificação [`docs/reformulacao-vendas-intervencoes-v11.md`](./reformulacao-vendas-intervencoes-v11.md).
 **Reformulação OT (2026-05-18):** o antigo épico AQUATEX de OT (#26–#30, incl. RF-OT-001
 "técnicos" e RF-OT-002 "nº sequencial") foi **descartado por não estar implementado** e
 substituído pela série **Reformulação do Processo de OT** — épico
@@ -138,6 +143,32 @@ Podem ser executadas **em paralelo** após Sprint 5. Sem ordem rígida.
 
 ---
 
+### 🔴 Sprint 7+ — Módulo de Vendas de Intervenções (P1/P2)
+
+**Épico:** [#163](https://github.com/euricopsapalo/SGI/issues/163) — ver
+[`docs/reformulacao-vendas-intervencoes-v11.md`](./reformulacao-vendas-intervencoes-v11.md)
+(adaptação de [`reformulacao-modulos-v10.md`](./reformulacao-modulos-v10.md)).
+
+Fatura **só OTs finalizadas**, com as linhas de consumíveis realmente consumidos (a mão de obra é
+custo interno e não vai à fatura). **Sem ligação a inventário**: o stock continua a sair no
+`finalizar` da OT. Uma fatura activa por OT; documento emitido é imutável e corrige-se por estorno.
+
+| Ordem | # | Título | Depende de | Prioridade | Estado |
+|---|---|---|---|---|---|
+| 1 | [#164](https://github.com/euricopsapalo/SGI/issues/164) | Fase 1 — matriz de configuração em metadados (3 níveis), documentos configurados, séries | — | P1 | 🔴 |
+| 2 | [#165](https://github.com/euricopsapalo/SGI/issues/165) | Fase 2 — faturar OT: rascunho, emissão de `FT`, pendente em CC | #164 | P1 | 🔴 |
+| 3 | [#166](https://github.com/euricopsapalo/SGI/issues/166) | Fase 3 — contas bancárias, liquidações `RE`, Movimento em conta, extrato | #165 | P1 | 🔴 |
+| 4 | [#167](https://github.com/euricopsapalo/SGI/issues/167) | Fase 4 — gestão de caixa (abertura, saída, fecho com apuramento) | #166 | P2 | 🔴 |
+| 5 | [#168](https://github.com/euricopsapalo/SGI/issues/168) | Fase 5 — `FR` com liquidação automática atómica | #166 #167 | P2 | 🔴 |
+| 6 | [#169](https://github.com/euricopsapalo/SGI/issues/169) | Fase 6 — estorno `NC`/`ND` e estorno de liquidações | #166 | P2 | 🔴 |
+| 7 | [#170](https://github.com/euricopsapalo/SGI/issues/170) | Fase 7 — impressão, relatórios, transição do ecrã de faturação antigo | #165 | P2 | 🔴 |
+| — | [#171](https://github.com/euricopsapalo/SGI/issues/171) | Pontos em aberto da especificação v11 | — | P2 | 🔴 |
+
+**Estimativa:** a fazer no planeamento da fase 1.
+**Critério de saída:** o teste e2e de aceitação (§7.4 da especificação) passa na íntegra.
+
+---
+
 ## 3. Diagrama de dependências
 
 ```
@@ -218,6 +249,15 @@ Actualizar nesta tabela à medida que as issues avançam. Manter a coluna **PR**
 | #47 | P3 | 6 | Estado vazio | 🔴 Aberto | — | — | — |
 | #48 | P3 | 6 | Upload + assinatura | 🔴 Aberto | — | — | — |
 | #49 | P3 | 6 | Loading inline | 🔴 Aberto | — | — | — |
+| #163 | P1 | 7+ | **EPIC** Módulo de Vendas de Intervenções | 🔴 Aberto | — | — | [#172](https://github.com/euricopsapalo/SGI/pull/172) (spec) |
+| #164 | P1 | 7+ | Vendas F1 — matriz, documentos, séries | 🔴 Aberto | — | — | — |
+| #165 | P1 | 7+ | Vendas F2 — faturar OT (`FT` + pendente) | 🔴 Aberto | — | — | — |
+| #166 | P1 | 7+ | Vendas F3 — liquidações, Mov. em conta, extrato | 🔴 Aberto | — | — | — |
+| #167 | P2 | 7+ | Vendas F4 — gestão de caixa | 🔴 Aberto | — | — | — |
+| #168 | P2 | 7+ | Vendas F5 — `FR` + liquidação automática | 🔴 Aberto | — | — | — |
+| #169 | P2 | 7+ | Vendas F6 — estorno `NC`/`ND` | 🔴 Aberto | — | — | — |
+| #170 | P2 | 7+ | Vendas F7 — impressão, relatórios, transição | 🔴 Aberto | — | — | — |
+| #171 | P2 | 7+ | Vendas — pontos em aberto v11 | 🔴 Aberto | — | — | — |
 
 ---
 
@@ -230,6 +270,7 @@ Actualizar nesta tabela à medida que as issues avançam. Manter a coluna **PR**
 | 4 | Estrutura de dados P2 | 7 | 11.5 |
 | 5 | Testes / hardening P2 | 4 | 8.5 |
 | 6+ | UX / performance P3 | 8 | 15 (paralelo) |
+| 7+ | Módulo de Vendas de Intervenções P1/P2 | 7 fases + 1 épico + 1 decisão | a estimar |
 | **Total** | | **31** | **≈ 57.5 d** (≈ 12 semanas com 1 dev, ≈ 6 semanas com 2 devs) |
 
 ---
