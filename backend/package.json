@@ -39,7 +39,10 @@
       "modules/vendas-config/documentos-config.service.ts",
       "modules/vendas-config/series.service.ts",
       "modules/vendas/vendas.rules.ts",
-      "modules/vendas/documentos-venda.service.ts"
+      "modules/vendas/documentos-venda.service.ts",
+      "modules/tesouraria/tesouraria.rules.ts",
+      "modules/tesouraria/liquidacoes.service.ts",
+      "modules/tesouraria/conta-corrente.service.ts"
     ],
     "coverageThreshold": {
       "global": {
@@ -81,6 +84,14 @@
         "lines": 90
       },
       "**/modules/vendas/documentos-venda.service.ts": {
+        "statements": 80,
+        "lines": 80
+      },
+      "**/modules/tesouraria/tesouraria.rules.ts": {
+        "statements": 90,
+        "lines": 90
+      },
+      "**/modules/tesouraria/*.service.ts": {
         "statements": 80,
         "lines": 80
       }
