@@ -90,6 +90,51 @@ export const tesourariaApi = {
     imprimir: (id: number) => api.post<ReciboImpressao>(`/liquidacoes/${id}/imprimir`).then(r => r.data),
 };
 
+/* ── #167 — Gestão de caixa ─────────────────────────────────── */
+
+export interface SessaoCaixa {
+    id: number; estado: 'ABERTA' | 'FECHADA';
+    contaBancariaId: number; contaCodigo?: string;
+    aberturaDocumento: string | null; abertaEm: string;
+    valorSugerido: number; valorDeclarado: number;
+    entradas: number; saidas: number; saldoTeorico: number;
+    fechoDocumento: string | null; fechadaEm: string | null;
+    valorContado: number | null; diferenca: number | null;
+    acertoDocumento: string | null; acertoValor: number | null;
+    observacoesAbertura: string | null; observacoesFecho: string | null;
+    movimentos?: {
+        id: number; numeroDocumento: string | null; documentoDescricao: string | null;
+        origemTipo: 'LIQUIDACAO' | 'SAIDA_CAIXA' | 'ACERTO_CAIXA'; origemId: number; origemDocumento: string | null;
+        descricao: string | null; modoPagamentoDescricao: string | null; valor: number; dataHora: string;
+    }[];
+}
+
+export interface EstadoCaixa {
+    conta: { id: number; codigo: string; descricao: string; moeda: string; ativo: boolean; aberta: boolean };
+    valorSugerido: number;
+    sessao: SessaoCaixa | null;
+    ultimoFecho: SessaoCaixa | null;
+}
+
+export const caixaApi = {
+    listar: () => api.get<EstadoCaixa[]>('/caixa').then(r => r.data),
+    caixa: (contaId: number) => api.get<EstadoCaixa>(`/caixa/${contaId}`).then(r => r.data),
+    sessoes: (contaId: number) => api.get<SessaoCaixa[]>(`/caixa/${contaId}/sessoes`).then(r => r.data),
+    sessao: (id: number) => api.get<SessaoCaixa>(`/caixa/sessoes/${id}`).then(r => r.data),
+    abrir: (contaId: number, dto: { valorDeclarado: number; observacoes?: string }) =>
+        api.post<SessaoCaixa>(`/caixa/${contaId}/abrir`, dto).then(r => r.data),
+    saida: (contaId: number, dto: { valor: number; motivo: string }) =>
+        api.post<SessaoCaixa>(`/caixa/${contaId}/saida`, dto).then(r => r.data),
+    fechar: (contaId: number, dto: { valorContado: number; observacoes?: string }) =>
+        api.post<SessaoCaixa>(`/caixa/${contaId}/fechar`, dto).then(r => r.data),
+};
+
+/** Diferença do fecho (contado − teórico): sobra > 0, quebra < 0 — espelha `apuramento` do backend. */
+export function apuramentoCaixa(saldoTeorico: number, valorContado: number): { diferenca: number; acerto: 'SOBRA' | 'QUEBRA' | null } {
+    const diferenca = Math.round((valorContado - saldoTeorico + Number.EPSILON) * 100) / 100;
+    return { diferenca, acerto: diferenca > 0 ? 'SOBRA' : diferenca < 0 ? 'QUEBRA' : null };
+}
+
 export interface ReciboImpressao {
     via: Via;
     empresa: EmpresaImpressao;

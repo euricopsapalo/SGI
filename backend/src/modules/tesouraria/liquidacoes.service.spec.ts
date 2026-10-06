@@ -7,6 +7,7 @@ import { DocumentoConfig } from '../vendas-config/documento-config.entity';
 import { Serie } from '../vendas-config/serie.entity';
 import { ContaBancaria } from '../vendas-config/conta-bancaria.entity';
 import { Cliente } from '../clientes/cliente.entity';
+import { SessaoCaixa } from './sessao-caixa.entity';
 import { anoLocal } from '../vendas-config/series.rules';
 
 /**
@@ -48,6 +49,7 @@ describe('LiquidacoesService', () => {
             serieRe: serie(),
             serieMc: serie({ id: 300, documentoConfigId: 30 }),
             conta: { id: 7, codigo: 'CXAOA', tipo: 'CAIXA', aberta: true, ativo: true },
+            sessao: { id: 11, contaBancariaId: 7 },
             cliente: { id: 3, nome: 'Cliente' },
             movs: [
                 { id: 1, clienteId: 3, ccTipoId: 1, ccEstadoId: 1, natureza: 'D', valorPendente: '114000.00', modoPagamentoId: 2 },
@@ -70,6 +72,7 @@ describe('LiquidacoesService', () => {
                 if (entity === Cliente) return st.cliente;
                 if (entity === ContaBancaria) return st.conta;
                 if (entity === Serie) return opts.where.documentoConfigId === 30 ? st.serieMc : st.serieRe;
+                if (entity === SessaoCaixa) return st.sessao;
                 return null;
             }),
             find: jest.fn(async (entity: any) => (entity === MovimentoCc ? st.movs : [])),
@@ -96,6 +99,7 @@ describe('LiquidacoesService', () => {
         expect(m.update).toHaveBeenCalledWith(Serie, 200, { ultimoNumero: 1, ultimaDataHora: new Date(agora) });
         const mc = m.save.mock.calls.find((c: any[]) => c[0] === MovimentoConta)[1];
         expect(mc).toMatchObject({ documentoConfigId: 30, serieId: 300, numero: 1, contaBancariaId: 7, valor: 50000, modoPagamentoId: 2, origemId: 9 });
+        expect(mc.sessaoCaixaId).toBe(11); // #167 — o movimento entra na sessão de caixa aberta
         expect(m.update).toHaveBeenCalledWith(Serie, 300, expect.objectContaining({ ultimoNumero: 1 }));
         const locks = m.findOne.mock.calls.filter((c: any[]) => c[1]?.lock).map((c: any[]) => c[0]);
         expect(locks).toEqual([ContaBancaria, Serie, Serie]);
@@ -119,6 +123,14 @@ describe('LiquidacoesService', () => {
         st.conta.aberta = false;
         expect((await erros(svc.create(dto()))).contaBancariaId).toMatch(/fechada/);
         expect(m.save).not.toHaveBeenCalled();
+    });
+
+    it('#167 — caixa marcada aberta mas sem sessão → 422; conta DO não precisa de sessão', async () => {
+        st.sessao = null;
+        expect((await erros(svc.create(dto()))).contaBancariaId).toMatch(/fechada/);
+        st.conta = { ...st.conta, tipo: 'DO', aberta: false };
+        await svc.create(dto());
+        expect(m.save.mock.calls.find((c: any[]) => c[0] === MovimentoConta)[1].sessaoCaixaId).toBeNull();
     });
 
     it('conta não associada ao MC, inexistente ou inactiva → 422', async () => {

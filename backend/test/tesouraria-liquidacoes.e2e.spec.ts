@@ -10,10 +10,11 @@ import { OrdensTrabalhoModule } from '../src/modules/ordens-trabalho/ordens-trab
 import { buildValidationPipe } from '../src/config/validation-pipe';
 
 /**
- * #166 + #174 — Teste de aceitação da fase 3 contra BD real (v11 §7.4 passos 8–9,
- * com a caixa aberta por SQL até existir a gestão de caixa do #167), filtros de
- * pendentes e extrato. Mesmo regime do `vendas-faturar-ot.e2e.spec.ts`: corre com
- * `DB_HOST` definido, semeia os seus dados e remove-os no fim.
+ * #166 + #174 + #167 — Teste de aceitação das fases 3 e 4 contra BD real (v11 §7.4
+ * passos 8–9, com a caixa aberta pela gestão de caixa), filtros de pendentes,
+ * extrato, saída e fecho de caixa com acerto. Mesmo regime do
+ * `vendas-faturar-ot.e2e.spec.ts`: corre com `DB_HOST` definido, semeia os seus
+ * dados e remove-os no fim.
  */
 const describeDb = process.env.DB_HOST ? describe : describe.skip;
 
@@ -75,6 +76,9 @@ describeDb('Tesouraria — pendentes, liquidações e extrato (v11 §7.4 passos 
         ids.caixa = (await q(`INSERT INTO contas_bancarias (codigo, descricao, tipo) VALUES ($1, 'Caixa e2e', 'CAIXA') RETURNING id`, [`CX${tag}`])).id;
         ids.conta = (await q(`INSERT INTO contas_bancarias (codigo, descricao, tipo) VALUES ($1, 'DO não associada', 'DO') RETURNING id`, [`DO${tag}`])).id;
         await ds.query(`INSERT INTO documentos_config_bancos (documento_config_id, conta_bancaria_id) VALUES ($1, $2)`, [ids.mc, ids.caixa]);
+        // #167 — e aos documentos de abertura, saída e fecho de caixa.
+        await ds.query(`INSERT INTO documentos_config_bancos (documento_config_id, conta_bancaria_id)
+            SELECT id, $1 FROM documentos_config WHERE codigo IN ('ABC', 'SDC', 'FCC')`, [ids.caixa]);
 
         fts.x = await faturar('1', ids.clienteX, `${ano}-01-01T10:00:00Z`);
         fts.y = await faturar('2', ids.clienteY, `${ano}-01-02T10:00:00Z`);
@@ -83,6 +87,9 @@ describeDb('Tesouraria — pendentes, liquidações e extrato (v11 §7.4 passos 
     afterAll(async () => {
         if (ds?.isInitialized) {
             const clientes = [ids.clienteX, ids.clienteY];
+            await ds.query(`UPDATE sessoes_caixa SET documento_acerto_id = NULL WHERE conta_bancaria_id = $1`, [ids.caixa]);
+            await ds.query(`DELETE FROM movimentos_conta WHERE conta_bancaria_id = $1`, [ids.caixa]);
+            await ds.query(`DELETE FROM sessoes_caixa WHERE conta_bancaria_id = $1`, [ids.caixa]);
             await ds.query(`DELETE FROM movimentos_conta WHERE origem_tipo = 'LIQUIDACAO'
                 AND origem_id IN (SELECT id FROM liquidacoes WHERE cliente_id = ANY($1))`, [clientes]);
             await ds.query(`DELETE FROM liquidacoes WHERE cliente_id = ANY($1)`, [clientes]);
@@ -151,8 +158,21 @@ describeDb('Tesouraria — pendentes, liquidações e extrato (v11 §7.4 passos 
                 .toBe(serieRe.ultimo_numero);
         });
 
+        it('passo 8 (#167) — abrir a caixa: sugere 0 na 1.ª abertura e regista o declarado; abrir de novo → 422', async () => {
+            const estado = (await request(srv()).get(`/caixa/${ids.caixa}`).expect(200)).body;
+            expect(estado).toMatchObject({ conta: { aberta: false }, valorSugerido: 0, sessao: null });
+
+            const s = (await request(srv()).post(`/caixa/${ids.caixa}/abrir`).send({ valorDeclarado: 10000 }).expect(200)).body;
+            expect(s).toMatchObject({ estado: 'ABERTA', valorSugerido: 0, valorDeclarado: 10000, saldoTeorico: 10000 });
+            expect(s.aberturaDocumento).toMatch(/^ABC /);
+            ids.sessao = s.id;
+
+            const outra = await request(srv()).post(`/caixa/${ids.caixa}/abrir`).send({ valorDeclarado: 0 }).expect(422);
+            expect(outra.body.errors.contaBancariaId).toMatch(/já está aberta/);
+            await request(srv()).post(`/caixa/${ids.conta}/abrir`).send({ valorDeclarado: 0 }).expect(422);
+        });
+
         it('conta não associada ao MC, valor acima do pendente e pendente de outro cliente → 422', async () => {
-            await ds.query(`UPDATE contas_bancarias SET aberta = true WHERE id = $1`, [ids.caixa]); // abertura (#167)
             const nAssoc = await request(srv()).post('/liquidacoes').send(recebimento({ contaBancariaId: ids.conta })).expect(422);
             expect(nAssoc.body.errors.contaBancariaId).toMatch(/não está associada/);
 
@@ -174,8 +194,8 @@ describeDb('Tesouraria — pendentes, liquidações e extrato (v11 §7.4 passos 
             expect(liq.movimentosConta[0]).toMatchObject({ valor: 50000 });
             expect(liq.movimentosConta[0].numeroDocumento).toMatch(/^MC /);
 
-            const mc = await q(`SELECT conta_bancaria_id, valor FROM movimentos_conta WHERE origem_tipo = 'LIQUIDACAO' AND origem_id = $1`, [liq.id]);
-            expect(mc).toMatchObject({ conta_bancaria_id: ids.caixa, valor: '50000.00' });
+            const mc = await q(`SELECT conta_bancaria_id, sessao_caixa_id, valor FROM movimentos_conta WHERE origem_tipo = 'LIQUIDACAO' AND origem_id = $1`, [liq.id]);
+            expect(mc).toMatchObject({ conta_bancaria_id: ids.caixa, sessao_caixa_id: ids.sessao, valor: '50000.00' });
 
             const p = await pendentes({ documento: `FT ${tag}/1` });
             expect(p.items[0]).toMatchObject({ valorPendente: 64000, estadoCodigo: 'PEN' }); // parcial mantém o estado
@@ -198,6 +218,52 @@ describeDb('Tesouraria — pendentes, liquidações e extrato (v11 §7.4 passos 
             expect(liq).toMatchObject({ total: 100000, desconto: 14000 });
             expect(liq.movimentosConta[0].valor).toBe(100000);
             expect((await pendentes({ clienteId: ids.clienteY })).items).toHaveLength(0);
+        });
+    });
+
+    describe('#167 — saída e fecho de caixa', () => {
+        // Entradas na sessão: 50 000 + 64 000 + 100 000 = 214 000; abertura 10 000.
+        it('saída de caixa: acima do saldo → 422; válida → SDC negativo e saldo teórico actualizado', async () => {
+            const demais = await request(srv()).post(`/caixa/${ids.caixa}/saida`).send({ valor: 224000.01, motivo: 'Depósito' }).expect(422);
+            expect(demais.body.errors.valor).toMatch(/excede o saldo da caixa \(224000\)/);
+            await request(srv()).post(`/caixa/${ids.caixa}/saida`).send({ valor: 10, motivo: 'x' }).expect(400); // motivo curto
+
+            const s = (await request(srv()).post(`/caixa/${ids.caixa}/saida`).send({ valor: 4000, motivo: 'Combustível' }).expect(200)).body;
+            expect(s).toMatchObject({ entradas: 214000, saidas: 4000, saldoTeorico: 220000 });
+            const saida = s.movimentos.find((x: any) => x.origemTipo === 'SAIDA_CAIXA');
+            expect(saida).toMatchObject({ valor: -4000, descricao: 'Combustível' });
+            expect(saida.numeroDocumento).toMatch(/^SDC /);
+            expect(s.movimentos.filter((x: any) => x.origemTipo === 'LIQUIDACAO').every((x: any) => /^RE /.test(x.origemDocumento))).toBe(true);
+        });
+
+        it('fecho com quebra → acerto ACQ pela diferença; caixa fechada; RE para a caixa volta a dar 422', async () => {
+            const s = (await request(srv()).post(`/caixa/${ids.caixa}/fechar`).send({ valorContado: 219500 }).expect(200)).body;
+            expect(s).toMatchObject({ estado: 'FECHADA', saldoTeorico: 220000, valorContado: 219500, diferenca: -500, acertoValor: -500 });
+            expect(s.fechoDocumento).toMatch(/^FCC /);
+            expect(s.acertoDocumento).toMatch(/^ACQ /);
+            const acerto = await q(`SELECT m.valor, m.origem_tipo, d.codigo FROM sessoes_caixa s
+                JOIN movimentos_conta m ON m.id = s.documento_acerto_id JOIN documentos_config d ON d.id = m.documento_config_id
+                WHERE s.id = $1`, [ids.sessao]);
+            expect(acerto).toEqual({ valor: '-500.00', origem_tipo: 'ACERTO_CAIXA', codigo: 'ACQ' });
+            expect((await q(`SELECT aberta FROM contas_bancarias WHERE id = $1`, [ids.caixa])).aberta).toBe(false);
+
+            await request(srv()).post(`/caixa/${ids.caixa}/fechar`).send({ valorContado: 0 }).expect(422);
+            await request(srv()).post(`/caixa/${ids.caixa}/saida`).send({ valor: 1, motivo: 'Compra' }).expect(422);
+            const res = await request(srv()).post('/liquidacoes').send(recebimento({ linhas: [{ movimentoCcId: fts.x.movimentoCcId, valorPago: 1 }] })).expect(422);
+            expect(res.body.errors.contaBancariaId).toMatch(/está fechada/);
+        });
+
+        it('reabertura sugere o contado no fecho; fecho com sobra → acerto ACS; histórico das sessões', async () => {
+            const s2 = (await request(srv()).post(`/caixa/${ids.caixa}/abrir`).send({ valorDeclarado: 219000 }).expect(200)).body;
+            expect(s2).toMatchObject({ valorSugerido: 219500, valorDeclarado: 219000 });
+            const f2 = (await request(srv()).post(`/caixa/${ids.caixa}/fechar`).send({ valorContado: 219100 }).expect(200)).body;
+            expect(f2).toMatchObject({ saldoTeorico: 219000, diferenca: 100, acertoValor: 100 });
+            expect(f2.acertoDocumento).toMatch(/^ACS /);
+
+            const hist = (await request(srv()).get(`/caixa/${ids.caixa}/sessoes`).expect(200)).body;
+            expect(hist.map((h: any) => [h.estado, h.diferenca])).toEqual([['FECHADA', 100], ['FECHADA', -500]]);
+            const lista = (await request(srv()).get('/caixa').expect(200)).body;
+            expect(lista.find((c: any) => c.conta.id === ids.caixa)).toMatchObject({ valorSugerido: 219100, sessao: null });
         });
     });
 

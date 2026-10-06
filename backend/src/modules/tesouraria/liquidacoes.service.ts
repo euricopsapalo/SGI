@@ -1,14 +1,15 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, EntityManager, In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Liquidacao, LiquidacaoLinha } from './liquidacao.entity';
 import { MovimentoConta, OrigemMovimentoConta } from './movimento-conta.entity';
 import { MovimentoCc } from '../vendas/movimento-cc.entity';
 import { DocumentoConfig } from '../vendas-config/documento-config.entity';
 import { Serie } from '../vendas-config/serie.entity';
 import { ContaBancaria } from '../vendas-config/conta-bancaria.entity';
-import { proximaEmissao, SerieInvalidaError } from '../vendas-config/series.rules';
 import { erroValidacao, temErros } from '../vendas-config/erros';
+import { emitirNaSerie, serieBloqueada } from './emissao';
+import { sessaoCaixaAberta } from './caixa.service';
 import { Cliente } from '../clientes/cliente.entity';
 import { SysLogsService } from '../sys-logs/sys-logs.service';
 import { numeroDocumento, round2 } from '../vendas/vendas.rules';
@@ -112,14 +113,14 @@ export class LiquidacoesService {
                 }
                 const conta = await m.findOne(ContaBancaria, { where: { id: dto.contaBancariaId }, lock: { mode: 'pessimistic_write' } });
                 if (!conta || !conta.ativo) throw erroValidacao({ contaBancariaId: 'A conta indicada não existe ou está inactiva' });
-                if (conta.tipo === 'CAIXA' && !conta.aberta) {
-                    throw erroValidacao({ contaBancariaId: `A caixa ${conta.codigo} está fechada. Abra a caixa antes de registar recebimentos em numerário.` });
-                }
+                // #167 — numa caixa, o movimento entra na sessão aberta (sob o bloqueio da conta).
+                const sessao = await sessaoCaixaAberta(m, conta, 'contaBancariaId',
+                    `A caixa ${conta.codigo} está fechada. Abra a caixa antes de registar recebimentos em numerário.`);
 
                 // Série do RE.
                 const dataHora = dto.dataHora ? new Date(dto.dataHora) : new Date();
-                const serie = await this.serieBloqueada(m, config!, dto.serieId, dto.dataHora, 'serieId');
-                const numero = this.emitirNaSerie(serie, dataHora, '');
+                const serie = await serieBloqueada(m, config!, dto.serieId, dto.dataHora, 'serieId');
+                const numero = emitirNaSerie(serie, dataHora, '');
 
                 // Pendentes bloqueados e validados contra o pendente actual.
                 const movs = await m.find(MovimentoCc, {
@@ -173,19 +174,20 @@ export class LiquidacoesService {
                 }
 
                 // Movimento em conta — um por modo de pagamento (o modo qualifica o movimento).
-                const serieMc = await this.serieBloqueada(m, mcConfig, undefined, dto.dataHora, 'dataHora');
+                const serieMc = await serieBloqueada(m, mcConfig, undefined, dto.dataHora, 'dataHora');
                 let i = 0;
                 let ultimo = { numero: serieMc.ultimoNumero, dataHora: serieMc.ultimaDataHora };
                 for (const [modo, valor] of valorPorModo(dto.linhas, porId)) {
                     if (valor <= 0) continue;
                     const dh = new Date(dataHora.getTime() + i++); // mesmo instante, ordem estrita na série
-                    const n = this.emitirNaSerie({ ...serieMc, ultimoNumero: ultimo.numero, ultimaDataHora: ultimo.dataHora }, dh, `Movimento em conta (${mcConfig.codigo}): `);
+                    const n = emitirNaSerie({ ...serieMc, ultimoNumero: ultimo.numero, ultimaDataHora: ultimo.dataHora }, dh, `Movimento em conta (${mcConfig.codigo}): `);
                     await m.save(MovimentoConta, m.create(MovimentoConta, {
                         documentoConfigId: mcConfig.id,
                         serieId: serieMc.id,
                         numero: n,
                         dataHora: dh,
                         contaBancariaId: conta.id,
+                        sessaoCaixaId: sessao?.id ?? null,
                         origemTipo: OrigemMovimentoConta.LIQUIDACAO,
                         origemId: liq.id,
                         valor,
@@ -220,36 +222,6 @@ export class LiquidacoesService {
         }
         if (!config.ligacaoTesouraria || !config.ligacaoTesourariaDocId) {
             throw erroValidacao({ documentoConfigId: `O documento ${config.codigo} não tem ligação a tesouraria configurada` });
-        }
-    }
-
-    /** Série indicada (do documento) ou a por defeito, bloqueada para a emissão. */
-    private async serieBloqueada(m: EntityManager, config: DocumentoConfig, serieId: number | undefined, dataHora: string | undefined, campo: string) {
-        const serie = await m.findOne(Serie, {
-            where: serieId ? { id: serieId } : { documentoConfigId: config.id, porDefeito: true },
-            lock: { mode: 'pessimistic_write' },
-        });
-        if (!serie || serie.documentoConfigId !== config.id) {
-            throw erroValidacao({
-                [campo]: serieId
-                    ? `A série indicada não pertence ao documento ${config.codigo}`
-                    : `O documento ${config.codigo} não tem série por defeito`,
-            });
-        }
-        if (!dataHora && !serie.sugereDataSistema) {
-            throw erroValidacao({ dataHora: `A série ${serie.codigo} de ${config.codigo} exige a indicação da data-hora` });
-        }
-        return serie;
-    }
-
-    private emitirNaSerie(serie: Serie, dataHora: Date, prefixo: string): number {
-        try {
-            return proximaEmissao(serie, dataHora);
-        } catch (e) {
-            if (e instanceof SerieInvalidaError) {
-                throw erroValidacao({ [/data/i.test(e.message) ? 'dataHora' : 'serieId']: prefixo + e.message });
-            }
-            throw e;
         }
     }
 

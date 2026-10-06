@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import {
-    ArrayMinSize, IsArray, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min,
+    ArrayMinSize, IsArray, IsDateString, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength,
     ValidateNested,
 } from 'class-validator';
 
@@ -33,6 +33,43 @@ export class CreateLiquidacaoDto {
 
     @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => LinhaLiquidacaoDto)
     linhas: LinhaLiquidacaoDto[];
+}
+
+/**
+ * #167 — Campos comuns às operações de caixa. Sem documento → o activo do tipo
+ * associado à caixa; sem série → a por defeito; sem data-hora → agora.
+ */
+class OperacaoCaixaDto {
+    @IsOptional() @IsInt() documentoConfigId?: number;
+    @IsOptional() @IsInt() serieId?: number;
+    @IsOptional() @IsDateString() dataHora?: string;
+}
+
+/** #167 — `POST /api/caixa/:contaId/abrir`. */
+export class AbrirCaixaDto extends OperacaoCaixaDto {
+    @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
+    valorDeclarado: number;
+
+    @IsOptional() @IsString() @MaxLength(5000)
+    observacoes?: string;
+}
+
+/** #167 — `POST /api/caixa/:contaId/saida`. */
+export class SaidaCaixaDto extends OperacaoCaixaDto {
+    @IsNumber({ maxDecimalPlaces: 2 }) @Min(0.01)
+    valor: number;
+
+    @IsString() @MinLength(3) @MaxLength(300)
+    motivo: string;
+}
+
+/** #167 — `POST /api/caixa/:contaId/fechar`. */
+export class FecharCaixaDto extends OperacaoCaixaDto {
+    @IsNumber({ maxDecimalPlaces: 2 }) @Min(0)
+    valorContado: number;
+
+    @IsOptional() @IsString() @MaxLength(5000)
+    observacoes?: string;
 }
 
 /** #174 — filtros de `GET /api/cc/pendentes`. */

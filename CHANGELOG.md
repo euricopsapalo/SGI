@@ -4,6 +4,24 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(tesouraria): fase 4 — gestão de caixa: abertura, saída e fecho com apuramento e acerto (closes #167)
+
+Fase 4 do épico #163 (v11 §5.5, v10 §6.4). Novo separador **Vendas → Caixa**.
+
+- **Sessões de caixa** (`sessoes_caixa`): da abertura (`ABC`) ao fecho (`FCC`), cada uma numerada na série do respectivo documento. No máximo uma sessão aberta por caixa (índice único parcial).
+- **Abertura:** sugere o valor contado no fecho anterior (0 na primeira) e regista o valor sugerido e o declarado. Tem de ser posterior ao último fecho.
+- **Saída de caixa** (`SDC`): exige a caixa aberta e um motivo. Gera um Movimento em conta negativo na sessão e não pode exceder o saldo teórico.
+- **Fecho:**
+  - saldo teórico = abertura + entradas − saídas;
+  - com o valor contado, a diferença gera o acerto de **sobra** (`ACS`, positivo) ou de **quebra** (`ACQ`, negativo), um Movimento em conta ligado à sessão (`documento_acerto_id`);
+  - a caixa fica fechada.
+- **Qualquer movimento em caixa exige-a aberta no momento:** a liquidação (`RE` → `MC`) verifica a sessão aberta sob o `FOR UPDATE` da conta e associa o `MC` à sessão (`movimentos_conta.sessao_caixa_id`).
+- **API:** `GET /api/caixa`, `GET /api/caixa/:contaId`, `GET /api/caixa/:contaId/sessoes`, `GET /api/caixa/sessoes/:id`, `POST /api/caixa/:contaId/{abrir,saida,fechar}` (perfis admin, coordenador e vendedor).
+- **Migração `GestaoCaixa`:** cria `sessoes_caixa` e acrescenta `sessao_caixa_id` e `descricao` a `movimentos_conta`, mais as origens `SAIDA_CAIXA` e `ACERTO_CAIXA`. Uma caixa marcada como aberta sem sessão fica fechada.
+- **Testes:**
+  - unitários de `caixa.rules` e `CaixaService`;
+  - o e2e da tesouraria cobre o passo 8 completo da §7.4 (RE com caixa fechada → 422, abrir, repetir → sucesso), a saída e o fecho com quebra e com sobra.
+
 ### fix(vendas): pré-visualização e impressão da Fatura e do Recibo em folha A4 centrada (closes #180)
 
 A janela de impressão mostrava o documento à largura toda, sem folha, porque o formato só estava no `@page`, que só é aplicado ao imprimir. O Recibo estava em A5.
