@@ -4,7 +4,10 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/roles.decorator';
 import { ContaCorrenteService } from './conta-corrente.service';
 import { LiquidacoesService } from './liquidacoes.service';
-import { CreateLiquidacaoDto, ExtratoQueryDto, PendentesQueryDto } from './dto/tesouraria.dto';
+import { CaixaService } from './caixa.service';
+import {
+    AbrirCaixaDto, CreateLiquidacaoDto, ExtratoQueryDto, FecharCaixaDto, PendentesQueryDto, SaidaCaixaDto,
+} from './dto/tesouraria.dto';
 
 /** Perfis que registam recebimentos (os mesmos que faturam). */
 const TESOURARIA = ['admin', 'coordenador', 'vendedor'];
@@ -45,4 +48,39 @@ export class LiquidacoesController {
     /** #178 — dados para imprimir o recibo; conta a impressão (Original / Segunda via). */
     @Post(':id/imprimir') @HttpCode(200)
     imprimir(@Param('id', ParseIntPipe) id: number) { return this.impressao.imprimir(id); }
+}
+
+/** #167 — Gestão de caixa: abertura, saída e fecho com apuramento e acerto. */
+@ApiTags('tesouraria')
+@ApiBearerAuth('access-token')
+@Controller('caixa')
+export class CaixaController {
+    constructor(private readonly svc: CaixaService) {}
+
+    @Get()
+    listar() { return this.svc.listar(); }
+
+    @Get('sessoes/:id')
+    sessao(@Param('id', ParseIntPipe) id: number) { return this.svc.sessao(id); }
+
+    @Get(':contaId')
+    findOne(@Param('contaId', ParseIntPipe) contaId: number) { return this.svc.findOne(contaId); }
+
+    @Get(':contaId/sessoes')
+    sessoes(@Param('contaId', ParseIntPipe) contaId: number) { return this.svc.sessoes(contaId); }
+
+    @Post(':contaId/abrir') @HttpCode(200) @Roles(...TESOURARIA)
+    abrir(@Param('contaId', ParseIntPipe) contaId: number, @Body() dto: AbrirCaixaDto, @Request() req: any) {
+        return this.svc.abrir(contaId, dto, req?.user);
+    }
+
+    @Post(':contaId/saida') @HttpCode(200) @Roles(...TESOURARIA)
+    saida(@Param('contaId', ParseIntPipe) contaId: number, @Body() dto: SaidaCaixaDto, @Request() req: any) {
+        return this.svc.saida(contaId, dto, req?.user);
+    }
+
+    @Post(':contaId/fechar') @HttpCode(200) @Roles(...TESOURARIA)
+    fechar(@Param('contaId', ParseIntPipe) contaId: number, @Body() dto: FecharCaixaDto, @Request() req: any) {
+        return this.svc.fechar(contaId, dto, req?.user);
+    }
 }

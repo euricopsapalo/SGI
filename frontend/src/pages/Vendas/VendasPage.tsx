@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertCircle, BookOpen, FileText, Filter, HandCoins, Lock, Printer, Receipt, Search, Send, Trash2, Wallet, Wrench } from 'lucide-react';
+import { AlertCircle, BookOpen, FileText, Filter, HandCoins, Landmark, Lock, Printer, Receipt, Search, Send, Trash2, Wallet, Wrench } from 'lucide-react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import EmptyState from '../../components/EmptyState';
@@ -18,6 +18,7 @@ import { adiado, CANCELADO, Modal, mono, muted, num } from './ui';
 import { buildFaturaHtml, imprimirDocumento } from './impressao';
 import PendentesTab from './PendentesTab';
 import RecebimentosTab from './RecebimentosTab';
+import CaixaTab from './CaixaTab';
 import ExtratoTab from './ExtratoTab';
 
 /**
@@ -27,8 +28,8 @@ import ExtratoTab from './ExtratoTab';
  * que gera o pendente na conta corrente do cliente. Emitido = imutável.
  */
 
-type Tab = 'ots' | 'semValor' | 'documentos' | 'pendentes' | 'recebimentos' | 'extrato';
-const TABS_VALIDOS: Tab[] = ['ots', 'semValor', 'documentos', 'pendentes', 'recebimentos', 'extrato'];
+type Tab = 'ots' | 'semValor' | 'documentos' | 'pendentes' | 'recebimentos' | 'caixa' | 'extrato';
+const TABS_VALIDOS: Tab[] = ['ots', 'semValor', 'documentos', 'pendentes', 'recebimentos', 'caixa', 'extrato'];
 
 
 const ESTADO_BADGE: Record<EstadoFaturacao | 'Rascunho', { bg: string; color: string }> = {
@@ -426,6 +427,7 @@ const VendasPage: React.FC = () => {
         { id: 'documentos', label: 'Documentos', icon: Receipt, n: docs?.length },
         { id: 'pendentes', label: 'Pendentes', icon: Wallet },
         { id: 'recebimentos', label: 'Recebimentos', icon: HandCoins },
+        { id: 'caixa', label: 'Caixa', icon: Landmark },
         { id: 'extrato', label: 'Extrato', icon: BookOpen },
     ];
     const tabVendas = tab === 'ots' || tab === 'semValor' || tab === 'documentos';
@@ -529,6 +531,7 @@ const VendasPage: React.FC = () => {
                         onMudou={() => { setVersao(v => v + 1); carregar(); }} />
                 )}
                 {tab === 'recebimentos' && <RecebimentosTab versao={versao} />}
+                {tab === 'caixa' && <CaixaTab podeOperar={podeFaturar} versao={versao} onMudou={() => setVersao(v => v + 1)} />}
                 {tab === 'extrato' && <ExtratoTab versao={versao} />}
 
                 {tab === 'ots' && tabelaOts(ots, true)}

@@ -1,4 +1,4 @@
-import { filtrosDeUrl, filtrosParaUrl, podeSelecionar, type Pendente } from './tesouraria';
+import { apuramentoCaixa, filtrosDeUrl, filtrosParaUrl, podeSelecionar, type Pendente } from './tesouraria';
 
 /** #174 — filtros de pendentes no URL e regra de selecção para liquidar (#166). */
 describe('tesouraria — filtros e selecção', () => {
@@ -17,5 +17,11 @@ describe('tesouraria — filtros e selecção', () => {
         expect(podeSelecionar([p(1)], p(1))).toBeNull();
         expect(podeSelecionar([p(1)], p(2))).toMatch(/um só cliente/);
         expect(podeSelecionar([], p(1, 'C'))).toMatch(/débito/);
+    });
+
+    it('#167 — apuramento do fecho de caixa: sobra, quebra ou sem diferença', () => {
+        expect(apuramentoCaixa(1000, 1200)).toEqual({ diferenca: 200, acerto: 'SOBRA' });
+        expect(apuramentoCaixa(220000, 219500)).toEqual({ diferenca: -500, acerto: 'QUEBRA' });
+        expect(apuramentoCaixa(0.1 + 0.2, 0.3)).toEqual({ diferenca: 0, acerto: null });
     });
 });
