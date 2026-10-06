@@ -14,6 +14,7 @@ import {
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import EmptyState from '../../components/EmptyState';
 import TableSkeleton from '../../components/TableSkeleton';
+import { comPaginacao } from '../../utils/impressaoPagina';
 
 /* ── Helpers (fmtDate e fmtMoney vêm do GlobalContext) ── */
 
@@ -114,7 +115,7 @@ const FaturaDetalhe: React.FC<FaturaDetalheProps> = ({ fatura, nomeCliente, otDe
     const handlePrint = () => {
         const w = window.open('', '_blank', 'width=860,height=700');
         if (!w) return;
-        w.document.write(buildFaturaHtml());
+        w.document.write(comPaginacao(buildFaturaHtml()));
         w.document.close();
         setTimeout(() => w.print(), 350);
     };

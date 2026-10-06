@@ -13,6 +13,7 @@ import {
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import EmptyState from '../../components/EmptyState';
 import TableSkeleton from '../../components/TableSkeleton';
+import { comPaginacao } from '../../utils/impressaoPagina';
 
 /* ══ Helpers (fmt e fmtMoney vêm do GlobalContext) ══════════ */
 
@@ -744,7 +745,7 @@ const printInventSheet = (artigos: Artigo[], lines: InventLine[], armazens: Arma
     const html = buildInventSheetHtml(artigos, lines, armazens);
     const w = window.open('', '_blank');
     if (!w) return;
-    w.document.write(html);
+    w.document.write(comPaginacao(html));
     w.document.close();
     setTimeout(() => w.print(), 350);
 };

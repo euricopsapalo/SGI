@@ -19,6 +19,7 @@ import {
     CalendarDays, ListFilter, FileText, CreditCard, Wallet,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
+import { comPaginacao } from '../../utils/impressaoPagina';
 
 /* ══ Helpers ════════════════════════════════════════════════ */
 const linhaTotal = (l: EncomendaLinha) =>
@@ -384,7 +385,7 @@ function printNotaEncomenda(encomenda: Encomenda, fornecedorNome: string, empres
     const html = buildNotaEncomendaHtml(encomenda, fornecedorNome, empresa, simbolo, artigos, taxasIva);
     const w = window.open('', '_blank', 'width=794,height=1123');
     if (!w) return;
-    w.document.write(html);
+    w.document.write(comPaginacao(html));
     w.document.close();
     w.focus();
     setTimeout(() => { w.print(); }, 400);
@@ -542,7 +543,7 @@ function printNotaEntrada(
     const html = buildNotaEntradaHtml(rececao, encomenda, empresa, simbolo);
     const w = window.open('', '_blank', 'width=794,height=1123');
     if (!w) return;
-    w.document.write(html);
+    w.document.write(comPaginacao(html));
     w.document.close();
     w.focus();
     setTimeout(() => { w.print(); }, 400);
@@ -988,7 +989,7 @@ function buildVNCHtml(
 function printDocFornecedor(html: string) {
     const w = window.open('', '_blank', 'width=794,height=1123');
     if (!w) return;
-    w.document.write(html);
+    w.document.write(comPaginacao(html));
     w.document.close();
     w.focus();
     setTimeout(() => w.print(), 400);
@@ -2338,7 +2339,7 @@ function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: st
     const html = buildSugestoesHtml(artigos, empresa, simbolo);
     const w = window.open('', '_blank', 'width=794,height=1123');
     if (!w) return;
-    w.document.write(html);
+    w.document.write(comPaginacao(html));
     w.document.close();
     w.focus();
     setTimeout(() => w.print(), 400);

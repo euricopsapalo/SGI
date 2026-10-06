@@ -18,6 +18,7 @@ import {
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import EmptyState from '../../components/EmptyState';
 import TableSkeleton from '../../components/TableSkeleton';
+import { comPaginacao } from '../../utils/impressaoPagina';
 
 /* ── Constants ───────────────────────────────────────── */
 const ESTADO_CONFIG: Record<OTEstado, { dot: string; label: string; icon: React.ReactNode }> = {
@@ -95,7 +96,7 @@ function otEstadoCor(estado: string) {
 function openPrintI(html: string, title: string) {
     const w = window.open('', '_blank', 'width=1100,height=900');
     if (!w) return;
-    w.document.write(html);
+    w.document.write(comPaginacao(html));
     w.document.title = title;
     w.document.close(); w.focus(); setTimeout(() => w.print(), 350);
 }
@@ -459,7 +460,7 @@ async function printOT(
     const assinatura = await fetchAssinaturaDataUrl(ot.id);
     const w = window.open('', '_blank', 'width=840,height=960');
     if (!w) return;
-    w.document.write(buildOTHtml(ot, equipInstalados, modelosEquipamento, clientes, empresa, simbolo, assinatura));
+    w.document.write(comPaginacao(buildOTHtml(ot, equipInstalados, modelosEquipamento, clientes, empresa, simbolo, assinatura)));
     w.document.close();
     w.focus();
     setTimeout(() => w.print(), 350);

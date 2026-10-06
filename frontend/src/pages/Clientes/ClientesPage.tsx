@@ -13,6 +13,7 @@ import SubmitButton from '../../components/SubmitButton';
 import { useModalA11y } from '../../components/useModalA11y';
 import EmptyState from '../../components/EmptyState';
 import TableSkeleton from '../../components/TableSkeleton';
+import { comPaginacao } from '../../utils/impressaoPagina';
 
 /* ══════════════════════════════════════════
    Types
@@ -560,7 +561,7 @@ function ultimaIntRC(clienteId: string | number, ordens: OrdemTrabalho[]) {
 function openPrint(html: string) {
     const w = window.open('', '_blank', 'width=1000,height=900');
     if (!w) return;
-    w.document.write(html);
+    w.document.write(comPaginacao(html));
     w.document.close();
     w.focus();
     setTimeout(() => w.print(), 350);
