@@ -10,6 +10,15 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 - **Cabeçalhos de secção:** Dados do Documento · Artigos e Serviços · Resumo de Impostos · Retenção na Fonte · Totais · Coordenadas Bancárias · Observações. Nenhuma informação foi removida nem acrescentada além da OT.
 - Testes do gerador cobrem a ordem das secções e a fatura com/sem OT.
 
+### fix(tesouraria): recebimento em numerário só entra numa caixa (closes #187)
+
+Um recebimento em numerário podia ficar lançado numa conta bancária (a "Conta de destino" vinha pré-seleccionada com o banco), fora da sessão de caixa — o saldo teórico da caixa ficava abaixo do dinheiro físico.
+
+- **Backend:** `POST /api/tesouraria/liquidacoes` recusa (422 em `contaBancariaId`) pendentes com modo de numerário (`NUM`/`PGNUM`) numa conta que não é `CAIXA`.
+- **Pendentes:** a listagem devolve `modoPagamentoMovimento` (código do modo).
+- **Frontend — Recebimento:** em numerário pré-selecciona a caixa aberta; se for escolhido um banco, avisa no campo e não deixa gravar.
+- Dados do caso real (FT 2026/2) corrigidos à parte em #188.
+
 ### feat(impressao): PDFs gerados no servidor — impressão igual em qualquer browser (closes #182)
 
 O Firefox (browser por omissão dos utilizadores) ignora a regra de página do #180 e imprime o seu título, URL e data nos cantos, sem a paginação. Agora todas as impressões chegam ao utilizador **já como PDF**, gerado no servidor.

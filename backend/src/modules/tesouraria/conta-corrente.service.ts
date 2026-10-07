@@ -82,7 +82,8 @@ export class ContaCorrenteService {
                    d.ot_id AS "otId", ot.numero AS "otNumero",
                    m.valor_original::float AS "valorOriginal", m.valor_pendente::float AS "valorPendente",
                    m.cc_tipo_id AS "ccTipoId", m.cc_estado_id AS "ccEstadoId", e.codigo AS "estadoCodigo",
-                   m.modo_pagamento_id AS "modoPagamentoId", mp.descricao AS "modoPagamentoDescricao"
+                   m.modo_pagamento_id AS "modoPagamentoId", mp.descricao AS "modoPagamentoDescricao",
+                   mp.movimento AS "modoPagamentoMovimento"
             ${from}
             ORDER BY ${ordem} ${direcao}, m.id ${direcao}
             LIMIT $${n + 1} OFFSET $${n + 2}`, [...params, porPagina, (pagina - 1) * porPagina]);

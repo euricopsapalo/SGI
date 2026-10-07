@@ -66,6 +66,12 @@ export function valorPorModo(
     return out;
 }
 
+/** #187 — Modos de pagamento em numerário (código `movimento` da tabela `modos_pagamento`). */
+export const MOVIMENTOS_NUMERARIO = ['NUM', 'PGNUM'];
+
+export const eNumerario = (movimento: string | null | undefined) =>
+    !!movimento && MOVIMENTOS_NUMERARIO.includes(movimento.trim().toUpperCase());
+
 /** Dias em atraso face ao vencimento (0 se ainda não venceu). Datas `YYYY-MM-DD`. */
 export function diasAtraso(dataVencimento: string, hoje: string): number {
     const ms = Date.parse(`${hoje}T00:00:00Z`) - Date.parse(`${dataVencimento}T00:00:00Z`);
