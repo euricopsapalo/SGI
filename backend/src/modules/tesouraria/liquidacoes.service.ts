@@ -14,7 +14,8 @@ import { Cliente } from '../clientes/cliente.entity';
 import { SysLogsService } from '../sys-logs/sys-logs.service';
 import { numeroDocumento, round2 } from '../vendas/vendas.rules';
 import { snapshotCliente, snapshotEmpresa } from '../vendas/snapshot';
-import { MovimentoLiquidavel, validarLinhasLiquidacao, valorPorModo } from './tesouraria.rules';
+import { ModoPagamento } from '../tabelas-sistema/modo-pagamento.entity';
+import { eNumerario, MovimentoLiquidavel, validarLinhasLiquidacao, valorPorModo } from './tesouraria.rules';
 import { CreateLiquidacaoDto } from './dto/tesouraria.dto';
 
 type Utilizador = { id?: number; email?: string } | undefined;
@@ -134,6 +135,16 @@ export class LiquidacoesService {
                     clienteId: dto.clienteId, ccTipoId: config!.ccTipoId, ccEstadoId: config!.ccEstadoId,
                 });
                 if (temErros(erros)) throw erroValidacao(erros);
+                // #187 — numerário só entra numa caixa (e, por isso, na sessão aberta).
+                if (conta.tipo !== 'CAIXA') {
+                    const modoIds = [...new Set(movs.map((mv) => mv.modoPagamentoId).filter((x): x is number => x != null))];
+                    const modos = modoIds.length ? await m.find(ModoPagamento, { where: { id: In(modoIds) } }) : [];
+                    if (modos.some((mp) => eNumerario(mp.movimento))) {
+                        throw erroValidacao({
+                            contaBancariaId: `Recebimento em numerário: escolha uma caixa como conta de destino (${conta.codigo} não é uma caixa).`,
+                        });
+                    }
+                }
                 const total = round2(dto.linhas.reduce((s, l) => s + Number(l.valorPago), 0));
                 const desconto = round2(dto.linhas.reduce((s, l) => s + Number(l.desconto ?? 0), 0));
                 if (total <= 0) throw erroValidacao({ linhas: 'O valor total a receber tem de ser superior a zero' });

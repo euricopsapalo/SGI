@@ -1,4 +1,11 @@
-import { apuramentoCaixa, filtrosDeUrl, filtrosParaUrl, podeSelecionar, type Pendente } from './tesouraria';
+import { apuramentoCaixa, eNumerario, filtrosDeUrl, filtrosParaUrl, podeSelecionar, type Pendente } from './tesouraria';
+
+it('#187 — eNumerario: só os modos NUM/PGNUM', () => {
+    expect(eNumerario('NUM')).toBe(true);
+    expect(eNumerario(' pgnum ')).toBe(true);
+    expect(eNumerario('TRFR')).toBe(false);
+    expect(eNumerario(null)).toBe(false);
+});
 
 /** #174 — filtros de pendentes no URL e regra de selecção para liquidar (#166). */
 describe('tesouraria — filtros e selecção', () => {

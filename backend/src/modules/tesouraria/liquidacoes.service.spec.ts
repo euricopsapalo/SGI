@@ -8,6 +8,7 @@ import { Serie } from '../vendas-config/serie.entity';
 import { ContaBancaria } from '../vendas-config/conta-bancaria.entity';
 import { Cliente } from '../clientes/cliente.entity';
 import { SessaoCaixa } from './sessao-caixa.entity';
+import { ModoPagamento } from '../tabelas-sistema/modo-pagamento.entity';
 import { anoLocal } from '../vendas-config/series.rules';
 
 /**
@@ -55,6 +56,7 @@ describe('LiquidacoesService', () => {
                 { id: 1, clienteId: 3, ccTipoId: 1, ccEstadoId: 1, natureza: 'D', valorPendente: '114000.00', modoPagamentoId: 2 },
                 { id: 2, clienteId: 3, ccTipoId: 1, ccEstadoId: 1, natureza: 'D', valorPendente: '10000.00', modoPagamentoId: null },
             ],
+            modos: [{ id: 2, movimento: 'TRFR' }],
         };
         repo = {
             find: jest.fn(async () => [{ id: 9, numero: 1, total: '50000.00', desconto: '0', documentoConfig: { codigo: 'RE' }, serie: { codigo: '2026' }, cliente: { nome: 'C' }, contaBancaria: { codigo: 'CXAOA' } }]),
@@ -75,7 +77,7 @@ describe('LiquidacoesService', () => {
                 if (entity === SessaoCaixa) return st.sessao;
                 return null;
             }),
-            find: jest.fn(async (entity: any) => (entity === MovimentoCc ? st.movs : [])),
+            find: jest.fn(async (entity: any) => (entity === MovimentoCc ? st.movs : entity === ModoPagamento ? st.modos : [])),
             create: jest.fn((_e: any, o: any) => ({ ...o })),
             save: jest.fn(async (e: any, o: any) => (e === Liquidacao ? { id: 9, ...o } : o)),
             update: jest.fn(),
@@ -131,6 +133,27 @@ describe('LiquidacoesService', () => {
         st.conta = { ...st.conta, tipo: 'DO', aberta: false };
         await svc.create(dto());
         expect(m.save.mock.calls.find((c: any[]) => c[0] === MovimentoConta)[1].sessaoCaixaId).toBeNull();
+    });
+
+    it('#187 — numerário numa conta que não é caixa → 422 e nada é gravado', async () => {
+        st.conta = { ...st.conta, codigo: 'BFAAO', tipo: 'DO', aberta: false };
+        st.modos = [{ id: 2, movimento: 'NUM' }];
+        expect((await erros(svc.create(dto()))).contaBancariaId).toMatch(/numerário.*BFAAO não é uma caixa/);
+        expect(m.save).not.toHaveBeenCalled();
+        expect(m.find).toHaveBeenCalledWith(ModoPagamento, { where: { id: expect.anything() } });
+    });
+
+    it('#187 — numerário na caixa aberta entra na sessão; transferência no banco é aceite', async () => {
+        st.modos = [{ id: 2, movimento: 'NUM' }];
+        await svc.create(dto());
+        expect(m.save.mock.calls.find((c: any[]) => c[0] === MovimentoConta)[1]).toMatchObject({ contaBancariaId: 7, sessaoCaixaId: 11 });
+        expect(m.find).not.toHaveBeenCalledWith(ModoPagamento, expect.anything()); // numa caixa nem é preciso consultar o modo
+
+        m.save.mockClear();
+        st.conta = { ...st.conta, tipo: 'DO', aberta: false };
+        st.modos = [{ id: 2, movimento: 'TRFR' }];
+        await svc.create(dto());
+        expect(m.save.mock.calls.find((c: any[]) => c[0] === MovimentoConta)[1]).toMatchObject({ sessaoCaixaId: null });
     });
 
     it('conta não associada ao MC, inexistente ou inactiva → 422', async () => {

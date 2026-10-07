@@ -8,7 +8,7 @@ import FieldError, { fieldAria } from '../../components/FieldError';
 import { useGlobal } from '../../contexts/GlobalContext';
 import { extractErrorMessage, extractFieldErrors, showToast } from '../../utils/errorHandler';
 import {
-    tesourariaApi, filtrosDeUrl, filtrosParaUrl, podeSelecionar,
+    tesourariaApi, filtrosDeUrl, filtrosParaUrl, podeSelecionar, eNumerario,
     type Pendente, type PendentesFiltros, type PendentesResposta,
 } from '../../services/tesouraria';
 import { paraDataHoraLocal } from '../../services/vendas';
@@ -65,12 +65,20 @@ const ResumoLiquidacao: React.FC<{ selecionados: Pendente[]; onClose: () => void
         if (doc) setSerieId(String((series.find(s => s.porDefeito) ?? series[0])?.id ?? ''));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [docId, configs]);
+    // #187 — em numerário o dinheiro entra numa caixa: pré-selecciona a caixa aberta.
+    const numerario = selecionados.some(p => eNumerario(p.modoPagamentoMovimento));
     useEffect(() => {
-        if (!contaId && contasMc.length) setContaId(String((contasMc.find(c => c.tipo !== 'CAIXA' || c.aberta) ?? contasMc[0]).id));
-    }, [contasMc, contaId]);
+        if (contaId || !contasMc.length) return;
+        const preferida = numerario
+            ? contasMc.find(c => c.tipo === 'CAIXA' && c.aberta) ?? contasMc.find(c => c.tipo === 'CAIXA')
+            : contasMc.find(c => c.tipo !== 'CAIXA' || c.aberta);
+        setContaId(String((preferida ?? contasMc[0]).id));
+    }, [contasMc, contaId, numerario]);
 
     const conta = contasMc.find(c => String(c.id) === contaId);
     const caixaFechada = conta?.tipo === 'CAIXA' && !conta.aberta;
+    const numerarioForaDeCaixa = numerario && !!conta && conta.tipo !== 'CAIXA';
+    const contaInvalida = caixaFechada || numerarioForaDeCaixa;
     const total = linhas.reduce((s, l) => s + (Number(l.valorPago) || 0), 0);
     const desconto = linhas.reduce((s, l) => s + (Number(l.desconto) || 0), 0);
     const set = (i: number, patch: Partial<LinhaPagar>) => setLinhas(ls => ls.map((l, j) => (j === i ? { ...l, ...patch } : l)));
@@ -109,9 +117,9 @@ const ResumoLiquidacao: React.FC<{ selecionados: Pendente[]; onClose: () => void
         <Modal titulo={`Recebimento — ${selecionados[0].clienteNome}`} onClose={onClose} footer={<>
             <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
             <SubmitButton type="button" className="abtn abtn-secondary" submitting={aGravar} loadingLabel="A gravar…" icon={<HandCoins size={12} />}
-                disabled={!docId || !contaId || caixaFechada || total <= 0} onClick={() => gravar(false)}>Gravar recebimento</SubmitButton>
+                disabled={!docId || !contaId || contaInvalida || total <= 0} onClick={() => gravar(false)}>Gravar recebimento</SubmitButton>
             <SubmitButton type="button" submitting={aGravar} loadingLabel="A gravar…" icon={<Printer size={12} />}
-                disabled={!docId || !contaId || caixaFechada || total <= 0} onClick={() => gravar(true)}>Gravar e imprimir</SubmitButton>
+                disabled={!docId || !contaId || contaInvalida || total <= 0} onClick={() => gravar(true)}>Gravar e imprimir</SubmitButton>
         </>}>
             {configs.length > 0 && !recebimentos.length && (
                 <div role="alert" style={{ color: 'var(--red, #dc2626)', marginBottom: 10 }}>
@@ -143,7 +151,9 @@ const ResumoLiquidacao: React.FC<{ selecionados: Pendente[]; onClose: () => void
                     <select id="rl-conta" className="form-control" value={contaId} onChange={e => setContaId(e.target.value)} {...fieldAria('rl-conta-e', erros.contaBancariaId)}>
                         {contasMc.map(c => <option key={c.id} value={c.id}>{c.codigo} — {c.descricao}{c.tipo === 'CAIXA' && !c.aberta ? ' (fechada)' : ''}</option>)}
                     </select>
-                    <FieldError id="rl-conta-e" message={erros.contaBancariaId ?? (caixaFechada ? `A caixa ${conta?.codigo} está fechada. Abra a caixa antes de registar recebimentos em numerário.` : undefined)} />
+                    <FieldError id="rl-conta-e" message={erros.contaBancariaId
+                        ?? (caixaFechada ? `A caixa ${conta?.codigo} está fechada. Abra a caixa antes de registar recebimentos em numerário.` : undefined)
+                        ?? (numerarioForaDeCaixa ? `Recebimento em numerário: escolha uma caixa como conta de destino (${conta?.codigo} não é uma caixa).` : undefined)} />
                 </div>
             </div>
 
