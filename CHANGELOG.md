@@ -4,6 +4,12 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(impressao): Fatura identifica a OT de origem e agrupa a informação com cabeçalhos (closes #186)
+
+- **Campo "Ordem de Trabalho"** em *Dados do Documento* (`OT-000123 · N.º série …`), só quando a fatura tem OT; a "Referência" passa a mostrar apenas a referência manual (a gerada da OT tinha o mesmo texto e repetia-se).
+- **Cabeçalhos de secção:** Dados do Documento · Artigos e Serviços · Resumo de Impostos · Retenção na Fonte · Totais · Coordenadas Bancárias · Observações. Nenhuma informação foi removida nem acrescentada além da OT.
+- Testes do gerador cobrem a ordem das secções e a fatura com/sem OT.
+
 ### feat(impressao): PDFs gerados no servidor — impressão igual em qualquer browser (closes #182)
 
 O Firefox (browser por omissão dos utilizadores) ignora a regra de página do #180 e imprime o seu título, URL e data nos cantos, sem a paginação. Agora todas as impressões chegam ao utilizador **já como PDF**, gerado no servidor.

@@ -21,7 +21,7 @@ const fatura: FaturaImpressao = {
     documento: {
         descricao: 'Fatura', codigo: 'FT', tipoFiscal: 'FT', numeroDocumento: 'FT 2026/15', dataHora: '2026-09-07T10:00:00Z',
         data: '2026-09-07', dataVencimento: '2026-09-30', condicaoPagamento: 'Fim do Mês', modoPagamento: 'Transferência',
-        requisicao: 'REQ-1', moeda: 'AOA', descontoCliente: 0, referencia: 'OT-000007', otNumero: 'OT-000007',
+        requisicao: 'REQ-1', moeda: 'AOA', descontoCliente: 0, referencia: 'OT-000007 · N.º série SN-9', otNumero: 'OT-000007',
         nrSerieEquipamento: 'SN-9', dataDisposicao: '2026-09-07', observacoes: null,
     },
     linhas: [
@@ -53,8 +53,8 @@ describe('impressão — Fatura', () => {
     });
 
     it('quadros de impostos (com motivo de isenção) e de retenção, totais e coordenadas bancárias', () => {
-        for (const t of ['Quadro Resumo de Impostos', 'IVA (0,00) (90)', '106 951,87', 'Motivo Isenção: Transmissão de bens e serviço não sujeita',
-            'Quadro de Retenção', 'Mercadoria/Serviços', 'Descontos Comerciais', 'Total ( AOA )', 'Coordenadas Bancárias',
+        for (const t of ['Resumo de Impostos', 'IVA (0,00) (90)', '106 951,87', 'Motivo Isenção: Transmissão de bens e serviço não sujeita',
+            'Retenção na Fonte', 'Mercadoria/Serviços', 'Descontos Comerciais', 'Total ( AOA )', 'Coordenadas Bancárias',
             'Nº Conta: 001167698.10.001', 'IBAN: AO06.0070.0000.0116.7698.1013.2']) {
             expect(html).toContain(t);
         }
@@ -76,6 +76,31 @@ describe('impressão — Fatura', () => {
         expect(html).toContain('AQUATEX &lt;Comércio&gt;');
         expect(buildFaturaHtml({ ...fatura, via: 'Segunda via', codigoHash: null })).toContain('Segunda via');
         expect(buildFaturaHtml({ ...fatura, codigoHash: null })).toContain('>\n        Documento processado por computador');
+    });
+
+    it('#186 — blocos com cabeçalhos sugestivos, pela ordem do documento', () => {
+        const seccoes = [...html.matchAll(/<h2 class="seccao">([^<]+)<\/h2>/g)].map((m) => m[1]);
+        expect(seccoes).toEqual(['Dados do Documento', 'Artigos e Serviços', 'Resumo de Impostos', 'Retenção na Fonte',
+            'Totais', 'Coordenadas Bancárias', 'Observações']);
+    });
+
+    it('#186 — a OT de origem tem campo próprio e não se repete na Referência', () => {
+        expect(html).toContain('<th>Ordem de Trabalho</th>');
+        expect(html).toContain('<td class="ot">OT-000007 · N.º série SN-9</td>');
+        expect(html.match(/OT-000007/g)).toHaveLength(1);
+        // a referência gerada a partir da OT (mesmo texto) não se duplica; a manual mantém-se
+        const auto = buildFaturaHtml({ ...fatura, documento: { ...fatura.documento, referencia: 'OT-000007 · N.º série SN-9' } });
+        expect(auto.match(/OT-000007/g)).toHaveLength(1);
+        const manual = buildFaturaHtml({ ...fatura, documento: { ...fatura.documento, referencia: 'Contrato 2026/4' } });
+        expect(manual).toContain('<td>Contrato 2026/4</td>');
+        expect(manual).toContain('<td class="ot">OT-000007 · N.º série SN-9</td>');
+    });
+
+    it('#186 — fatura sem OT não mostra o campo Ordem de Trabalho', () => {
+        const semOt = buildFaturaHtml({ ...fatura, documento: { ...fatura.documento, otNumero: null, nrSerieEquipamento: null, referencia: 'Venda balcão' } });
+        expect(semOt).not.toContain('Ordem de Trabalho');
+        expect(semOt).not.toContain('class="ot"');
+        expect(semOt).toContain('<td>Venda balcão</td>');
     });
 
     it('quadro de retenção preenchido quando existir (#179)', () => {

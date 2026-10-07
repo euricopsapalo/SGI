@@ -109,14 +109,25 @@ const CSS_BASE = `
     thead { display: table-header-group; }
     tr { page-break-inside: avoid; }
     .quadro-titulo { font-weight: 700; margin: 10px 0 2px; }
+    .seccao { font-size: 0.95em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+        margin: 12px 0 4px; padding: 3px 6px; background: #e8eef5; border-left: 3px solid #1f3a5f;
+        break-after: avoid; page-break-after: avoid; }
     .extenso { margin-top: 10px; font-weight: 700; }
     .rodape { margin-top: 14px; font-size: 0.8em; color: #333; border-top: 1px solid #999; padding-top: 4px; }
 `;
 
-/* ══ Fatura (A4) ═══════════════════════════════════════════════ */
+/* ══ Fatura (A4) ═══════════════════════════════════════════════
+ * #186 — blocos agrupados por cabeçalhos (Dados do Documento · Artigos e Serviços ·
+ * Resumo de Impostos · Retenção na Fonte · Totais · Coordenadas Bancárias · Observações)
+ * e a OT de origem num campo próprio. */
 export function buildFaturaHtml(d: FaturaImpressao): string {
     const doc = d.documento;
-    const referencia = [doc.otNumero, doc.nrSerieEquipamento && `N.º série ${doc.nrSerieEquipamento}`].filter(Boolean).join(' · ') || doc.referencia;
+    // #186 — a OT de origem tem campo próprio; a "Referência" fica só com a referência manual
+    // (a gerada a partir da OT tem o mesmo texto e repetia-se).
+    const ordemTrabalho = doc.otNumero
+        ? [doc.otNumero, doc.nrSerieEquipamento && `N.º série ${doc.nrSerieEquipamento}`].filter(Boolean).join(' · ')
+        : '';
+    const referencia = doc.referencia && doc.referencia !== ordemTrabalho ? doc.referencia : '';
     const moeda = doc.moeda;
     const retencao = d.retencao;
 
@@ -162,6 +173,7 @@ export function buildFaturaHtml(d: FaturaImpressao): string {
     .totais td { padding: 2px 4px; }
     .totais .total td { font-weight: 800; font-size: 1.15em; border-top: 2px solid #111; }
     .motivo { font-size: 0.9em; color: #333; }
+    .ot { font-weight: 700; white-space: nowrap; }
 </style></head><body><main class="folha">
     <div class="topo">
         <div>${blocoEmpresa(d.empresa)}</div>
@@ -173,20 +185,23 @@ export function buildFaturaHtml(d: FaturaImpressao): string {
         <span class="via">${esc(d.via)}</span>
     </div>
 
+    <h2 class="seccao">Dados do Documento</h2>
     <table class="dados">
-        <thead><tr><th>V/N.º Contrib.</th><th>Requisição</th><th>Moeda</th><th>Data</th></tr></thead>
+        <thead><tr><th>V/N.º Contrib.</th><th>Requisição</th><th>Moeda</th><th>Data</th>${ordemTrabalho ? '<th>Ordem de Trabalho</th>' : ''}</tr></thead>
         <tbody><tr>
             <td>${esc(d.cliente?.nif ?? '')}</td><td>${esc(doc.requisicao ?? '')}</td><td>${esc(moeda)}</td><td>${esc(doc.data)}</td>
+            ${ordemTrabalho ? `<td class="ot">${esc(ordemTrabalho)}</td>` : ''}
         </tr></tbody>
     </table>
     <table class="dados">
         <thead><tr><th>Desc. Cli.</th><th>Vencimento</th><th>Condição Pagamento</th><th>Modo Pagamento</th><th>Referência</th></tr></thead>
         <tbody><tr>
             <td class="num">${fmtNum(doc.descontoCliente)}</td><td>${esc(doc.dataVencimento ?? '')}</td>
-            <td>${esc(doc.condicaoPagamento ?? '')}</td><td>${esc(doc.modoPagamento ?? '')}</td><td>${esc(referencia ?? '')}</td>
+            <td>${esc(doc.condicaoPagamento ?? '')}</td><td>${esc(doc.modoPagamento ?? '')}</td><td>${esc(referencia)}</td>
         </tr></tbody>
     </table>
 
+    <h2 class="seccao">Artigos e Serviços</h2>
     <table class="linhas">
         <thead><tr>
             <th>Artigo</th><th>Descrição</th><th class="num">Qtd.</th><th>Un.</th>
@@ -197,16 +212,17 @@ export function buildFaturaHtml(d: FaturaImpressao): string {
 
     <div class="resumo">
         <div>
-            <div class="quadro-titulo">Quadro Resumo de Impostos</div>
+            <h2 class="seccao">Resumo de Impostos</h2>
             <table><thead><tr><th>Taxa/Valor</th><th class="num">Incid./Qtd.</th><th class="num">Total</th></tr></thead>
                 <tbody>${impostos}</tbody></table>
-            <div class="quadro-titulo">Quadro de Retenção</div>
+            <h2 class="seccao">Retenção na Fonte</h2>
             <table><thead><tr><th>Entidade</th><th class="num">Inc.</th><th class="num">%</th><th class="num">Valor</th></tr></thead>
                 <tbody>${retencao
                     ? `<tr><td>${esc(retencao.entidade)}</td><td class="num">${fmtNum(retencao.incidencia)}</td><td class="num">${fmtNum(retencao.percentagem)}</td><td class="num">${fmtNum(retencao.valor)}</td></tr>`
                     : '<tr><td colspan="4">&nbsp;</td></tr>'}</tbody></table>
         </div>
         <div>
+            <h2 class="seccao">Totais</h2>
             <table class="totais"><tbody>
                 ${totalLinha('Mercadoria/Serviços', d.totais.mercadoriaServicos)}
                 ${totalLinha('Descontos Comerciais', d.totais.descontosComerciais)}
@@ -216,10 +232,11 @@ export function buildFaturaHtml(d: FaturaImpressao): string {
         </div>
     </div>
 
-    ${coordenadas ? `<div class="quadro-titulo">Coordenadas Bancárias</div>${coordenadas}` : ''}
+    ${coordenadas ? `<h2 class="seccao">Coordenadas Bancárias</h2>${coordenadas}` : ''}
 
+    <h2 class="seccao">Observações</h2>
     <div class="extenso">VALOR POR EXTENSO: ${esc(valorPorExtenso(d.totais.total))}.</div>
-    ${doc.observacoes ? `<div style="margin-top:6px">Observações: ${esc(doc.observacoes)}</div>` : ''}
+    ${doc.observacoes ? `<div style="margin-top:6px">${esc(doc.observacoes)}</div>` : ''}
 
     <div class="rodape">
         ${hash}Documento processado por computador | Os bens e/ou serviços foram colocados à disposição na data ${esc(doc.dataDisposicao ?? doc.data)} / © SGI /
