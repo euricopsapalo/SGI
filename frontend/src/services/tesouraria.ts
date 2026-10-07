@@ -32,7 +32,13 @@ export interface Pendente {
     valorOriginal: number; valorPendente: number;
     ccTipoId: number; ccEstadoId: number; estadoCodigo: string | null;
     modoPagamentoId: number | null; modoPagamentoDescricao: string | null;
+    /** #187 — código do modo (`NUM`/`PGNUM` = numerário). */
+    modoPagamentoMovimento?: string | null;
 }
+
+/** #187 — numerário só pode entrar numa caixa (espelha `MOVIMENTOS_NUMERARIO` do backend). */
+export const eNumerario = (movimento: string | null | undefined) =>
+    !!movimento && ['NUM', 'PGNUM'].includes(movimento.trim().toUpperCase());
 
 export interface PendentesResposta {
     items: Pendente[];
