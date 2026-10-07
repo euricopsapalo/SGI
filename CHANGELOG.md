@@ -4,6 +4,14 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(vendas): fase 5 — Fatura Recibo (FR) com liquidação automática atómica (closes #168)
+
+- **Emissão da `FR`:** na mesma transacção emite o recibo configurado (`RE`) pelo total, que gera o `MC` na conta de destino — o pendente fica a 0 e a OT *Paga*.
+- **R5 — atomicidade:** qualquer falha na cadeia `FR → RE → MC` desfaz tudo (documento continua rascunho, sem movimento de CC, RE nem MC, séries inalteradas). Caixa fechada → *"A caixa X está fechada. Abra a caixa antes de emitir Faturas Recibo."*; os restantes erros do recibo aparecem junto à conta de destino, identificados como "Recibo automático".
+- **Backend:** a lógica do recibo passou para `liquidarNaTransacao()` (partilhada pelo recebimento e pela FR); `POST /vendas/documentos/:id/emitir` aceita `contaBancariaId`.
+- **Frontend — editor de vendas:** a FR passa a poder ser escolhida; ao emitir, campo **Conta de destino** (bancos associados ao `MC`), com a caixa aberta pré-seleccionada em numerário e aviso de caixa fechada / numerário fora de caixa.
+- Testes: unitários da ligação FR → RE e e2e contra BD real (caixa fechada → nada gravado; caixa aberta → FR paga, MC na sessão; D5).
+
 ### feat(impressao): Fatura identifica a OT de origem e agrupa a informação com cabeçalhos (closes #186)
 
 - **Campo "Ordem de Trabalho"** em *Dados do Documento* (`OT-000123 · N.º série …`), só quando a fatura tem OT; a "Referência" passa a mostrar apenas a referência manual (a gerada da OT tinha o mesmo texto e repetia-se).
