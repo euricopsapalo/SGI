@@ -4,6 +4,36 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(impressao): PDFs gerados no servidor — impressão igual em qualquer browser (closes #182)
+
+O Firefox (browser por omissão dos utilizadores) ignora a regra de página do #180 e imprime o seu título, URL e data nos cantos, sem a paginação. Agora todas as impressões chegam ao utilizador **já como PDF**, gerado no servidor.
+
+- **Backend — `POST /api/impressao/pdf`** (`{ html, nomeFicheiro }` → `application/pdf`):
+  - converte o HTML com um **Chromium headless** (`puppeteer-core`), com `preferCSSPageSize`, fundo impresso e sem cabeçalho/rodapé;
+  - uma instância do browser reutilizada, um contexto isolado por pedido, no máximo 3 renders em simultâneo.
+- **Segurança do render:**
+  - JavaScript desligado;
+  - todos os pedidos de rede bloqueados excepto imagens embutidas (`data:`): sem URLs externos, rede interna nem `file://`;
+  - o documento é servido da memória com uma CSP restritiva;
+  - timeout de 20 s; HTML até 8 MB (corpo de 12 MB só nesta rota, recusado sem `Authorization` antes de ser lido);
+  - limite de 30 pedidos/min; o conteúdo nunca vai para os logs.
+- **Docker:** Chromium e fontes Liberation/DejaVu (acentos) na imagem do backend; `PUPPETEER_EXECUTABLE_PATH`. **CI:** o e2e usa o Chrome do runner.
+- **Frontend — utilitário único `imprimirPdf()`:**
+  - a janela abre no clique com "A gerar o PDF…";
+  - mostra o PDF com os botões **Imprimir** e **Descarregar**;
+  - o ficheiro tem o nome do documento (ex.: `Fatura FT 2026-1.pdf`, `OT-000007.pdf`);
+  - erros da API em JSON são lidos mesmo com resposta `blob`.
+- **As 17 impressões migradas:**
+  - Vendas: fatura e recibo;
+  - OT: folha e relatório de intervenções;
+  - Compras: nota de encomenda, nota de entrada, documentos de fornecedor e sugestões de compra;
+  - fichas e relatórios de clientes, fornecedores, técnicos e parque (3);
+  - agenda, folha de inventário, faturação anterior e exportação PDF.
+- **Testes:**
+  - unitários do serviço (isolamento, bloqueios, erros, concorrência) e das regras;
+  - e2e com Chromium real: PDF A4 com "Pág. 1/1" e sem texto do navegador; documento longo com "Pág. x/y" em todas as páginas; horizontal; JS não executa; nenhum pedido externo; imagem `data:` embutida; 401 sem sessão;
+  - frontend: o utilitário.
+
 ### feat(tesouraria): fase 4 — gestão de caixa: abertura, saída e fecho com apuramento e acerto (closes #167)
 
 Fase 4 do épico #163 (v11 §5.5, v10 §6.4). Novo separador **Vendas → Caixa**.

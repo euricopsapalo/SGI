@@ -13,7 +13,7 @@ import {
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import EmptyState from '../../components/EmptyState';
 import TableSkeleton from '../../components/TableSkeleton';
-import { comPaginacao } from '../../utils/impressaoPagina';
+import { imprimirPdf } from '../../utils/imprimirPdf';
 
 /* ══ Helpers (fmt e fmtMoney vêm do GlobalContext) ══════════ */
 
@@ -742,12 +742,7 @@ const buildInventSheetHtml = (artigos: Artigo[], lines: InventLine[], armazens: 
 };
 
 const printInventSheet = (artigos: Artigo[], lines: InventLine[], armazens: Armazem[] = []) => {
-    const html = buildInventSheetHtml(artigos, lines, armazens);
-    const w = window.open('', '_blank');
-    if (!w) return;
-    w.document.write(comPaginacao(html));
-    w.document.close();
-    setTimeout(() => w.print(), 350);
+    void imprimirPdf(buildInventSheetHtml(artigos, lines, armazens), 'Folha de inventário');
 };
 
 const InventarioModal: React.FC<InventarioModalProps> = ({ artigos, armazens, onClose, onConfirm }) => {

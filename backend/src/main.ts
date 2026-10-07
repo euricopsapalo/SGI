@@ -5,6 +5,7 @@ import * as compression from 'compression';
 import { AppModule } from './app.module';
 import { assertJwtSecret } from './config/read-secret';
 import { buildValidationPipe } from './config/validation-pipe';
+import { configurarCorpoPdf } from './config/body-parser';
 
 async function bootstrap() {
   // #53/#24 — valida o JWT_SECRET resolvido (env ou ficheiro Docker secret)
@@ -19,6 +20,8 @@ async function bootstrap() {
   const corsOrigins = process.env.CORS_ORIGIN?.split(',').map(o => o.trim()).filter(Boolean);
   app.enableCors({ origin: corsOrigins ?? ['http://localhost:3000'], credentials: true });
   app.setGlobalPrefix('api');
+  // #182 — corpo maior só para a geração de PDF (documentos HTML com imagens embutidas).
+  configurarCorpoPdf(app);
   app.useGlobalPipes(buildValidationPipe());
 
   // Documentação OpenAPI/Swagger — apenas fora de produção (issue #40)

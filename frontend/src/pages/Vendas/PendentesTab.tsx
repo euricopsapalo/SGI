@@ -80,8 +80,7 @@ const ResumoLiquidacao: React.FC<{ selecionados: Pendente[]; onClose: () => void
         const gravado = adiado();
         let reciboId = 0;
         if (comImpressao) {
-            imprimirDocumento(async () => { await gravado.promise; return buildReciboHtml(await tesourariaApi.imprimir(reciboId)); })
-                .catch(e => { if (e !== CANCELADO) showToast(extractErrorMessage(e), 'error'); });
+            void imprimirDocumento(async () => { await gravado.promise; return buildReciboHtml(await tesourariaApi.imprimir(reciboId)); });
         }
         setAGravar(true); setErros({});
         try {

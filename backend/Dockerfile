@@ -1,5 +1,12 @@
 FROM node:18-alpine
 
+# #182 — Chromium headless para gerar os PDFs de impressão no servidor, com fontes
+# métricas-compatíveis com Arial/Times (Liberation) e cobertura de acentos (DejaVu).
+# O puppeteer-core não descarrega browser: usa este.
+RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates font-liberation font-dejavu
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
+    PUPPETEER_SKIP_DOWNLOAD=true
+
 WORKDIR /app
 
 # Copia apenas os arquivos de dependência primeiro para aproveitar o cache do Docker

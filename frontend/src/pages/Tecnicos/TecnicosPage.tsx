@@ -11,7 +11,7 @@ import { useModalA11y } from '../../components/useModalA11y';
 import EmptyState from '../../components/EmptyState';
 import TableSkeleton from '../../components/TableSkeleton';
 import { Search, Plus, Edit2, Eye, X, Check, Download, Trash2, UserCog, MapPin, Printer } from 'lucide-react';
-import { comPaginacao } from '../../utils/impressaoPagina';
+import { imprimirPdf } from '../../utils/imprimirPdf';
 
 /* ══ Print CSS + Helpers ═════════════════════════════════════ */
 const RT_CSS = `
@@ -40,10 +40,7 @@ const fRT = (d?: string) => {
 };
 
 const openPrintT = (html: string, title: string) => {
-    const w = window.open('', '_blank', 'width=960,height=700');
-    if (!w) return;
-    w.document.write(comPaginacao(`<!DOCTYPE html><html><head><title>${title}</title><style>${RT_CSS}</style></head><body>${html}<script>window.onload=()=>window.print();</script></body></html>`));
-    w.document.close();
+    void imprimirPdf(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>${RT_CSS}</style></head><body>${html}</body></html>`, title);
 };
 
 const hdrT = (title: string, sub: string, empresa?: EmpresaConfig | null) => `

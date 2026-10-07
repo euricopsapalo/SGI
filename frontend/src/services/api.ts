@@ -19,7 +19,12 @@ api.interceptors.request.use((config) => {
 // Handle responses — auto-logout on 401, global toast on errors
 api.interceptors.response.use(
     (response) => response,
-    (error) => {
+    async (error) => {
+        // #182 — pedidos com `responseType: 'blob'` (PDF) trazem o erro JSON num Blob.
+        const data = error.response?.data;
+        if (typeof Blob !== 'undefined' && data instanceof Blob && /json/.test(data.type)) {
+            try { error.response.data = JSON.parse(await data.text()); } catch { /* fica o Blob */ }
+        }
         if (error.response?.status === 401) {
             localStorage.removeItem('sgi_token');
             if (!window.location.pathname.includes('/login')) {

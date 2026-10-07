@@ -34,6 +34,8 @@ jobs:
       DB_USER: app_user
       DB_PASSWORD: app_password
       DB_NAME: app_test
+      # #182 — o e2e de impressão gera PDFs reais com o Chrome que o runner já traz.
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

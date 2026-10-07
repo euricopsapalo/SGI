@@ -157,8 +157,7 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
         // #178 — a janela de impressão abre já (ligada ao clique) e só é preenchida depois da emissão.
         const emissao = adiado();
         if (comImpressao) {
-            imprimirDocumento(async () => { await emissao.promise; return buildFaturaHtml(await vendasApi.imprimir(id)); })
-                .catch(e => { if (e !== CANCELADO) showToast(extractErrorMessage(e), 'error'); });
+            void imprimirDocumento(async () => { await emissao.promise; return buildFaturaHtml(await vendasApi.imprimir(id)); });
         }
         if (!(await gravar())) { emissao.rejeitar(CANCELADO); return; }
         setAGravar(true);
@@ -309,8 +308,7 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
 
 /** #178 — imprime a fatura emitida (a 1.ª impressão é o Original, as seguintes Segunda via). */
 const imprimirFatura = (id: number) =>
-    imprimirDocumento(async () => buildFaturaHtml(await vendasApi.imprimir(id)))
-        .catch(e => showToast(extractErrorMessage(e), 'error'));
+    imprimirDocumento(async () => buildFaturaHtml(await vendasApi.imprimir(id)));
 
 /* ══ Documento emitido (só leitura) ═══════════════════════════ */
 const DocumentoDetalhe: React.FC<{ id: number; onClose: () => void }> = ({ id, onClose }) => {

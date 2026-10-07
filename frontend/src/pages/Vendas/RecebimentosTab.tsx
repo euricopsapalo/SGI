@@ -11,8 +11,7 @@ import { fmtDataHora, Modal, mono, muted, num } from './ui';
 
 /** #178 — imprime o recibo (a 1.ª impressão é o Original, as seguintes Segunda via). */
 export const imprimirRecibo = (id: number) =>
-    imprimirDocumento(async () => buildReciboHtml(await tesourariaApi.imprimir(id)))
-        .catch(e => showToast(extractErrorMessage(e), 'error'));
+    imprimirDocumento(async () => buildReciboHtml(await tesourariaApi.imprimir(id)));
 
 const DetalheRecebimento: React.FC<{ id: number; onClose: () => void }> = ({ id, onClose }) => {
     const { fmtMoney } = useGlobal();
