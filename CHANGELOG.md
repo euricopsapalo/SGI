@@ -4,6 +4,12 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(impressao): Fatura identifica a OT de origem e agrupa a informação com cabeçalhos (closes #186)
+
+- **Campo "Ordem de Trabalho"** em *Dados do Documento* (`OT-000123 · N.º série …`), só quando a fatura tem OT; a "Referência" passa a mostrar apenas a referência manual (a gerada da OT tinha o mesmo texto e repetia-se).
+- **Cabeçalhos de secção:** Dados do Documento · Artigos e Serviços · Resumo de Impostos · Retenção na Fonte · Totais · Coordenadas Bancárias · Observações. Nenhuma informação foi removida nem acrescentada além da OT.
+- Testes do gerador cobrem a ordem das secções e a fatura com/sem OT.
+
 ### fix(tesouraria): recebimento em numerário só entra numa caixa (closes #187)
 
 Um recebimento em numerário podia ficar lançado numa conta bancária (a "Conta de destino" vinha pré-seleccionada com o banco), fora da sessão de caixa — o saldo teórico da caixa ficava abaixo do dinheiro físico.
