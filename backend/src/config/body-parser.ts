@@ -19,5 +19,11 @@ export function configurarCorpoPdf(app: INestApplication, rota = ROTA_PDF) {
         }
         next();
     });
-    app.use(rota, json({ limit: '12mb' }));
+    // Embrulhado numa função com outro nome: o Nest só regista o seu parser JSON
+    // global se não encontrar um middleware chamado `jsonParser` — registar o
+    // `json()` directamente deixava toda a restante API sem corpo (login incluído).
+    const parser = json({ limit: '12mb' });
+    app.use(rota, function corpoPdf(req: Request, res: Response, next: NextFunction) {
+        parser(req, res, next);
+    });
 }
