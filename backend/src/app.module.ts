@@ -28,6 +28,7 @@ import { HealthModule } from './modules/health/health.module';
 import { VendasConfigModule } from './modules/vendas-config/vendas-config.module';
 import { VendasModule } from './modules/vendas/vendas.module';
 import { TesourariaModule } from './modules/tesouraria/tesouraria.module';
+import { ImpressaoModule } from './modules/impressao/impressao.module';
 import { readSecret } from './config/read-secret';
 
 @Module({
@@ -92,6 +93,7 @@ import { readSecret } from './config/read-secret';
     VendasConfigModule,
     VendasModule,
     TesourariaModule,
+    ImpressaoModule,
   ],
   providers: [
     // Aplica o ThrottlerGuard globalmente (issue #41)

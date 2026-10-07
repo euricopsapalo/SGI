@@ -11,7 +11,7 @@ import { useModalA11y } from '../../components/useModalA11y';
 import EmptyState from '../../components/EmptyState';
 import TableSkeleton from '../../components/TableSkeleton';
 import { Search, Plus, Edit2, Eye, X, Check, Truck, Download, Trash2, MapPin, Printer } from 'lucide-react';
-import { comPaginacao } from '../../utils/impressaoPagina';
+import { imprimirPdf } from '../../utils/imprimirPdf';
 
 /* ══ Print helpers ═══════════════════════════════════════════ */
 const RF_CSS = `
@@ -35,10 +35,7 @@ const fRF = (d?: string) => {
 };
 
 const openPrintF = (html: string, title: string) => {
-    const w = window.open('', '_blank', 'width=900,height=700');
-    if (!w) return;
-    w.document.write(comPaginacao(`<!DOCTYPE html><html><head><title>${title}</title><style>${RF_CSS}</style></head><body>${html}<script>window.onload=()=>window.print();</script></body></html>`));
-    w.document.close();
+    void imprimirPdf(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><style>${RF_CSS}</style></head><body>${html}</body></html>`, title);
 };
 
 const totalEnc = (e: Encomenda) => e.linhas.reduce((s, l) => s + l.custoUnit * l.qtdEncomendada * (1 - (l.desconto || 0) / 100), 0);

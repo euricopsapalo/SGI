@@ -2,6 +2,7 @@ import type { ClienteImpressao, EmpresaImpressao, FaturaImpressao } from '../../
 import type { ReciboImpressao } from '../../services/tesouraria';
 import { valorPorExtenso } from '../../utils/valorPorExtenso';
 import { cssPagina, MARGENS_PAGINA } from '../../utils/impressaoPagina';
+import { imprimirPdf } from '../../utils/imprimirPdf';
 
 /**
  * #178 — Impressão da Fatura e do Recibo (ambos em A4 — #180) com a informação dos modelos
@@ -293,23 +294,8 @@ export function buildReciboHtml(d: ReciboImpressao): string {
 }
 
 /**
- * Abre a janela **antes** do pedido à API (senão o bloqueador de pop-ups trava-a,
- * por já não estar ligada ao clique) e depois escreve o HTML e imprime.
+ * #182 — Imprime como PDF gerado no servidor. A janela abre **antes** do pedido à
+ * API (senão o bloqueador de pop-ups trava-a); o ficheiro chama-se como o título
+ * do documento (ex.: `Fatura FT 2026-1.pdf`). Nunca rejeita.
  */
-export async function imprimirDocumento(obterHtml: () => Promise<string>): Promise<void> {
-    // Largura para a folha A4 inteira (210 mm ≈ 794 px) com o fundo à volta (#180).
-    const w = window.open('', '_blank', 'width=960,height=1000');
-    if (!w) throw new Error('O navegador bloqueou a janela de impressão — permita pop-ups para este site.');
-    w.document.write('<p style="font:14px Arial;padding:20px">A preparar o documento…</p>');
-    try {
-        const html = await obterHtml();
-        w.document.open();
-        w.document.write(html);
-        w.document.close();
-        w.focus();
-        setTimeout(() => w.print(), 400);
-    } catch (e) {
-        w.close();
-        throw e;
-    }
-}
+export const imprimirDocumento = (obterHtml: () => Promise<string>): Promise<boolean> => imprimirPdf(obterHtml);

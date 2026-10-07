@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Download, FileText, Braces, Printer } from 'lucide-react';
-import { comPaginacao } from '../utils/impressaoPagina';
+import { imprimirPdf } from '../utils/imprimirPdf';
 
 export interface ExportCol { key: string; label: string; }
 
@@ -78,12 +78,7 @@ function printPDF(title: string, cols: ExportCol[], rows: Record<string, any>[])
 </body>
 </html>`;
 
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(comPaginacao(html));
-    win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); }, 300);
+    void imprimirPdf(html, title);
 }
 
 /* ── Component ── */

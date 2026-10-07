@@ -19,7 +19,7 @@ import {
     CalendarDays, ListFilter, FileText, CreditCard, Wallet,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
-import { comPaginacao } from '../../utils/impressaoPagina';
+import { imprimirPdf } from '../../utils/imprimirPdf';
 
 /* ══ Helpers ════════════════════════════════════════════════ */
 const linhaTotal = (l: EncomendaLinha) =>
@@ -382,13 +382,7 @@ function buildNotaEncomendaHtml(encomenda: Encomenda, fornecedorNome: string, em
 }
 
 function printNotaEncomenda(encomenda: Encomenda, fornecedorNome: string, empresa?: EmpresaConfig, simbolo?: string, artigos?: Artigo[], taxasIva?: TaxaIva[]) {
-    const html = buildNotaEncomendaHtml(encomenda, fornecedorNome, empresa, simbolo, artigos, taxasIva);
-    const w = window.open('', '_blank', 'width=794,height=1123');
-    if (!w) return;
-    w.document.write(comPaginacao(html));
-    w.document.close();
-    w.focus();
-    setTimeout(() => { w.print(); }, 400);
+    void imprimirPdf(buildNotaEncomendaHtml(encomenda, fornecedorNome, empresa, simbolo, artigos, taxasIva));
 }
 
 /* ══ Print Nota de Entrada — guia de recebimento A4 ════════ */
@@ -540,13 +534,7 @@ function printNotaEntrada(
     empresa?: EmpresaConfig,
     simbolo?: string,
 ) {
-    const html = buildNotaEntradaHtml(rececao, encomenda, empresa, simbolo);
-    const w = window.open('', '_blank', 'width=794,height=1123');
-    if (!w) return;
-    w.document.write(comPaginacao(html));
-    w.document.close();
-    w.focus();
-    setTimeout(() => { w.print(); }, 400);
+    void imprimirPdf(buildNotaEntradaHtml(rececao, encomenda, empresa, simbolo));
 }
 
 /* ══ Print Fatura Fornecedor (VFA / VFR) ════════════════════ */
@@ -987,12 +975,7 @@ function buildVNCHtml(
 }
 
 function printDocFornecedor(html: string) {
-    const w = window.open('', '_blank', 'width=794,height=1123');
-    if (!w) return;
-    w.document.write(comPaginacao(html));
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 400);
+    void imprimirPdf(html);
 }
 
 /* ══ Encomenda Form Modal ═══════════════════════════════════ */
@@ -2336,13 +2319,7 @@ function buildSugestoesHtml(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?
 }
 
 function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: string) {
-    const html = buildSugestoesHtml(artigos, empresa, simbolo);
-    const w = window.open('', '_blank', 'width=794,height=1123');
-    if (!w) return;
-    w.document.write(comPaginacao(html));
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 400);
+    void imprimirPdf(buildSugestoesHtml(artigos, empresa, simbolo));
 }
 
 /* ══ Page ════════════════════════════════════════════════════ */

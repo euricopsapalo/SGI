@@ -13,7 +13,7 @@ import SubmitButton from '../../components/SubmitButton';
 import { useModalA11y } from '../../components/useModalA11y';
 import EmptyState from '../../components/EmptyState';
 import TableSkeleton from '../../components/TableSkeleton';
-import { comPaginacao } from '../../utils/impressaoPagina';
+import { imprimirPdf } from '../../utils/imprimirPdf';
 
 /* ══════════════════════════════════════════
    Types
@@ -559,12 +559,7 @@ function ultimaIntRC(clienteId: string | number, ordens: OrdemTrabalho[]) {
     return dates.at(-1);
 }
 function openPrint(html: string) {
-    const w = window.open('', '_blank', 'width=1000,height=900');
-    if (!w) return;
-    w.document.write(comPaginacao(html));
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 350);
+    void imprimirPdf(html);
 }
 
 /* 1. Ficha de Cliente */

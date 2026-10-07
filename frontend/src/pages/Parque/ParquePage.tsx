@@ -14,7 +14,7 @@ import {
     Eye, AlertTriangle, RefreshCw, Package, Printer, Download, Trash2,
 } from 'lucide-react';
 import { showToast, extractErrorMessage } from '../../utils/errorHandler';
-import { comPaginacao } from '../../utils/impressaoPagina';
+import { imprimirPdf } from '../../utils/imprimirPdf';
 
 const ESTADO_DOT: Record<EstadoEquip, string> = {
     ativo:         'dot-green',
@@ -126,11 +126,7 @@ function printEquip(
     manut: EquipManutencao,
 ) {
     const html = buildEquipHtml(eq, clientes, modelosEquipamento, manut);
-    const w = window.open('', '_blank', 'width=820,height=900');
-    if (!w) return;
-    w.document.write(comPaginacao(html).replace('</body></html>', '<script>window.onload=()=>window.print();</script></body></html>'));
-    w.document.close();
-    w.focus();
+    void imprimirPdf(html);
 }
 
 const PRINT_CSS = `
@@ -202,10 +198,7 @@ function printHistoricoEquip(
     empresa: string,
 ) {
     const html = buildHistoricoEquipHtml(eq, ots, cli, mod, empresa);
-    const w = window.open('', '_blank', 'width=1100,height=900');
-    if (!w) return;
-    w.document.write(comPaginacao(html).replace('</body></html>', '<script>window.onload=()=>window.print();</script></body></html>'));
-    w.document.close(); w.focus();
+    void imprimirPdf(html);
 }
 
 /* ── Estado do Parque print ── */
@@ -352,10 +345,7 @@ function printEstadoParque(
     seccoes: EstadoSeccoes,
 ) {
     const html = buildEstadoParqueHtml(equipInstalados, ordens, clientes, modelosEquipamento, empresa, seccoes);
-    const w = window.open('', '_blank', 'width=1000,height=900');
-    if (!w) return;
-    w.document.write(comPaginacao(html).replace('</body></html>', '<script>window.onload=()=>window.print();</script></body></html>'));
-    w.document.close(); w.focus();
+    void imprimirPdf(html);
 }
 
 /* ══ Relatório Estado Modal ══════════════════════════════ */
