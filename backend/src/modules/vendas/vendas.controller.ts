@@ -3,7 +3,10 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/roles.decorator';
 import { DocumentosVendaService } from './documentos-venda.service';
 import { ImpressaoFaturaService } from './impressao-fatura.service';
-import { CreateDocumentoVendaDto, EmitirDocumentoVendaDto, UpdateDocumentoVendaDto } from './dto/documento-venda.dto';
+import { EstornosVendaService } from './estornos-venda.service';
+import {
+    CreateDocumentoVendaDto, EmitirDocumentoVendaDto, EstornarDocumentoVendaDto, UpdateDocumentoVendaDto,
+} from './dto/documento-venda.dto';
 
 /** Perfis que faturam. */
 const FATURACAO = ['admin', 'coordenador', 'vendedor'];
@@ -19,6 +22,7 @@ export class VendasController {
     constructor(
         private readonly svc: DocumentosVendaService,
         private readonly impressao: ImpressaoFaturaService,
+        private readonly estornos: EstornosVendaService,
     ) {}
 
     /** v11 §4.1 — OTs a faturar; `?semValor=true` lista as que não têm consumíveis. */
@@ -51,5 +55,11 @@ export class VendasController {
     @Post('documentos/:id/emitir') @Roles(...FATURACAO) @HttpCode(200)
     emitir(@Param('id', ParseIntPipe) id: number, @Body() dto: EmitirDocumentoVendaDto, @Request() req: any) {
         return this.svc.emitir(id, dto, req?.user);
+    }
+
+    /** #169 — Ratificação/Estorno: emite a NC/ND de natureza inversa, linha a linha, com motivo. */
+    @Post('documentos/:id/estornar') @Roles(...FATURACAO) @HttpCode(200)
+    estornar(@Param('id', ParseIntPipe) id: number, @Body() dto: EstornarDocumentoVendaDto, @Request() req: any) {
+        return this.estornos.estornar(id, dto, req?.user);
     }
 }

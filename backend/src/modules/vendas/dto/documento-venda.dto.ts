@@ -59,3 +59,32 @@ export class EmitirDocumentoVendaDto {
     @IsOptional() @IsInt()
     contaBancariaId?: number;
 }
+
+/** #169 — Linha a estornar: linha do documento de origem, quantidade (≤ por estornar) e motivo. */
+export class LinhaEstornoDto {
+    @IsInt() linhaId: number;
+
+    @IsNumber({ maxDecimalPlaces: 3 }) @IsPositive()
+    quantidade: number;
+
+    @IsInt() motivoEstornoId: number;
+}
+
+/**
+ * #169 — `POST /api/vendas/documentos/:id/estornar` (v11 §5.3, §7.3). Estorno parcial
+ * ou total, linha a linha. Sem série → a configurada no documento de origem ou a
+ * por defeito do documento de estorno; sem data-hora → agora.
+ */
+export class EstornarDocumentoVendaDto {
+    @IsOptional() @IsInt()
+    serieId?: number;
+
+    @IsOptional() @IsDateString()
+    dataHora?: string;
+
+    @IsOptional() @IsString() @MaxLength(5000)
+    observacoes?: string;
+
+    @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => LinhaEstornoDto)
+    linhas: LinhaEstornoDto[];
+}

@@ -4,6 +4,16 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(vendas): fase 6 — estorno: Nota de Crédito/Débito e estorno de liquidações (closes #169)
+
+- **`POST /api/vendas/documentos/:id/estornar`:** emite o documento de estorno configurado (`NC` para FT/FR, `ND` para NC), linha a linha, com quantidade e motivo (`motivos_estorno`); sem rascunho. `qtd_estornada` acumula nas linhas de origem (CHECK `qtd_estornada <= quantidade`); estorno acima do faturado → 422.
+- **Conta corrente:** a `NC` gera um crédito que **abate automaticamente** o pendente da fatura de origem; se esta já estiver paga, o crédito fica pendente na NC — saldo a favor do cliente, visível no extrato. A lista de pendentes mostra só débitos.
+- **Não mexe em stock** (D1). **NC total** → limpa `ordens_trabalho.documento_venda_id`: a OT volta a *Não faturada* e a `ots-disponiveis`; a fatura fica *Estornada*. A `ND` sobre uma NC devolve as quantidades à fatura original e religa-a à OT (409 se a OT já foi faturada de novo).
+- **`POST /api/liquidacoes/:id/estornar` (`ERE`):** repõe o pendente dos documentos liquidados e emite `MC` de sinal contrário na mesma conta — numa caixa, na sessão aberta hoje (fechada → 422) e sem exceder o saldo. Estorno total, com motivo; uma liquidação só se estorna uma vez (409). No extrato, o ERE é um débito.
+- **Migração `EstornoDocumentos`:** `liquidacoes.liquidacao_origem_id` (UNIQUE) e `motivo_estorno_id`; índices de origem em `documentos_venda`/`documentos_venda_linhas`.
+- **Frontend:** "Ratificação / Estorno" no menu de contexto (botão direito) e no detalhe do documento emitido — editor com o original só de leitura e colunas **Estorno** e **Motivo**, pré-visualização do total, do abate e do saldo a favor; estados *Estornada* / *Estorno*; detalhe mostra o documento estornado e os estornos. Recebimentos: **Estornar recebimento** com motivo; marcas *Estorno* / *Estornado*.
+- Testes: regras puras, serviços (NC/ND/ERE) e e2e contra BD real do passo 7 do v11 §7.4 (NC de 1 unidade → pendente 79 800 e stock inalterado; NC total → OT disponível; estorno de RE).
+
 ### feat(vendas): fase 5 — Fatura Recibo (FR) com liquidação automática atómica (closes #168)
 
 - **Emissão da `FR`:** na mesma transacção emite o recibo configurado (`RE`) pelo total, que gera o `MC` na conta de destino — o pendente fica a 0 e a OT *Paga*.

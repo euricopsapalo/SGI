@@ -214,8 +214,10 @@ describe('LiquidacoesService', () => {
         const [l] = await svc.findAll({ clienteId: '3' });
         expect(repo.find.mock.calls[0][0].where).toEqual({ clienteId: 3 });
         expect(l).toMatchObject({ numeroDocumento: 'RE 2026/1', total: 50000, contaCodigo: 'CXAOA' });
+        // #169 — cada findAll consulta também os estornos (ERE) das liquidações listadas.
+        expect(repo.find.mock.calls[1][0].where).toEqual({ liquidacaoOrigemId: expect.anything() });
         await svc.findAll();
-        expect(repo.find.mock.calls[1][0].where).toBeUndefined();
+        expect(repo.find.mock.calls[2][0].where).toBeUndefined();
         repo.findOne.mockResolvedValueOnce(null);
         await expect(svc.findOne(1)).rejects.toBeInstanceOf(NotFoundException);
     });

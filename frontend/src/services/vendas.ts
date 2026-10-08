@@ -15,10 +15,12 @@ export interface DocumentoVendaLinha {
     id: number; otArtigoId: number | null; artigoId: number | null; descricao: string;
     quantidade: number; precoUnitario: number; desconto: number; codigoIva: string | null; taxaIva: number;
     totalLiquido: number; qtdEstornada: number; ordem: number;
+    /** #169 — NC/ND: linha estornada e motivo. */
+    linhaOrigemId: number | null; motivoEstornoId: number | null; motivoEstornoDescricao: string | null;
 }
 
 export type EstadoDocumentoVenda = 'RASCUNHO' | 'EMITIDO';
-export type EstadoFaturacao = 'Não faturada' | 'Pendente' | 'Parcialmente paga' | 'Paga';
+export type EstadoFaturacao = 'Não faturada' | 'Pendente' | 'Parcialmente paga' | 'Paga' | 'Estornada';
 
 export interface DocumentoVenda {
     id: number; documentoConfigId: number; documentoCodigo: string; documentoDescricao: string; tipoFiscal: string | null;
@@ -30,6 +32,12 @@ export interface DocumentoVenda {
     descontoGlobal: number; subtotal: number; desconto: number; valorIva: number; total: number; moeda: string;
     emitidoEm: string | null; createdAt: string;
     valorPendente: number | null; dataVencimento: string | null; estadoFaturacao: EstadoFaturacao | null;
+    /** #169 — NC/ND: documento estornado. */
+    documentoOrigemId: number | null; documentoOrigemNumero: string | null;
+    /** #169 — todas as linhas totalmente estornadas. */
+    totalmenteEstornado: boolean;
+    /** #169 — só no detalhe de um emitido: estornos já emitidos sobre ele. */
+    estornos?: { id: number; numeroDocumento: string | null; dataHora: string | null; total: number }[];
     linhas?: DocumentoVendaLinha[];
     /** Só em rascunho: consumíveis faturáveis da OT (para repor linhas removidas). */
     consumiveis?: ConsumivelOt[];
@@ -100,7 +108,15 @@ export const vendasApi = {
         api.post<DocumentoVenda>(`/vendas/documentos/${id}/emitir`, dto).then(r => r.data),
     /** #178 — dados para imprimir a fatura (conta a impressão: Original / Segunda via). */
     imprimir: (id: number) => api.post<FaturaImpressao>(`/vendas/documentos/${id}/imprimir`).then(r => r.data),
+    /** #169 — Ratificação/Estorno: emite a NC/ND, linha a linha, com motivo. */
+    estornar: (id: number, dto: EstornarDocumento) =>
+        api.post<DocumentoVenda>(`/vendas/documentos/${id}/estornar`, dto).then(r => r.data),
 };
+
+export interface EstornarDocumento {
+    serieId?: number; dataHora?: string; observacoes?: string;
+    linhas: { linhaId: number; quantidade: number; motivoEstornoId: number }[];
+}
 
 /** Perfis (etiqueta do frontend) que podem faturar — espelha o `@Roles` do backend. */
 export const PERFIS_FATURACAO = ['Administrador', 'Coordenador', 'Vendedor'];

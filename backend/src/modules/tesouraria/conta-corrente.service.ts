@@ -26,7 +26,8 @@ export class ContaCorrenteService {
     async pendentes(q: PendentesQueryDto = {}) {
         const params: unknown[] = [];
         const p = (v: unknown) => { params.push(v); return `$${params.length}`; };
-        const where = ['m.valor_pendente > 0'];
+        // #169 — só débitos: o crédito pendente de uma NC é saldo a favor do cliente (visível no extrato).
+        const where = ['m.valor_pendente > 0', `m.natureza = 'D'`];
 
         const doc = termoNumeroDocumento(q.documento);
         if (doc) {
@@ -105,6 +106,8 @@ export class ContaCorrenteService {
      * v10 §6.5 — extrato do cliente: débitos (documentos a débito), créditos
      * (documentos a crédito e liquidações, pelo valor pago + desconto), saldo
      * corrido e saldo final. Com `de`, começa no saldo anterior a essa data.
+     * #169 — a NC é um crédito (saldo negativo = a favor do cliente); o estorno de
+     * uma liquidação (ERE) é um débito, que anula o crédito da liquidação.
      */
     async extrato(q: ExtratoQueryDto) {
         const [cliente] = await this.dataSource.query(
@@ -129,7 +132,9 @@ export class ContaCorrenteService {
             SELECT 'LIQUIDACAO' AS tipo, l.id, (l.data_hora AT TIME ZONE 'Africa/Luanda')::date::text AS data,
                    l.created_at AS "dataExtrato", l.data_hora AS ts,
                    (dc.codigo || ' ' || s.codigo || '/' || l.numero) AS documento, NULL AS "otNumero",
-                   0::float AS debito, (l.total + l.desconto)::float AS credito, l.desconto::float AS desconto
+                   CASE WHEN l.liquidacao_origem_id IS NOT NULL THEN l.total + l.desconto ELSE 0 END::float AS debito,
+                   CASE WHEN l.liquidacao_origem_id IS NULL THEN l.total + l.desconto ELSE 0 END::float AS credito,
+                   CASE WHEN l.liquidacao_origem_id IS NULL THEN l.desconto ELSE -l.desconto END::float AS desconto
             FROM liquidacoes l
             JOIN documentos_config dc ON dc.id = l.documento_config_id
             JOIN series s ON s.id = l.serie_id

@@ -91,18 +91,23 @@ export enum EstadoFaturacao {
     PENDENTE = 'Pendente',
     PARCIALMENTE_PAGA = 'Parcialmente paga',
     PAGA = 'Paga',
+    /** #169 — fatura totalmente estornada (a OT volta a *Não faturada*). */
+    ESTORNADA = 'Estornada',
 }
 
 /**
  * v11 §4.4 — estado de faturação da OT (dimensão paralela à máquina de estados).
  * Sem documento activo → Não faturada; senão, pelo pendente do movimento de CC.
  * Um documento que não gera movimento em CC (liquidado no acto) conta como pago.
+ * #169 — um documento totalmente estornado (NC total) é *Estornada*.
  */
 export function estadoFaturacao(
     documentoVendaId: number | null | undefined,
     mov?: { valorOriginal: number; valorPendente: number } | null,
+    estornado = false,
 ): EstadoFaturacao {
     if (!documentoVendaId) return EstadoFaturacao.NAO_FATURADA;
+    if (estornado) return EstadoFaturacao.ESTORNADA;
     if (!mov) return EstadoFaturacao.PAGA;
     const pendente = Number(mov.valorPendente);
     if (pendente <= 0) return EstadoFaturacao.PAGA;
