@@ -13,7 +13,8 @@ import {
     vendasApi, calcularTotais, paraDataHoraLocal, PERFIS_FATURACAO,
     type DocumentoVenda, type EstadoFaturacao, type OtDisponivel,
 } from '../../services/vendas';
-import { vendasConfigApi, type DocumentoConfig } from '../../services/vendasConfig';
+import { vendasConfigApi, type ContaBancaria, type DocumentoConfig } from '../../services/vendasConfig';
+import { eNumerario } from '../../services/tesouraria';
 import { adiado, CANCELADO, Modal, mono, muted, num } from './ui';
 import { buildFaturaHtml, imprimirDocumento } from './impressao';
 import PendentesTab from './PendentesTab';
@@ -26,6 +27,7 @@ import ExtratoTab from './ExtratoTab';
  * Fatura-se exclusivamente OTs finalizadas: a lista de OTs disponíveis, o
  * rascunho (só consumíveis — a mão de obra é custo interno) e a emissão da FT,
  * que gera o pendente na conta corrente do cliente. Emitido = imutável.
+ * #168 — a FR (Fatura Recibo) é emitida já paga: escolhe-se a conta de destino no editor.
  */
 
 type Tab = 'ots' | 'semValor' | 'documentos' | 'pendentes' | 'recebimentos' | 'caixa' | 'extrato';
@@ -45,10 +47,10 @@ const EstadoBadge: React.FC<{ estado: EstadoFaturacao | 'Rascunho' }> = ({ estad
     return <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: 10, fontWeight: 700, background: b.bg, color: b.color, whiteSpace: 'nowrap' }}>{estado}</span>;
 };
 
-/** Documentos que podem nascer de uma OT: faturas (FT) a receber, activas, sem liquidação automática (FR é a fase 5). */
+/** Documentos que podem nascer de uma OT: faturas (FT) e Faturas Recibo (FR, #168) a receber, activas. */
 const eFaturaDeOt = (d: DocumentoConfig) =>
     d.ativo && d.tipoCodigo === 'FINANCEIRO' && d.natureza === 'A_RECEBER'
-    && ['FT', 'FR'].includes(d.tipoFiscal ?? '') && !d.liquidacaoAutomatica;
+    && ['FT', 'FR'].includes(d.tipoFiscal ?? '');
 
 const Totais: React.FC<{ t: { subtotal: number; desconto: number; valorIva: number; total: number }; moeda: string; extra?: React.ReactNode }> = ({ t, moeda, extra }) => {
     const { fmtMoney } = useGlobal();
@@ -116,6 +118,32 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
         if (!serieId && series.length) setSerieId(String((series.find(s => s.porDefeito) ?? series[0]).id));
     }, [series, serieId]);
 
+    // #168 — Fatura Recibo: a conta de destino escolhe-se aqui, de entre os bancos do MC do recibo automático.
+    const faturaRecibo = !!config?.liquidacaoAutomatica;
+    const [contas, setContas] = useState<ContaBancaria[]>([]);
+    const [contaId, setContaId] = useState('');
+    useEffect(() => {
+        if (!faturaRecibo) return;
+        vendasConfigApi.contas().then(setContas).catch(e => showToast(extractErrorMessage(e), 'error'));
+    }, [faturaRecibo]);
+    const reAuto = configs.find(c => c.id === config?.liquidacaoAutoDocId);
+    const mcAuto = configs.find(c => c.id === reAuto?.ligacaoTesourariaDocId);
+    const contasMc = contas.filter(c => c.ativo && (mcAuto?.contasBancariaIds ?? []).includes(c.id));
+    const numerario = eNumerario(modosPagamento.find(m => m.id === modoPagamentoId)?.movimento);
+    useEffect(() => {
+        if (!contasMc.length || contasMc.some(c => String(c.id) === contaId)) return;
+        const preferida = numerario
+            ? contasMc.find(c => c.tipo === 'CAIXA' && c.aberta) ?? contasMc.find(c => c.tipo === 'CAIXA')
+            : contasMc.find(c => c.tipo !== 'CAIXA' || c.aberta);
+        setContaId(String((preferida ?? contasMc[0]).id));
+    }, [contasMc, contaId, numerario]);
+    const conta = contasMc.find(c => String(c.id) === contaId);
+    const avisoConta = !faturaRecibo || !conta ? undefined
+        : conta.tipo === 'CAIXA' && !conta.aberta ? `A caixa ${conta.codigo} está fechada. Abra a caixa antes de emitir Faturas Recibo.`
+            : numerario && conta.tipo !== 'CAIXA' ? `Recebimento em numerário: escolha uma caixa como conta de destino (${conta.codigo} não é uma caixa).`
+                : undefined;
+    const emissaoBloqueada = faturaRecibo && (!contaId || !!avisoConta);
+
     const incluidas = linhas.filter(l => l.incluida);
     const totais = useMemo(() => calcularTotais(incluidas, descontoGlobal), [incluidas, descontoGlobal]);
     const set = (otArtigoId: number, patch: Partial<LinhaEdit>) =>
@@ -162,9 +190,15 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
         if (!(await gravar())) { emissao.rejeitar(CANCELADO); return; }
         setAGravar(true);
         try {
-            const d = await vendasApi.emitir(id, { serieId: serieId ? Number(serieId) : undefined, dataHora: new Date(dataHora).toISOString() });
+            const d = await vendasApi.emitir(id, {
+                serieId: serieId ? Number(serieId) : undefined,
+                dataHora: new Date(dataHora).toISOString(),
+                ...(faturaRecibo ? { contaBancariaId: Number(contaId) } : {}),
+            });
             emissao.resolver();
-            showToast(`${d.numeroDocumento} emitida — pendente de ${fmtMoney(d.valorPendente ?? d.total, d.moeda)} na conta corrente`, 'success');
+            showToast(faturaRecibo
+                ? `${d.numeroDocumento} emitida e paga — ${fmtMoney(d.total, d.moeda)} recebidos em ${conta?.codigo ?? 'conta'}`
+                : `${d.numeroDocumento} emitida — pendente de ${fmtMoney(d.valorPendente ?? d.total, d.moeda)} na conta corrente`, 'success');
             onMudou();
             onClose();
         } catch (e) {
@@ -195,8 +229,8 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
                     <button type="button" className="abtn abtn-primary" onClick={() => setEmitir(true)} disabled={!incluidas.length}><Send size={12} /> Emitir…</button>
                 </>}
                 {podeFaturar && emitir && <>
-                    <SubmitButton type="button" className="abtn abtn-secondary" submitting={aGravar} loadingLabel="A emitir…" onClick={() => confirmarEmissao(false)} icon={<Send size={12} />}>Confirmar emissão</SubmitButton>
-                    <SubmitButton type="button" submitting={aGravar} loadingLabel="A emitir…" onClick={() => confirmarEmissao(true)} icon={<Printer size={12} />}>Emitir e imprimir</SubmitButton>
+                    <SubmitButton type="button" className="abtn abtn-secondary" submitting={aGravar} loadingLabel="A emitir…" disabled={emissaoBloqueada} onClick={() => confirmarEmissao(false)} icon={<Send size={12} />}>Confirmar emissão</SubmitButton>
+                    <SubmitButton type="button" submitting={aGravar} loadingLabel="A emitir…" disabled={emissaoBloqueada} onClick={() => confirmarEmissao(true)} icon={<Printer size={12} />}>Emitir e imprimir</SubmitButton>
                 </>}
             </>}
         >
@@ -296,9 +330,22 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
                             <input id="vd-dh" className="form-control" type="datetime-local" value={dataHora} onChange={e => setDataHora(e.target.value)} {...fieldAria('vd-dh-err', erros.dataHora)} />
                             <FieldError id="vd-dh-err" message={erros.dataHora} />
                         </div>
+                        {faturaRecibo && (
+                            <div className="form-group" style={{ margin: 0, minWidth: 220 }}>
+                                <label className="form-label" htmlFor="vd-conta">Conta de destino</label>
+                                <select id="vd-conta" className="form-control" value={contaId} onChange={e => setContaId(e.target.value)} {...fieldAria('vd-conta-err', erros.contaBancariaId ?? avisoConta)}>
+                                    {!contasMc.length && <option value="">— sem contas associadas —</option>}
+                                    {contasMc.map(c => <option key={c.id} value={c.id}>{c.codigo} — {c.descricao}{c.tipo === 'CAIXA' && !c.aberta ? ' (fechada)' : ''}</option>)}
+                                </select>
+                                <FieldError id="vd-conta-err" message={erros.contaBancariaId ?? avisoConta} />
+                            </div>
+                        )}
                     </div>
                     <div style={{ ...muted, marginTop: 8 }}>
-                        <Lock size={10} /> Depois de emitido o documento não pode ser alterado nem eliminado — só estornado. Gera um pendente de {fmtMoney(totais.total, doc.moeda)} na conta corrente do cliente.
+                        <Lock size={10} /> Depois de emitido o documento não pode ser alterado nem eliminado — só estornado.{' '}
+                        {faturaRecibo
+                            ? <>É emitido também o recibo{reAuto ? ` (${reAuto.codigo})` : ''} de {fmtMoney(totais.total, doc.moeda)}, que dá entrada em {conta?.codigo ?? 'na conta escolhida'} — a fatura fica paga.</>
+                            : <>Gera um pendente de {fmtMoney(totais.total, doc.moeda)} na conta corrente do cliente.</>}
                     </div>
                 </div>
             )}

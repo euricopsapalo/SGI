@@ -10,6 +10,14 @@ import { Cliente } from '../clientes/cliente.entity';
 import { Fatura } from '../faturas/fatura.entity';
 import { anoLocal } from '../vendas-config/series.rules';
 import { hashDocumento } from './vendas.rules';
+import { liquidarNaTransacao } from '../tesouraria/liquidacoes.service';
+
+// #168 — a cadeia RE → MC tem testes próprios (liquidacoes.service.spec); aqui só a ligação.
+jest.mock('../tesouraria/liquidacoes.service', () => ({
+    ...jest.requireActual('../tesouraria/liquidacoes.service'),
+    liquidarNaTransacao: jest.fn(),
+}));
+const liquidar = liquidarNaTransacao as jest.Mock;
 
 /**
  * #165 — DocumentosVendaService: rascunho a partir da OT, edição, imutabilidade
@@ -173,7 +181,6 @@ describe('DocumentosVendaService', () => {
             ['inexistente', null, /não existe/],
             ['inactivo', config({ ativo: false }), /inactivo/],
             ['que não é fatura', config({ tipoFiscal: 'NC', natureza: 'A_PAGAR' }), /não é uma fatura/],
-            ['com liquidação automática (FR — fase 5)', config({ tipoFiscal: 'FR', liquidacaoAutomatica: true }), /liquidação automática/],
         ])('documento %s → 422', async (_n, cfg, msg) => {
             st.config = cfg;
             expect((await erros(svc.create({ otId: 7, documentoConfigId: 4 }))).documentoConfigId).toMatch(msg as RegExp);
@@ -341,6 +348,59 @@ describe('DocumentosVendaService', () => {
             st.config = config({ geraMovCc: false });
             await svc.emitir(50, { dataHora: agora });
             expect(m.save.mock.calls.find((c: any[]) => c[0] === MovimentoCc)).toBeUndefined();
+        });
+
+        describe('#168 — Fatura Recibo (FR → RE → MC)', () => {
+            beforeEach(() => {
+                liquidar.mockReset();
+                st.config = config({ codigo: 'FR', tipoFiscal: 'FR', liquidacaoAutomatica: true, liquidacaoAutoDocId: 8 });
+                m.save.mockImplementation(async (e: any, o: any) => (e === MovimentoCc ? { id: 77, ...o } : o));
+                liquidar.mockResolvedValue({ id: 5, resumo: 'RE 2026/5 — Cliente: 114000 AOA para CXAOA' });
+            });
+
+            it('na mesma transacção liquida o pendente pelo total na conta escolhida', async () => {
+                await svc.emitir(50, { dataHora: agora, contaBancariaId: 3 }, { id: 9, email: 'x@y' });
+                expect(liquidar).toHaveBeenCalledTimes(1);
+                const [mgr, dto, user, opts] = liquidar.mock.calls[0];
+                expect(mgr).toBe(m);
+                expect(dto).toEqual({
+                    documentoConfigId: 8, clienteId: 3, contaBancariaId: 3, dataHora: new Date(agora).toISOString(),
+                    observacoes: 'Liquidação automática da FR 2026/1', linhas: [{ movimentoCcId: 77, valorPago: 114000 }],
+                });
+                expect(user).toEqual({ id: 9, email: 'x@y' });
+                expect(opts.mensagemCaixaFechada('CXAOA')).toBe('A caixa CXAOA está fechada. Abra a caixa antes de emitir Faturas Recibo.');
+                expect(sysLogs.create).toHaveBeenCalledWith(expect.objectContaining({ acao: 'LIQUIDACAO_EMITIDA', detalhes: expect.stringMatching(/automática/) }));
+            });
+
+            it('sem conta de destino → 422 (e a transacção não chega a liquidar)', async () => {
+                expect((await erros(svc.emitir(50, { dataHora: agora }))).contaBancariaId).toMatch(/conta de destino/);
+                expect(liquidar).not.toHaveBeenCalled();
+            });
+
+            it('R5 — erro da RE (caixa fechada) propaga 422 e nada fica gravado', async () => {
+                liquidar.mockRejectedValueOnce(new UnprocessableEntityException({ errors: { contaBancariaId: 'A caixa CXAOA está fechada. Abra a caixa antes de emitir Faturas Recibo.' } }));
+                expect((await erros(svc.emitir(50, { dataHora: agora, contaBancariaId: 3 }))).contaBancariaId).toMatch(/está fechada/);
+                expect(sysLogs.create).not.toHaveBeenCalled();
+            });
+
+            it('outros erros da RE aparecem na conta, identificados como do recibo', async () => {
+                liquidar.mockRejectedValueOnce(new UnprocessableEntityException({ errors: { dataHora: 'tem de ser posterior' } }));
+                expect((await erros(svc.emitir(50, { dataHora: agora, contaBancariaId: 3 }))).contaBancariaId)
+                    .toBe('Recibo automático: tem de ser posterior');
+            });
+
+            it('configuração incompleta (sem recibo ou sem movimento de CC) → 422', async () => {
+                st.config = config({ liquidacaoAutomatica: true, liquidacaoAutoDocId: null });
+                expect((await erros(svc.emitir(50, { dataHora: agora, contaBancariaId: 3 }))).documentoConfigId).toMatch(/recibo configurado/);
+                st.config = config({ liquidacaoAutomatica: true, liquidacaoAutoDocId: 8, geraMovCc: false });
+                expect((await erros(svc.emitir(50, { dataHora: agora, contaBancariaId: 3 }))).documentoConfigId).toMatch(/não gera movimento/);
+            });
+
+            it('uma FT normal não liquida', async () => {
+                st.config = config();
+                await svc.emitir(50, { dataHora: agora, contaBancariaId: 3 });
+                expect(liquidar).not.toHaveBeenCalled();
+            });
         });
 
         it('violação do UNIQUE (série, número) numa corrida → 409', async () => {

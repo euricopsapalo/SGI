@@ -96,7 +96,7 @@ export const vendasApi = {
     atualizarRascunho: (id: number, dto: AtualizarRascunho) =>
         api.put<DocumentoVenda>(`/vendas/documentos/${id}`, dto).then(r => r.data),
     eliminarRascunho: (id: number) => api.delete(`/vendas/documentos/${id}`),
-    emitir: (id: number, dto: { serieId?: number; dataHora?: string }) =>
+    emitir: (id: number, dto: { serieId?: number; dataHora?: string; contaBancariaId?: number }) =>
         api.post<DocumentoVenda>(`/vendas/documentos/${id}/emitir`, dto).then(r => r.data),
     /** #178 — dados para imprimir a fatura (conta a impressão: Original / Segunda via). */
     imprimir: (id: number) => api.post<FaturaImpressao>(`/vendas/documentos/${id}/imprimir`).then(r => r.data),

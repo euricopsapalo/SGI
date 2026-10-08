@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Not, Repository } from 'typeorm';
 import { DocumentoVenda, DocumentoVendaLinha, EstadoDocumentoVenda } from './documento-venda.entity';
@@ -18,6 +18,7 @@ import {
     calcularTotais, dataLocal, dataVencimento, estadoFaturacao, hashDocumento, naturezaMovimento, numeroDocumento,
 } from './vendas.rules';
 import { snapshotCliente, snapshotEmpresa } from './snapshot';
+import { liquidarNaTransacao, mensagemCaixaFechadaFR } from '../tesouraria/liquidacoes.service';
 import { CreateDocumentoVendaDto, EmitirDocumentoVendaDto, UpdateDocumentoVendaDto } from './dto/documento-venda.dto';
 
 /** Tipos fiscais que podem nascer de uma OT (D2): as faturas. */
@@ -36,6 +37,7 @@ const ehFaturavel = (a: OtArtigo) => !!a.artigoId && Number(a.qtdConsumida ?? 0)
  * - Emissão: uma transacção com `FOR UPDATE` na série (numeração contínua,
  *   data-hora crescente) e na OT (D5); gera o movimento de CC a débito e liga
  *   a OT ao documento. Não toca em stock (D1).
+ * - Fatura Recibo (#168): a mesma transacção liquida o pendente (`RE` → `MC`) — R5.
  * - Emitido: imutável (409).
  */
 @Injectable()
@@ -279,6 +281,7 @@ export class DocumentosVendaService {
 
     async emitir(id: number, dto: EmitirDocumentoVendaDto, user?: Utilizador) {
         let resumo = '';
+        let resumoRecibo = '';
         try {
             await this.dataSource.transaction(async (m) => {
                 const doc = await m.findOne(DocumentoVenda, { where: { id }, lock: { mode: 'pessimistic_write' } });
@@ -381,13 +384,14 @@ export class DocumentosVendaService {
                 await m.update(OrdemTrabalho, ot.id, { documentoVendaId: id });
 
                 // Pendente na conta corrente, no tipo/estado configurados.
+                let mov: MovimentoCc | null = null;
                 if (config!.geraMovCc) {
                     if (!config!.ccTipoId || !config!.ccEstadoId) {
                         throw erroValidacao({ documentoConfigId: `O documento ${config!.codigo} gera movimento em conta corrente mas não tem conta/estado configurados` });
                     }
                     const cliente = await m.findOne(Cliente, { where: { id: doc.clienteId }, relations: ['condicaoPagamento'] });
                     const dataDocumento = dataLocal(dataHora);
-                    await m.save(MovimentoCc, m.create(MovimentoCc, {
+                    mov = await m.save(MovimentoCc, m.create(MovimentoCc, {
                         ccTipoId: config!.ccTipoId,
                         ccEstadoId: config!.ccEstadoId,
                         clienteId: doc.clienteId,
@@ -401,7 +405,16 @@ export class DocumentosVendaService {
                         dataVencimento: dataVencimento(dataDocumento, cliente?.condicaoPagamento?.numDias ?? 0),
                     }));
                 }
-                resumo = `${numeroDocumento(config!.codigo, serie.codigo, numero)} da OT ${ot.numero ?? ot.id} — total ${totais.total} AOA`;
+                const numeroDoc = numeroDocumento(config!.codigo, serie.codigo, numero)!;
+                resumo = `${numeroDoc} da OT ${ot.numero ?? ot.id} — total ${totais.total} AOA`;
+
+                // #168 — Fatura Recibo: cadeia FR → RE → MC na mesma transacção (R5).
+                if (config!.liquidacaoAutomatica) {
+                    if (!mov) {
+                        throw erroValidacao({ documentoConfigId: `O documento ${config!.codigo} tem liquidação automática mas não gera movimento em conta corrente` });
+                    }
+                    resumoRecibo = await this.liquidacaoAutomatica(m, config!, doc, mov, dataHora, numeroDoc, dto, user);
+                }
             });
         } catch (e: any) {
             // Rede de segurança: UNIQUE (serie_id, numero) numa corrida não apanhada pelo lock.
@@ -410,6 +423,9 @@ export class DocumentosVendaService {
         }
 
         await this.log(user, 'VENDA_EMITIDA', resumo);
+        if (resumoRecibo) {
+            await this.sysLogs.create({ usuario: user?.email ?? 'sistema', modulo: 'TESOURARIA', acao: 'LIQUIDACAO_EMITIDA', detalhes: `${resumoRecibo} (automática)` });
+        }
         return this.findOne(id);
     }
 
@@ -423,9 +439,41 @@ export class DocumentosVendaService {
             || !TIPOS_FISCAIS_FATURA.includes(config.tipoFiscal ?? '')) {
             throw erroValidacao({ documentoConfigId: `O documento ${config.codigo} não é uma fatura (FT/FR) a receber` });
         }
-        if (config.liquidacaoAutomatica) {
-            // A cadeia FR → RE → MC é a fase 5 (#168).
-            throw erroValidacao({ documentoConfigId: `O documento ${config.codigo} tem liquidação automática, que ainda não está disponível — use uma fatura a crédito` });
+    }
+
+    /**
+     * #168 — Fatura Recibo (v11 §5.2): na mesma transacção da emissão, liquida o
+     * pendente pelo total com a `RE` configurada, que emite o `MC` na conta escolhida.
+     * Qualquer falha (caixa fechada, conta não associada, série…) desfaz tudo (R5).
+     * Os erros da `RE` são identificados como tal e mostrados junto à conta de destino.
+     */
+    private async liquidacaoAutomatica(
+        m: EntityManager, config: DocumentoConfig, doc: DocumentoVenda, mov: MovimentoCc,
+        dataHora: Date, numeroFr: string, dto: EmitirDocumentoVendaDto, user: Utilizador,
+    ): Promise<string> {
+        if (!config.liquidacaoAutoDocId || !config.geraMovCc) {
+            throw erroValidacao({ documentoConfigId: `O documento ${config.codigo} tem liquidação automática mas não tem o recibo configurado` });
+        }
+        if (!dto.contaBancariaId) {
+            throw erroValidacao({ contaBancariaId: 'Indique a conta de destino do recebimento' });
+        }
+        try {
+            const r = await liquidarNaTransacao(m, {
+                documentoConfigId: config.liquidacaoAutoDocId,
+                clienteId: doc.clienteId,
+                contaBancariaId: dto.contaBancariaId,
+                dataHora: dataHora.toISOString(),
+                observacoes: `Liquidação automática da ${numeroFr}`,
+                linhas: [{ movimentoCcId: mov.id, valorPago: Number(mov.valorOriginal) }],
+            }, user, { mensagemCaixaFechada: mensagemCaixaFechadaFR });
+            return r.resumo;
+        } catch (e) {
+            if (!(e instanceof UnprocessableEntityException)) throw e;
+            const errors: Record<string, string> = (e.getResponse() as any)?.errors ?? {};
+            const mapeados = Object.fromEntries(Object.entries(errors).map(([campo, msg]) => (campo === 'contaBancariaId'
+                ? [campo, msg]
+                : ['contaBancariaId', `Recibo automático: ${msg}`])));
+            throw erroValidacao(temErros(mapeados) ? mapeados : { contaBancariaId: 'Não foi possível emitir o recibo automático' });
         }
     }
 

@@ -54,4 +54,8 @@ export class EmitirDocumentoVendaDto {
 
     @IsOptional() @IsDateString()
     dataHora?: string;
+
+    /** #168 — Fatura Recibo: conta de destino da liquidação automática (banco associado ao `MC`). */
+    @IsOptional() @IsInt()
+    contaBancariaId?: number;
 }
