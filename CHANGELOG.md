@@ -8,7 +8,7 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 - **Impressão:** a mesma impressão da fatura (#178, Original / Segunda via) serve FT, FR, NC e ND. A **NC/ND** passa a mostrar o **documento de origem** (`FT 2026/7 de 2026-01-05`) em *Dados do Documento* e o **motivo do estorno** em cada linha. A **FR** mostra o recibo da liquidação automática e a conta onde entrou o valor (*Pago — RE 2026/4 · Caixa Sede*).
 - **`GET /api/vendas/relatorios?de=&ate=`** (por omissão, de 1 de Janeiro até hoje): faturação por mês, IVA por código/taxa (incidência após o desconto global), faturação por cliente e por OT, sobre os documentos emitidos no período (as NC abatem). Inclui também as **contas a receber** por cliente e antiguidade (não vencido · 1–30 · 31–60 · 61–90 · > 90 dias), com o saldo a favor a abater, à data de hoje.
-- **Frontend — `/relatorios` → Vendas:** filtros de período e de vista (Por Período · IVA por Taxa · Por Cliente · Por OT · Contas a Receber), cartões de totais e exportação da vista activa.
+- **Frontend — Vendas → Relatórios** (separador novo na página Vendas) e **Gestão → Relatórios → Vendas** (`/relatorios?tab=vendas`): filtros de período e de vista (Por Período · IVA por Taxa · Por Cliente · Por OT · Contas a Receber), cartões de totais e exportação da vista activa.
 - **Transição (§9, D8):** já feita no #165. `POST /api/faturas` responde 410 e `/faturacao` fica só para consultar, pagar ou anular as faturas antigas, por isso a mesma OT não pode ser faturada pelos dois módulos.
 - Testes: regras puras dos relatórios, serviço, geradores de impressão (NC/FR) e e2e contra BD real (impressão da NC e da FR; relatórios com FT + NC que se anulam).
 

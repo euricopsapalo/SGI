@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useGlobal } from '../../contexts/GlobalContext';
-import { ExportCol } from '../../components/ExportModal';
+import ExportModal, { ExportCol } from '../../components/ExportModal';
+import { Download } from 'lucide-react';
 import { RelatorioVendas, vendasApi } from '../../services/vendas';
 import { extractErrorMessage } from '../../utils/errorHandler';
 
@@ -62,8 +63,11 @@ const numCell: React.CSSProperties = { textAlign: 'right', fontVariantNumeric: '
 const hoje = () => new Date().toLocaleDateString('en-CA');
 
 interface Props {
-    /** Avisa a página do que exportar (vista activa e respectivas linhas). */
-    onExportavel: (e: { titulo: string; colunas: ExportCol[]; linhas: Record<string, any>[] }) => void;
+    /**
+     * Avisa a página do que exportar (vista activa e respectivas linhas). Sem ele
+     * (ex.: dentro da página Vendas), o separador mostra o seu próprio botão Exportar.
+     */
+    onExportavel?: (e: { titulo: string; colunas: ExportCol[]; linhas: Record<string, any>[] }) => void;
 }
 
 const VendasRelatorioTab: React.FC<Props> = ({ onExportavel }) => {
@@ -74,6 +78,7 @@ const VendasRelatorioTab: React.FC<Props> = ({ onExportavel }) => {
     const [dados, setDados] = useState<RelatorioVendas | null>(null);
     const [erro, setErro] = useState<string | null>(null);
     const [aCarregar, setACarregar] = useState(false);
+    const [exportar, setExportar] = useState(false);
 
     useEffect(() => {
         if (!de || !ate) return;
@@ -89,7 +94,7 @@ const VendasRelatorioTab: React.FC<Props> = ({ onExportavel }) => {
     const linhas = useMemo(() => linhasVista(dados, vista), [dados, vista]);
     const tituloVista = VISTAS.find((v) => v.id === vista)!.label;
     useEffect(() => {
-        onExportavel({ titulo: `Vendas — ${tituloVista}`, colunas: COLS_VENDAS[vista], linhas });
+        onExportavel?.({ titulo: `Vendas — ${tituloVista}`, colunas: COLS_VENDAS[vista], linhas });
     }, [linhas, vista, tituloVista, onExportavel]);
 
     const t = dados?.totais;
@@ -125,6 +130,11 @@ const VendasRelatorioTab: React.FC<Props> = ({ onExportavel }) => {
                 <select className="filter-select" value={vista} onChange={(e) => setVista(e.target.value as VistaVendas)} aria-label="Relatório">
                     {VISTAS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
                 </select>
+                {!onExportavel && (
+                    <button type="button" className="abtn abtn-secondary" style={{ marginLeft: 'auto' }} onClick={() => setExportar(true)}>
+                        <Download size={13} /> Exportar
+                    </button>
+                )}
                 {aCarregar && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>A carregar…</span>}
             </div>
 
@@ -234,6 +244,11 @@ const VendasRelatorioTab: React.FC<Props> = ({ onExportavel }) => {
                         : `${linhas.length} linhas · ${de} a ${ate}`}
                 </div>
             </div>
+
+            {exportar && (
+                <ExportModal title={`Vendas — ${tituloVista}`} columns={COLS_VENDAS[vista]} data={linhas}
+                    filename={`relatorio_vendas_${vista}`} onClose={() => setExportar(false)} />
+            )}
         </>
     );
 };

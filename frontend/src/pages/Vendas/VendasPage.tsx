@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertCircle, BookOpen, FileText, Filter, HandCoins, Landmark, Lock, Printer, Receipt, RotateCcw, Search, Send, Trash2, Wallet, Wrench } from 'lucide-react';
+import { AlertCircle, BarChart3, BookOpen, FileText, Filter, HandCoins, Landmark, Lock, Printer, Receipt, RotateCcw, Search, Send, Trash2, Wallet, Wrench } from 'lucide-react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import EmptyState from '../../components/EmptyState';
@@ -21,6 +21,7 @@ import PendentesTab from './PendentesTab';
 import RecebimentosTab from './RecebimentosTab';
 import CaixaTab from './CaixaTab';
 import ExtratoTab from './ExtratoTab';
+import VendasRelatorioTab from '../Relatorios/VendasRelatorioTab';
 import EstornoModal from './EstornoModal';
 
 /**
@@ -32,8 +33,8 @@ import EstornoModal from './EstornoModal';
  * #169 — Ratificação / Estorno (menu de contexto ou detalhe do documento emitido): NC/ND.
  */
 
-type Tab = 'ots' | 'semValor' | 'documentos' | 'pendentes' | 'recebimentos' | 'caixa' | 'extrato';
-const TABS_VALIDOS: Tab[] = ['ots', 'semValor', 'documentos', 'pendentes', 'recebimentos', 'caixa', 'extrato'];
+type Tab = 'ots' | 'semValor' | 'documentos' | 'pendentes' | 'recebimentos' | 'caixa' | 'extrato' | 'relatorios';
+const TABS_VALIDOS: Tab[] = ['ots', 'semValor', 'documentos', 'pendentes', 'recebimentos', 'caixa', 'extrato', 'relatorios'];
 
 
 /** Estado mostrado na lista: o de faturação, ou Rascunho, ou Estorno (NC/ND). */
@@ -519,6 +520,8 @@ const VendasPage: React.FC = () => {
         { id: 'recebimentos', label: 'Recebimentos', icon: HandCoins },
         { id: 'caixa', label: 'Caixa', icon: Landmark },
         { id: 'extrato', label: 'Extrato', icon: BookOpen },
+        // #170 — os mesmos relatórios de Relatórios → Vendas.
+        { id: 'relatorios', label: 'Relatórios', icon: BarChart3 },
     ];
     const tabVendas = tab === 'ots' || tab === 'semValor' || tab === 'documentos';
 
@@ -623,6 +626,7 @@ const VendasPage: React.FC = () => {
                 {tab === 'recebimentos' && <RecebimentosTab versao={versao} podeEstornar={podeFaturar} onMudou={carregar} />}
                 {tab === 'caixa' && <CaixaTab podeOperar={podeFaturar} versao={versao} onMudou={() => setVersao(v => v + 1)} />}
                 {tab === 'extrato' && <ExtratoTab versao={versao} />}
+                {tab === 'relatorios' && <VendasRelatorioTab />}
 
                 {tab === 'ots' && tabelaOts(ots, true)}
                 {tab === 'semValor' && tabelaOts(semValor, false)}

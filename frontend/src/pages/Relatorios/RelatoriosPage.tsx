@@ -102,7 +102,11 @@ const RelatoriosPage: React.FC = () => {
     const { faturas, ordens, movimentosStock, artigos, armazens, clientes, equipInstalados, provincias, empresaConfig, fmtMoney, fmtDate, fmt: fmtNum } = useGlobal();
     const fmtKz = fmtMoney;
 
-    const [tab,        setTab]        = useState<RelTab>('faturacao');
+    // #170 — `?tab=vendas` abre directamente um separador.
+    const [tab,        setTab]        = useState<RelTab>(() => {
+        const pedido = new URLSearchParams(window.location.search).get('tab');
+        return TABS.some(t => t.id === pedido) ? pedido as RelTab : 'faturacao';
+    });
     const [showExport, setShowExport] = useState(false);
 
     /* ── Faturação mensal (computed from real faturas) ── */
