@@ -163,6 +163,23 @@ describeDb('Vendas — estorno NC / RE (v11 §7.4 passo 7) E2E, BD real', () => 
         ids.nc = nc.id;
     });
 
+    it('#175 — detalhe do pendente: histórico NC → RE → ERE → NC reproduz o pendente; a lista impressa respeita o filtro', async () => {
+        const mov = await q(`SELECT id FROM movimentos_cc WHERE origem_tipo = 'DOCUMENTO_VENDA' AND origem_id = $1`, [ids.ft]);
+        const d = (await request(srv()).get(`/cc/pendentes/${mov.id}/impressao`).expect(200)).body;
+        expect(d.documento).toMatchObject({ numeroDocumento: `FT ${tag}/1`, otNumero: `OT-${tag}` });
+        expect(d.linhas).toHaveLength(2);
+        expect(d).toMatchObject({ valorOriginal: 114000, valorLiquidado: 114000, valorPendente: 0 });
+        expect(d.historico.map((e: any) => [e.tipo, e.efeito, e.pendenteApos])).toEqual([
+            ['NOTA_CREDITO', -34200, 79800], ['LIQUIDACAO', -50000, 29800],
+            ['ESTORNO_LIQUIDACAO', 50000, 79800], ['NOTA_CREDITO', -79800, 0],
+        ]);
+        await request(srv()).get('/cc/pendentes/999999999/impressao').expect(404);
+
+        const lista = (await request(srv()).get('/cc/pendentes/impressao').query({ clienteId: ids.cliente }).expect(200)).body;
+        expect(lista).toMatchObject({ items: [], truncado: false, totais: { documentos: 0 } });
+        expect(lista.empresa).toHaveProperty('nome');
+    });
+
     it('#170 — a NC imprime o documento estornado e o motivo de cada linha', async () => {
         const r = (await request(srv()).post(`/vendas/documentos/${ids.nc}/imprimir`).expect(200)).body;
         expect(r.documento).toMatchObject({ codigo: 'NC', documentoOrigem: { numeroDocumento: `FT ${tag}/1` }, liquidacao: null });
