@@ -15,11 +15,13 @@ import { paraDataHoraLocal } from '../../services/vendas';
 import { vendasConfigApi, type ContaBancaria, type DocumentoConfig } from '../../services/vendasConfig';
 import { adiado, CANCELADO, Modal, mono, muted, num } from './ui';
 import { buildReciboHtml, imprimirDocumento } from './impressao';
+import { buildListaPendentesHtml, buildPendenteHtml } from './impressaoPendentes';
 
 /**
  * #174 — Pendentes da conta corrente de clientes, filtráveis por n.º de documento,
  * n.º de OT, entidade e data; os filtros ficam no URL (lista partilhável/imprimível).
  * #166 — a partir da selecção, regista-se o recebimento (`RE` → `MC`).
+ * #175 — imprime a lista tal como está filtrada (todas as páginas) e cada pendente.
  */
 
 const POR_PAGINA = 50;
@@ -241,6 +243,12 @@ const PendentesTab: React.FC<{ podeReceber: boolean; onAbrirDocumento: (id: numb
     const pagina = filtros.pagina ?? 1;
     const totalPaginas = dados ? Math.max(1, Math.ceil(dados.totais.documentos / POR_PAGINA)) : 1;
     const temFiltros = ['documento', 'ot', 'clienteId', 'de', 'ate', 'vencidosAte'].some(k => sp.has(k));
+    // #175 — impressão: a lista com os filtros actuais (todas as páginas) e um pendente.
+    const nomeCliente = filtros.clienteId ? clientes.find(c => Number(c.id) === filtros.clienteId)?.nome ?? null : null;
+    const imprimirLista = () => imprimirDocumento(async () =>
+        buildListaPendentesHtml(await tesourariaApi.imprimirPendentes(filtros), filtros, nomeCliente));
+    const imprimirPendente = (p: Pendente) => imprimirDocumento(async () =>
+        buildPendenteHtml(await tesourariaApi.imprimirPendente(p.movimentoCcId)));
     const selecionado = (p: Pendente) => selecionados.some(s => s.movimentoCcId === p.movimentoCcId);
 
     const alternar = (p: Pendente) => {
@@ -284,6 +292,10 @@ const PendentesTab: React.FC<{ podeReceber: boolean; onAbrirDocumento: (id: numb
                         aplicar({ documento: undefined, ot: undefined, clienteId: undefined, de: undefined, ate: undefined, vencidosAte: undefined });
                     }}><Filter size={12} /> Limpar</button>
                 )}
+                <button className="abtn abtn-secondary" type="button" style={{ marginLeft: 'auto' }} disabled={!dados || dados.totais.documentos === 0}
+                    title="Imprime todos os pendentes do filtro actual (todas as páginas)" onClick={() => { void imprimirLista(); }}>
+                    <Printer size={12} /> Imprimir lista
+                </button>
             </div>
 
             {dados && (
@@ -310,11 +322,12 @@ const PendentesTab: React.FC<{ podeReceber: boolean; onAbrirDocumento: (id: numb
                             {podeReceber && <th style={{ width: 28 }} aria-label="Selecionar" />}
                             <th>Documento</th><th>OT</th><th>Cliente</th><th>Data</th><th>Vencimento</th>
                             <th style={num}>Original</th><th style={num}>Pendente</th><th>Modo pag.</th>
+                            <th style={{ width: 36 }} aria-label="Acções" />
                         </tr></thead>
                         <tbody>
-                            {!dados && <tr><td colSpan={9} style={muted}>A carregar…</td></tr>}
+                            {!dados && <tr><td colSpan={10} style={muted}>A carregar…</td></tr>}
                             {dados?.items.length === 0 && (
-                                <tr><td colSpan={9}><EmptyState icon={<Wallet size={28} />} title="Sem pendentes" description={temFiltros ? 'Nenhum pendente corresponde aos filtros.' : 'As faturas emitidas a crédito aparecem aqui até serem liquidadas.'} /></td></tr>
+                                <tr><td colSpan={10}><EmptyState icon={<Wallet size={28} />} title="Sem pendentes" description={temFiltros ? 'Nenhum pendente corresponde aos filtros.' : 'As faturas emitidas a crédito aparecem aqui até serem liquidadas.'} /></td></tr>
                             )}
                             {dados?.items.map(p => (
                                 <tr key={p.movimentoCcId} style={{ background: selecionado(p) ? 'var(--blue-light, #EFF6FF)' : undefined }}>
@@ -331,6 +344,8 @@ const PendentesTab: React.FC<{ podeReceber: boolean; onAbrirDocumento: (id: numb
                                     <td style={num}>{fmtMoney(p.valorOriginal, 'AOA')}</td>
                                     <td style={{ ...num, fontWeight: 700 }}>{fmtMoney(p.valorPendente, 'AOA')}</td>
                                     <td style={{ fontSize: '0.78rem' }}>{p.modoPagamentoDescricao ?? '—'}</td>
+                                    <td><button type="button" className="icon-btn" title="Imprimir pendente" aria-label={`Imprimir ${p.numeroDocumento ?? 'pendente'}`}
+                                        onClick={() => { void imprimirPendente(p); }}><Printer size={13} /></button></td>
                                 </tr>
                             ))}
                         </tbody>

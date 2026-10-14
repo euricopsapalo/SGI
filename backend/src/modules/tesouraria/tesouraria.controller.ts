@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, ParseIntPipe, Post, Query, Request } from '@nestjs/common';
 import { ImpressaoReciboService } from './impressao-recibo.service';
+import { ImpressaoPendentesService } from './impressao-pendentes.service';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/roles.decorator';
 import { ContaCorrenteService } from './conta-corrente.service';
@@ -17,10 +18,23 @@ const TESOURARIA = ['admin', 'coordenador', 'vendedor'];
 @ApiBearerAuth('access-token')
 @Controller('cc')
 export class ContaCorrenteController {
-    constructor(private readonly svc: ContaCorrenteService) {}
+    constructor(
+        private readonly svc: ContaCorrenteService,
+        private readonly impressao: ImpressaoPendentesService,
+    ) {}
 
     @Get('pendentes')
     pendentes(@Query() q: PendentesQueryDto) { return this.svc.pendentes(q); }
+
+    /** #175 — lista para imprimir: todas as páginas do filtro, com os dados da empresa. */
+    @Get('pendentes/impressao')
+    imprimirLista(@Query() q: PendentesQueryDto, @Request() req: any) {
+        return this.impressao.lista(q, req?.user?.nome ?? req?.user?.email);
+    }
+
+    /** #175 — um pendente: documento de origem, linhas, liquidado, pendente e histórico. */
+    @Get('pendentes/:movimentoCcId/impressao')
+    imprimirPendente(@Param('movimentoCcId', ParseIntPipe) id: number) { return this.impressao.detalhe(id); }
 
     @Get('extrato')
     extrato(@Query() q: ExtratoQueryDto) { return this.svc.extrato(q); }

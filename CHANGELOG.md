@@ -4,6 +4,14 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(vendas): imprimir a lista de pendentes filtrada e o detalhe de um pendente (closes #175)
+
+- **Imprimir lista** (separador Pendentes): imprime exactamente o resultado do filtro actual, com a mesma ordenação e **todas as páginas** (até 5000 linhas, com aviso se forem mais). Leva os dados da empresa, a data/hora, o utilizador, o resumo dos filtros ("Sem filtros" quando não há nenhum), as colunas documento · data · vencimento · dias em atraso · cliente · NIF · OT · valor original · valor pendente, e os totais (n.º de documentos, Σ original, Σ vencido, Σ pendente). Com filtro de cliente, agrupa e subtotaliza por cliente.
+- **Imprimir pendente** (ícone em cada linha): empresa e cliente, documento de origem (n.º, data, vencimento, modo de pagamento), OT e n.º de série do equipamento, linhas do documento, valor original, já liquidado e pendente, e o **histórico** de liquidações, estornos de liquidação e Notas de Crédito, com o efeito de cada um no pendente.
+- **Backend:** `GET /api/cc/pendentes/impressao` (mesmos filtros de `/cc/pendentes`) e `GET /api/cc/pendentes/:movimentoCcId/impressao`. O efeito de cada NC no histórico reproduz a regra do estorno (#169): a NC abate no máximo o pendente que havia nesse momento, pela ordem real de processamento.
+- PDF gerado no servidor, em A4, como as restantes impressões (#182). Não são documentos fiscais, por isso não contam vias.
+- Testes: regras do histórico, serviço, geradores de HTML (filtros, totais, agrupamento por cliente, detalhe) e e2e contra BD real (histórico NC → RE → ERE → NC).
+
 ### feat(vendas): fase 7 — impressão de NC/ND/FR e relatórios de vendas (closes #170)
 
 - **Impressão:** a mesma impressão da fatura (#178, Original / Segunda via) serve FT, FR, NC e ND. A **NC/ND** passa a mostrar o **documento de origem** (`FT 2026/7 de 2026-01-05`) em *Dados do Documento* e o **motivo do estorno** em cada linha. A **FR** mostra o recibo da liquidação automática e a conta onde entrou o valor (*Pago — RE 2026/4 · Caixa Sede*).

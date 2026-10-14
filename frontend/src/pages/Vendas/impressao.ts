@@ -10,7 +10,7 @@ import { imprimirPdf } from '../../utils/imprimirPdf';
  * impressão, no mesmo padrão das restantes impressões do SGI.
  */
 
-const esc = (v: unknown) => String(v ?? '')
+export const esc = (v: unknown) => String(v ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /** 106 951,87 — espaço nos milhares e vírgula decimal, como nos modelos. */
@@ -26,7 +26,7 @@ const fmtQtd = (v: number) => fmtNum(v, 2);
 const linhasOpcionais = (...linhas: (string | null | undefined | false)[]) =>
     linhas.filter(Boolean).map((l) => `<div>${l}</div>`).join('');
 
-function blocoEmpresa(e: EmpresaImpressao) {
+export function blocoEmpresa(e: EmpresaImpressao) {
     return `
         ${e.logoUrl ? `<img class="logo" src="${esc(e.logoUrl)}" alt="">` : ''}
         <div class="empresa">
@@ -43,7 +43,7 @@ function blocoEmpresa(e: EmpresaImpressao) {
         </div>`;
 }
 
-function blocoCliente(c: ClienteImpressao | null) {
+export function blocoCliente(c: ClienteImpressao | null) {
     if (!c) return '';
     const local = [c.codigoPostal, c.localidade].filter(Boolean).join(' ');
     const regiao = [c.municipio, c.provincia].filter(Boolean).join(' — ');
@@ -73,7 +73,7 @@ function tituloDocumento(doc: { descricao: string; codigo: string; tipoFiscal: s
  */
 const MARGENS = MARGENS_PAGINA;
 
-const CSS_BASE = `
+export const CSS_BASE = `
     ${cssPagina('A4 portrait')}
     * { box-sizing: border-box; }
     html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }

@@ -98,6 +98,12 @@ export const tesourariaApi = {
     liquidar: (dto: LiquidacaoPedido) => api.post<Liquidacao>('/liquidacoes', dto).then(r => r.data),
     /** #178 — dados para imprimir o recibo (conta a impressão: Original / Segunda via). */
     imprimir: (id: number) => api.post<ReciboImpressao>(`/liquidacoes/${id}/imprimir`).then(r => r.data),
+    /** #175 — lista de pendentes para imprimir: todas as páginas do filtro actual. */
+    imprimirPendentes: (f: PendentesFiltros) =>
+        api.get<ListaPendentesImpressao>('/cc/pendentes/impressao', { params: limpo({ ...f, pagina: undefined, porPagina: undefined }) }).then(r => r.data),
+    /** #175 — detalhe de um pendente para imprimir. */
+    imprimirPendente: (movimentoCcId: number) =>
+        api.get<PendenteImpressao>(`/cc/pendentes/${movimentoCcId}/impressao`).then(r => r.data),
     /** #169 — estorno do recebimento (ERE): repõe o pendente e devolve o valor da conta. */
     estornar: (id: number, dto: { motivoEstornoId: number; dataHora?: string; observacoes?: string }) =>
         api.post<Liquidacao>(`/liquidacoes/${id}/estornar`, dto).then(r => r.data),
@@ -200,4 +206,32 @@ export function podeSelecionar(selecionados: Pendente[], p: Pendente): string | 
         return 'Um recebimento é de um só cliente — conclua ou limpe a selecção actual';
     }
     return null;
+}
+
+/* ── #175 — impressão de pendentes ───────────────────────────────────────── */
+
+export interface ListaPendentesImpressao {
+    empresa: EmpresaImpressao;
+    geradoEm: string;
+    utilizador: string | null;
+    items: Pendente[];
+    totais: PendentesResposta['totais'];
+    /** A lista excedeu o limite de linhas da impressão. */
+    truncado: boolean;
+}
+
+export type TipoEventoPendente = 'LIQUIDACAO' | 'ESTORNO_LIQUIDACAO' | 'NOTA_CREDITO';
+
+export interface PendenteImpressao {
+    empresa: EmpresaImpressao;
+    cliente: ClienteImpressao | null;
+    geradoEm: string;
+    documento: {
+        codigo: string | null; descricao: string; numeroDocumento: string | null; data: string; dataVencimento: string;
+        moeda: string; modoPagamento: string | null; otNumero: string | null; nrSerieEquipamento: string | null;
+    };
+    linhas: { descricao: string; quantidade: number; precoUnitario: number; desconto: number; codigoIva: string | null; taxaIva: number; totalLiquido: number }[];
+    totais: { subtotal: number; desconto: number; valorIva: number; total: number } | null;
+    valorOriginal: number; valorLiquidado: number; valorPendente: number;
+    historico: { tipo: TipoEventoPendente; numeroDocumento: string | null; data: string; valor: number; desconto: number; efeito: number; pendenteApos: number }[];
 }
