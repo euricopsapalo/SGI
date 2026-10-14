@@ -1,7 +1,8 @@
 import {
     calcularTotais, codigoHash, dataLocal, dataVencimento, EstadoFaturacao, estadoFaturacao, hashDocumento, naturezaMovimento,
-    numeroDocumento, round2,
+    numeroDocumento, round2, classificacaoLinha,
 } from './vendas.rules';
+import { TipoArtigo } from '../artigos/artigo.entity';
 
 /** #165 — Regras puras do documento de venda (v11 §4–§5.1). */
 describe('vendas.rules', () => {
@@ -98,5 +99,17 @@ describe('vendas.rules', () => {
         it('documento sem movimento em CC (liquidado no acto) → Paga', () => {
             expect(estadoFaturacao(1, null)).toBe(EstadoFaturacao.PAGA);
         });
+    });
+});
+
+describe('#195 — classificacaoLinha', () => {
+    it('copia o tipo e a retenção do artigo; sem artigo → Produto sem retenção', () => {
+        expect(classificacaoLinha({ tipo: TipoArtigo.SERVICO, sujeitoRetencao: true })).toEqual({ tipoArtigo: 'SERVICO', sujeitoRetencao: true });
+        expect(classificacaoLinha({ tipo: TipoArtigo.SERVICO, sujeitoRetencao: false })).toEqual({ tipoArtigo: 'SERVICO', sujeitoRetencao: false });
+        expect(classificacaoLinha(undefined)).toEqual({ tipoArtigo: 'PRODUTO', sujeitoRetencao: false });
+    });
+
+    it('um Produto nunca fica sujeito a retenção, mesmo com dados inconsistentes', () => {
+        expect(classificacaoLinha({ tipo: TipoArtigo.PRODUTO, sujeitoRetencao: true })).toEqual({ tipoArtigo: 'PRODUTO', sujeitoRetencao: false });
     });
 });

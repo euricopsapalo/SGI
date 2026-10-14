@@ -64,7 +64,8 @@ describeDb('Vendas — faturar OT (v11 §7.4 passos 2–6) E2E, BD real', () => 
 
         ids.cliente = (await q(`INSERT INTO clientes (nome) VALUES ($1) RETURNING id`, [`Cliente ${tag}`])).id;
         ids.artigoA = (await q(`INSERT INTO artigos (codigo, descricao) VALUES ($1, 'Filtro sedimentos') RETURNING id`, [`${tag}A`])).id;
-        ids.artigoB = (await q(`INSERT INTO artigos (codigo, descricao) VALUES ($1, 'Membrana RO') RETURNING id`, [`${tag}B`])).id;
+        // #195 — B é um Serviço sujeito a retenção; A fica Produto (omissão).
+        ids.artigoB = (await q(`INSERT INTO artigos (codigo, descricao, tipo, sujeito_retencao) VALUES ($1, 'Membrana RO', 'SERVICO', true) RETURNING id`, [`${tag}B`])).id;
         ids.ft = (await q(`SELECT id FROM documentos_config WHERE codigo = 'FT'`)).id;
         ids.serie = (await q(`INSERT INTO series (documento_config_id, codigo, ano) VALUES ($1, $2, $3) RETURNING id`,
             [ids.ft, tag, ano])).id;
@@ -111,6 +112,13 @@ describeDb('Vendas — faturar OT (v11 §7.4 passos 2–6) E2E, BD real', () => 
         });
         expect(rascunho1.linhas).toHaveLength(2);
         expect(rascunho1.linhas.map((l: any) => l.descricao)).not.toContain('Técnico');
+        // #195 — cada linha copia o tipo do artigo e a marcação de retenção.
+        const classe = (artigoId: number) => {
+            const l = rascunho1.linhas.find((x: any) => x.artigoId === artigoId);
+            return [l.tipoArtigo, l.sujeitoRetencao];
+        };
+        expect(classe(ids.artigoA)).toEqual(['PRODUTO', false]);
+        expect(classe(ids.artigoB)).toEqual(['SERVICO', true]);
 
         // O rascunho não reserva a OT: pode coexistir um segundo (só a emissão verifica D5).
         rascunho2 = (await request(srv()).post('/vendas/documentos')
@@ -150,6 +158,18 @@ describeDb('Vendas — faturar OT (v11 §7.4 passos 2–6) E2E, BD real', () => 
         // D1 — a fatura não mexe em stock.
         const stock = Number((await q(`SELECT existencia FROM artigos WHERE id = $1`, [ids.artigoA])).existencia);
         expect(stock).toBe(ids.stockA);
+    });
+
+    it('#195 — a classificação fica fixada na emissão; a BD recusa um Produto sujeito a retenção', async () => {
+        await ds.query(`UPDATE artigos SET tipo = 'PRODUTO', sujeito_retencao = false WHERE id = $1`, [ids.artigoB]);
+        const doc = (await request(srv()).get(`/vendas/documentos/${emitida.id}`).expect(200)).body;
+        const linhaB = doc.linhas.find((l: any) => l.artigoId === ids.artigoB);
+        expect(linhaB).toMatchObject({ tipoArtigo: 'SERVICO', sujeitoRetencao: true });
+
+        await expect(ds.query(`UPDATE artigos SET sujeito_retencao = true WHERE id = $1`, [ids.artigoB]))
+            .rejects.toThrow(/chk_artigos_retencao_servico/);
+        await expect(ds.query(`UPDATE artigos SET tipo = 'OUTRO' WHERE id = $1`, [ids.artigoB]))
+            .rejects.toThrow(/chk_artigos_tipo/);
     });
 
     it('emitido é imutável — editar ou eliminar devolve 409', async () => {

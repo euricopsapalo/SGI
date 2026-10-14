@@ -9,13 +9,14 @@ import { proximaEmissao, SerieInvalidaError } from '../vendas-config/series.rule
 import { erroValidacao, temErros } from '../vendas-config/erros';
 import { OrdemTrabalho, OTEstado } from '../ordens-trabalho/ordem-trabalho.entity';
 import { OtArtigo } from '../ordens-trabalho/ot-artigo.entity';
+import { Artigo } from '../artigos/artigo.entity';
 import { Cliente } from '../clientes/cliente.entity';
 import { TaxaIva } from '../tabelas-sistema/taxa-iva.entity';
 import { ConfiguracaoEmpresa } from '../configuracao/configuracao-empresa.entity';
 import { EstadoFatura, Fatura } from '../faturas/fatura.entity';
 import { SysLogsService } from '../sys-logs/sys-logs.service';
 import {
-    calcularTotais, dataLocal, dataVencimento, estadoFaturacao, hashDocumento, naturezaMovimento, numeroDocumento,
+    calcularTotais, classificacaoLinha, dataLocal, dataVencimento, estadoFaturacao, hashDocumento, naturezaMovimento, numeroDocumento,
 } from './vendas.rules';
 import { snapshotCliente, snapshotEmpresa } from './snapshot';
 import { liquidarNaTransacao, mensagemCaixaFechadaFR } from '../tesouraria/liquidacoes.service';
@@ -149,6 +150,7 @@ export class DocumentosVendaService {
                 precoUnitario: Number(a.preco ?? 0),
                 taxaIva: taxaDe(a),
             }));
+        await this.classificarLinhas(this.dataSource.manager, consumiveis);
         return { ...dto, consumiveis };
     }
 
@@ -186,6 +188,7 @@ export class DocumentosVendaService {
                 taxaIva: taxaDe(a),
                 ordem: i + 1,
             }));
+        await this.classificarLinhas(this.dataSource.manager, linhas);
         const totais = calcularTotais(linhas, 0);
 
         const doc = await this.repo.save(this.repo.create({
@@ -263,6 +266,7 @@ export class DocumentosVendaService {
                 };
             }).filter(Boolean) as any[];
             if (temErros(erros)) throw erroValidacao(erros);
+            await this.classificarLinhas(this.dataSource.manager, linhas);
         }
 
         const descontoGlobal = dto.descontoGlobal ?? Number(doc.descontoGlobal);
@@ -381,8 +385,12 @@ export class DocumentosVendaService {
                 });
                 const [snapCliente, snapEmpresa] = await Promise.all([snapshotCliente(m, doc.clienteId), snapshotEmpresa(m)]);
 
+                // #195 — fixa a classificação do artigo (tipo/retenção) tal como está na emissão.
+                await this.classificarLinhas(m, linhas);
                 for (const [i, l] of linhas.entries()) {
-                    await m.update(DocumentoVendaLinha, l.id, { totalLiquido: totais.linhas[i] });
+                    await m.update(DocumentoVendaLinha, l.id, {
+                        totalLiquido: totais.linhas[i], tipoArtigo: l.tipoArtigo, sujeitoRetencao: l.sujeitoRetencao,
+                    });
                 }
                 await m.update(DocumentoVenda, id, {
                     estado: EstadoDocumentoVenda.EMITIDO,
@@ -526,6 +534,20 @@ export class DocumentosVendaService {
     }
 
     /** IVA da linha: taxa gravada na OT → taxa do código de IVA → IVA global da empresa. */
+    /**
+     * #195 — copia para cada linha o tipo do artigo e a marcação de retenção (base da
+     * retenção na fonte, #179). Linhas sem artigo ficam Produto, sem retenção.
+     */
+    private async classificarLinhas(
+        m: EntityManager, linhas: { artigoId: number | null; tipoArtigo?: unknown; sujeitoRetencao?: unknown }[],
+    ) {
+        const ids = [...new Set(linhas.map((l) => l.artigoId).filter((x): x is number => !!x))];
+        const artigos = ids.length
+            ? new Map((await m.find(Artigo, { where: { id: In(ids) }, select: ['id', 'tipo', 'sujeitoRetencao'] })).map((a) => [a.id, a]))
+            : new Map<number, Artigo>();
+        for (const l of linhas) Object.assign(l, classificacaoLinha(l.artigoId ? artigos.get(l.artigoId) : undefined));
+    }
+
     private async resolvedorIva(): Promise<(a: OtArtigo) => number> {
         const [taxas, empresa] = await Promise.all([
             this.taxaRepo.find(),

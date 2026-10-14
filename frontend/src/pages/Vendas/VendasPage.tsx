@@ -7,7 +7,7 @@ import EmptyState from '../../components/EmptyState';
 import SubmitButton from '../../components/SubmitButton';
 import FieldError, { fieldAria } from '../../components/FieldError';
 import { useConfirm } from '../../components/useConfirm';
-import { useGlobal } from '../../contexts/GlobalContext';
+import { useGlobal, type TipoArtigo } from '../../contexts/GlobalContext';
 import { extractErrorMessage, extractFieldErrors, showToast } from '../../utils/errorHandler';
 import {
     vendasApi, calcularTotais, paraDataHoraLocal, PERFIS_FATURACAO,
@@ -15,7 +15,7 @@ import {
 } from '../../services/vendas';
 import { vendasConfigApi, type ContaBancaria, type DocumentoConfig } from '../../services/vendasConfig';
 import { eNumerario } from '../../services/tesouraria';
-import { adiado, CANCELADO, Modal, mono, muted, num } from './ui';
+import { adiado, CANCELADO, EtiquetaTipo, Modal, mono, muted, num } from './ui';
 import { buildFaturaHtml, imprimirDocumento } from './impressao';
 import PendentesTab from './PendentesTab';
 import RecebimentosTab from './RecebimentosTab';
@@ -79,7 +79,7 @@ const Totais: React.FC<{ t: { subtotal: number; desconto: number; valorIva: numb
 };
 
 /* ══ Editor de rascunho + emissão ══════════════════════════════ */
-interface LinhaEdit { otArtigoId: number; incluida: boolean; descricao: string; quantidade: number; maximo: number; precoUnitario: number; desconto: number; taxaIva: number }
+interface LinhaEdit { otArtigoId: number; incluida: boolean; descricao: string; quantidade: number; maximo: number; precoUnitario: number; desconto: number; taxaIva: number; tipoArtigo?: TipoArtigo; sujeitoRetencao?: boolean }
 
 const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFaturar: boolean; onClose: () => void; onMudou: () => void }> = ({ id, configs, podeFaturar, onClose, onMudou }) => {
     const { modosPagamento, fmtMoney } = useGlobal();
@@ -107,6 +107,7 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
                     otArtigoId: c.otArtigoId, incluida: !!l, descricao: l?.descricao ?? c.descricao,
                     quantidade: l?.quantidade ?? c.qtdConsumida, maximo: c.qtdConsumida,
                     precoUnitario: l?.precoUnitario ?? c.precoUnitario, desconto: l?.desconto ?? 0, taxaIva: l?.taxaIva ?? c.taxaIva,
+                    tipoArtigo: l?.tipoArtigo ?? c.tipoArtigo, sujeitoRetencao: l?.sujeitoRetencao ?? c.sujeitoRetencao,
                 };
             }));
             setObservacoes(d.observacoes ?? '');
@@ -284,6 +285,7 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
                                     <td>
                                         <input className="form-control" value={l.descricao} disabled={ro || !l.incluida} maxLength={300} aria-label={`Descrição da linha ${i + 1}`}
                                             onChange={e => set(l.otArtigoId, { descricao: e.target.value })} />
+                                        <EtiquetaTipo tipo={l.tipoArtigo} retencao={l.sujeitoRetencao} />
                                         <FieldError id={`vd-art-${l.otArtigoId}`} message={eArt} />
                                     </td>
                                     <td>
@@ -403,7 +405,7 @@ const DocumentoDetalhe: React.FC<{ id: number; onClose: () => void; onAbrir: (id
                 </tr></thead>
                 <tbody>{(doc.linhas ?? []).map(l => (
                     <tr key={l.id}>
-                        <td>{l.descricao}</td><td style={num}>{l.quantidade}</td>
+                        <td>{l.descricao}<EtiquetaTipo tipo={l.tipoArtigo} retencao={l.sujeitoRetencao} /></td><td style={num}>{l.quantidade}</td>
                         {doc.documentoOrigemId
                             ? <td style={{ fontSize: '0.78rem' }}>{l.motivoEstornoDescricao ?? '—'}</td>
                             : <td style={num}>{l.qtdEstornada || '—'}</td>}

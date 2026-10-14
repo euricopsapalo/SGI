@@ -1,6 +1,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { useModalA11y } from '../../components/useModalA11y';
+import type { TipoArtigo } from '../../contexts/GlobalContext';
 
 /** #165/#166 — peças partilhadas pelos separadores de Vendas. */
 
@@ -23,6 +24,13 @@ export const Modal: React.FC<{ titulo: string; largura?: number; onClose: () => 
         </div>
     );
 };
+
+/** #195 — etiqueta de linha de Serviço (e sujeita a retenção na fonte); nada para Produtos. */
+export const EtiquetaTipo: React.FC<{ tipo?: TipoArtigo; retencao?: boolean }> = ({ tipo, retencao }) => (tipo === 'SERVICO' ? (
+    <span title={retencao ? 'Serviço sujeito a retenção na fonte' : 'Serviço'} style={{ marginLeft: 6, fontSize: '0.66rem', fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: 'var(--blue-light,#EFF6FF)', color: 'var(--blue)', whiteSpace: 'nowrap' }}>
+        Serviço{retencao ? ' · Ret.' : ''}
+    </span>
+) : null);
 
 /** Motivo de rejeição de um `adiado` quando a operação não chegou a acontecer (não é um erro a mostrar). */
 export const CANCELADO = Symbol('cancelado');

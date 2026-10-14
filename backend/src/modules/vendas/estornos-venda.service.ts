@@ -77,6 +77,9 @@ export class EstornosVendaService {
                         otArtigoId: l.otArtigoId,
                         artigoId: l.artigoId,
                         descricao: l.descricao,
+                        // #195 — o estorno herda a classificação gravada na linha de origem.
+                        tipoArtigo: l.tipoArtigo,
+                        sujeitoRetencao: l.sujeitoRetencao,
                         quantidade: Number(p.quantidade),
                         precoUnitario: Number(l.precoUnitario),
                         desconto: Number(l.desconto),

@@ -176,8 +176,14 @@ export interface StockArmazem {
 }
 
 // ── Stock ──────────────────────────────────────────────────
+/** #195 — Produto ou Serviço; a retenção na fonte (#179) só incide sobre Serviços. */
+export type TipoArtigo = 'PRODUTO' | 'SERVICO';
+export const TIPO_ARTIGO_LABEL: Record<TipoArtigo, string> = { PRODUTO: 'Produto', SERVICO: 'Serviço' };
+
 export interface Artigo {
     id: string; codigo: string; descricao: string;
+    /** #195 */
+    tipo: TipoArtigo; sujeitoRetencao: boolean;
     classe: string; familia: string; imagem?: string;
     precoUnitario: number; moeda: string;
     existencia: number; stockReservado: number; nivelMaximo: number; stockSeguranca: number;
@@ -292,7 +298,7 @@ const norm = (item: any) => ({ ...item, id: item.id?.toString() });
 const normProvincia = (p: any): Provincia => ({ id: p.id?.toString(), nome: p.nome, paisId: p.pais?.id?.toString() ?? '' });
 const normMunicipio = (m: any): Municipio => ({ id: m.id?.toString(), nome: m.nome, provinciaId: m.provincia?.id?.toString() ?? '' });
 const normFuncaoTecnico = (f: any): FuncaoTecnico => ({ id: f.id?.toString(), codigo: f.codigo, descricao: f.descricao, custo: Number(f.custo) });
-const normArtigo = (a: any): Artigo => ({ ...a, id: a.id?.toString(), classe: a.classe ?? '', familia: a.familia ?? '', precoUnitario: Number(a.precoUnitario), existencia: Number(a.existencia), stockReservado: Number(a.stockReservado ?? 0), nivelMaximo: Number(a.nivelMaximo), stockSeguranca: Number(a.stockSeguranca), custoMedio: Number(a.custoMedio), precoCusto: Number(a.precoCusto ?? 0), stockEncomendado: Number(a.stockEncomendado ?? 0), stockInicial: Number(a.stockInicial ?? 0), unidadeMedida: a.unidadeMedida ?? 'UN', refFornecedor: a.refFornecedor ?? undefined, dataUltimaEntrada: a.dataUltimaEntrada ?? undefined, dataUltimaSaida: a.dataUltimaSaida ?? undefined });
+const normArtigo = (a: any): Artigo => ({ ...a, id: a.id?.toString(), tipo: a.tipo === 'SERVICO' ? 'SERVICO' : 'PRODUTO', sujeitoRetencao: a.tipo === 'SERVICO' && !!a.sujeitoRetencao, classe: a.classe ?? '', familia: a.familia ?? '', precoUnitario: Number(a.precoUnitario), existencia: Number(a.existencia), stockReservado: Number(a.stockReservado ?? 0), nivelMaximo: Number(a.nivelMaximo), stockSeguranca: Number(a.stockSeguranca), custoMedio: Number(a.custoMedio), precoCusto: Number(a.precoCusto ?? 0), stockEncomendado: Number(a.stockEncomendado ?? 0), stockInicial: Number(a.stockInicial ?? 0), unidadeMedida: a.unidadeMedida ?? 'UN', refFornecedor: a.refFornecedor ?? undefined, dataUltimaEntrada: a.dataUltimaEntrada ?? undefined, dataUltimaSaida: a.dataUltimaSaida ?? undefined });
 const normMovimento = (m: any): MovimentoStock => ({
     ...m,
     id: m.id?.toString(),

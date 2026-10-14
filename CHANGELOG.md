@@ -4,6 +4,22 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(artigos): tipo de artigo (Produto/Serviço) e marcação "sujeito a retenção na fonte" (closes #195)
+
+Pré-requisito da retenção na fonte (#179), que só incide sobre Serviços com a retenção habilitada.
+
+- **Migração `TipoArtigoRetencao`:**
+  - `artigos.tipo` (`PRODUTO`/`SERVICO`, varchar + CHECK, por omissão Produto; os artigos existentes ficam Produto) e `artigos.sujeito_retencao`. Um CHECK garante que só um Serviço pode estar sujeito a retenção;
+  - cópia de ambos em `documentos_venda_linhas` (`tipo_artigo`, `sujeito_retencao`).
+- **API de artigos:** `tipo` e `sujeitoRetencao` validados no DTO. Pedir retenção num Produto devolve 422 no campo; mudar um Serviço para Produto desliga a retenção.
+- **Documento de venda:** as linhas copiam a classificação do artigo ao criar e editar o rascunho, e voltam a fixá-la na **emissão**. Alterar o artigo depois não muda faturas emitidas. As NC/ND herdam a classificação da linha que estornam.
+- **Frontend:**
+  - Stock → ficha do artigo: campo **Tipo** e caixa **Sujeito a retenção na fonte**, só activa para Serviços;
+  - lista com filtro por tipo e etiqueta "Serviço · Ret.";
+  - exportação com as colunas Tipo e Retenção;
+  - editor e detalhe de Vendas: a etiqueta "Serviço" nas linhas.
+- Testes: regra de retenção, classificação das linhas, DTO, serviço e e2e contra BD real (cópia no rascunho, fixada na emissão, CHECKs da BD). Migração validada contra BD fresca: run → `--check` sem diferenças → revert → run.
+
 ### feat(vendas): imprimir a lista de pendentes filtrada e o detalhe de um pendente (closes #175)
 
 - **Imprimir lista** (separador Pendentes): imprime exactamente o resultado do filtro actual, com a mesma ordenação e **todas as páginas** (até 5000 linhas, com aviso se forem mais). Leva os dados da empresa, a data/hora, o utilizador, o resumo dos filtros ("Sem filtros" quando não há nenhum), as colunas documento · data · vencimento · dias em atraso · cliente · NIF · OT · valor original · valor pendente, e os totais (n.º de documentos, Σ original, Σ vencido, Σ pendente). Com filtro de cliente, agrupa e subtotaliza por cliente.

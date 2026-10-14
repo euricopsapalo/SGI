@@ -1,4 +1,5 @@
 import api from './api';
+import type { TipoArtigo } from '../contexts/GlobalContext';
 
 /**
  * #165 — Cliente do Módulo de Vendas de Intervenções (fase 2): OTs disponíveis,
@@ -15,6 +16,8 @@ export interface DocumentoVendaLinha {
     id: number; otArtigoId: number | null; artigoId: number | null; descricao: string;
     quantidade: number; precoUnitario: number; desconto: number; codigoIva: string | null; taxaIva: number;
     totalLiquido: number; qtdEstornada: number; ordem: number;
+    /** #195 — cópia do tipo do artigo e da marcação de retenção (fixada na emissão). */
+    tipoArtigo: TipoArtigo; sujeitoRetencao: boolean;
     /** #169 — NC/ND: linha estornada e motivo. */
     linhaOrigemId: number | null; motivoEstornoId: number | null; motivoEstornoDescricao: string | null;
 }
@@ -46,6 +49,8 @@ export interface DocumentoVenda {
 export interface ConsumivelOt {
     otArtigoId: number; artigoId: number | null; descricao: string;
     qtdConsumida: number; precoUnitario: number; taxaIva: number;
+    /** #195 */
+    tipoArtigo: TipoArtigo; sujeitoRetencao: boolean;
 }
 
 export interface LinhaRascunho { otArtigoId: number; descricao?: string; quantidade?: number; desconto?: number }
