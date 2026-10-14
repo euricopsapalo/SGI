@@ -82,10 +82,16 @@ export interface FaturaImpressao {
         modoPagamento: string | null; requisicao: string | null; moeda: string; descontoCliente: number;
         referencia: string | null; otNumero: string | null; nrSerieEquipamento: string | null;
         dataDisposicao: string | null; observacoes: string | null;
+        /** #170 — NC/ND: documento estornado. */
+        documentoOrigem?: { numeroDocumento: string | null; data: string | null } | null;
+        /** #170 — FR: recibo da liquidação automática e conta onde entrou o valor. */
+        liquidacao?: { numeroDocumento: string | null; conta: string } | null;
     };
     linhas: {
         artigoCodigo: string | null; descricao: string; quantidade: number; unidade: string; precoUnitario: number;
         desconto: number; codigoIva: string | null; taxaIva: number; valor: number;
+        /** #170 — NC/ND: motivo do estorno da linha. */
+        motivoEstorno?: string | null;
     }[];
     totais: { mercadoriaServicos: number; descontosComerciais: number; valorIva: number; total: number; valorPendente: number | null };
     impostos: { codigoIva: string | null; taxa: number; incidencia: number; valor: number; motivoIsencao: string | null }[];
@@ -111,7 +117,31 @@ export const vendasApi = {
     /** #169 — Ratificação/Estorno: emite a NC/ND, linha a linha, com motivo. */
     estornar: (id: number, dto: EstornarDocumento) =>
         api.post<DocumentoVenda>(`/vendas/documentos/${id}/estornar`, dto).then(r => r.data),
+    /** #170 — relatórios de vendas do período (e contas a receber à data de hoje). */
+    relatorios: (params: { de?: string; ate?: string }) =>
+        api.get<RelatorioVendas>('/vendas/relatorios', { params }).then(r => r.data),
 };
+
+/* ── #170 — relatórios de vendas ─────────────────────────────────────────── */
+
+/** Acumulado de um grupo de documentos: as NC entram em `creditos` e abatem ao `liquido`. */
+export interface AcumuladoVendas { documentos: number; faturado: number; creditos: number; iva: number; liquido: number }
+
+export interface ContasReceberLinha {
+    clienteId: number; nome: string; nif: string | null; documentos: number;
+    naoVencido: number; ate30: number; ate60: number; ate90: number; mais90: number; saldoFavor: number; total: number;
+}
+
+export interface RelatorioVendas {
+    periodo: { de: string; ate: string };
+    hoje: string;
+    totais: AcumuladoVendas;
+    porPeriodo: (AcumuladoVendas & { mes: string })[];
+    iva: { codigoIva: string | null; taxa: number; incidencia: number; valor: number }[];
+    porCliente: (AcumuladoVendas & { clienteId: number; nome: string; nif: string | null })[];
+    porOt: (AcumuladoVendas & { otId: number; otNumero: string | null; clienteNome: string; numeros: string[] })[];
+    contasReceber: { linhas: ContasReceberLinha[]; totais: Omit<ContasReceberLinha, 'clienteId' | 'nome' | 'nif'> };
+}
 
 export interface EstornarDocumento {
     serieId?: number; dataHora?: string; observacoes?: string;

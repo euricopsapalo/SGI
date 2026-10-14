@@ -109,6 +109,25 @@ describe('impressão — Fatura', () => {
         expect(r).toContain('6,50');
         expect(r).toContain('6 951,87');
     });
+
+    it('#170 — NC: documento de origem e motivo de cada linha', () => {
+        const nc = buildFaturaHtml({
+            ...fatura,
+            documento: { ...fatura.documento, codigo: 'NC', descricao: 'Nota de Crédito', documentoOrigem: { numeroDocumento: 'FT 2026/7', data: '2026-01-05' } },
+            linhas: fatura.linhas.map((l, i) => ({ ...l, motivoEstorno: i === 0 ? 'Devolução <parcial>' : null })),
+        });
+        expect(nc).toContain('<th>Doc. Origem</th>');
+        expect(nc).toContain('FT 2026/7 de 2026-01-05');
+        expect(nc).toContain('Motivo: Devolução &lt;parcial&gt;');
+        expect(nc.match(/Motivo: /g)).toHaveLength(1);
+        expect(html).not.toContain('Doc. Origem');
+    });
+
+    it('#170 — FR: recibo da liquidação automática e conta', () => {
+        const fr = buildFaturaHtml({ ...fatura, documento: { ...fatura.documento, liquidacao: { numeroDocumento: 'RE 2026/4', conta: 'Caixa Sede' } } });
+        expect(fr).toContain('Pago — RE 2026/4 · Caixa Sede');
+        expect(html).not.toContain('class="pago"');
+    });
 });
 
 const recibo: ReciboImpressao = {

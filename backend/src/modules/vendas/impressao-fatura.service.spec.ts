@@ -96,6 +96,27 @@ describe('ImpressaoFaturaService', () => {
             expect(r.documento.dataVencimento).toBeNull();
         });
 
+        it('#170 — NC traz o documento estornado e o motivo de cada linha; sem liquidação', async () => {
+            doc.documentoConfig = { codigo: 'NC', descricao: 'Nota de Crédito', tipoFiscal: 'NC', liquidacaoAutomatica: false };
+            doc.documentoOrigem = { numero: 7, dataHora: new Date('2025-12-20T10:00:00Z'), documentoConfig: { codigo: 'FT' }, serie: { codigo: '2025' } };
+            doc.linhas[0].motivoEstorno = { descricao: 'Devolução' };
+            const r: any = await svc.imprimir(50);
+            expect(r.documento.documentoOrigem).toEqual({ numeroDocumento: 'FT 2025/7', data: '2025-12-20' });
+            expect(r.documento.liquidacao).toBeNull();
+            expect(r.linhas.map((l: any) => l.motivoEstorno)).toEqual([null, 'Devolução']);
+            expect(ds.query.mock.calls.some(([sql]: [string]) => sql.includes('FROM liquidacoes'))).toBe(false);
+        });
+
+        it('#170 — FR traz o recibo da liquidação automática e a conta', async () => {
+            doc.documentoConfig = { codigo: 'FR', descricao: 'Fatura Recibo', tipoFiscal: 'FR', liquidacaoAutomatica: true };
+            const query = ds.query.getMockImplementation();
+            ds.query.mockImplementation(async (sql: string, p: any[]) => (sql.includes('FROM liquidacoes')
+                ? [{ codigo: 'RE', serie: '2026', numero: 4, conta: 'Caixa Sede' }] : query(sql, p)));
+            const r: any = await svc.imprimir(50);
+            expect(r.documento.liquidacao).toEqual({ numeroDocumento: 'RE 2026/4', conta: 'Caixa Sede' });
+            expect(r.documento.documentoOrigem).toBeNull();
+        });
+
         it('rascunho → 422; inexistente → 404', async () => {
             doc.estado = 'RASCUNHO';
             await expect(svc.imprimir(50)).rejects.toBeInstanceOf(UnprocessableEntityException);

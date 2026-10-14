@@ -130,11 +130,16 @@ export function buildFaturaHtml(d: FaturaImpressao): string {
     const referencia = doc.referencia && doc.referencia !== ordemTrabalho ? doc.referencia : '';
     const moeda = doc.moeda;
     const retencao = d.retencao;
+    // #170 — NC/ND identificam o documento que estornam; a FR, o recibo que a pagou.
+    const origem = doc.documentoOrigem
+        ? [doc.documentoOrigem.numeroDocumento, doc.documentoOrigem.data && `de ${doc.documentoOrigem.data}`].filter(Boolean).join(' ')
+        : '';
+    const liquidacao = doc.liquidacao;
 
     const linhas = d.linhas.map((l) => `
         <tr>
             <td>${esc(l.artigoCodigo ?? '')}</td>
-            <td>${esc(l.descricao)}</td>
+            <td>${esc(l.descricao)}${l.motivoEstorno ? `<div class="motivo">Motivo: ${esc(l.motivoEstorno)}</div>` : ''}</td>
             <td class="num">${fmtQtd(l.quantidade)}</td>
             <td>${esc(l.unidade)}</td>
             <td class="num">${fmtNum(l.precoUnitario)}</td>
@@ -174,6 +179,7 @@ export function buildFaturaHtml(d: FaturaImpressao): string {
     .totais .total td { font-weight: 800; font-size: 1.15em; border-top: 2px solid #111; }
     .motivo { font-size: 0.9em; color: #333; }
     .ot { font-weight: 700; white-space: nowrap; }
+    .pago { margin-top: 6px; text-align: right; font-weight: 700; }
 </style></head><body><main class="folha">
     <div class="topo">
         <div>${blocoEmpresa(d.empresa)}</div>
@@ -187,9 +193,10 @@ export function buildFaturaHtml(d: FaturaImpressao): string {
 
     <h2 class="seccao">Dados do Documento</h2>
     <table class="dados">
-        <thead><tr><th>V/N.º Contrib.</th><th>Requisição</th><th>Moeda</th><th>Data</th>${ordemTrabalho ? '<th>Ordem de Trabalho</th>' : ''}</tr></thead>
+        <thead><tr><th>V/N.º Contrib.</th><th>Requisição</th><th>Moeda</th><th>Data</th>${origem ? '<th>Doc. Origem</th>' : ''}${ordemTrabalho ? '<th>Ordem de Trabalho</th>' : ''}</tr></thead>
         <tbody><tr>
             <td>${esc(d.cliente?.nif ?? '')}</td><td>${esc(doc.requisicao ?? '')}</td><td>${esc(moeda)}</td><td>${esc(doc.data)}</td>
+            ${origem ? `<td class="ot">${esc(origem)}</td>` : ''}
             ${ordemTrabalho ? `<td class="ot">${esc(ordemTrabalho)}</td>` : ''}
         </tr></tbody>
     </table>
@@ -229,6 +236,7 @@ export function buildFaturaHtml(d: FaturaImpressao): string {
                 ${totalLinha('IVA', d.totais.valorIva)}
                 ${totalLinha(`Total ( ${esc(moeda)} )`, d.totais.total, true)}
             </tbody></table>
+            ${liquidacao ? `<div class="pago">Pago — ${esc(liquidacao.numeroDocumento)} · ${esc(liquidacao.conta)}</div>` : ''}
         </div>
     </div>
 

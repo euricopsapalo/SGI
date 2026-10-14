@@ -1,13 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
-import { BarChart3, TrendingUp, Users, Download, Package, Search, Briefcase, Trophy, MapPin } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Download, Package, Search, Briefcase, Trophy, MapPin, Receipt } from 'lucide-react';
 import { useGlobal } from '../../contexts/GlobalContext';
+import VendasRelatorioTab from './VendasRelatorioTab';
 
 /* fmtDate, fmtMoney, fmt vêm do GlobalContext */
 
-type RelTab = 'faturacao' | 'comissoes' | 'produtividade' | 'movimentos' | 'carteira' | 'ranking' | 'regioes';
+type RelTab = 'faturacao' | 'comissoes' | 'produtividade' | 'movimentos' | 'carteira' | 'ranking' | 'regioes' | 'vendas';
 
 const TABS: { id: RelTab; label: string; icon: React.FC<any> }[] = [
     { id: 'faturacao',     label: 'Faturação Mensal',      icon: BarChart3  },
@@ -17,6 +18,7 @@ const TABS: { id: RelTab; label: string; icon: React.FC<any> }[] = [
     { id: 'carteira',      label: 'Carteira de Clientes',   icon: Briefcase  },
     { id: 'ranking',       label: 'Ranking de Clientes',    icon: Trophy     },
     { id: 'regioes',       label: 'Clientes por Região',    icon: MapPin     },
+    { id: 'vendas',        label: 'Vendas',                 icon: Receipt    },
 ];
 
 const MES_PT: Record<string, string> = {
@@ -34,7 +36,8 @@ const TIPO_MOV_COLOR: Record<string, string> = {
     'Ajuste': 'var(--blue)', 'Transferência': 'var(--orange)', 'Devolução': 'var(--text-muted)',
 };
 
-const COLS: Record<RelTab, ExportCol[]> = {
+/** Colunas por separador; as de Vendas (#170) dependem da vista e vêm do próprio separador. */
+const COLS: Record<Exclude<RelTab, 'vendas'>, ExportCol[]> = {
     faturacao: [
         { key: 'mes',        label: 'Mês'            },
         { key: 'os',         label: 'Nº OT'          },
@@ -99,7 +102,11 @@ const RelatoriosPage: React.FC = () => {
     const { faturas, ordens, movimentosStock, artigos, armazens, clientes, equipInstalados, provincias, empresaConfig, fmtMoney, fmtDate, fmt: fmtNum } = useGlobal();
     const fmtKz = fmtMoney;
 
-    const [tab,        setTab]        = useState<RelTab>('faturacao');
+    // #170 — `?tab=vendas` abre directamente um separador.
+    const [tab,        setTab]        = useState<RelTab>(() => {
+        const pedido = new URLSearchParams(window.location.search).get('tab');
+        return TABS.some(t => t.id === pedido) ? pedido as RelTab : 'faturacao';
+    });
     const [showExport, setShowExport] = useState(false);
 
     /* ── Faturação mensal (computed from real faturas) ── */
@@ -282,7 +289,11 @@ const RelatoriosPage: React.FC = () => {
         [carteiraData, carteiraSearch]
     );
 
-    const exportData: Record<RelTab, Record<string, any>[]> = {
+    // #170 — o separador de Vendas diz o que exportar (vista activa).
+    const [vendasExport, setVendasExport] = useState<{ titulo: string; colunas: ExportCol[]; linhas: Record<string, any>[] }>({ titulo: 'Vendas', colunas: [], linhas: [] });
+    const onVendasExportavel = useCallback((e: typeof vendasExport) => setVendasExport(e), []);
+
+    const exportData: Record<Exclude<RelTab, 'vendas'>, Record<string, any>[]> = {
         faturacao:     filtFaturacao,
         comissoes:     filtComissoes,
         produtividade: filtProdutividade,
@@ -795,13 +806,16 @@ const RelatoriosPage: React.FC = () => {
                         </div>
                     </>
                 )}
+
+                {/* ── VENDAS (#170) ── */}
+                {tab === 'vendas' && <VendasRelatorioTab onExportavel={onVendasExportavel} />}
             </div>
 
             {showExport && (
                 <ExportModal
-                    title={tabLabel}
-                    columns={COLS[tab]}
-                    data={exportData[tab]}
+                    title={tab === 'vendas' ? vendasExport.titulo : tabLabel}
+                    columns={tab === 'vendas' ? vendasExport.colunas : COLS[tab]}
+                    data={tab === 'vendas' ? vendasExport.linhas : exportData[tab]}
                     filename={`relatorio_${tab}`}
                     onClose={() => setShowExport(false)}
                 />

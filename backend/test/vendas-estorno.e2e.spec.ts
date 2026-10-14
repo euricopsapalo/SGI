@@ -160,5 +160,22 @@ describeDb('Vendas — estorno NC / RE (v11 §7.4 passo 7) E2E, BD real', () => 
 
         // Já não há nada por estornar.
         await estornar(ids.ft, [{ linhaId: ids.l2, quantidade: 1, motivoEstornoId: ids.motivo }]).expect(422);
+        ids.nc = nc.id;
+    });
+
+    it('#170 — a NC imprime o documento estornado e o motivo de cada linha', async () => {
+        const r = (await request(srv()).post(`/vendas/documentos/${ids.nc}/imprimir`).expect(200)).body;
+        expect(r.documento).toMatchObject({ codigo: 'NC', documentoOrigem: { numeroDocumento: `FT ${tag}/1` }, liquidacao: null });
+        expect(r.linhas.map((l: any) => l.motivoEstorno)).toEqual(['Erro de faturação', 'Erro de faturação']);
+    });
+
+    it('#170 — relatórios: a FT soma, as NC abatem; a OT fica com líquido 0', async () => {
+        const r = (await request(srv()).get('/vendas/relatorios').expect(200)).body;
+        const ot = r.porOt.find((o: any) => o.otId === ids.ot);
+        expect(ot).toMatchObject({ documentos: 3, faturado: 114000, creditos: 114000, liquido: 0 });
+        expect(r.porCliente.find((c: any) => c.clienteId === ids.cliente)).toMatchObject({ liquido: 0 });
+        // Pendente da FT a 0 → o cliente não aparece em contas a receber.
+        expect(r.contasReceber.linhas.find((c: any) => c.clienteId === ids.cliente)).toBeUndefined();
+        await request(srv()).get('/vendas/relatorios').query({ de: '2026-02-01', ate: '2026-01-01' }).expect(422);
     });
 });
