@@ -7,6 +7,7 @@ import { ContaBancaria } from '../vendas-config/conta-bancaria.entity';
 import { Cliente } from '../clientes/cliente.entity';
 import { User } from '../users/user.entity';
 import { MovimentoCc } from '../vendas/movimento-cc.entity';
+import { MotivoEstorno } from '../vendas-config/motivo-estorno.entity';
 import type { SnapshotCliente, SnapshotEmpresa } from '../vendas/snapshot';
 
 /**
@@ -15,11 +16,12 @@ import type { SnapshotCliente, SnapshotEmpresa } from '../vendas/snapshot';
  * Documento de contas correntes, sempre emitido (não tem rascunho): abate o
  * pendente de um ou mais movimentos de CC do mesmo cliente e, na mesma
  * transacção, emite o Movimento em conta da sua ligação a tesouraria.
- * O estorno (fase 6) é por documento inverso — a liquidação nunca se altera.
+ * O estorno (#169) é por documento inverso (`ERE`) — a liquidação nunca se altera.
  */
 @Entity('liquidacoes')
 @Unique('uq_liquidacoes_serie_numero', ['serieId', 'numero'])
 @Index('idx_liquidacoes_cliente', ['clienteId'])
+@Index('uq_liquidacoes_origem', ['liquidacaoOrigemId'], { unique: true })
 @Check('chk_liquidacoes_totais', `"total" > 0 AND "desconto" >= 0`)
 export class Liquidacao {
     @PrimaryGeneratedColumn()
@@ -88,6 +90,21 @@ export class Liquidacao {
     /** #178 — n.º de impressões: a 1.ª é o Original, as seguintes são Segunda via. */
     @Column({ type: 'int', default: 0 })
     impressoes: number;
+
+    /** #169 — estorno (`ERE`) → liquidação estornada. Uma liquidação só se estorna uma vez. */
+    @ManyToOne(() => Liquidacao, { nullable: true, onDelete: 'RESTRICT' })
+    @JoinColumn({ name: 'liquidacao_origem_id' })
+    liquidacaoOrigem: Liquidacao;
+
+    @Column({ name: 'liquidacao_origem_id', type: 'int', nullable: true })
+    liquidacaoOrigemId: number | null;
+
+    @ManyToOne(() => MotivoEstorno, { nullable: true, onDelete: 'RESTRICT' })
+    @JoinColumn({ name: 'motivo_estorno_id' })
+    motivoEstorno: MotivoEstorno;
+
+    @Column({ name: 'motivo_estorno_id', type: 'int', nullable: true })
+    motivoEstornoId: number | null;
 
     @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({ name: 'emitido_por_id' })

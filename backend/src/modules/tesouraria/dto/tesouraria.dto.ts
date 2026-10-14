@@ -35,6 +35,16 @@ export class CreateLiquidacaoDto {
     linhas: LinhaLiquidacaoDto[];
 }
 
+/** #169 — `POST /api/liquidacoes/:id/estornar`: estorno total, com motivo. */
+export class EstornarLiquidacaoDto {
+    @IsInt() motivoEstornoId: number;
+    @IsOptional() @IsInt() serieId?: number;
+    @IsOptional() @IsDateString() dataHora?: string;
+
+    @IsOptional() @IsString() @MaxLength(5000)
+    observacoes?: string;
+}
+
 /**
  * #167 — Campos comuns às operações de caixa. Sem documento → o activo do tipo
  * associado à caixa; sem série → a por defeito; sem data-hora → agora.

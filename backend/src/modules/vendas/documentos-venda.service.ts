@@ -38,7 +38,7 @@ const ehFaturavel = (a: OtArtigo) => !!a.artigoId && Number(a.qtdConsumida ?? 0)
  *   data-hora crescente) e na OT (D5); gera o movimento de CC a débito e liga
  *   a OT ao documento. Não toca em stock (D1).
  * - Fatura Recibo (#168): a mesma transacção liquida o pendente (`RE` → `MC`) — R5.
- * - Emitido: imutável (409).
+ * - Emitido: imutável (409) — só se estorna (#169, `EstornosVendaService`).
  */
 @Injectable()
 export class DocumentosVendaService {
@@ -98,23 +98,43 @@ export class DocumentosVendaService {
         if (query.clienteId) where.clienteId = Number(query.clienteId);
         const docs = await this.repo.find({
             where,
-            relations: ['documentoConfig', 'serie', 'cliente', 'ot', 'modoPagamento'],
+            relations: ['documentoConfig', 'serie', 'cliente', 'ot', 'modoPagamento', 'documentoOrigem', 'documentoOrigem.documentoConfig', 'documentoOrigem.serie'],
             order: { id: 'DESC' },
         });
-        const movs = await this.movimentosDe(docs.map((d) => d.id));
-        return docs.map((d) => this.toDto(d, movs.get(d.id)));
+        const ids = docs.map((d) => d.id);
+        const [movs, estornados] = await Promise.all([this.movimentosDe(ids), this.estornadosDe(ids)]);
+        return docs.map((d) => this.toDto(d, movs.get(d.id), estornados.has(d.id)));
     }
 
     async findOne(id: number) {
         const doc = await this.repo.findOne({
             where: { id },
-            relations: ['documentoConfig', 'serie', 'cliente', 'ot', 'modoPagamento', 'linhas'],
+            relations: [
+                'documentoConfig', 'serie', 'cliente', 'ot', 'modoPagamento', 'linhas', 'linhas.motivoEstorno',
+                'documentoOrigem', 'documentoOrigem.documentoConfig', 'documentoOrigem.serie',
+            ],
         });
         if (!doc) throw new NotFoundException(`Documento de venda ${id} não encontrado`);
         doc.linhas = (doc.linhas ?? []).sort((a, b) => a.ordem - b.ordem || a.id - b.id);
-        const movs = await this.movimentosDe([id]);
-        const dto = this.toDto(doc, movs.get(id));
-        if (doc.estado !== EstadoDocumentoVenda.RASCUNHO) return dto;
+        const [movs, estornados] = await Promise.all([this.movimentosDe([id]), this.estornadosDe([id])]);
+        const dto = this.toDto(doc, movs.get(id), estornados.has(id));
+        if (doc.estado !== EstadoDocumentoVenda.RASCUNHO) {
+            // #169 — estornos já emitidos sobre este documento.
+            const estornos = await this.repo.find({
+                where: { documentoOrigemId: id },
+                relations: ['documentoConfig', 'serie'],
+                order: { id: 'ASC' },
+            });
+            return {
+                ...dto,
+                estornos: estornos.map((e) => ({
+                    id: e.id,
+                    numeroDocumento: numeroDocumento(e.documentoConfig?.codigo ?? '', e.serie?.codigo, e.numero),
+                    dataHora: e.dataHora,
+                    total: Number(e.total),
+                })),
+            };
+        }
 
         // Rascunho: os consumíveis faturáveis da OT, para o editor poder repor linhas removidas.
         const taxaDe = await this.resolvedorIva();
@@ -528,12 +548,23 @@ export class DocumentosVendaService {
         return new Map(movs.map((mv) => [mv.origemId, mv]));
     }
 
+    /** #169 — documentos cujas linhas estão todas totalmente estornadas. */
+    private async estornadosDe(docIds: number[]): Promise<Set<number>> {
+        if (!docIds.length) return new Set();
+        const rows: { id: number }[] = await this.dataSource.query(`
+            SELECT documento_id AS id FROM documentos_venda_linhas
+            WHERE documento_id = ANY($1)
+            GROUP BY documento_id
+            HAVING bool_and(qtd_estornada >= quantidade)`, [docIds]);
+        return new Set(rows.map((r) => Number(r.id)));
+    }
+
     private async log(user: Utilizador, acao: string, detalhes: string) {
         await this.sysLogs.create({ usuario: user?.email ?? 'sistema', modulo: 'VENDAS', acao, detalhes });
     }
 
-    private toDto(d: DocumentoVenda, mov?: MovimentoCc) {
-        const { documentoConfig, serie, cliente, ot, modoPagamento, linhas, ...rest } = d;
+    private toDto(d: DocumentoVenda, mov?: MovimentoCc, estornado = false) {
+        const { documentoConfig, serie, cliente, ot, modoPagamento, linhas, documentoOrigem, ...rest } = d;
         return {
             ...rest,
             descontoGlobal: Number(d.descontoGlobal),
@@ -552,10 +583,17 @@ export class DocumentosVendaService {
             modoPagamentoDescricao: modoPagamento?.descricao ?? null,
             valorPendente: mov ? Number(mov.valorPendente) : null,
             dataVencimento: mov?.dataVencimento ?? null,
-            estadoFaturacao: d.estado === EstadoDocumentoVenda.EMITIDO ? estadoFaturacao(d.id, mov) : null,
+            // #169 — um estorno (NC/ND) não tem estado de faturação; a fatura totalmente estornada é *Estornada*.
+            estadoFaturacao: d.estado === EstadoDocumentoVenda.EMITIDO && !d.documentoOrigemId
+                ? estadoFaturacao(d.id, mov, estornado) : null,
+            totalmenteEstornado: estornado,
+            documentoOrigemNumero: documentoOrigem
+                ? numeroDocumento(documentoOrigem.documentoConfig?.codigo ?? '', documentoOrigem.serie?.codigo, documentoOrigem.numero)
+                : null,
             ...(linhas ? {
-                linhas: linhas.map(({ documento, ...l }) => ({
+                linhas: linhas.map(({ documento, motivoEstorno, ...l }) => ({
                     ...l,
+                    motivoEstornoDescricao: motivoEstorno?.descricao ?? null,
                     quantidade: Number(l.quantidade),
                     precoUnitario: Number(l.precoUnitario),
                     desconto: Number(l.desconto),

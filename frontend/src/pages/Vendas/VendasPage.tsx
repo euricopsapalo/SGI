@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertCircle, BookOpen, FileText, Filter, HandCoins, Landmark, Lock, Printer, Receipt, Search, Send, Trash2, Wallet, Wrench } from 'lucide-react';
+import { AlertCircle, BookOpen, FileText, Filter, HandCoins, Landmark, Lock, Printer, Receipt, RotateCcw, Search, Send, Trash2, Wallet, Wrench } from 'lucide-react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import EmptyState from '../../components/EmptyState';
@@ -21,6 +21,7 @@ import PendentesTab from './PendentesTab';
 import RecebimentosTab from './RecebimentosTab';
 import CaixaTab from './CaixaTab';
 import ExtratoTab from './ExtratoTab';
+import EstornoModal from './EstornoModal';
 
 /**
  * #165 — Vendas de Intervenções, fase 2 (v11 §4, §5.1).
@@ -28,21 +29,27 @@ import ExtratoTab from './ExtratoTab';
  * rascunho (só consumíveis — a mão de obra é custo interno) e a emissão da FT,
  * que gera o pendente na conta corrente do cliente. Emitido = imutável.
  * #168 — a FR (Fatura Recibo) é emitida já paga: escolhe-se a conta de destino no editor.
+ * #169 — Ratificação / Estorno (menu de contexto ou detalhe do documento emitido): NC/ND.
  */
 
 type Tab = 'ots' | 'semValor' | 'documentos' | 'pendentes' | 'recebimentos' | 'caixa' | 'extrato';
 const TABS_VALIDOS: Tab[] = ['ots', 'semValor', 'documentos', 'pendentes', 'recebimentos', 'caixa', 'extrato'];
 
 
-const ESTADO_BADGE: Record<EstadoFaturacao | 'Rascunho', { bg: string; color: string }> = {
+/** Estado mostrado na lista: o de faturação, ou Rascunho, ou Estorno (NC/ND). */
+type EstadoLista = EstadoFaturacao | 'Rascunho' | 'Estorno';
+
+const ESTADO_BADGE: Record<EstadoLista, { bg: string; color: string }> = {
     'Rascunho':          { bg: '#ECEFF1', color: '#546E7A' },
     'Não faturada':      { bg: '#ECEFF1', color: '#546E7A' },
     'Pendente':          { bg: '#FFF3E0', color: '#E65100' },
     'Parcialmente paga': { bg: '#EFF6FF', color: '#1565C0' },
     'Paga':              { bg: '#E8F5E9', color: '#2E7D32' },
+    'Estornada':         { bg: '#FDECEA', color: '#B71C1C' },
+    'Estorno':           { bg: '#F3E5F5', color: '#6A1B9A' },
 };
 
-const EstadoBadge: React.FC<{ estado: EstadoFaturacao | 'Rascunho' }> = ({ estado }) => {
+const EstadoBadge: React.FC<{ estado: EstadoLista }> = ({ estado }) => {
     const b = ESTADO_BADGE[estado];
     return <span style={{ fontSize: '0.72rem', padding: '2px 8px', borderRadius: 10, fontWeight: 700, background: b.bg, color: b.color, whiteSpace: 'nowrap' }}>{estado}</span>;
 };
@@ -358,7 +365,7 @@ const imprimirFatura = (id: number) =>
     imprimirDocumento(async () => buildFaturaHtml(await vendasApi.imprimir(id)));
 
 /* ══ Documento emitido (só leitura) ═══════════════════════════ */
-const DocumentoDetalhe: React.FC<{ id: number; onClose: () => void }> = ({ id, onClose }) => {
+const DocumentoDetalhe: React.FC<{ id: number; onClose: () => void; onAbrir: (id: number) => void; onEstornar?: (id: number) => void }> = ({ id, onClose, onAbrir, onEstornar }) => {
     const { fmtMoney, fmtDate } = useGlobal();
     const [doc, setDoc] = useState<DocumentoVenda | null>(null);
     useEffect(() => {
@@ -368,6 +375,9 @@ const DocumentoDetalhe: React.FC<{ id: number; onClose: () => void }> = ({ id, o
     return (
         <Modal titulo={`${doc.documentoDescricao} ${doc.numeroDocumento ?? ''}`} onClose={onClose}
             footer={<>
+                {onEstornar && !doc.totalmenteEstornado && (
+                    <button type="button" className="abtn abtn-secondary" style={{ marginRight: 'auto' }} onClick={() => onEstornar(id)}><RotateCcw size={12} /> Ratificação / Estorno</button>
+                )}
                 <button type="button" className="abtn abtn-secondary" onClick={onClose}>Fechar</button>
                 <button type="button" className="abtn abtn-primary" onClick={() => imprimirFatura(id)}><Printer size={12} /> Imprimir</button>
             </>}>
@@ -377,13 +387,26 @@ const DocumentoDetalhe: React.FC<{ id: number; onClose: () => void }> = ({ id, o
                 <div><div style={muted}>Data-hora</div><div>{doc.dataHora ? new Date(doc.dataHora).toLocaleString('pt-PT') : '—'}</div></div>
                 <div><div style={muted}>Vencimento</div><div>{fmtDate(doc.dataVencimento ?? undefined)}</div></div>
                 <div><div style={muted}>Modo de pagamento</div><div>{doc.modoPagamentoDescricao ?? '—'}</div></div>
-                <div><div style={muted}>Estado</div>{doc.estadoFaturacao && <EstadoBadge estado={doc.estadoFaturacao} />}</div>
+                <div><div style={muted}>Estado</div><EstadoBadge estado={doc.documentoOrigemId ? 'Estorno' : doc.estadoFaturacao ?? 'Pendente'} /></div>
+                {doc.documentoOrigemId && (
+                    <div><div style={muted}>Estorna</div>
+                        <button type="button" style={linkDoc} onClick={() => onAbrir(doc.documentoOrigemId!)}>{doc.documentoOrigemNumero ?? `#${doc.documentoOrigemId}`}</button>
+                    </div>
+                )}
             </div>
             <table className="data-table">
-                <thead><tr><th>Descrição</th><th style={num}>Qtd.</th><th style={num}>Preço</th><th style={num}>Desc. %</th><th style={num}>IVA</th><th style={num}>Total líquido</th></tr></thead>
+                <thead><tr>
+                    <th>Descrição</th><th style={num}>Qtd.</th>
+                    {doc.documentoOrigemId ? <th>Motivo</th> : <th style={num}>Estornado</th>}
+                    <th style={num}>Preço</th><th style={num}>Desc. %</th><th style={num}>IVA</th><th style={num}>Total líquido</th>
+                </tr></thead>
                 <tbody>{(doc.linhas ?? []).map(l => (
                     <tr key={l.id}>
-                        <td>{l.descricao}</td><td style={num}>{l.quantidade}</td><td style={num}>{fmtMoney(l.precoUnitario, doc.moeda)}</td>
+                        <td>{l.descricao}</td><td style={num}>{l.quantidade}</td>
+                        {doc.documentoOrigemId
+                            ? <td style={{ fontSize: '0.78rem' }}>{l.motivoEstornoDescricao ?? '—'}</td>
+                            : <td style={num}>{l.qtdEstornada || '—'}</td>}
+                        <td style={num}>{fmtMoney(l.precoUnitario, doc.moeda)}</td>
                         <td style={num}>{l.desconto || '—'}</td><td style={num}>{l.taxaIva}%</td><td style={{ ...num, fontWeight: 600 }}>{fmtMoney(l.totalLiquido, doc.moeda)}</td>
                     </tr>
                 ))}</tbody>
@@ -393,10 +416,24 @@ const DocumentoDetalhe: React.FC<{ id: number; onClose: () => void }> = ({ id, o
                     <span>Pendente</span><span style={num}>{fmtMoney(doc.valorPendente, doc.moeda)}</span>
                 </div>
             )} />
+            {(doc.estornos?.length ?? 0) > 0 && (
+                <div style={{ marginTop: 12 }}>
+                    <div style={{ ...muted, fontWeight: 700, marginBottom: 4 }}>Estornos</div>
+                    {doc.estornos!.map(e => (
+                        <div key={e.id} style={{ display: 'flex', gap: 12, fontSize: '0.8rem' }}>
+                            <button type="button" style={linkDoc} onClick={() => onAbrir(e.id)}>{e.numeroDocumento}</button>
+                            <span style={muted}>{e.dataHora ? new Date(e.dataHora).toLocaleString('pt-PT') : ''}</span>
+                            <span style={{ ...num, marginLeft: 'auto' }}>{fmtMoney(e.total, doc.moeda)}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
             {doc.observacoes && <div style={{ ...muted, marginTop: 12 }}>Observações: {doc.observacoes}</div>}
         </Modal>
     );
 };
+
+const linkDoc: React.CSSProperties = { ...mono, fontWeight: 700, color: 'var(--blue)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' };
 
 /* ══ Página ════════════════════════════════════════════════════ */
 const VendasPage: React.FC = () => {
@@ -420,8 +457,11 @@ const VendasPage: React.FC = () => {
     const [aCriar, setACriar] = useState<number | null>(null);
     const [editor, setEditor] = useState<number | null>(null);
     const [detalhe, setDetalhe] = useState<number | null>(null);
+    const [estorno, setEstorno] = useState<number | null>(null);
+    const [ctx, setCtx] = useState<{ doc: DocumentoVenda; x: number; y: number } | null>(null);
     const fecharEditor = useCallback(() => setEditor(null), []);
     const fecharDetalhe = useCallback(() => setDetalhe(null), []);
+    const fecharEstorno = useCallback(() => setEstorno(null), []);
 
     const carregar = useCallback(async () => {
         try {
@@ -452,7 +492,12 @@ const VendasPage: React.FC = () => {
 
     const q = search.trim().toLowerCase();
     const filtraOt = (o: OtDisponivel) => !q || [o.numero, o.clienteNome, o.nrSerie, o.descricao].some(v => (v ?? '').toLowerCase().includes(q));
-    const estadoDoc = (d: DocumentoVenda): EstadoFaturacao | 'Rascunho' => (d.estado === 'RASCUNHO' ? 'Rascunho' : d.estadoFaturacao ?? 'Pendente');
+    const estadoDoc = (d: DocumentoVenda): EstadoLista =>
+        (d.estado === 'RASCUNHO' ? 'Rascunho' : d.documentoOrigemId ? 'Estorno' : d.estadoFaturacao ?? 'Pendente');
+    /** #169 — emitido, com algo por estornar e com Ratificação/Estorno configurado no documento. */
+    const podeEstornar = (d: DocumentoVenda | undefined) => !!d && podeFaturar && d.estado === 'EMITIDO' && !d.totalmenteEstornado
+        && !!configs.find(c => c.id === d.documentoConfigId)?.estorno;
+    const abrirEstorno = (id: number) => { setDetalhe(null); setCtx(null); setEstorno(id); };
     const docsFiltrados = (docs ?? []).filter(d =>
         (!q || [d.numeroDocumento, d.clienteNome, d.otNumero].some(v => (v ?? '').toLowerCase().includes(q)))
         && (!filtroEstado || estadoDoc(d) === filtroEstado));
@@ -528,7 +573,7 @@ const VendasPage: React.FC = () => {
                 )}
             </ActionBar>
 
-            <div className="page-content">
+            <div className="page-content" onClick={() => setCtx(null)}>
                 {erro && <div role="alert" style={{ color: 'var(--red, #dc2626)', marginBottom: 12 }}><AlertCircle size={13} /> Não foi possível carregar: {erro}</div>}
                 {!podeFaturar && <div style={{ ...muted, marginBottom: 10 }}><Lock size={11} /> Consulta apenas — só administradores, coordenadores e vendedores podem faturar.</div>}
 
@@ -563,7 +608,7 @@ const VendasPage: React.FC = () => {
                     {tab === 'documentos' && (
                         <select className="filter-select" aria-label="Estado" value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}>
                             <option value="">Todos os estados</option>
-                            {(['Rascunho', 'Pendente', 'Parcialmente paga', 'Paga'] as const).map(e => <option key={e} value={e}>{e}</option>)}
+                            {(['Rascunho', 'Pendente', 'Parcialmente paga', 'Paga', 'Estornada', 'Estorno'] as const).map(e => <option key={e} value={e}>{e}</option>)}
                         </select>
                     )}
                     {(search || filtroEstado) && (
@@ -575,7 +620,7 @@ const VendasPage: React.FC = () => {
                     <PendentesTab podeReceber={podeFaturar} onAbrirDocumento={setDetalhe}
                         onMudou={() => { setVersao(v => v + 1); carregar(); }} />
                 )}
-                {tab === 'recebimentos' && <RecebimentosTab versao={versao} />}
+                {tab === 'recebimentos' && <RecebimentosTab versao={versao} podeEstornar={podeFaturar} onMudou={carregar} />}
                 {tab === 'caixa' && <CaixaTab podeOperar={podeFaturar} versao={versao} onMudou={() => setVersao(v => v + 1)} />}
                 {tab === 'extrato' && <ExtratoTab versao={versao} />}
 
@@ -595,7 +640,8 @@ const VendasPage: React.FC = () => {
                                         <tr><td colSpan={7}><EmptyState icon={<Receipt size={28} />} title="Nenhum documento" description="Os rascunhos e as faturas emitidas a partir das OTs aparecem aqui." /></td></tr>
                                     )}
                                     {docsFiltrados.map(d => (
-                                        <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => (d.estado === 'RASCUNHO' ? setEditor(d.id) : setDetalhe(d.id))}>
+                                        <tr key={d.id} style={{ cursor: 'pointer' }} onClick={() => (d.estado === 'RASCUNHO' ? setEditor(d.id) : setDetalhe(d.id))}
+                                            onContextMenu={e => { if (d.estado !== 'EMITIDO') return; e.preventDefault(); setCtx({ doc: d, x: e.clientX, y: e.clientY }); }}>
                                             <td style={{ ...mono, fontWeight: 700, color: 'var(--blue)' }}>{d.numeroDocumento ?? `${d.documentoCodigo} · rascunho #${d.id}`}</td>
                                             <td style={mono}>{d.otNumero ?? `#${d.otId}`}</td>
                                             <td style={{ fontWeight: 600 }}>{d.clienteNome}</td>
@@ -613,8 +659,33 @@ const VendasPage: React.FC = () => {
                 )}
             </div>
 
+            {ctx && (
+                <div role="menu" style={{ position: 'fixed', top: ctx.y, left: ctx.x, background: '#fff', border: '1px solid var(--border)', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.12)', zIndex: 9999, minWidth: 190 }}
+                    onClick={e => e.stopPropagation()}>
+                    {[
+                        { label: 'Abrir', action: () => { setDetalhe(ctx.doc.id); setCtx(null); } },
+                        { label: '⎙ Imprimir', action: () => { imprimirFatura(ctx.doc.id); setCtx(null); } },
+                        ...(podeEstornar(ctx.doc) ? [{ label: '↩ Ratificação / Estorno', action: () => abrirEstorno(ctx.doc.id) }] : []),
+                    ].map(item => (
+                        <button key={item.label} type="button" role="menuitem" onClick={item.action}
+                            style={{ display: 'block', width: '100%', padding: '8px 14px', border: 'none', background: 'none', textAlign: 'left', fontSize: '0.82rem', cursor: 'pointer', color: 'var(--text-primary)' }}
+                            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-secondary)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                            {item.label}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {editor !== null && <EditorRascunho id={editor} configs={configs} podeFaturar={podeFaturar} onClose={fecharEditor} onMudou={carregar} />}
-            {detalhe !== null && <DocumentoDetalhe id={detalhe} onClose={fecharDetalhe} />}
+            {detalhe !== null && (
+                <DocumentoDetalhe key={detalhe} id={detalhe} onClose={fecharDetalhe} onAbrir={setDetalhe}
+                    onEstornar={podeEstornar(docs?.find(x => x.id === detalhe)) ? abrirEstorno : undefined} />
+            )}
+            {estorno !== null && (
+                <EstornoModal id={estorno} configs={configs} onClose={fecharEstorno}
+                    onMudou={() => { setVersao(v => v + 1); carregar(); }} />
+            )}
         </AppLayout>
     );
 };

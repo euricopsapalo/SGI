@@ -6,7 +6,7 @@ import { ContaCorrenteService } from './conta-corrente.service';
 import { LiquidacoesService } from './liquidacoes.service';
 import { CaixaService } from './caixa.service';
 import {
-    AbrirCaixaDto, CreateLiquidacaoDto, ExtratoQueryDto, FecharCaixaDto, PendentesQueryDto, SaidaCaixaDto,
+    AbrirCaixaDto, CreateLiquidacaoDto, EstornarLiquidacaoDto, ExtratoQueryDto, FecharCaixaDto, PendentesQueryDto, SaidaCaixaDto,
 } from './dto/tesouraria.dto';
 
 /** Perfis que registam recebimentos (os mesmos que faturam). */
@@ -48,6 +48,12 @@ export class LiquidacoesController {
     /** #178 — dados para imprimir o recibo; conta a impressão (Original / Segunda via). */
     @Post(':id/imprimir') @HttpCode(200)
     imprimir(@Param('id', ParseIntPipe) id: number) { return this.impressao.imprimir(id); }
+
+    /** #169 — estorno do recebimento (ERE): repõe o pendente e devolve o valor da conta (MC de sinal contrário). */
+    @Post(':id/estornar') @Roles(...TESOURARIA) @HttpCode(200)
+    estornar(@Param('id', ParseIntPipe) id: number, @Body() dto: EstornarLiquidacaoDto, @Request() req: any) {
+        return this.svc.estornar(id, dto, req?.user);
+    }
 }
 
 /** #167 — Gestão de caixa: abertura, saída e fecho com apuramento e acerto. */

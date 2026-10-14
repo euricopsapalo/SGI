@@ -23,7 +23,8 @@ export enum EstadoDocumentoVenda {
  *
  * Nasce sempre de uma OT (D2). Em RASCUNHO não tem série, número nem data-hora:
  * a numeração é atribuída só na emissão (um rascunho abandonado não queima
- * números). Depois de EMITIDO é imutável (D6) — só se estorna (fase 6).
+ * números). Depois de EMITIDO é imutável (D6) — só se estorna (#169): o estorno
+ * (`NC`/`ND`) é outro documento, emitido directamente, com `documento_origem_id`.
  *
  * Descontos em percentagem (linha e global); os valores monetários guardados
  * são o snapshot calculado na última gravação/emissão.
@@ -33,6 +34,7 @@ export enum EstadoDocumentoVenda {
 @Index('idx_documentos_venda_ot', ['otId'])
 @Index('idx_documentos_venda_cliente', ['clienteId'])
 @Index('idx_documentos_venda_estado', ['estado'])
+@Index('idx_documentos_venda_origem', ['documentoOrigemId'])
 @Check('chk_documentos_venda_estado', `"estado" IN ('RASCUNHO','EMITIDO')`)
 @Check('chk_documentos_venda_numeracao', `("estado" = 'RASCUNHO' AND "numero" IS NULL AND "serie_id" IS NULL) OR ("estado" = 'EMITIDO' AND "numero" IS NOT NULL AND "serie_id" IS NOT NULL AND "data_hora" IS NOT NULL)`)
 @Check('chk_documentos_venda_desconto', `"desconto_global" >= 0 AND "desconto_global" <= 100`)
@@ -78,7 +80,7 @@ export class DocumentoVenda {
     @Column({ name: 'ot_id' })
     otId: number;
 
-    /** NC/ND → documento estornado (fase 6). */
+    /** NC/ND → documento estornado (#169). */
     @ManyToOne(() => DocumentoVenda, { nullable: true, onDelete: 'RESTRICT' })
     @JoinColumn({ name: 'documento_origem_id' })
     documentoOrigem: DocumentoVenda;
@@ -182,6 +184,7 @@ export class DocumentoVenda {
  */
 @Entity('documentos_venda_linhas')
 @Index('idx_documentos_venda_linhas_doc', ['documentoId'])
+@Index('idx_documentos_venda_linhas_origem', ['linhaOrigemId'])
 @Check('chk_dvl_quantidade', `"quantidade" > 0`)
 @Check('chk_dvl_preco', `"preco_unitario" >= 0`)
 @Check('chk_dvl_desconto', `"desconto" >= 0 AND "desconto" <= 100`)
@@ -235,11 +238,11 @@ export class DocumentoVendaLinha {
     @Column({ name: 'total_liquido', type: 'numeric', precision: 14, scale: 2, default: 0 })
     totalLiquido: number;
 
-    /** Quantidade já estornada por NC (fase 6). */
+    /** Quantidade já estornada (acumulada) por NC/ND (#169). */
     @Column({ name: 'qtd_estornada', type: 'numeric', precision: 12, scale: 3, default: 0 })
     qtdEstornada: number;
 
-    /** NC → linha da FT estornada (fase 6). */
+    /** NC/ND → linha do documento estornado (#169). */
     @ManyToOne(() => DocumentoVendaLinha, { nullable: true, onDelete: 'RESTRICT' })
     @JoinColumn({ name: 'linha_origem_id' })
     linhaOrigem: DocumentoVendaLinha;

@@ -61,6 +61,10 @@ export interface Liquidacao {
     serieId: number; numero: number; dataHora: string;
     clienteId: number; clienteNome: string; contaBancariaId: number; contaCodigo: string; contaDescricao: string;
     total: number; desconto: number; moeda: string; observacoes: string | null; createdAt: string;
+    /** #169 — é um estorno (ERE) de outra liquidação; ou já foi estornada por um. */
+    eEstorno: boolean; liquidacaoOrigemId: number | null; liquidacaoOrigemNumero?: string | null;
+    motivoEstornoDescricao?: string | null;
+    estornadaPor: { id: number; numeroDocumento: string | null } | null;
     linhas?: {
         id: number; movimentoCcId: number; valorPago: number; desconto: number; pendenteAnterior: number;
         numeroDocumento: string | null; otNumero: string | null; valorOriginal: number;
@@ -94,6 +98,9 @@ export const tesourariaApi = {
     liquidar: (dto: LiquidacaoPedido) => api.post<Liquidacao>('/liquidacoes', dto).then(r => r.data),
     /** #178 — dados para imprimir o recibo (conta a impressão: Original / Segunda via). */
     imprimir: (id: number) => api.post<ReciboImpressao>(`/liquidacoes/${id}/imprimir`).then(r => r.data),
+    /** #169 — estorno do recebimento (ERE): repõe o pendente e devolve o valor da conta. */
+    estornar: (id: number, dto: { motivoEstornoId: number; dataHora?: string; observacoes?: string }) =>
+        api.post<Liquidacao>(`/liquidacoes/${id}/estornar`, dto).then(r => r.data),
 };
 
 /* ── #167 — Gestão de caixa ─────────────────────────────────── */
