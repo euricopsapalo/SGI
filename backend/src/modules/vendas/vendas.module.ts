@@ -11,11 +11,13 @@ import { DocumentosVendaService } from './documentos-venda.service';
 import { VendasController } from './vendas.controller';
 import { ImpressaoFaturaService } from './impressao-fatura.service';
 import { EstornosVendaService } from './estornos-venda.service';
+import { RelatoriosVendasService } from './relatorios-vendas.service';
 
 /**
  * #165 — Fase 2 do Módulo de Vendas de Intervenções (épico #163):
  * documentos de venda a partir de OTs finalizadas e pendente em conta corrente.
  * #169 — Fase 6: estorno (NC/ND) com abate automático do pendente.
+ * #170 — Fase 7: impressão de NC/ND/FR e relatórios de vendas.
  */
 @Module({
     imports: [
@@ -25,6 +27,6 @@ import { EstornosVendaService } from './estornos-venda.service';
         SysLogsModule,
     ],
     controllers: [VendasController],
-    providers: [DocumentosVendaService, ImpressaoFaturaService, EstornosVendaService],
+    providers: [DocumentosVendaService, ImpressaoFaturaService, EstornosVendaService, RelatoriosVendasService],
 })
 export class VendasModule {}

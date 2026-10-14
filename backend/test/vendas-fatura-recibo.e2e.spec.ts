@@ -129,6 +129,11 @@ describeDb('Vendas — Fatura Recibo (FR → RE → MC) E2E, BD real', () => {
 
         const ot = await request(srv()).get(`/ordens/${ids.ot}`).expect(200);
         expect(ot.body.estadoFaturacao).toBe('Paga');
+
+        // #170 — a impressão da FR identifica o recibo e a conta onde entrou o valor.
+        const imp = (await request(srv()).post(`/vendas/documentos/${fr.id}/imprimir`).expect(200)).body;
+        expect(imp.documento.liquidacao).toEqual({ numeroDocumento: expect.stringMatching(/^RE /), conta: 'Caixa e2e FR' });
+        expect(imp.documento.documentoOrigem).toBeNull();
     });
 
     it('D5 — a OT já faturada pela FR não volta a ser faturada', async () => {

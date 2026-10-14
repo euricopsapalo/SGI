@@ -4,6 +4,7 @@ import { Roles } from '../auth/roles.decorator';
 import { DocumentosVendaService } from './documentos-venda.service';
 import { ImpressaoFaturaService } from './impressao-fatura.service';
 import { EstornosVendaService } from './estornos-venda.service';
+import { RelatoriosVendasService } from './relatorios-vendas.service';
 import {
     CreateDocumentoVendaDto, EmitirDocumentoVendaDto, EstornarDocumentoVendaDto, UpdateDocumentoVendaDto,
 } from './dto/documento-venda.dto';
@@ -23,6 +24,7 @@ export class VendasController {
         private readonly svc: DocumentosVendaService,
         private readonly impressao: ImpressaoFaturaService,
         private readonly estornos: EstornosVendaService,
+        private readonly relatorios: RelatoriosVendasService,
     ) {}
 
     /** v11 §4.1 — OTs a faturar; `?semValor=true` lista as que não têm consumíveis. */
@@ -30,6 +32,10 @@ export class VendasController {
     otsDisponiveis(@Query('semValor') semValor?: string) {
         return this.svc.otsDisponiveis(semValor === 'true');
     }
+
+    /** #170 — relatórios: faturação por período/cliente/OT, IVA por taxa e contas a receber. */
+    @Get('relatorios')
+    relatorio(@Query() query: { de?: string; ate?: string }) { return this.relatorios.relatorio(query); }
 
     @Get('documentos')
     findAll(@Query() query: { estado?: string; otId?: string; clienteId?: string }) {

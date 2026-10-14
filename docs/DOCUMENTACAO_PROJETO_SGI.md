@@ -265,6 +265,7 @@ SGI/
 | Comissoes | OK | Por vendedor |
 | Produtividade | OK | Por tecnico |
 | Movimentos de Stock | OK | Historico |
+| Vendas (#170) | OK | Faturacao por periodo, IVA por taxa, por cliente e por OT (NC abatem); contas a receber por antiguidade — `GET /api/vendas/relatorios` |
 
 ### 4.11 Configuracoes
 

@@ -56,6 +56,20 @@ export async function extrasEmpresa(db: Consultor) {
     return { logoUrl: e?.logoUrl ?? null, rodapeDocumentos: e?.rodapeDocumentos ?? null, coordenadasBancarias: coordenadas };
 }
 
+/** #170 — FR: o recibo (`RE`) emitido na mesma transacção e a conta onde entrou o valor. */
+export async function liquidacaoAutomatica(db: Consultor, documentoId: number) {
+    const [l] = await db.query(`SELECT dc.codigo, s.codigo AS serie, l.numero, cb.descricao AS conta
+        FROM liquidacoes l
+        JOIN liquidacoes_linhas ll ON ll.liquidacao_id = l.id
+        JOIN movimentos_cc m ON m.id = ll.movimento_cc_id
+        JOIN documentos_config dc ON dc.id = l.documento_config_id
+        JOIN series s ON s.id = l.serie_id
+        JOIN contas_bancarias cb ON cb.id = l.conta_bancaria_id
+        WHERE m.origem_tipo = 'DOCUMENTO_VENDA' AND m.origem_id = $1 AND l.liquidacao_origem_id IS NULL
+        ORDER BY l.id LIMIT 1`, [documentoId]);
+    return l ? { numeroDocumento: numeroDocumento(l.codigo, l.serie, l.numero), conta: l.conta as string } : null;
+}
+
 /**
  * #178 — Dados para imprimir a Fatura com a informação do modelo de referência:
  * empresa e cliente (cópia gravada na emissão), dados do documento, linhas com
@@ -69,7 +83,11 @@ export class ImpressaoFaturaService {
     async imprimir(id: number) {
         const doc = await this.dataSource.getRepository(DocumentoVenda).findOne({
             where: { id },
-            relations: ['documentoConfig', 'serie', 'ot', 'ot.equipInstalado', 'modoPagamento', 'linhas', 'linhas.artigo'],
+            relations: [
+                'documentoConfig', 'serie', 'ot', 'ot.equipInstalado', 'modoPagamento', 'linhas', 'linhas.artigo',
+                // #170 — NC/ND: documento estornado e motivo de cada linha.
+                'documentoOrigem', 'documentoOrigem.documentoConfig', 'documentoOrigem.serie', 'linhas.motivoEstorno',
+            ],
         });
         if (!doc) throw new NotFoundException(`Documento de venda ${id} não encontrado`);
         if (doc.estado !== EstadoDocumentoVenda.EMITIDO) {
@@ -79,7 +97,7 @@ export class ImpressaoFaturaService {
         // Conta a impressão (atómico) e decide a via pela contagem anterior.
         const anteriores = await registarImpressao(this.dataSource, 'documentos_venda', id);
 
-        const [cliente, empresa, extras, mov, motivos] = await Promise.all([
+        const [cliente, empresa, extras, mov, motivos, liquidacao] = await Promise.all([
             doc.snapshotCliente ? Promise.resolve(doc.snapshotCliente as SnapshotCliente) : snapshotCliente(this.dataSource, doc.clienteId),
             doc.snapshotEmpresa ? Promise.resolve(doc.snapshotEmpresa as SnapshotEmpresa) : snapshotEmpresa(this.dataSource),
             extrasEmpresa(this.dataSource),
@@ -87,7 +105,9 @@ export class ImpressaoFaturaService {
                 FROM movimentos_cc WHERE origem_tipo = 'DOCUMENTO_VENDA' AND origem_id = $1`, [id]).then((r) => r[0] ?? null),
             this.dataSource.query(`SELECT codigo, motivo_isencao AS "motivoIsencao" FROM taxas_iva`)
                 .then((r: any[]) => new Map(r.map((t) => [t.codigo, t.motivoIsencao]))),
+            doc.documentoConfig.liquidacaoAutomatica ? liquidacaoAutomatica(this.dataSource, id) : Promise.resolve(null),
         ]);
+        const origem = doc.documentoOrigem;
 
         const linhas = (doc.linhas ?? []).sort((a, b) => a.ordem - b.ordem || a.id - b.id).map((l) => ({
             artigoCodigo: l.artigo?.codigo ?? null,
@@ -99,6 +119,7 @@ export class ImpressaoFaturaService {
             codigoIva: l.codigoIva,
             taxaIva: Number(l.taxaIva),
             valor: Number(l.totalLiquido),
+            motivoEstorno: l.motivoEstorno?.descricao ?? null,
         }));
         const bruto = round2(linhas.reduce((s, l) => s + round2(l.quantidade * l.precoUnitario), 0));
         const liquidoSemIva = round2(Number(doc.subtotal) - Number(doc.desconto));
@@ -126,6 +147,13 @@ export class ImpressaoFaturaService {
                 nrSerieEquipamento: doc.ot?.equipInstalado?.nrSerie ?? null,
                 dataDisposicao: doc.dataDisposicao,
                 observacoes: doc.observacoes,
+                // #170 — NC/ND: documento que estornam.
+                documentoOrigem: origem ? {
+                    numeroDocumento: numeroDocumento(origem.documentoConfig?.codigo ?? '', origem.serie?.codigo, origem.numero),
+                    data: origem.dataHora ? dataLocal(new Date(origem.dataHora)) : null,
+                } : null,
+                // #170 — FR: liquidação automática que a pagou.
+                liquidacao,
             },
             linhas,
             totais: {

@@ -4,6 +4,14 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(vendas): fase 7 — impressão de NC/ND/FR e relatórios de vendas (closes #170)
+
+- **Impressão:** a mesma impressão da fatura (#178, Original / Segunda via) serve FT, FR, NC e ND. A **NC/ND** passa a mostrar o **documento de origem** (`FT 2026/7 de 2026-01-05`) em *Dados do Documento* e o **motivo do estorno** em cada linha. A **FR** mostra o recibo da liquidação automática e a conta onde entrou o valor (*Pago — RE 2026/4 · Caixa Sede*).
+- **`GET /api/vendas/relatorios?de=&ate=`** (por omissão, de 1 de Janeiro até hoje): faturação por mês, IVA por código/taxa (incidência após o desconto global), faturação por cliente e por OT, sobre os documentos emitidos no período (as NC abatem). Inclui também as **contas a receber** por cliente e antiguidade (não vencido · 1–30 · 31–60 · 61–90 · > 90 dias), com o saldo a favor a abater, à data de hoje.
+- **Frontend — `/relatorios` → Vendas:** filtros de período e de vista (Por Período · IVA por Taxa · Por Cliente · Por OT · Contas a Receber), cartões de totais e exportação da vista activa.
+- **Transição (§9, D8):** já feita no #165. `POST /api/faturas` responde 410 e `/faturacao` fica só para consultar, pagar ou anular as faturas antigas, por isso a mesma OT não pode ser faturada pelos dois módulos.
+- Testes: regras puras dos relatórios, serviço, geradores de impressão (NC/FR) e e2e contra BD real (impressão da NC e da FR; relatórios com FT + NC que se anulam).
+
 ### feat(vendas): fase 6 — estorno: Nota de Crédito/Débito e estorno de liquidações (closes #169)
 
 - **`POST /api/vendas/documentos/:id/estornar`:** emite o documento de estorno configurado (`NC` para FT/FR, `ND` para NC), linha a linha, com quantidade e motivo (`motivos_estorno`); sem rascunho. `qtd_estornada` acumula nas linhas de origem (CHECK `qtd_estornada <= quantidade`); estorno acima do faturado → 422.
