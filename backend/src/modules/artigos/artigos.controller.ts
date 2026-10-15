@@ -7,9 +7,11 @@ import { AjusteExistenciaDto } from './dto/ajuste-existencia.dto';
 import { UpsertStockArmazemDto } from './dto/upsert-stock-armazem.dto';
 import { CreateMovimentoStockDto } from './dto/create-movimento-stock.dto';
 import { TransferenciaStockDto } from './dto/transferencia-stock.dto';
+import { RolesEscrita, ESCRITORIO, Roles } from '../auth/roles.decorator';
 
 @ApiTags('artigos')
 @ApiBearerAuth('access-token')
+@RolesEscrita(...ESCRITORIO)
 @Controller('artigos')
 export class ArtigosController {
     constructor(private readonly service: ArtigosService) {}
@@ -74,6 +76,7 @@ export class ArtigosController {
 
 @ApiTags('movimentos-stock')
 @ApiBearerAuth('access-token')
+@Roles(...ESCRITORIO)
 @Controller('movimentos-stock')
 export class MovimentosStockController {
     constructor(private readonly service: ArtigosService) {}

@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseIntPipe, Post, Put, Query, Request } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Roles } from '../auth/roles.decorator';
+import { Roles, ESCRITORIO } from '../auth/roles.decorator';
 import { DocumentosVendaService } from './documentos-venda.service';
 import { ImpressaoFaturaService } from './impressao-fatura.service';
 import { EstornosVendaService } from './estornos-venda.service';
@@ -18,6 +18,7 @@ const FATURACAO = ['admin', 'coordenador', 'vendedor'];
  */
 @ApiTags('vendas')
 @ApiBearerAuth('access-token')
+@Roles(...ESCRITORIO)
 @Controller('vendas')
 export class VendasController {
     constructor(

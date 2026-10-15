@@ -5,9 +5,11 @@ import { CreateModeloEquipamentoDto } from './dto/create-modelo-equipamento.dto'
 import { UpdateModeloEquipamentoDto } from './dto/update-modelo-equipamento.dto';
 import { CreateEquipInstaladoDto } from './dto/create-equip-instalado.dto';
 import { UpdateEquipInstaladoDto } from './dto/update-equip-instalado.dto';
+import { RolesEscrita, ESCRITORIO } from '../auth/roles.decorator';
 
 @ApiTags('modelos-equipamento')
 @ApiBearerAuth('access-token')
+@RolesEscrita(...ESCRITORIO)
 @Controller('modelos-equipamento')
 export class ModelosEquipamentoController {
     constructor(private readonly service: ParqueService) {}
@@ -30,6 +32,7 @@ export class ModelosEquipamentoController {
 
 @ApiTags('equip-instalados')
 @ApiBearerAuth('access-token')
+@RolesEscrita(...ESCRITORIO)
 @Controller('equip-instalados')
 export class EquipInstaladosController {
     constructor(private readonly service: ParqueService) {}

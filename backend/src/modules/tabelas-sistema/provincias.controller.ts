@@ -3,9 +3,11 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { TabelasSistemaService } from './tabelas-sistema.service';
 import { CreateProvinciaDto } from './dto/create-provincia.dto';
 import { UpdateProvinciaDto } from './dto/update-provincia.dto';
+import { RolesEscrita, GESTAO } from '../auth/roles.decorator';
 
 @ApiTags('provincias')
 @ApiBearerAuth('access-token')
+@RolesEscrita(...GESTAO)
 @Controller('provincias')
 export class ProvinciasController {
     constructor(private readonly service: TabelasSistemaService) {}

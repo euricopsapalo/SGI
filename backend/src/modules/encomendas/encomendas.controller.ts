@@ -4,9 +4,11 @@ import { EncomendaService } from './encomendas.service';
 import { CreateEncomendaDto } from './dto/create-encomenda.dto';
 import { UpdateEncomendaDto } from './dto/update-encomenda.dto';
 import { ReceberLinhasDto } from './dto/receber-linhas.dto';
+import { Roles, ESCRITORIO } from '../auth/roles.decorator';
 
 @ApiTags('compras')
 @ApiBearerAuth('access-token')
+@Roles(...ESCRITORIO)
 @Controller('compras')
 export class EncomendaController {
     constructor(private readonly service: EncomendaService) {}
