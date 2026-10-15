@@ -1,9 +1,19 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Check, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 import { MovimentoStock } from './movimento-stock.entity';
 
+/** #195 — tipo de artigo: a retenção na fonte (#179) só incide sobre Serviços. */
+export enum TipoArtigo {
+    PRODUTO = 'PRODUTO',
+    SERVICO = 'SERVICO',
+}
+export const TIPOS_ARTIGO = Object.values(TipoArtigo);
+
 @Entity('artigos')
 // #35 — stock e quantidades nunca negativos.
 @Check('chk_artigos_stock_nn', `"existencia" >= 0 AND "stock_reservado" >= 0 AND "stock_encomendado" >= 0`)
+// #195 — tipo (varchar + CHECK, #89); só um Serviço pode estar sujeito a retenção na fonte.
+@Check('chk_artigos_tipo', `"tipo" IN ('PRODUTO','SERVICO')`)
+@Check('chk_artigos_retencao_servico', `"sujeito_retencao" = false OR "tipo" = 'SERVICO'`)
 // #31 — índices de performance (antes no init.sql).
 @Index('idx_artigos_codigo', ['codigo'])
 @Index('idx_artigos_armazem', ['codigoArmazem'])
@@ -16,6 +26,14 @@ export class Artigo {
 
     @Column({ length: 300 })
     descricao: string;
+
+    /** #195 — Produto ou Serviço. */
+    @Column({ type: 'varchar', length: 30, default: TipoArtigo.PRODUTO })
+    tipo: TipoArtigo;
+
+    /** #195 — sujeito a retenção na fonte (Lei 19/14); só para Serviços. */
+    @Column({ name: 'sujeito_retencao', default: false })
+    sujeitoRetencao: boolean;
 
     // #159 — classe/familia deixam de ser obrigatórias no registo de artigo.
     @Column({ length: 100, nullable: true })

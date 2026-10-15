@@ -5,6 +5,8 @@ import { Artigo } from './artigo.entity';
 import { MovimentoStock, TipoMovimento } from './movimento-stock.entity';
 import { StockArmazem } from './stock-armazem.entity';
 import { OtArtigo } from '../ordens-trabalho/ot-artigo.entity';
+import { normalizarRetencao } from './artigo.rules';
+import { erroValidacao } from '../vendas-config/erros';
 
 @Injectable()
 export class ArtigosService {
@@ -53,10 +55,20 @@ export class ArtigosService {
         const a = await this.artigosRepo.findOne({ where: { id } });
         return a ? this.withDisponivel(a) : a;
     }
-    create(body: Partial<Artigo>) { return this.artigosRepo.save(this.artigosRepo.create(body)); }
+    async create(body: Partial<Artigo>) {
+        return this.artigosRepo.save(this.artigosRepo.create(this.comRetencaoValida(null, body)));
+    }
     async update(id: number, body: Partial<Artigo>) {
-        await this.artigosRepo.update(id, body);
+        const atual = await this.artigosRepo.findOne({ where: { id }, select: ['id', 'tipo', 'sujeitoRetencao'] });
+        await this.artigosRepo.update(id, this.comRetencaoValida(atual, body));
         return this.findOne(id);
+    }
+
+    /** #195 — só Serviços sujeitos a retenção (422 no campo); passar a Produto desliga-a. */
+    private comRetencaoValida(atual: Pick<Artigo, 'tipo' | 'sujeitoRetencao'> | null, body: Partial<Artigo>) {
+        const { patch, erro } = normalizarRetencao(atual, body);
+        if (erro) throw erroValidacao({ sujeitoRetencao: erro });
+        return patch;
     }
     remove(id: number) { return this.artigosRepo.delete(id); }
 

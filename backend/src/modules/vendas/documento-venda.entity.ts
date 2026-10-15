@@ -8,7 +8,7 @@ import { MotivoEstorno } from '../vendas-config/motivo-estorno.entity';
 import { Cliente } from '../clientes/cliente.entity';
 import { OrdemTrabalho } from '../ordens-trabalho/ordem-trabalho.entity';
 import { OtArtigo } from '../ordens-trabalho/ot-artigo.entity';
-import { Artigo } from '../artigos/artigo.entity';
+import { Artigo, TipoArtigo } from '../artigos/artigo.entity';
 import { ModoPagamento } from '../tabelas-sistema/modo-pagamento.entity';
 import { User } from '../users/user.entity';
 import type { SnapshotCliente, SnapshotEmpresa } from './snapshot';
@@ -190,6 +190,7 @@ export class DocumentoVenda {
 @Check('chk_dvl_desconto', `"desconto" >= 0 AND "desconto" <= 100`)
 @Check('chk_dvl_taxa_iva', `"taxa_iva" >= 0`)
 @Check('chk_dvl_qtd_estornada', `"qtd_estornada" >= 0 AND "qtd_estornada" <= "quantidade"`)
+@Check('chk_dvl_tipo_artigo', `"tipo_artigo" IN ('PRODUTO','SERVICO')`)
 export class DocumentoVendaLinha {
     @PrimaryGeneratedColumn()
     id: number;
@@ -217,6 +218,14 @@ export class DocumentoVendaLinha {
 
     @Column({ length: 300 })
     descricao: string;
+
+    /** #195 — cópia do tipo do artigo (fixada na emissão): base da retenção na fonte (#179). */
+    @Column({ name: 'tipo_artigo', type: 'varchar', length: 30, default: TipoArtigo.PRODUTO })
+    tipoArtigo: TipoArtigo;
+
+    /** #195 — cópia de `artigos.sujeito_retencao` (fixada na emissão). */
+    @Column({ name: 'sujeito_retencao', default: false })
+    sujeitoRetencao: boolean;
 
     @Column({ type: 'numeric', precision: 12, scale: 3 })
     quantidade: number;

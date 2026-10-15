@@ -1,8 +1,13 @@
-import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { TipoArtigo, TIPOS_ARTIGO } from '../artigo.entity';
 
 export class CreateArtigoDto {
   @IsString() @IsNotEmpty() codigo: string;
   @IsString() @IsNotEmpty() descricao: string;
+  /** #195 — Produto ou Serviço. */
+  @IsOptional() @IsIn(TIPOS_ARTIGO, { message: 'O tipo tem de ser Produto ou Serviço' }) tipo?: TipoArtigo;
+  /** #195 — só para Serviços (o serviço recusa num Produto). */
+  @IsOptional() @IsBoolean() sujeitoRetencao?: boolean;
   @IsOptional() @IsString() classe?: string;
   @IsOptional() @IsString() familia?: string;
   @IsOptional() @IsString() imagem?: string;

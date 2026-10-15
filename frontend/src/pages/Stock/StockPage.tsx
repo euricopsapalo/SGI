@@ -3,7 +3,7 @@ import AppLayout from '../../components/Layout/AppLayout';
 import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
-import { useGlobal, Artigo, Armazem } from '../../contexts/GlobalContext';
+import { useGlobal, Artigo, Armazem, TipoArtigo, TIPO_ARTIGO_LABEL } from '../../contexts/GlobalContext';
 import {
     Search, Plus, Edit2, X, AlertCircle, Check, Package, Download,
     BarChart2, ArrowDownCircle, ArrowUpCircle, RefreshCw,
@@ -20,6 +20,8 @@ import { imprimirPdf } from '../../utils/imprimirPdf';
 const COLS_STOCK: ExportCol[] = [
     { key: 'codigo',         label: 'Código' },
     { key: 'descricao',      label: 'Descrição' },
+    { key: 'tipoLabel',      label: 'Tipo' },
+    { key: 'retencaoLabel',  label: 'Retenção na fonte' },
     { key: 'classe',         label: 'Classe' },
     { key: 'familia',        label: 'Família' },
     { key: 'existencia',     label: 'Existência' },
@@ -86,6 +88,10 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
     const [codigoArmazem,  setArmazem] = useState(artigo?.codigoArmazem ?? 'ARM-01');
     const [inativo,        setInativo] = useState(artigo?.inativo  ?? false);
     const [critico,        setCritico] = useState(artigo?.critico  ?? false);
+    // #195 — tipo e retenção na fonte (só Serviços podem estar sujeitos a retenção).
+    const [tipo,            setTipo]            = useState<TipoArtigo>(artigo?.tipo ?? 'PRODUTO');
+    const [sujeitoRetencao, setSujeitoRetencao] = useState(artigo?.sujeitoRetencao ?? false);
+    const mudarTipo = (t: TipoArtigo) => { setTipo(t); if (t !== 'SERVICO') setSujeitoRetencao(false); };
 
     // Fornecedor / Unidade
     const [unidadeMedida,  setUnidade]     = useState(artigo?.unidadeMedida ?? 'UN');
@@ -121,6 +127,7 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
         if (!validate()) return;
         onSave({
             codigo, descricao, classe, familia, imagem,
+            tipo, sujeitoRetencao: tipo === 'SERVICO' && sujeitoRetencao,
             precoUnitario: Number(precoUnitario), moeda,
             // stock_inicial e existencia só são enviados na criação; na edição preservam o valor da BD
             existencia: isNew ? Number(existencia) : (artigo?.existencia ?? 0),
@@ -244,6 +251,24 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
                                                     </option>
                                                 ))}
                                             </select>
+                                        </div>
+                                    </div>
+                                    {/* #195 — tipo de artigo e retenção na fonte */}
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label className="form-label" htmlFor="art-tipo">Tipo</label>
+                                            <select id="art-tipo" className="form-select" value={tipo} onChange={e => mudarTipo(e.target.value as TipoArtigo)}>
+                                                <option value="PRODUTO">Produto</option>
+                                                <option value="SERVICO">Serviço</option>
+                                            </select>
+                                        </div>
+                                        <div className="form-group" style={{ justifyContent: 'flex-end' }}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', cursor: tipo === 'SERVICO' ? 'pointer' : 'not-allowed', color: tipo === 'SERVICO' ? undefined : 'var(--text-muted)', marginTop: 22 }}
+                                                title={tipo === 'SERVICO' ? undefined : 'Só os artigos do tipo Serviço podem estar sujeitos a retenção'}>
+                                                <input type="checkbox" checked={sujeitoRetencao} disabled={tipo !== 'SERVICO'}
+                                                    onChange={e => setSujeitoRetencao(e.target.checked)} style={{ width: 14, height: 14, flexShrink: 0 }} />
+                                                Sujeito a retenção na fonte
+                                            </label>
                                         </div>
                                     </div>
                                 </div>
@@ -1143,6 +1168,7 @@ const StockPage: React.FC = () => {
     const [search,    setSearch]  = useState('');
     const [filterCls, setFCls]    = useState('');
     const [filterFam, setFFam]    = useState('');
+    const [filterTipo, setFTipo]  = useState<TipoArtigo | ''>('');   // #195
     const [modal,     setModal]   = useState<'new' | string | null>(null);
     const [viewModal, setViewModal] = useState<string | null>(null);
     const [op,         setOp]       = useState<OpState>(null);
@@ -1158,10 +1184,14 @@ const StockPage: React.FC = () => {
         const q = search.toLowerCase();
         return (!q || a.codigo.toLowerCase().includes(q) || a.descricao.toLowerCase().includes(q) || a.familia.toLowerCase().includes(q))
             && (!filterCls || a.classe  === filterCls)
-            && (!filterFam || a.familia === filterFam);
+            && (!filterFam || a.familia === filterFam)
+            && (!filterTipo || a.tipo === filterTipo);
     });
 
-    const exportData = filtered.map(a => ({ ...a, critico: a.critico ? 'Sim' : 'Não' }));
+    const exportData = filtered.map(a => ({
+        ...a, critico: a.critico ? 'Sim' : 'Não',
+        tipoLabel: TIPO_ARTIGO_LABEL[a.tipo], retencaoLabel: a.sujeitoRetencao ? 'Sim' : 'Não',
+    }));
 
     const editTarget = typeof modal === 'string' && modal !== 'new' ? artigos.find(a => a.id === modal) : undefined;
 
@@ -1285,6 +1315,11 @@ const StockPage: React.FC = () => {
                         <option value="">Todas as famílias</option>
                         {familias.map(f => <option key={f} value={f}>{f}</option>)}
                     </select>
+                    <select className="filter-select" aria-label="Tipo de artigo" value={filterTipo} onChange={e => setFTipo(e.target.value as TipoArtigo | '')}>
+                        <option value="">Todos os tipos</option>
+                        <option value="PRODUTO">Produtos</option>
+                        <option value="SERVICO">Serviços</option>
+                    </select>
                 </div>
 
                 <div className="table-container">
@@ -1340,7 +1375,15 @@ const StockPage: React.FC = () => {
                                                 <span style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--text-muted)' }}>{a.codigo}</span>
                                                 {a.critico && <Star size={10} style={{ color: 'var(--orange,#f97316)', marginLeft: 4, verticalAlign: 'middle' }} />}
                                             </td>
-                                            <td style={{ fontWeight: 600, fontSize: '0.83rem' }}>{a.descricao}</td>
+                                            <td style={{ fontWeight: 600, fontSize: '0.83rem' }}>
+                                                {a.descricao}
+                                                {/* #195 — Serviço (e retenção na fonte) */}
+                                                {a.tipo === 'SERVICO' && (
+                                                    <span title={a.sujeitoRetencao ? 'Serviço sujeito a retenção na fonte' : 'Serviço'} style={{ marginLeft: 6, fontSize: '0.66rem', fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: 'var(--blue-light,#EFF6FF)', color: 'var(--blue)', verticalAlign: 'middle' }}>
+                                                        Serviço{a.sujeitoRetencao ? ' · Ret.' : ''}
+                                                    </span>
+                                                )}
+                                            </td>
                                             <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                                                 {a.classe}{a.familia ? ` / ${a.familia}` : ''}
                                             </td>

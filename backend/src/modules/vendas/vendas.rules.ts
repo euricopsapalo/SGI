@@ -1,10 +1,17 @@
 import { createHash } from 'crypto';
 import { FUSO_EMPRESA } from '../vendas-config/series.rules';
+import { TipoArtigo } from '../artigos/artigo.entity';
 
 /**
  * #165 — Regras puras do documento de venda (v11 §4–§5.1): totais, natureza do
  * movimento de conta corrente, vencimento e estado de faturação da OT.
  */
+
+/** #195 — classificação copiada do artigo para a linha (sem artigo → Produto, sem retenção). */
+export function classificacaoLinha(artigo?: { tipo: TipoArtigo; sujeitoRetencao: boolean } | null) {
+    const tipoArtigo = artigo?.tipo ?? TipoArtigo.PRODUTO;
+    return { tipoArtigo, sujeitoRetencao: tipoArtigo === TipoArtigo.SERVICO && !!artigo?.sujeitoRetencao };
+}
 
 export const round2 = (x: number): number => Math.round((x + Number.EPSILON) * 100) / 100;
 

@@ -35,6 +35,14 @@ describe('Artigos DTOs', () => {
       expect(errors.length).toBe(0);
     });
 
+    it('#195 — aceita tipo Produto/Serviço e sujeitoRetencao booleano; recusa outro tipo', async () => {
+      const ok = plainToInstance(CreateArtigoDto, { codigo: 'S1', descricao: 'Montagem', tipo: 'SERVICO', sujeitoRetencao: true });
+      expect(await validate(ok)).toHaveLength(0);
+      const mau = plainToInstance(CreateArtigoDto, { codigo: 'S1', descricao: 'X', tipo: 'OUTRO', sujeitoRetencao: 'sim' });
+      const errors = await validate(mau);
+      expect(errors.map(e => e.property).sort()).toEqual(['sujeitoRetencao', 'tipo']);
+    });
+
     it('should fail without codigo', async () => {
       const dto = plainToInstance(CreateArtigoDto, { descricao: 'X', classe: 'Y', familia: 'Z' });
       const errors = await validate(dto);

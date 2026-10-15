@@ -63,6 +63,15 @@ describe('ArtigosService', () => {
         expect(artigosRepo.delete).toHaveBeenCalledWith(1);
     });
 
+    it('#195 — retenção só em Serviços: 422 num Produto; passar a Produto desliga-a', async () => {
+        await expect(service.create({ codigo: 'P1', sujeitoRetencao: true } as any)).rejects.toMatchObject({
+            response: { errors: { sujeitoRetencao: expect.stringMatching(/Serviço/) } },
+        });
+        artigosRepo.findOne.mockResolvedValueOnce({ id: 1, tipo: 'SERVICO', sujeitoRetencao: true });
+        await service.update(1, { tipo: 'PRODUTO' } as any);
+        expect(artigosRepo.update).toHaveBeenCalledWith(1, { tipo: 'PRODUTO', sujeitoRetencao: false });
+    });
+
     it('ajusteExistencia soma o delta à existência', async () => {
         await service.ajusteExistencia(1, 5);
         expect(artigosRepo.update).toHaveBeenCalledWith(1, { existencia: 15 });
