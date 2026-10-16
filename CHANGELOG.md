@@ -4,6 +4,17 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(stock): o stock reservado deixa de ser recalculado no frontend (closes #202)
+
+- **Antes:** o `GlobalContext` somava as quantidades de **todas** as OTs abertas (Registada, Programada, Adiada e Confirmada) e sobrepunha esse valor ao `stock_reservado` do backend. Mas o backend (RF-OT-004) só reserva na **confirmação**, por isso Stock, Encomendas e Dashboard mostravam disponível e ruptura errados. Ex.: na BD de dev, o artigo `001` tem 0 reservado, mas o ecrã mostrava 1 reservado e 45 disponíveis em vez de 46.
+- **Agora usa o `stockReservado` do backend.** O disponível (`existencia − reservado`, nunca negativo) e a ruptura (`disponível + encomendado < segurança`) são calculados em `comDisponibilidade`.
+- A lista de artigos é recarregada quando o reservado muda no backend:
+  - ao confirmar uma OT;
+  - ao adiar uma OT;
+  - ao editar os artigos de uma OT (#200);
+  - o fecho da OT já a recarregava.
+- Testes: `comDisponibilidade` (disponível, nunca negativo, ruptura). Verificado na app: o artigo `001` mostra 0 reservado e 46 disponíveis.
+
 ### fix(ordens): edição de OT com guarda de estado e reservas sincronizadas (closes #200)
 
 - **Antes:** o `PUT /ordens/:id` apagava e recriava `ot_artigos` e `ot_mao_obra` em qualquer estado, fora de uma transação. Isto acontecia com a OT Confirmada (reservas feitas), Finalizada (stock consumido) ou já faturada. As reservas ficavam dessincronizadas e a fatura deixava de bater com a OT.
