@@ -3,9 +3,11 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { TabelasSistemaService } from './tabelas-sistema.service';
 import { CreateFuncaoTecnicoDto } from './dto/create-funcao-tecnico.dto';
 import { UpdateFuncaoTecnicoDto } from './dto/update-funcao-tecnico.dto';
+import { RolesEscrita, GESTAO } from '../auth/roles.decorator';
 
 @ApiTags('funcoes-tecnico')
 @ApiBearerAuth('access-token')
+@RolesEscrita(...GESTAO)
 @Controller('funcoes-tecnico')
 export class FuncoesTecnicoController {
     constructor(private readonly service: TabelasSistemaService) {}

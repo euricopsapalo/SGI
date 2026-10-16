@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, ParseIntPipe, Post, Query, Requ
 import { ImpressaoReciboService } from './impressao-recibo.service';
 import { ImpressaoPendentesService } from './impressao-pendentes.service';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Roles } from '../auth/roles.decorator';
+import { Roles, ESCRITORIO } from '../auth/roles.decorator';
 import { ContaCorrenteService } from './conta-corrente.service';
 import { LiquidacoesService } from './liquidacoes.service';
 import { CaixaService } from './caixa.service';
@@ -16,6 +16,7 @@ const TESOURARIA = ['admin', 'coordenador', 'vendedor'];
 /** #174 / #166 — Conta corrente de clientes: pendentes filtráveis e extrato. */
 @ApiTags('conta-corrente')
 @ApiBearerAuth('access-token')
+@Roles(...ESCRITORIO)
 @Controller('cc')
 export class ContaCorrenteController {
     constructor(
@@ -43,6 +44,7 @@ export class ContaCorrenteController {
 /** #166 — Liquidações (`RE`), que emitem o Movimento em conta (`MC`). */
 @ApiTags('tesouraria')
 @ApiBearerAuth('access-token')
+@Roles(...ESCRITORIO)
 @Controller('liquidacoes')
 export class LiquidacoesController {
     constructor(
@@ -73,6 +75,7 @@ export class LiquidacoesController {
 /** #167 — Gestão de caixa: abertura, saída e fecho com apuramento e acerto. */
 @ApiTags('tesouraria')
 @ApiBearerAuth('access-token')
+@Roles(...ESCRITORIO)
 @Controller('caixa')
 export class CaixaController {
     constructor(private readonly svc: CaixaService) {}

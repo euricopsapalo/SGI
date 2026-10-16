@@ -3,9 +3,11 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { PlanosService } from './planos.service';
 import { CreatePlanoDto } from './dto/create-plano.dto';
 import { UpdatePlanoDto } from './dto/update-plano.dto';
+import { RolesEscrita, ESCRITORIO } from '../auth/roles.decorator';
 
 @ApiTags('planos')
 @ApiBearerAuth('access-token')
+@RolesEscrita(...ESCRITORIO)
 @Controller('planos')
 export class PlanosController {
     constructor(private readonly service: PlanosService) {}

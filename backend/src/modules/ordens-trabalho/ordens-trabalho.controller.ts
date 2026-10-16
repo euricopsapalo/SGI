@@ -12,6 +12,7 @@ import {
     FinalizarOtDto,
 } from './dto/transicao-ot.dto';
 import { RegistarConsumoDto } from './dto/registar-consumo.dto';
+import { Roles, ESCRITORIO } from '../auth/roles.decorator';
 
 @ApiTags('ordens')
 @ApiBearerAuth('access-token')
@@ -37,7 +38,9 @@ export class OrdensTrabalhoController {
         return this.service.update(id, dto, req?.user?.email ?? 'sistema');
     }
 
+    // #198 — o técnico de campo executa OTs mas não as elimina.
     @Delete(':id')
+    @Roles(...ESCRITORIO)
     remove(@Param('id', ParseIntPipe) id: number) { return this.service.remove(id); }
 
     // ── Máquina de estados (RF-OT-001) ───────────────────────────────

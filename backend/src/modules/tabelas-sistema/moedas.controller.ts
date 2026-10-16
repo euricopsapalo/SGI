@@ -3,9 +3,11 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { TabelasSistemaService } from './tabelas-sistema.service';
 import { CreateMoedaDto } from './dto/create-moeda.dto';
 import { UpdateMoedaDto } from './dto/update-moeda.dto';
+import { RolesEscrita, GESTAO } from '../auth/roles.decorator';
 
 @ApiTags('moedas')
 @ApiBearerAuth('access-token')
+@RolesEscrita(...GESTAO)
 @Controller('moedas')
 export class MoedasController {
     constructor(private readonly service: TabelasSistemaService) {}

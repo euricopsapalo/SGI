@@ -32,6 +32,20 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 - O estado só muda pelas transições `agendar`, `confirmar`, `adiar`, `iniciar` e `finalizar`.
 - Testes: DTO (rejeita cada campo de sistema; o Update aceita as datas de execução) e service (`update` ignora o estado; `create` grava em Registada com o utilizador autenticado).
 
+### fix(auth): autorização por perfil no backend em todos os módulos (closes #198)
+
+- **Antes:** só `users`, `PUT /configuracao`, `DELETE /logs`, as escritas de vendas e tesouraria e `config/*` tinham restrição de perfil. Um técnico de campo lia clientes, logs, contas bancárias, documentos de venda e pendentes, e podia criar, alterar e apagar clientes, artigos, tabelas do sistema, encomendas e faturas de fornecedor.
+- **Novo decorator `@RolesEscrita(...)`:** restringe só as escritas e deixa as leituras abertas, para os dados que o técnico precisa de ler nas OTs. Grupos `ADMIN`, `GESTAO` e `ESCRITORIO` em `auth/roles.decorator.ts`.
+- **Técnico de campo:**
+  - lê clientes, artigos, parque, planos, técnicos, armazéns e tabelas do sistema, mas não os altera;
+  - continua a executar OTs (transições, consumo, anexos), mas não as elimina;
+  - deixa de aceder a compras, fornecedores, faturas de fornecedor, movimentos de stock, vendas, conta corrente, liquidações, caixa e configuração de vendas.
+- **Tabelas do sistema, armazéns e técnicos:** a escrita fica para admin, coordenador e suporte.
+- **Logs:** a leitura passa a ser só para o admin. O `POST` continua aberto.
+- Os outros perfis mantêm o que tinham.
+- Matriz documentada em `docs/perfis-permissoes.md`.
+- Testes: `roles.matriz.spec.ts` corre o guard em todos os endpoints com cada perfil. Falha se aparecer um controller sem restrição de perfil.
+
 ### fix(seed): o seed deixa de repor as passwords por omissão em cada arranque (closes #197)
 
 - **Antes:** no arranque, se a password de `admin@`, `tecnico@` ou `vendas@aquatex.ao` não fosse a do seed, o `SeedService` voltava a gravá-la, também em produção. As mudanças de password perdiam-se no restart e as credenciais por omissão ficavam sempre válidas.
