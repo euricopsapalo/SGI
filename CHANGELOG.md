@@ -4,6 +4,17 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(ordens): PUT/POST /ordens deixam de alterar o estado à margem da máquina de estados (closes #199)
+
+- **Antes:** o `CreateOrdemTrabalhoDto` (e o `Update`, que o herda) aceitava `estado`, `assinadaCliente` e `registadoPorId`, e o service espalhava o corpo no `repo.update`. Um pedido podia pôr uma OT em `Finalizada` sem reserva nem consumo de stock, sem assinatura e sem registo, e torná-la faturável.
+- **DTOs:** `estado`, `assinadaCliente` e `registadoPorId` saem dos DTOs. Com `forbidNonWhitelisted`, enviá-los dá 400. O `PUT` continua a aceitar a correção de `dataInicio` e `dataFim`.
+- **Service:**
+  - `create` grava sempre em `Registada`, com o `registadoPor` do utilizador autenticado e a janela calculada;
+  - `create` e `update` retiram sempre os campos de sistema (estado, número, assinatura, adiamentos, janela, aprovação, OT de origem, documento de venda), mesmo que o DTO seja contornado.
+- **Frontend:** `addOrdem` e `updateOrdem` deixam de enviar esses campos (`semCamposSistemaOT`).
+- O estado só muda pelas transições `agendar`, `confirmar`, `adiar`, `iniciar` e `finalizar`.
+- Testes: DTO (rejeita cada campo de sistema; o Update aceita as datas de execução) e service (`update` ignora o estado; `create` grava em Registada com o utilizador autenticado).
+
 ### feat(artigos): tipo de artigo (Produto/Serviço) e marcação "sujeito a retenção na fonte" (closes #195)
 
 Pré-requisito da retenção na fonte (#179), que só incide sobre Serviços com a retenção habilitada.

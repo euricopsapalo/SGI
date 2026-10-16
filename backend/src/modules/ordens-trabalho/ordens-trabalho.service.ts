@@ -42,6 +42,23 @@ export function addMonthsISO(fromDate: string, months: number): string {
     return d.toISOString().split('T')[0];
 }
 
+/**
+ * #199 — Campos que só o servidor gere (máquina de estados, numeração,
+ * assinatura, adiamentos, aprovação, faturação). Retirados de qualquer
+ * create/update genérico, mesmo que o DTO seja contornado.
+ */
+export const CAMPOS_SISTEMA_OT = [
+    'id', 'estado', 'numero', 'registadoPorId', 'registadoPor', 'assinadaCliente', 'assinaturaRef',
+    'dataExecucao', 'adiamentos', 'janelaFim', 'aprovadoPorId', 'aprovadoPor',
+    'geradaDeOtId', 'geradaDe', 'documentoVendaId', 'documentoVenda', 'anexos',
+] as const;
+
+export function semCamposSistema(body: any, extra: string[] = []): any {
+    const limpo = { ...(body ?? {}) };
+    for (const k of [...CAMPOS_SISTEMA_OT, ...extra]) delete limpo[k];
+    return limpo;
+}
+
 /** RF-OT-003 — fallback se a configuração não for legível ou estiver vazia. */
 export const LIMITE_ADIAMENTOS_DEFAULT = 3;
 
@@ -263,10 +280,10 @@ export class OrdensTrabalhoService {
      * - Gera `numero` (OT-NNNNNN) e `dataRegisto` (hoje, se omitido).
      */
     async create(body: any, currentUser?: { id?: number; sub?: number }) {
-        const { maosDeObra, maosObra, artigos, ...rest } = body;
+        const { maosDeObra, maosObra, artigos, ...rest } = semCamposSistema(body, ['dataInicio', 'dataFim']);
 
-        // 1. registadoPorId — auto-preencher se omitido
-        const registadoPorId = rest.registadoPorId ?? currentUser?.id ?? currentUser?.sub;
+        // 1. registadoPorId — sempre o utilizador autenticado (#199: não vem do pedido)
+        const registadoPorId = currentUser?.id ?? currentUser?.sub;
 
         // 2. validar equipInstalado e derivar cliente
         let clienteId = rest.clienteId ? Number(rest.clienteId) : undefined;
@@ -313,11 +330,12 @@ export class OrdensTrabalhoService {
         const dataRegisto = rest.dataRegisto ?? today;
         const prioridade = rest.prioridade ?? 'Normal';
         // RF-OT-003 §3.1 — janela_fim = data_registo + 6 meses.
-        const janelaFim = rest.janelaFim ?? addMonthsISO(dataRegisto, 6);
+        const janelaFim = addMonthsISO(dataRegisto, 6);
         const dataAgendada = rest.dataAgendada ?? null;
 
         const entity = this.repo.create({
             ...rest,
+            estado: OTEstado.REGISTADA,
             cliente: clienteId ? { id: clienteId } : undefined,
             registadoPorId,
             dataRegisto,
@@ -369,7 +387,7 @@ export class OrdensTrabalhoService {
     }
 
     async update(id: number, body: any) {
-        const { maosDeObra, maosObra, artigos, clienteId, reprogramacoes, cliente, ...rest } = body;
+        const { maosDeObra, maosObra, artigos, clienteId, reprogramacoes, cliente, ...rest } = semCamposSistema(body);
         await this.repo.update(id, rest);
 
         // Replace mão de obra rows

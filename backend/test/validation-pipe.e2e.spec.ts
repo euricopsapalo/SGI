@@ -220,7 +220,7 @@ describe('ValidationPipe E2E — validação de dados de entrada', () => {
         });
     });
 
-    it('POST /test-ordens — enum estado inválido → 400', () => {
+    it('POST /test-ordens — estado é campo de sistema (#199) → 400', () => {
       return request(app.getHttpServer())
         .post('/test-ordens')
         .send({ descricao: 'OT Teste', estado: 'Desconhecido' })
@@ -420,7 +420,6 @@ describe('ValidationPipe E2E — validação de dados de entrada', () => {
           descricao: 'Manutenção preventiva - troca de filtros',
           tipo: 'periodica',
           clienteId: 1,
-          estado: 'Programada',
           maosObra: [{ funcao: 'Técnico', custo: 5000, hora: '08:00' }],
           artigos: [{ descricao: 'Filtro 10"', quantidade: 2, preco: 2500 }],
         })
@@ -428,7 +427,6 @@ describe('ValidationPipe E2E — validação de dados de entrada', () => {
         .expect((res) => {
           expect(res.body.recebido.descricao).toBe('Manutenção preventiva - troca de filtros');
           expect(res.body.recebido.tipo).toBe('periodica');
-          expect(res.body.recebido.estado).toBe('Programada');
           expect(res.body.recebido.maosObra).toHaveLength(1);
           expect(res.body.recebido.artigos).toHaveLength(1);
         });

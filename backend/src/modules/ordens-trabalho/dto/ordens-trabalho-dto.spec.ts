@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { CreateOrdemTrabalhoDto } from './create-ordem-trabalho.dto';
+import { UpdateOrdemTrabalhoDto } from './update-ordem-trabalho.dto';
 import { EmitirOtDto } from './emitir-ot.dto';
 import { ReprogramarOtDto } from './reprogramar-ot.dto';
 
@@ -21,7 +22,6 @@ describe('Ordens-Trabalho DTOs', () => {
         naturezaIntervencao: 'Manutenção',
         previsaoTempo: 2.5,
         periodicidade: 'Mensal',
-        estado: 'Programada',
         dataAgendada: '2026-04-10',
         maosObra: [{ funcao: 'Técnico', custo: 5000 }],
         artigos: [{ descricao: 'Filtro', quantidade: 2, preco: 1500 }],
@@ -42,18 +42,30 @@ describe('Ordens-Trabalho DTOs', () => {
       expect(errors.some(e => e.property === 'tipo')).toBe(true);
     });
 
-    it('should fail with invalid estado', async () => {
-      const dto = plainToInstance(CreateOrdemTrabalhoDto, { descricao: 'Test', estado: 'Cancelado' });
-      const errors = await validate(dto);
-      expect(errors.some(e => e.property === 'estado')).toBe(true);
+    // #199 — o estado e os campos de sistema não fazem parte do DTO; com a
+    // whitelist do ValidationPipe (forbidNonWhitelisted) são rejeitados.
+    it.each([
+      ['estado', 'Finalizada'], ['registadoPorId', 7], ['assinadaCliente', true],
+      ['dataInicio', '2026-01-01'], ['dataFim', '2026-01-02'], ['numero', 'OT-000001'], ['adiamentos', 0],
+    ])('rejeita o campo de sistema %s', async (campo, valor) => {
+      const dto = plainToInstance(CreateOrdemTrabalhoDto, { descricao: 'Test', [campo]: valor });
+      const errors = await validate(dto, { whitelist: true, forbidNonWhitelisted: true });
+      expect(errors.some(e => e.property === campo)).toBe(true);
     });
+  });
 
-    it('should accept all valid estados', async () => {
-      for (const estado of ['Registada', 'Programada', 'Adiada', 'Confirmada', 'Em execução', 'Finalizada']) {
-        const dto = plainToInstance(CreateOrdemTrabalhoDto, { descricao: 'Test', estado });
-        const errors = await validate(dto);
-        expect(errors.length).toBe(0);
-      }
+  describe('UpdateOrdemTrabalhoDto (#199)', () => {
+    it.each([['estado', 'Finalizada'], ['assinadaCliente', true], ['registadoPorId', 7]])(
+      'rejeita o campo de sistema %s', async (campo, valor) => {
+        const dto = plainToInstance(UpdateOrdemTrabalhoDto, { [campo]: valor });
+        const errors = await validate(dto, { whitelist: true, forbidNonWhitelisted: true });
+        expect(errors.some(e => e.property === campo)).toBe(true);
+      });
+
+    it('aceita a correção das datas de execução', async () => {
+      const dto = plainToInstance(UpdateOrdemTrabalhoDto, { dataInicio: '2026-03-01', dataFim: '2026-03-02' });
+      const errors = await validate(dto, { whitelist: true, forbidNonWhitelisted: true });
+      expect(errors).toEqual([]);
     });
 
     // ── Regressão fix #15 ────────────────────────────────────────────────

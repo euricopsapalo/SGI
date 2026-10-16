@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class OtMaoObraDto {
@@ -16,6 +16,13 @@ export class OtArtigoDto {
   @IsOptional() @IsNumber() taxaIva?: number;
 }
 
+/**
+ * #199 — Só campos editáveis pelo utilizador. Os campos de sistema (estado,
+ * número, registadoPor, assinatura, datas de execução, adiamentos, janela,
+ * aprovação, documento de venda) NÃO estão aqui: com `forbidNonWhitelisted`,
+ * enviá-los dá 400. O estado só muda pelos endpoints de transição
+ * (agendar/confirmar/adiar/iniciar/finalizar), que passam por `assertTransicao`.
+ */
 export class CreateOrdemTrabalhoDto {
   @IsOptional() @IsEnum(['pontual', 'periodica']) tipo?: string;
   // RF-OT-002 §3.1 — novos campos
@@ -23,7 +30,6 @@ export class CreateOrdemTrabalhoDto {
   naturezaIntervencao?: string;
   @IsOptional() @IsEnum(['Normal','Alta','Urgente']) prioridade?: string;
   @IsOptional() @IsString() dataRegisto?: string;
-  @IsOptional() @IsNumber() registadoPorId?: number;   // auto-preenchido pelo backend se omitido
   @IsOptional() @IsNumber() executadoPorId?: number;   // técnico de campo (opcional na marcação)
   @IsOptional() @IsNumber() clienteId?: number;        // derivado do equipInstalado se omitido
   @IsOptional() @IsNumber() equipInstaladoId?: number;
@@ -35,10 +41,6 @@ export class CreateOrdemTrabalhoDto {
   @IsOptional() @IsString() sintoma?: string;
   @IsOptional() @IsString() causa?: string;
   @IsOptional() @IsString() dataAgendada?: string;
-  @IsOptional() @IsString() dataInicio?: string;
-  @IsOptional() @IsString() dataFim?: string;
-  @IsOptional() @IsEnum(['Registada', 'Programada', 'Adiada', 'Confirmada', 'Em execução', 'Finalizada']) estado?: string;
-  @IsOptional() @IsBoolean() assinadaCliente?: boolean;
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => OtMaoObraDto) maosObra?: OtMaoObraDto[];
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => OtArtigoDto) artigos?: OtArtigoDto[];
 }
