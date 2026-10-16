@@ -132,11 +132,12 @@ export class TecnicosService {
         const tecnico = await this.findOne(id);
         if (!tecnico) return { affected: 0 };
 
-        // Check if tecnico is linked to any OT (via user account)
+        // #201 — OTs em que é o técnico executante (a coluna `responsavel` saiu no #76).
+        // A FK é ON DELETE SET NULL: sem esta guarda, apagar o técnico apagaria o histórico.
         const [{ total }] = await this.dataSource.query(`
             SELECT COUNT(*)::int AS total FROM ordens_trabalho ot
-            WHERE ot.responsavel ILIKE $1
-        `, [tecnico.nome]);
+            WHERE ot.executado_por_id = $1
+        `, [id]);
 
         if (total > 0) {
             throw new ConflictException(
