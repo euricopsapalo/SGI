@@ -6,6 +6,7 @@ import { ArtigosService } from './artigos.service';
 import { Artigo } from './artigo.entity';
 import { MovimentoStock } from './movimento-stock.entity';
 import { StockArmazem } from './stock-armazem.entity';
+import { Armazem } from '../armazens/armazem.entity';
 import { entradaStock, resyncExistencia, saidaStock } from './stock-armazem.ops';
 
 // #204 — os movimentos de stock passam por stock-armazem.ops (testado à parte).
@@ -250,13 +251,20 @@ describe('ArtigosService.transferencia (#37)', () => {
             create: jest.fn((e: any) => ({ ...e })),
             save: jest.fn(async (e: any) => e),
         };
+        // #203 — o armazém de destino tem de existir (id 2 existe, 99 não).
+        const armazemRepo = { findOne: jest.fn(async ({ where }: any) => (where.id === 99 ? null : { id: where.id })) };
         const manager = {
-            getRepository: jest.fn((ent: any) => (ent === StockArmazem ? saRepo : movRepo)),
+            getRepository: jest.fn((ent: any) => (ent === StockArmazem ? saRepo : ent === Armazem ? armazemRepo : movRepo)),
         };
         const dataSource: any = { transaction: jest.fn(async (cb: any) => cb(manager)) };
         const svc = new ArtigosService({} as any, movRepo as any, saRepo as any, dataSource);
         return { svc, saRepo, movRepo, dataSource };
     }
+
+    it('#203 — rejeita armazém de destino inexistente', async () => {
+        const { svc } = makeManager({ quantidade: 10 }, null);
+        await expect(svc.transferencia(1, 1, 99, 2)).rejects.toThrow(/destino não encontrado/);
+    });
 
     it('rejeita quantidade não positiva', async () => {
         const { svc } = makeManager({ quantidade: 10 }, null);
@@ -310,8 +318,10 @@ describe('ArtigosService.transferencia (#37)', () => {
             create: jest.fn((e: any) => ({ ...e })),
             save: jest.fn(async () => { throw new Error('falha simulada ao gravar movimento'); }),
         };
+        // #203 — o armazém de destino tem de existir (id 2 existe, 99 não).
+        const armazemRepo = { findOne: jest.fn(async ({ where }: any) => (where.id === 99 ? null : { id: where.id })) };
         const manager = {
-            getRepository: jest.fn((ent: any) => (ent === StockArmazem ? saRepo : movRepo)),
+            getRepository: jest.fn((ent: any) => (ent === StockArmazem ? saRepo : ent === Armazem ? armazemRepo : movRepo)),
         };
         const dataSource: any = {
             transaction: jest.fn(async (cb: any) => {
