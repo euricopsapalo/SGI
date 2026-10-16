@@ -4,7 +4,9 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { User, UserRole } from '../users/user.entity';
 import { TaxaIva } from '../tabelas-sistema/taxa-iva.entity';
+import { readSecret } from '../../config/read-secret';
 
+// Utilizadores de demonstração — só criados fora de produção (#197).
 const DEFAULT_USERS = [
     { nome: 'Eurico Sapalo', email: 'admin@aquatex.ao',    password: 'aquatex2024', role: UserRole.ADMIN },
     { nome: 'Manuel Silva',  email: 'tecnico@aquatex.ao',  password: 'aquatex2024', role: UserRole.CAMPO },
@@ -42,29 +44,58 @@ export class SeedService implements OnModuleInit {
         await this.seedTaxasIva();
     }
 
+    /**
+     * #197 — O seed só CRIA utilizadores em falta; nunca reescreve a password
+     * de um utilizador existente (as mudanças de password sobrevivem ao restart).
+     *
+     * - Fora de produção: cria os utilizadores de demonstração (DEFAULT_USERS).
+     * - Em produção: não cria utilizadores com passwords conhecidas. Só cria um
+     *   admin inicial se não existir nenhum admin E `SEED_ADMIN_PASSWORD`
+     *   (ou `SEED_ADMIN_PASSWORD_FILE`) estiver definido.
+     */
     private async seedUsers() {
         try {
+            if (process.env.NODE_ENV === 'production') {
+                await this.seedAdminProducao();
+                return;
+            }
             for (const seed of DEFAULT_USERS) {
-                const existing = await this.userRepo.findOne({ where: { email: seed.email } });
-
-                if (!existing) {
-                    const hash = await bcrypt.hash(seed.password, 10);
-                    await this.userRepo.save(
-                        this.userRepo.create({ nome: seed.nome, email: seed.email, passwordHash: hash, role: seed.role, ativo: true }),
-                    );
-                    this.logger.log(`Utilizador criado: ${seed.email}`);
-                } else {
-                    const valid = await bcrypt.compare(seed.password, existing.passwordHash);
-                    if (!valid) {
-                        const hash = await bcrypt.hash(seed.password, 10);
-                        await this.userRepo.update(existing.id, { passwordHash: hash });
-                        this.logger.warn(`Hash corrigida: ${seed.email}`);
-                    }
-                }
+                await this.criarSeNaoExistir(seed);
             }
         } catch (err) {
             this.logger.error(`Erro ao executar seed de utilizadores: ${err.message}`);
         }
+    }
+
+    private async seedAdminProducao() {
+        const admins = await this.userRepo.count({ where: { role: UserRole.ADMIN } });
+        if (admins > 0) return;
+
+        const password = readSecret('SEED_ADMIN_PASSWORD');
+        if (!password) {
+            this.logger.warn(
+                'Não existe nenhum administrador. Defina SEED_ADMIN_PASSWORD (ou SEED_ADMIN_PASSWORD_FILE) ' +
+                'para criar o admin inicial no próximo arranque.',
+            );
+            return;
+        }
+        await this.criarSeNaoExistir({
+            nome: 'Administrador',
+            email: process.env.SEED_ADMIN_EMAIL || DEFAULT_USERS[0].email,
+            password,
+            role: UserRole.ADMIN,
+        });
+    }
+
+    private async criarSeNaoExistir(seed: { nome: string; email: string; password: string; role: UserRole }) {
+        const existing = await this.userRepo.findOne({ where: { email: seed.email } });
+        if (existing) return;
+
+        const hash = await bcrypt.hash(seed.password, 10);
+        await this.userRepo.save(
+            this.userRepo.create({ nome: seed.nome, email: seed.email, passwordHash: hash, role: seed.role, ativo: true }),
+        );
+        this.logger.log(`Utilizador criado: ${seed.email}`);
     }
 
     private async seedTaxasIva() {

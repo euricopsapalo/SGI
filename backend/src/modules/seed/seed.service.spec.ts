@@ -99,18 +99,81 @@ describe('SeedService', () => {
       expect(userRepo.update).not.toHaveBeenCalled();
     });
 
-    it('deve corrigir hash inválida de utilizador existente', async () => {
-      userRepo.findOne.mockResolvedValue({ id: 5, passwordHash: 'hash_corrompida' });
+    it('#197 — não deve repor a password de um utilizador que a alterou', async () => {
+      const outraHash = await bcrypt.hash('password-nova-do-admin', 10);
+      userRepo.findOne.mockResolvedValue({ id: 5, passwordHash: outraHash });
       taxaIvaRepo.count.mockResolvedValue(7);
 
       await service.onModuleInit();
 
-      expect(userRepo.update).toHaveBeenCalledTimes(3);
-      expect(userRepo.update).toHaveBeenCalledWith(
-        5,
-        expect.objectContaining({ passwordHash: expect.any(String) }),
-      );
+      expect(userRepo.update).not.toHaveBeenCalled();
+      expect(userRepo.save).not.toHaveBeenCalled();
     });
+  });
+
+  describe('#197 — em produção', () => {
+    const envOriginal = { ...process.env };
+
+    beforeEach(() => {
+      process.env.NODE_ENV = 'production';
+      delete process.env.SEED_ADMIN_PASSWORD;
+      delete process.env.SEED_ADMIN_PASSWORD_FILE;
+      delete process.env.SEED_ADMIN_EMAIL;
+      userRepo.count = jest.fn();
+      userRepo.findOne.mockResolvedValue(null);
+      taxaIvaRepo.count.mockResolvedValue(7);
+    });
+
+    afterEach(() => {
+      process.env = { ...envOriginal };
+    });
+
+    it('não cria os utilizadores de demonstração', async () => {
+      userRepo.count.mockResolvedValue(1);
+
+      await service.onModuleInit();
+
+      expect(userRepo.save).not.toHaveBeenCalled();
+      expect(userRepo.create).not.toHaveBeenCalledWith(expect.objectContaining({ email: 'tecnico@aquatex.ao' }));
+      expect(userRepo.create).not.toHaveBeenCalledWith(expect.objectContaining({ email: 'vendas@aquatex.ao' }));
+    });
+
+    it('sem admin e sem SEED_ADMIN_PASSWORD, não cria nada e avisa', async () => {
+      const warnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      userRepo.count.mockResolvedValue(0);
+
+      await service.onModuleInit();
+
+      expect(userRepo.save).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('SEED_ADMIN_PASSWORD'));
+    });
+
+    it('sem admin e com SEED_ADMIN_PASSWORD, cria o admin inicial com essa password', async () => {
+      process.env.SEED_ADMIN_PASSWORD = 'uma-password-forte-de-producao';
+      process.env.SEED_ADMIN_EMAIL = 'ti@aquatex.ao';
+      userRepo.count.mockResolvedValue(0);
+
+      await service.onModuleInit();
+
+      expect(userRepo.save).toHaveBeenCalledTimes(1);
+      const criado = userRepo.create.mock.calls[0][0];
+      expect(criado).toEqual(expect.objectContaining({ email: 'ti@aquatex.ao', role: UserRole.ADMIN, ativo: true }));
+      expect(await bcrypt.compare('uma-password-forte-de-producao', criado.passwordHash)).toBe(true);
+      expect(await bcrypt.compare('aquatex2024', criado.passwordHash)).toBe(false);
+    });
+
+    it('com um admin já existente, não cria nem altera nada', async () => {
+      process.env.SEED_ADMIN_PASSWORD = 'uma-password-forte-de-producao';
+      userRepo.count.mockResolvedValue(1);
+
+      await service.onModuleInit();
+
+      expect(userRepo.save).not.toHaveBeenCalled();
+      expect(userRepo.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('taxas IVA e tratamento de erros', () => {
 
     it('deve criar taxas IVA quando a tabela está vazia', async () => {
       userRepo.findOne.mockResolvedValue(null);
