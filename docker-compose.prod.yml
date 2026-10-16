@@ -36,6 +36,10 @@ services:
       DB_PASSWORD_FILE: /run/secrets/sgi_db_password
       JWT_SECRET_FILE: /run/secrets/sgi_jwt_secret
       MAIL_PASS_FILE: /run/secrets/sgi_mail_pass
+      # #197 — admin inicial: só usado se ainda não existir nenhum admin. Para o
+      # primeiro deploy, crie o secret `sgi_seed_admin_password`, acrescente-o à
+      # lista `secrets` abaixo e descomente a linha seguinte.
+      # SEED_ADMIN_PASSWORD_FILE: /run/secrets/sgi_seed_admin_password
       # Não-segredos continuam como env normais.
       CORS_ORIGIN: ${CORS_ORIGIN:-https://sgi.aquatex.ao}
       MAIL_HOST: smtp.gmail.com
