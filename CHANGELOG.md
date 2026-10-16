@@ -4,6 +4,31 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(stock): stock_armazem passa a ser a fonte única de verdade do stock (closes #204)
+
+- **Antes:**
+  - `artigos.existencia` era alterada diretamente por vários caminhos (ajuste, receção e anulação de encomendas, compras diretas, VNC de devolução, consumo de OT), sem tocar em `stock_armazem`;
+  - mas `upsertStockArmazem` e `removeStockArmazem` recalculavam a existência como Σ `stock_armazem` e apagavam esses movimentos;
+  - na BD de dev, o artigo `001` tinha existência 46 e nenhuma linha por armazém: o primeiro upsert pô-lo-ia a 0.
+- **Helper `stock-armazem.ops`** (`entradaStock` / `saidaStock` / `resyncExistencia`), usado com o `EntityManager` da transação de cada operação:
+  - a entrada vai para o armazém indicado (id ou código) ou para o armazém do artigo;
+  - a saída tira do armazém indicado ou, sem armazém, primeiro do armazém do artigo e depois dos restantes;
+  - sem stock suficiente → **422** com a explicação (antes era 500, por violação do CHECK);
+  - `existencia` é sempre recalculada como Σ `stock_armazem`.
+- **Caminhos migrados:**
+  - ajuste (`PUT /artigos/:id/ajuste`, com `armazem` opcional);
+  - existência inicial ao criar o artigo e alteração da existência na ficha;
+  - receção de encomenda, no armazém de destino;
+  - anulação de receção, que passa a ser transacional e sai do armazém da receção;
+  - compras diretas VFA/VFR;
+  - validação de VNC de devolução, com os movimentos na mesma transação;
+  - baixa do consumo no fecho da OT.
+- **Migração `StockArmazemFonteUnica`** (só dados): a existência que não estava em nenhum armazém passa para o armazém do artigo. Depois, `existencia` = Σ armazéns.
+- Testes:
+  - helper com um `EntityManager` em memória (armazém do artigo, outros armazéns, 422, `limitarAoExistente`);
+  - services de artigos, encomendas e faturas de fornecedor;
+  - e2e contra BD real, incluindo a invariante `existencia = Σ stock_armazem` em todos os artigos.
+
 ### fix(ordens): edição de OT com guarda de estado e reservas sincronizadas (closes #200)
 
 - **Antes:** o `PUT /ordens/:id` apagava e recriava `ot_artigos` e `ot_mao_obra` em qualquer estado, fora de uma transação. Isto acontecia com a OT Confirmada (reservas feitas), Finalizada (stock consumido) ou já faturada. As reservas ficavam dessincronizadas e a fatura deixava de bater com a OT.

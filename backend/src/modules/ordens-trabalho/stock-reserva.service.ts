@@ -3,6 +3,7 @@ import { DataSource, EntityManager } from 'typeorm';
 import { OtArtigo } from './ot-artigo.entity';
 import { Artigo } from '../artigos/artigo.entity';
 import { SysLogsService } from '../sys-logs/sys-logs.service';
+import { saidaStock } from '../artigos/stock-armazem.ops';
 
 /** RF-OT-004 §4 — aviso devolvido ao confirmar quando falta stock. */
 export interface AvisoStock {
@@ -174,8 +175,10 @@ export class StockReservaService {
             });
             if (!artigo) continue;
 
+            // #204 — a baixa sai de stock_armazem (armazém do artigo e, se faltar, dos
+            // restantes) e a existência é recalculada; sem stock suficiente → 422.
+            await saidaStock(manager, artigo.id, consumido);
             await manager.update(Artigo, artigo.id, {
-                existencia: Number(artigo.existencia) - consumido,
                 stockReservado: Math.max(0, Number(artigo.stockReservado) - reservada),
             });
 

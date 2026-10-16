@@ -6,6 +6,7 @@ import { LinhaFaturaFornecedor } from './linha-fatura-fornecedor.entity';
 import { VncFaturaAssociada } from './vnc-fatura-associada.entity';
 import { Artigo } from '../artigos/artigo.entity';
 import { MovimentoStock } from '../artigos/movimento-stock.entity';
+import { entradaStock, saidaStock } from '../artigos/stock-armazem.ops';
 
 @Injectable()
 export class FaturasFornecedorService {
@@ -70,26 +71,29 @@ export class FaturasFornecedorService {
         // VNC: stock não é afectado na criação — só no momento de Validação.
         const isDirectPurchase = !body.idEncomenda;
         if (isDirectPurchase && (tipo === 'VFA' || tipo === 'VFR')) {
-            for (const linha of (body.linhas ?? [])) {
-                const prodId = Number(linha.produtoId);
-                if (!prodId || !(Number(linha.quantidade) > 0)) continue;
-                const artigo = await this.artigoRepo.findOne({ where: { id: prodId } });
-                if (!artigo) continue;
+            // #204 — a entrada vai para o armazém do artigo (stock_armazem), numa transação.
+            await this.artigoRepo.manager.transaction(async (m) => {
+                for (const linha of (body.linhas ?? [])) {
+                    const prodId = Number(linha.produtoId);
+                    if (!prodId || !(Number(linha.quantidade) > 0)) continue;
+                    const artigo = await m.findOne(Artigo, { where: { id: prodId } });
+                    if (!artigo) continue;
 
-                const qtd        = Number(linha.quantidade);
-                const existAtual = Number(artigo.existencia);
-                const precoNovo  = Number(linha.precoUnitarioNet);
-                const custoAtual = Number(artigo.custoMedio) || Number(artigo.precoCusto) || 0;
-                const novaExist  = existAtual + qtd;
-                const novoCusto  = novaExist > 0
-                    ? (existAtual * custoAtual + qtd * precoNovo) / novaExist
-                    : precoNovo;
-                await this.artigoRepo.update(prodId, {
-                    existencia: novaExist,
-                    custoMedio: Math.round(novoCusto * 100) / 100,
-                    dataUltimaEntrada: new Date(),
-                });
-            }
+                    const qtd        = Number(linha.quantidade);
+                    const existAtual = Number(artigo.existencia);
+                    const precoNovo  = Number(linha.precoUnitarioNet);
+                    const custoAtual = Number(artigo.custoMedio) || Number(artigo.precoCusto) || 0;
+                    const novaExist  = existAtual + qtd;
+                    const novoCusto  = novaExist > 0
+                        ? (existAtual * custoAtual + qtd * precoNovo) / novaExist
+                        : precoNovo;
+                    await entradaStock(m, prodId, qtd);
+                    await m.update(Artigo, prodId, {
+                        custoMedio: Math.round(novoCusto * 100) / 100,
+                        dataUltimaEntrada: new Date(),
+                    });
+                }
+            });
         }
 
         return this.findOne(saved.id);
@@ -116,25 +120,27 @@ export class FaturasFornecedorService {
 
         // Impacto em stock: só Devolução ao transitar para Validado
         if (novoEstado === 'Validado' && fatura.tipoNotaCredito === 'Devolucao') {
-            for (const linha of fatura.linhas) {
-                const prodId = linha.produtoId ? Number(linha.produtoId) : null;
-                if (!prodId || !(Number(linha.quantidade) > 0)) continue;
-                const artigo = await this.artigoRepo.findOne({ where: { id: prodId } });
-                if (!artigo) continue;
-                const qtd = Number(linha.quantidade);
-                await this.artigoRepo.update(prodId, {
-                    existencia: Number(artigo.existencia) - qtd,
-                    dataUltimaSaida: new Date(),
-                });
-                await this.movimentoRepo.save(this.movimentoRepo.create({
-                    artigo: { id: prodId },
-                    tipo: 'devolucao' as any,
-                    quantidade: qtd,
-                    referencia: `VNC-${fatura.numFaturaExterno}`,
-                    usuario: usuario ?? 'Sistema',
-                    observacao: `Devolução via VNC id=${id}`,
-                }));
-            }
+            // #204 — a devolução sai de stock_armazem (armazém do artigo e, se faltar, dos
+            // restantes), com os movimentos, numa transação. Sem stock suficiente → 422.
+            await this.artigoRepo.manager.transaction(async (m) => {
+                for (const linha of fatura.linhas) {
+                    const prodId = linha.produtoId ? Number(linha.produtoId) : null;
+                    if (!prodId || !(Number(linha.quantidade) > 0)) continue;
+                    const artigo = await m.findOne(Artigo, { where: { id: prodId } });
+                    if (!artigo) continue;
+                    const qtd = Number(linha.quantidade);
+                    await saidaStock(m, prodId, qtd);
+                    await m.update(Artigo, prodId, { dataUltimaSaida: new Date() });
+                    await m.save(MovimentoStock, m.create(MovimentoStock, {
+                        artigo: { id: prodId },
+                        tipo: 'devolucao' as any,
+                        quantidade: qtd,
+                        referencia: `VNC-${fatura.numFaturaExterno}`,
+                        usuario: usuario ?? 'Sistema',
+                        observacao: `Devolução via VNC id=${id}`,
+                    } as any));
+                }
+            });
         }
         // AcertoPreco → sem impacto em stock
 
