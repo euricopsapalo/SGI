@@ -32,6 +32,15 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 - O estado só muda pelas transições `agendar`, `confirmar`, `adiar`, `iniciar` e `finalizar`.
 - Testes: DTO (rejeita cada campo de sistema; o Update aceita as datas de execução) e service (`update` ignora o estado; `create` grava em Registada com o utilizador autenticado).
 
+### fix(seed): o seed deixa de repor as passwords por omissão em cada arranque (closes #197)
+
+- **Antes:** no arranque, se a password de `admin@`, `tecnico@` ou `vendas@aquatex.ao` não fosse a do seed, o `SeedService` voltava a gravá-la, também em produção. As mudanças de password perdiam-se no restart e as credenciais por omissão ficavam sempre válidas.
+- **Agora o seed só cria utilizadores em falta e nunca reescreve a password de um utilizador existente.**
+- **Fora de produção** continua a criar os utilizadores de demonstração quando não existem.
+- **Em produção** (`NODE_ENV=production`) não cria utilizadores com passwords conhecidas. Cria só um **admin inicial** se não existir nenhum admin e `SEED_ADMIN_PASSWORD` (ou `SEED_ADMIN_PASSWORD_FILE`, via Docker secret) estiver definido. O e-mail vem de `SEED_ADMIN_EMAIL` (por omissão `admin@aquatex.ao`). Sem a variável, regista um aviso e não cria nada.
+- Documentado em `.env.example` e `docker-compose.prod.yml`.
+- Testes: password alterada mantém-se; em produção, não cria utilizadores de demonstração, cria o admin inicial só sem admins e com a password definida, e avisa quando falta.
+
 ### feat(artigos): tipo de artigo (Produto/Serviço) e marcação "sujeito a retenção na fonte" (closes #195)
 
 Pré-requisito da retenção na fonte (#179), que só incide sobre Serviços com a retenção habilitada.
