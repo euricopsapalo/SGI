@@ -33,7 +33,9 @@ export class OrdensTrabalhoController {
     }
 
     @Put(':id')
-    update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateOrdemTrabalhoDto) { return this.service.update(id, dto); }
+    update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateOrdemTrabalhoDto, @Request() req: any) {
+        return this.service.update(id, dto, req?.user?.email ?? 'sistema');
+    }
 
     @Delete(':id')
     remove(@Param('id', ParseIntPipe) id: number) { return this.service.remove(id); }

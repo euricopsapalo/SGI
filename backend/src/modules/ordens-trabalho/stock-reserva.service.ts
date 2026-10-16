@@ -35,102 +35,110 @@ export class StockReservaService {
      * Não bloqueia com stock insuficiente: reserva o disponível e marca
      * `para_reposicao`. Devolve os avisos de falta (`avisosStock`).
      */
-    async reservar(otId: number, usuario = 'sistema'): Promise<AvisoStock[]> {
-        return this.dataSource.transaction(async (manager) => {
-            const linhas = await manager.find(OtArtigo, {
-                where: { ordemTrabalho: { id: otId } },
+    async reservar(otId: number, usuario = 'sistema', manager?: EntityManager): Promise<AvisoStock[]> {
+        // #200 — com `manager`, participa na transação do chamador (edição da OT).
+        if (manager) return this.reservarCom(manager, otId, usuario);
+        return this.dataSource.transaction((m) => this.reservarCom(m, otId, usuario));
+    }
+
+    private async reservarCom(manager: EntityManager, otId: number, usuario: string): Promise<AvisoStock[]> {
+        const linhas = await manager.find(OtArtigo, {
+            where: { ordemTrabalho: { id: otId } },
+        });
+
+        const avisos: AvisoStock[] = [];
+        for (const linha of linhas) {
+            if (!linha.artigoId) continue;
+            const prevista = Number(linha.qtdPrevista ?? 0) || Number(linha.quantidade ?? 0);
+            if (prevista <= 0) continue;
+
+            // Lock pessimista na linha do artigo (RD-2).
+            const artigo = await manager.findOne(Artigo, {
+                where: { id: linha.artigoId },
+                lock: { mode: 'pessimistic_write' },
             });
+            if (!artigo) continue;
 
-            const avisos: AvisoStock[] = [];
-            for (const linha of linhas) {
-                if (!linha.artigoId) continue;
-                const prevista = Number(linha.qtdPrevista ?? 0) || Number(linha.quantidade ?? 0);
-                if (prevista <= 0) continue;
+            const disponivel = Number(artigo.existencia) - Number(artigo.stockReservado);
+            const reservar = Math.min(prevista, Math.max(0, disponivel));
+            const emFalta = prevista - reservar;
 
-                // Lock pessimista na linha do artigo (RD-2).
-                const artigo = await manager.findOne(Artigo, {
-                    where: { id: linha.artigoId },
-                    lock: { mode: 'pessimistic_write' },
+            linha.qtdReservada = reservar;
+            linha.paraReposicao = emFalta > 0;
+            await manager.save(OtArtigo, linha);
+
+            if (reservar > 0) {
+                await manager.update(Artigo, artigo.id, {
+                    stockReservado: Number(artigo.stockReservado) + reservar,
                 });
-                if (!artigo) continue;
-
-                const disponivel = Number(artigo.existencia) - Number(artigo.stockReservado);
-                const reservar = Math.min(prevista, Math.max(0, disponivel));
-                const emFalta = prevista - reservar;
-
-                linha.qtdReservada = reservar;
-                linha.paraReposicao = emFalta > 0;
-                await manager.save(OtArtigo, linha);
-
-                if (reservar > 0) {
-                    await manager.update(Artigo, artigo.id, {
-                        stockReservado: Number(artigo.stockReservado) + reservar,
-                    });
-                }
-
-                if (emFalta > 0) {
-                    avisos.push({
-                        artigoId: artigo.id,
-                        descricao: linha.descricao ?? artigo.descricao,
-                        previsto: prevista,
-                        reservado: reservar,
-                        emFalta,
-                    });
-                }
             }
 
-            await this.sysLogs.create({
-                usuario,
-                modulo: 'OT',
-                acao: 'OT_STOCK_RESERVADO',
-                detalhes:
-                    `#${otId}: ${linhas.length} linha(s) processada(s)` +
-                    (avisos.length ? `, ${avisos.length} em reposição` : ', stock suficiente'),
-            });
+            if (emFalta > 0) {
+                avisos.push({
+                    artigoId: artigo.id,
+                    descricao: linha.descricao ?? artigo.descricao,
+                    previsto: prevista,
+                    reservado: reservar,
+                    emFalta,
+                });
+            }
+        }
 
-            return avisos;
+        await this.sysLogs.create({
+            usuario,
+            modulo: 'OT',
+            acao: 'OT_STOCK_RESERVADO',
+            detalhes:
+                `#${otId}: ${linhas.length} linha(s) processada(s)` +
+                (avisos.length ? `, ${avisos.length} em reposição` : ', stock suficiente'),
         });
+
+        return avisos;
     }
 
     /**
      * RF-OT-004 §5 — Liberta todas as reservas de uma OT (ao adiar/eliminar).
      * No-op seguro se não houver reservas.
      */
-    async libertar(otId: number, usuario = 'sistema'): Promise<void> {
-        await this.dataSource.transaction(async (manager) => {
-            const linhas = await manager.find(OtArtigo, {
-                where: { ordemTrabalho: { id: otId } },
-            });
+    async libertar(otId: number, usuario = 'sistema', manager?: EntityManager): Promise<void> {
+        // #200 — com `manager`, participa na transação do chamador (edição da OT).
+        if (manager) return this.libertarCom(manager, otId, usuario);
+        await this.dataSource.transaction((m) => this.libertarCom(m, otId, usuario));
+    }
 
-            let libertadas = 0;
-            for (const linha of linhas) {
-                const reservada = Number(linha.qtdReservada ?? 0);
-                if (!linha.artigoId || reservada <= 0) continue;
-
-                const artigo = await manager.findOne(Artigo, {
-                    where: { id: linha.artigoId },
-                    lock: { mode: 'pessimistic_write' },
-                });
-                if (artigo) {
-                    const novoReservado = Math.max(0, Number(artigo.stockReservado) - reservada);
-                    await manager.update(Artigo, artigo.id, { stockReservado: novoReservado });
-                }
-
-                linha.qtdReservada = 0;
-                linha.paraReposicao = false;
-                await manager.save(OtArtigo, linha);
-                libertadas++;
-            }
-
-            if (libertadas > 0) {
-                await this.sysLogs.create({
-                    usuario,
-                    modulo: 'OT',
-                    acao: 'OT_STOCK_LIBERTADO',
-                    detalhes: `#${otId}: ${libertadas} reserva(s) libertada(s)`,
-                });
-            }
+    private async libertarCom(manager: EntityManager, otId: number, usuario: string): Promise<void> {
+        const linhas = await manager.find(OtArtigo, {
+            where: { ordemTrabalho: { id: otId } },
         });
+
+        let libertadas = 0;
+        for (const linha of linhas) {
+            const reservada = Number(linha.qtdReservada ?? 0);
+            if (!linha.artigoId || reservada <= 0) continue;
+
+            const artigo = await manager.findOne(Artigo, {
+                where: { id: linha.artigoId },
+                lock: { mode: 'pessimistic_write' },
+            });
+            if (artigo) {
+                const novoReservado = Math.max(0, Number(artigo.stockReservado) - reservada);
+                await manager.update(Artigo, artigo.id, { stockReservado: novoReservado });
+            }
+
+            linha.qtdReservada = 0;
+            linha.paraReposicao = false;
+            await manager.save(OtArtigo, linha);
+            libertadas++;
+        }
+
+        if (libertadas > 0) {
+            await this.sysLogs.create({
+                usuario,
+                modulo: 'OT',
+                acao: 'OT_STOCK_LIBERTADO',
+                detalhes: `#${otId}: ${libertadas} reserva(s) libertada(s)`,
+            });
+        }
     }
 
     /**
