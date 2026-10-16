@@ -88,6 +88,22 @@ export const otAberta     = (e: OTEstado) => e === 'Registada' || e === 'Program
 export const otEmExecucao = (e: OTEstado) => e === 'Em execução';
 export const otConcluida  = (e: OTEstado) => e === 'Finalizada';
 
+/**
+ * #199 — Campos de uma OT que só o servidor gere (máquina de estados,
+ * numeração, assinatura, adiamentos, aprovação, faturação). O backend rejeita-os
+ * em POST/PUT /ordens; o estado só muda pelas transições (agendar, confirmar…).
+ */
+const CAMPOS_SISTEMA_OT = [
+    'estado', 'numero', 'registadoPorId', 'registadoPorNome', 'assinadaCliente', 'assinaturaRef',
+    'dataExecucao', 'adiamentos', 'janelaFim', 'aprovadoPorId', 'geradaDeOtId', 'documentoVendaId',
+    'transicoesPossiveis', 'requerAprovacaoAdiar',
+];
+export const semCamposSistemaOT = (o: object): any => {
+    const limpo: any = { ...o };
+    for (const k of CAMPOS_SISTEMA_OT) delete limpo[k];
+    return limpo;
+};
+
 export const OT_ESTADO_COR: Record<OTEstado, string> = {
     'Registada': '#6b7280',
     'Programada': '#2563eb',
@@ -1222,8 +1238,10 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // Remove campos que o CreateOrdemTrabalhoDto não aceita (#158): o backend
         // usa forbidNonWhitelisted, por isso um `id` no payload (ex.: id:'' vindo
         // de chamadas com `as any`) rebentava com "property id should not exist".
+        // #199 — o estado e os campos de sistema também não são aceites: a OT nasce
+        // sempre Registada e só muda de estado pelas transições.
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { id, reprogramacoes, maosDeObra, ...rest } = o as any;
+        const { id, reprogramacoes, maosDeObra, dataInicio, dataFim, ...rest } = semCamposSistemaOT(o);
         const payload = { ...rest, ...(maosDeObra !== undefined ? { maosObra: maosDeObra } : {}) };
         const { data } = await api.post(`/ordens`, payload);
         const n = normOrdem(data);
@@ -1234,7 +1252,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const updateOrdem = async (id: string, o: Partial<OrdemTrabalho>) => {
         try {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { reprogramacoes, maosDeObra, ...rest } = o as any;
+            const { id: _id, reprogramacoes, maosDeObra, ...rest } = semCamposSistemaOT(o);
             const payload = { ...rest, ...(maosDeObra !== undefined ? { maosObra: maosDeObra } : {}) };
             const { data: updated } = await api.put(`/ordens/${id}`, payload);
             setOrdens(p => p.map(x => x.id === id ? normOrdem(updated) : x));

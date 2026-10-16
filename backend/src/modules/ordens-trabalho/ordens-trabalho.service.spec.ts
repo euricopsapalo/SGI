@@ -277,6 +277,39 @@ describe('OrdensTrabalhoService (regression #15)', () => {
         expect(call.descricao).toBe('Membrana RO');
     });
 
+    // ── #199 — create/update não contornam a máquina de estados ───────
+    describe('campos de sistema (#199)', () => {
+        const SISTEMA = {
+            estado: OTEstado.FINALIZADA, numero: 'OT-999999', registadoPorId: 77, assinadaCliente: true,
+            assinaturaRef: 'x.png', dataExecucao: '2026-01-01', adiamentos: 9, janelaFim: '2099-01-01',
+            aprovadoPorId: 77, geradaDeOtId: 3, documentoVendaId: 50,
+        };
+
+        it('update ignora estado e restantes campos de sistema', async () => {
+            await service.update(1, { descricao: 'nova', ...SISTEMA });
+            const [, aplicado] = repo.update.mock.calls[0];
+            expect(aplicado).toEqual({ descricao: 'nova' });
+        });
+
+        it('update mantém a correção das datas de execução', async () => {
+            await service.update(1, { dataInicio: '2026-03-01', dataFim: '2026-03-02', estado: OTEstado.FINALIZADA });
+            const [, aplicado] = repo.update.mock.calls[0];
+            expect(aplicado).toEqual({ dataInicio: '2026-03-01', dataFim: '2026-03-02' });
+        });
+
+        it('create grava sempre em Registada, com o registadoPor do utilizador autenticado', async () => {
+            await service.create({ descricao: 'OT', ...SISTEMA, dataInicio: '2026-01-01', dataFim: '2026-01-02' }, { id: 42 });
+            const criado = repo.create.mock.calls[0][0];
+            expect(criado.estado).toBe(OTEstado.REGISTADA);
+            expect(criado.registadoPorId).toBe(42);
+            for (const k of ['numero', 'assinadaCliente', 'assinaturaRef', 'dataExecucao', 'adiamentos',
+                'aprovadoPorId', 'geradaDeOtId', 'documentoVendaId', 'dataInicio', 'dataFim']) {
+                expect(criado).not.toHaveProperty(k);
+            }
+            expect(criado.janelaFim).not.toBe('2099-01-01');
+        });
+    });
+
     // ── #165 (v11 §4.4) — estado de faturação derivado ───────────────
     describe('estado de faturação', () => {
         const mockVendas = (movs: any[]) => {

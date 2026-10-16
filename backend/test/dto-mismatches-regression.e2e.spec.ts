@@ -181,7 +181,6 @@ describe('Regressão DTO mismatches — PR #16 (closes #13, #14, #15)', () => {
                     descricao: 'Manutenção preventiva com filtros',
                     tipo: 'periodica',
                     clienteId: 1,
-                    estado: 'Programada',
                     artigos: [
                         { artigoId: 5, descricao: 'Filtro 10"', quantidade: 2, preco: 2500, codigoIva: 'I14', taxaIva: 14 },
                         { artigoId: 6, descricao: 'O-ring',     quantidade: 4, preco: 100,  codigoIva: 'I5',  taxaIva: 5  },
