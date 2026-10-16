@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Roles } from '../auth/roles.decorator';
+import { Roles, ESCRITORIO } from '../auth/roles.decorator';
 import { MatrizService } from './matriz.service';
 import { DocumentosConfigService } from './documentos-config.service';
 import { SeriesService } from './series.service';
@@ -19,6 +19,7 @@ import {
 
 @ApiTags('config-vendas')
 @ApiBearerAuth('access-token')
+@Roles(...ESCRITORIO)
 @Controller('config/matriz')
 export class MatrizController {
     constructor(private readonly svc: MatrizService) {}
@@ -29,6 +30,7 @@ export class MatrizController {
 
 @ApiTags('config-vendas')
 @ApiBearerAuth('access-token')
+@Roles(...ESCRITORIO)
 @Controller('config/documentos')
 export class DocumentosConfigController {
     constructor(private readonly svc: DocumentosConfigService) {}
@@ -43,6 +45,7 @@ export class DocumentosConfigController {
 
 @ApiTags('config-vendas')
 @ApiBearerAuth('access-token')
+@Roles(...ESCRITORIO)
 @Controller('config/series')
 export class SeriesController {
     constructor(private readonly svc: SeriesService) {}
@@ -59,6 +62,7 @@ export class SeriesController {
 
 @ApiTags('config-vendas')
 @ApiBearerAuth('access-token')
+@Roles(...ESCRITORIO)
 @Controller('config/cc-tipos')
 export class CcTiposController {
     constructor(private readonly svc: CadastrosService) {}
@@ -72,6 +76,7 @@ export class CcTiposController {
 
 @ApiTags('config-vendas')
 @ApiBearerAuth('access-token')
+@Roles(...ESCRITORIO)
 @Controller('config/contas-bancarias')
 export class ContasBancariasController {
     constructor(private readonly svc: CadastrosService) {}
@@ -85,6 +90,7 @@ export class ContasBancariasController {
 
 @ApiTags('config-vendas')
 @ApiBearerAuth('access-token')
+@Roles(...ESCRITORIO)
 @Controller('config/motivos-estorno')
 export class MotivosEstornoController {
     constructor(private readonly svc: CadastrosService) {}

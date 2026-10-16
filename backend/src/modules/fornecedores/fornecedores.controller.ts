@@ -3,9 +3,11 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { FornecedoresService } from './fornecedores.service';
 import { CreateFornecedorDto } from './dto/create-fornecedor.dto';
 import { UpdateFornecedorDto } from './dto/update-fornecedor.dto';
+import { Roles, ESCRITORIO } from '../auth/roles.decorator';
 
 @ApiTags('fornecedores')
 @ApiBearerAuth('access-token')
+@Roles(...ESCRITORIO)
 @Controller('fornecedores')
 export class FornecedoresController {
     constructor(private readonly service: FornecedoresService) {}

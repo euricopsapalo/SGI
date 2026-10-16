@@ -10,12 +10,15 @@ import { CreateLogDto } from './dto/create-log.dto';
 export class SysLogsController {
     constructor(private readonly service: SysLogsService) {}
 
+    // #198 — leitura dos registos só para admin; o POST fica aberto (todos registam ações).
     @Get()
+    @Roles('admin')
     findAll(@Query('usuario') usuario?: string) {
         return this.service.findAll(usuario);
     }
 
     @Get(':id')
+    @Roles('admin')
     findOne(@Param('id', ParseIntPipe) id: number) {
         return this.service.findOne(id);
     }

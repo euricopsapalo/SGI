@@ -3,9 +3,11 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { TabelasSistemaService } from './tabelas-sistema.service';
 import { CreateTaxaIvaDto } from './dto/create-taxa-iva.dto';
 import { UpdateTaxaIvaDto } from './dto/update-taxa-iva.dto';
+import { RolesEscrita, GESTAO } from '../auth/roles.decorator';
 
 @ApiTags('taxas-iva')
 @ApiBearerAuth('access-token')
+@RolesEscrita(...GESTAO)
 @Controller('taxas-iva')
 export class TaxasIvaController {
     constructor(private readonly service: TabelasSistemaService) {}
