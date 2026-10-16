@@ -602,6 +602,20 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
     };
     const updateArtQtd = (i: number, v: string) => setArts(p => p.map((x, idx) => idx !== i ? x : { ...x, quantidade: Math.max(1, Number(v) || 1) }));
 
+    // #200 — o backend só aceita certas edições conforme o estado da OT.
+    const faturada = !!ot?.estadoFaturacao && ot.estadoFaturacao !== 'Não faturada';
+    const finalizada = ot?.estado === 'Finalizada';
+    const artigosBloqueados = faturada || finalizada || ot?.estado === 'Em execução';
+    const avisoEdicao = faturada
+        ? 'OT faturada — só de consulta.'
+        : finalizada
+            ? 'OT finalizada — só se corrigem as datas de execução e o diagnóstico (órgão, sintoma, causa).'
+            : ot?.estado === 'Em execução'
+                ? 'OT em execução — as peças registam-se no consumo, não aqui.'
+                : ot?.estado === 'Confirmada'
+                    ? 'OT confirmada — ao alterar os artigos, as reservas de stock são refeitas.'
+                    : '';
+
     // Issue #71 — devolve as keys com erro para o caller saltar para a aba certa.
     const validate = (): string[] => {
         const e: Record<string, string> = {};
@@ -646,7 +660,17 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
             setTab(firstTab);
             return;
         }
-        onSave(buildOT());
+        if (faturada) return;
+        const completo: any = buildOT();
+        // #200 — envia só o que o estado permite editar.
+        let payload: any = completo;
+        if (finalizada) {
+            payload = { dataInicio: completo.dataInicio, dataFim: completo.dataFim, orgao: completo.orgao, sintoma: completo.sintoma, causa: completo.causa };
+        } else if (artigosBloqueados) {
+            const { artigos: _artigos, ...semArtigos } = completo;
+            payload = semArtigos;
+        }
+        onSave(payload);
     };
 
     const TABS: { id: TabId; label: string }[] = [
@@ -821,6 +845,11 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                         {/* ── 4. EXECUÇÃO (Mão de Obra · Artigos · Diagnóstico) ── */}
                         {tab === 'execucao' && (
                             <>
+                                {avisoEdicao && (
+                                    <div role="note" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 3, padding: '6px 10px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <AlertCircle size={12} /> {avisoEdicao}
+                                    </div>
+                                )}
                                 {/* — Mão de Obra — */}
                                 <div style={{ marginBottom: 18 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingBottom: 4, borderBottom: '1px solid var(--border)' }}>
@@ -848,7 +877,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                                 <div style={{ marginBottom: 18 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingBottom: 4, borderBottom: '1px solid var(--border)' }}>
                                         <h4 style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>Artigos</h4>
-                                        <button type="button" className="abtn abtn-secondary" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={addArt}><Plus size={11} /> Adicionar</button>
+                                        {!artigosBloqueados && <button type="button" className="abtn abtn-secondary" style={{ fontSize: '0.75rem', padding: '3px 8px' }} onClick={addArt}><Plus size={11} /> Adicionar</button>}
                                     </div>
                                     {arts.length === 0 ? (
                                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Sem artigos definidos.</div>
@@ -858,12 +887,12 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                                     return (
                                         <div key={i} style={{ marginBottom: 6 }}>
                                             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) 70px 110px 28px', gap: 6, alignItems: 'start', minWidth: 320, overflowX: 'auto' }}>
-                                                <SearchableSelect options={catalogOpts} value={a.artigoId} onChange={v => updateArtId(i, v)} placeholder="Seleccionar artigo..." />
-                                                <input type="number" min={1} className="form-input" value={a.quantidade} onChange={e => updateArtQtd(i, e.target.value)} placeholder="Qtd" />
+                                                <SearchableSelect options={catalogOpts} value={a.artigoId} onChange={v => { if (!artigosBloqueados) updateArtId(i, v); }} placeholder="Seleccionar artigo..." />
+                                                <input type="number" min={1} className="form-input" value={a.quantidade} onChange={e => updateArtQtd(i, e.target.value)} placeholder="Qtd" disabled={artigosBloqueados} />
                                                 <div className="form-input" style={{ color: 'var(--text-muted)', background: 'var(--bg-secondary)', fontSize: '0.78rem' }}>
                                                     {a.preco.toLocaleString('pt-PT')} Kz
                                                 </div>
-                                                <button type="button" className="icon-btn" style={{ color: 'var(--red)', marginTop: 3 }} onClick={() => removeArt(i)}><Trash2 size={12} /></button>
+                                                {artigosBloqueados ? <span /> : <button type="button" className="icon-btn" style={{ color: 'var(--red)', marginTop: 3 }} onClick={() => removeArt(i)} aria-label="Remover artigo"><Trash2 size={12} /></button>}
                                             </div>
                                             {semStock && (
                                                 <div style={{ fontSize: '0.72rem', color: 'var(--orange,#f97316)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1001,7 +1030,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                         {ot && (
                             <button type="button" className="abtn abtn-secondary" onClick={handlePrint}><Printer size={12} /> Imprimir</button>
                         )}
-                        {!readOnly && <button type="submit" className="abtn abtn-primary"><Check size={12} /> Guardar</button>}
+                        {!readOnly && !faturada && <button type="submit" className="abtn abtn-primary"><Check size={12} /> Guardar</button>}
                     </div>
                 </form>
             </div>

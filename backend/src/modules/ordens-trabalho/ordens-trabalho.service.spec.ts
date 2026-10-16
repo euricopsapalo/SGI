@@ -28,6 +28,8 @@ describe('OrdensTrabalhoService (regression #15)', () => {
     let service: OrdensTrabalhoService;
     let artigoRepo: any;
     let repo: any;
+    let managerMock: any;
+    let stockReservaMock: any;
     let module: TestingModule;
 
     beforeEach(async () => {
@@ -69,10 +71,16 @@ describe('OrdensTrabalhoService (regression #15)', () => {
 
         // #37 — DataSource.transaction executa o callback com um manager mockado
         // (update para a mudança de estado; save para a OT periódica gerada).
-        const managerMock = {
+        managerMock = {
             update: jest.fn(async () => ({ affected: 1 })),
-            save: jest.fn(async (e: any) => (Array.isArray(e) ? e : { ...e, id: 200 })),
+            delete: jest.fn(async () => ({ affected: 0 })),
+            create: jest.fn((_e: any, obj: any) => ({ ...obj })),
+            save: jest.fn(async (...args: any[]) => {
+                const e = args.length > 1 ? args[1] : args[0];
+                return Array.isArray(e) ? e : { ...e, id: 200 };
+            }),
         };
+        stockReservaMock = { reservar: jest.fn(async () => []), libertar: jest.fn(), consumir: jest.fn() };
         const dataSourceMock = { transaction: jest.fn(async (cb: any) => cb(managerMock)) };
 
         module = await Test.createTestingModule({
@@ -88,7 +96,7 @@ describe('OrdensTrabalhoService (regression #15)', () => {
                 { provide: getRepositoryToken(ConfiguracaoEmpresa), useValue: { find: jest.fn(async () => [{ limiteAdiamentos: 3 }]) } },
                 { provide: getRepositoryToken(PlanoManutencao), useValue: { findOne: jest.fn(async () => ({ id: 1, ativo: true })) } },
                 { provide: ArtigosService, useValue: artigosServiceMock },
-                { provide: StockReservaService, useValue: { reservar: jest.fn(async () => []), libertar: jest.fn(), consumir: jest.fn() } },
+                { provide: StockReservaService, useValue: stockReservaMock },
                 { provide: SysLogsService, useValue: sysLogsMock },
                 { provide: DataSource, useValue: dataSourceMock },
             ],
@@ -269,9 +277,10 @@ describe('OrdensTrabalhoService (regression #15)', () => {
             ],
         });
 
-        expect(artigoRepo.delete).toHaveBeenCalled();
-        expect(artigoRepo.create).toHaveBeenCalledTimes(1);
-        const call = artigoRepo.create.mock.calls[0][0];
+        expect(managerMock.delete).toHaveBeenCalledWith(OtArtigo, expect.anything());
+        const linhas = managerMock.create.mock.calls.filter((c: any[]) => c[0] === OtArtigo);
+        expect(linhas).toHaveLength(1);
+        const call = linhas[0][1];
         expect(call.codigoIva).toBe('I14');
         expect(call.taxaIva).toBe(14);
         expect(call.descricao).toBe('Membrana RO');
@@ -287,13 +296,13 @@ describe('OrdensTrabalhoService (regression #15)', () => {
 
         it('update ignora estado e restantes campos de sistema', async () => {
             await service.update(1, { descricao: 'nova', ...SISTEMA });
-            const [, aplicado] = repo.update.mock.calls[0];
+            const [, , aplicado] = managerMock.update.mock.calls[0];
             expect(aplicado).toEqual({ descricao: 'nova' });
         });
 
         it('update mantém a correção das datas de execução', async () => {
             await service.update(1, { dataInicio: '2026-03-01', dataFim: '2026-03-02', estado: OTEstado.FINALIZADA });
-            const [, aplicado] = repo.update.mock.calls[0];
+            const [, , aplicado] = managerMock.update.mock.calls[0];
             expect(aplicado).toEqual({ dataInicio: '2026-03-01', dataFim: '2026-03-02' });
         });
 
@@ -307,6 +316,73 @@ describe('OrdensTrabalhoService (regression #15)', () => {
                 expect(criado).not.toHaveProperty(k);
             }
             expect(criado.janelaFim).not.toBe('2099-01-01');
+        });
+    });
+
+    // ── #200 — edição com guarda de estado ────────────────────────────
+    describe('edição por estado (#200)', () => {
+        const comOt = (ot: any) => repo.findOne.mockResolvedValue({ id: 1, artigos: [], ...ot });
+        const LINHA = [{ artigoId: 5, descricao: 'Filtro', quantidade: 2, preco: 100 }];
+
+        it.each([OTEstado.REGISTADA, OTEstado.PROGRAMADA, OTEstado.ADIADA])(
+            'em %s edita os artigos sem mexer em reservas', async (estado) => {
+                comOt({ estado });
+                await service.update(1, { artigos: LINHA });
+                expect(managerMock.save).toHaveBeenCalledWith(OtArtigo, expect.any(Array));
+                expect(stockReservaMock.libertar).not.toHaveBeenCalled();
+                expect(stockReservaMock.reservar).not.toHaveBeenCalled();
+            });
+
+        it('em Confirmada liberta e refaz as reservas na mesma transação, pela ordem certa', async () => {
+            comOt({ estado: OTEstado.CONFIRMADA });
+            const ordem: string[] = [];
+            stockReservaMock.libertar.mockImplementation(async () => { ordem.push('libertar'); });
+            managerMock.delete.mockImplementation(async (e: any) => { if (e === OtArtigo) ordem.push('apagar'); return { affected: 1 }; });
+            managerMock.save.mockImplementation(async (e: any, v: any) => { if (e === OtArtigo) ordem.push('gravar'); return v; });
+            stockReservaMock.reservar.mockImplementation(async () => { ordem.push('reservar'); return []; });
+
+            await service.update(1, { artigos: LINHA }, 'coord@aquatex.ao');
+
+            expect(ordem).toEqual(['libertar', 'apagar', 'gravar', 'reservar']);
+            expect(stockReservaMock.libertar).toHaveBeenCalledWith(1, 'coord@aquatex.ao', managerMock);
+            expect(stockReservaMock.reservar).toHaveBeenCalledWith(1, 'coord@aquatex.ao', managerMock);
+        });
+
+        it('em Confirmada, editar só a descrição não toca nas reservas', async () => {
+            comOt({ estado: OTEstado.CONFIRMADA });
+            await service.update(1, { descricao: 'nova' });
+            expect(stockReservaMock.libertar).not.toHaveBeenCalled();
+            expect(stockReservaMock.reservar).not.toHaveBeenCalled();
+        });
+
+        it('em execução recusa a edição dos artigos (422) mas aceita a mão de obra', async () => {
+            comOt({ estado: OTEstado.EM_EXECUCAO });
+            await expect(service.update(1, { artigos: LINHA })).rejects.toBeInstanceOf(UnprocessableEntityException);
+            expect(managerMock.delete).not.toHaveBeenCalled();
+            await service.update(1, { maosObra: [{ funcao: 'Técnico', custo: 100 }] });
+            expect(managerMock.save).toHaveBeenCalledWith(OtMaoObra, expect.any(Array));
+        });
+
+        it('finalizada só aceita as datas de execução e o diagnóstico', async () => {
+            comOt({ estado: OTEstado.FINALIZADA, dataInicio: '2026-03-01' });
+            await expect(service.update(1, { descricao: 'x' })).rejects.toBeInstanceOf(UnprocessableEntityException);
+            await expect(service.update(1, { maosObra: [] })).rejects.toBeInstanceOf(UnprocessableEntityException);
+            await service.update(1, { dataFim: '2026-03-02', causa: 'Membrana colmatada' });
+            const [, , aplicado] = managerMock.update.mock.calls[0];
+            expect(aplicado).toEqual({ dataFim: '2026-03-02', causa: 'Membrana colmatada' });
+        });
+
+        it('recusa data de fim anterior à de início', async () => {
+            comOt({ estado: OTEstado.FINALIZADA, dataInicio: '2026-03-05' });
+            await expect(service.update(1, { dataFim: '2026-03-01' })).rejects.toBeInstanceOf(UnprocessableEntityException);
+        });
+
+        it('faturada é só de leitura', async () => {
+            comOt({ estado: OTEstado.FINALIZADA, documentoVendaId: 50 });
+            // findOne deriva o estado de faturação a partir de documentos/movimentos.
+            (module.get(DataSource) as any).getRepository = jest.fn(() => ({ find: jest.fn(async () => []) }));
+            await expect(service.update(1, { causa: 'x' })).rejects.toBeInstanceOf(UnprocessableEntityException);
+            expect(managerMock.update).not.toHaveBeenCalled();
         });
     });
 

@@ -59,6 +59,43 @@ export function semCamposSistema(body: any, extra: string[] = []): any {
     return limpo;
 }
 
+/** #200 — o que ainda se pode corrigir numa OT Finalizada (não faturada). */
+export const CAMPOS_EDITAVEIS_FINALIZADA = ['dataInicio', 'dataFim', 'orgao', 'sintoma', 'causa'];
+
+/**
+ * #200 — Regras de edição por estado (pura; `dados` já sem campos de sistema).
+ * Lança 422 com a explicação quando a alteração não é permitida.
+ */
+export function assertEdicaoOt(
+    ot: { id: number; numero?: string; estado: OTEstado; documentoVendaId?: number | null; dataInicio?: string; dataFim?: string },
+    dados: Record<string, any>,
+): void {
+    const ref = ot.numero ?? `#${ot.id}`;
+    if (ot.documentoVendaId) {
+        throw new UnprocessableEntityException(`A OT ${ref} já foi faturada e só pode ser consultada.`);
+    }
+    const temArtigos = dados.artigos !== undefined;
+    if (ot.estado === OTEstado.EM_EXECUCAO && temArtigos) {
+        throw new UnprocessableEntityException(
+            `A OT ${ref} está em execução: as peças registam-se no consumo, não na edição da OT.`,
+        );
+    }
+    if (ot.estado === OTEstado.FINALIZADA) {
+        const proibidos = Object.keys(dados).filter((k) => !CAMPOS_EDITAVEIS_FINALIZADA.includes(k));
+        if (proibidos.length > 0) {
+            throw new UnprocessableEntityException(
+                `A OT ${ref} está finalizada: só se corrigem as datas de execução e o diagnóstico ` +
+                `(não: ${proibidos.join(', ')}).`,
+            );
+        }
+    }
+    const inicio = dados.dataInicio ?? ot.dataInicio;
+    const fim = dados.dataFim ?? ot.dataFim;
+    if (inicio && fim && fim < inicio) {
+        throw new UnprocessableEntityException(`A data de fim (${fim}) não pode ser anterior à de início (${inicio}).`);
+    }
+}
+
 /** RF-OT-003 — fallback se a configuração não for legível ou estiver vazia. */
 export const LIMITE_ADIAMENTOS_DEFAULT = 3;
 
@@ -386,39 +423,55 @@ export class OrdensTrabalhoService {
         return this.findOne(saved.id);
     }
 
-    async update(id: number, body: any) {
-        const { maosDeObra, maosObra, artigos, clienteId, reprogramacoes, cliente, ...rest } = semCamposSistema(body);
-        await this.repo.update(id, rest);
-
-        // Replace mão de obra rows
+    /**
+     * #200 — Edição com guarda de estado, numa só transação:
+     * - Registada / Programada / Adiada: tudo editável (ainda não há reservas).
+     * - Confirmada: editável; ao mudar os artigos, as reservas são libertadas
+     *   e refeitas para as novas linhas (mantém `disponivel = existencia − reservado`).
+     * - Em execução: os artigos já não se editam aqui (usa-se o registo de consumo).
+     * - Finalizada: só a correção das datas de execução e do diagnóstico.
+     * - Faturada (`documentoVendaId`): só de leitura.
+     */
+    async update(id: number, body: any, usuario = 'sistema') {
+        const ot = await this.findOrFail(id);
+        const dados = semCamposSistema(body);
+        const { maosDeObra, maosObra, artigos, clienteId, reprogramacoes, cliente, ...rest } = dados;
         const maosRaw: any[] | undefined = maosDeObra ?? maosObra;
-        if (maosRaw !== undefined) {
-            await this.maoRepo.delete({ ordemTrabalho: { id } } as any);
-            if (maosRaw.length > 0) {
-                await this.maoRepo.save(
-                    maosRaw.map(m => this.maoRepo.create({ ordemTrabalho: { id }, funcao: m.funcao, custo: m.custo, hora: m.hora }))
-                );
-            }
-        }
+        assertEdicaoOt(ot, dados);
 
-        // Replace artigos rows
-        if (artigos !== undefined) {
-            await this.artigoRepo.delete({ ordemTrabalho: { id } } as any);
-            if (artigos.length > 0) {
-                await this.artigoRepo.save(
-                    artigos.map((a: any) => this.artigoRepo.create({
-                        ordemTrabalho: { id },
-                        artigoId: a.artigoId ? Number(a.artigoId) : null,
-                        descricao: a.descricao ?? '',
-                        quantidade: a.quantidade,
-                        qtdPrevista: a.qtdPrevista ?? a.quantidade ?? 0,
-                        preco: a.preco,
-                        codigoIva: a.codigoIva ?? null,
-                        taxaIva: a.taxaIva ?? null,
-                    }))
-                );
+        await this.dataSource.transaction(async (m) => {
+            if (Object.keys(rest).length > 0) await m.update(OrdemTrabalho, id, rest);
+
+            if (maosRaw !== undefined) {
+                await m.delete(OtMaoObra, { ordemTrabalho: { id } } as any);
+                if (maosRaw.length > 0) {
+                    await m.save(OtMaoObra,
+                        maosRaw.map(x => m.create(OtMaoObra, { ordemTrabalho: { id }, funcao: x.funcao, custo: x.custo, hora: x.hora } as any)),
+                    );
+                }
             }
-        }
+
+            if (artigos !== undefined) {
+                const reservada = ot.estado === OTEstado.CONFIRMADA;
+                if (reservada) await this.stockReserva.libertar(id, usuario, m);
+                await m.delete(OtArtigo, { ordemTrabalho: { id } } as any);
+                if (artigos.length > 0) {
+                    await m.save(OtArtigo,
+                        artigos.map((a: any) => m.create(OtArtigo, {
+                            ordemTrabalho: { id },
+                            artigoId: a.artigoId ? Number(a.artigoId) : null,
+                            descricao: a.descricao ?? '',
+                            quantidade: a.quantidade,
+                            qtdPrevista: a.qtdPrevista ?? a.quantidade ?? 0,
+                            preco: a.preco,
+                            codigoIva: a.codigoIva ?? null,
+                            taxaIva: a.taxaIva ?? null,
+                        } as any)),
+                    );
+                }
+                if (reservada) await this.stockReserva.reservar(id, usuario, m);
+            }
+        });
 
         return this.findOne(id);
     }

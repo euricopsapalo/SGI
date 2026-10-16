@@ -4,6 +4,23 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(ordens): edição de OT com guarda de estado e reservas sincronizadas (closes #200)
+
+- **Antes:** o `PUT /ordens/:id` apagava e recriava `ot_artigos` e `ot_mao_obra` em qualquer estado, fora de uma transação. Isto acontecia com a OT Confirmada (reservas feitas), Finalizada (stock consumido) ou já faturada. As reservas ficavam dessincronizadas e a fatura deixava de bater com a OT.
+- **Regras de edição por estado** (`assertEdicaoOt`, 422 com a explicação):
+  - **Registada / Programada / Adiada:** tudo editável;
+  - **Confirmada:** editável; ao mudar os artigos, as reservas antigas são libertadas e as novas linhas reservadas, na mesma transação;
+  - **Em execução:** os artigos já não se editam aqui (usa-se o registo de consumo); a mão de obra continua editável;
+  - **Finalizada:** só as datas de execução (`dataInicio`, `dataFim`) e o diagnóstico (`orgao`, `sintoma`, `causa`);
+  - **Faturada:** só de leitura.
+  - A data de fim não pode ser anterior à de início.
+- **Transação única:** o `update` corre todo em `DataSource.transaction`. `StockReservaService.reservar` e `libertar` aceitam o `EntityManager` do chamador, como já fazia o `consumir`.
+- **Frontend:**
+  - o modal mostra um aviso na aba Execução conforme o estado;
+  - esconde as ações sobre artigos quando estão bloqueados e envia só os campos permitidos;
+  - numa OT faturada não mostra o Guardar.
+- Testes: unitários por estado (incluindo a ordem libertar → apagar → gravar → reservar) e e2e contra BD real (troca de artigos numa OT Confirmada, 422 em execução e finalizada).
+
 ### fix(ordens): PUT/POST /ordens deixam de alterar o estado à margem da máquina de estados (closes #199)
 
 - **Antes:** o `CreateOrdemTrabalhoDto` (e o `Update`, que o herda) aceitava `estado`, `assinadaCliente` e `registadoPorId`, e o service espalhava o corpo no `repo.update`. Um pedido podia pôr uma OT em `Finalizada` sem reserva nem consumo de stock, sem assinatura e sem registo, e torná-la faturável.
