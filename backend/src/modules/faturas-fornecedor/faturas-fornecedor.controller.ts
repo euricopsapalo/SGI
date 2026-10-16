@@ -4,9 +4,11 @@ import { FaturasFornecedorService } from './faturas-fornecedor.service';
 import { CreateFaturaFornecedorDto } from './dto/create-fatura-fornecedor.dto';
 import { UpdateFaturaFornecedorDto } from './dto/update-fatura-fornecedor.dto';
 import { UpdateEstadoFaturaFornecedorDto } from './dto/update-estado-fatura-fornecedor.dto';
+import { Roles, ESCRITORIO } from '../auth/roles.decorator';
 
 @ApiTags('faturas-fornecedor')
 @ApiBearerAuth('access-token')
+@Roles(...ESCRITORIO)
 @Controller('faturas-fornecedor')
 export class FaturasFornecedorController {
     constructor(private readonly service: FaturasFornecedorService) {}
