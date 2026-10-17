@@ -4,6 +4,24 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(planos): criar e editar planos grava a mão de obra, os artigos e o equipamento (closes #205)
+
+- **Editar:** `planos.service.ts` descartava `maosObra`/`maosDeObra`, `artigos` e `equipInstaladoId` e só atualizava os escalares. O frontend aplicava a alteração no estado local, por isso parecia gravado até recarregar.
+- **Criar também falhava:** o modal enviava `maosDeObra` e ids em texto. O DTO só aceita `maosObra` e, com `forbidNonWhitelisted`, o `POST /planos` dava **400**. Como o `addPlano` era fire-and-forget e engolia o erro, o ecrã mostrava "Plano criado" sem nada gravado (na BD de dev havia 0 planos). O "Repetir plano" enviava ainda o `id` do plano original, que também é recusado.
+- **Backend:** o `update` grava os escalares, o equipamento e as linhas numa transação.
+  - Linhas enviadas substituem as existentes; uma lista vazia apaga-as; omitidas, ficam como estão.
+  - Aceita `maosObra` e `maosDeObra`.
+  - 404 se o plano não existir.
+- **Frontend:**
+  - `toPlanoPayload` monta exatamente o que o DTO aceita: `maosObra`, ids numéricos, sem `id`, sem vazios e sem linhas por preencher;
+  - `addPlano` e `updatePlano` esperam pelo servidor, propagam o erro e guardam o plano devolvido;
+  - a página só fecha o modal e confirma depois de gravar;
+  - "Repetir plano" indica quantos foram criados.
+- Testes:
+  - service de planos (antes sem testes) e `toPlanoPayload`;
+  - e2e contra BD real (criar com linhas, editar linhas e equipamento, editar só a descrição sem perder linhas);
+  - verificado na app: criado um plano com 1 mão de obra e 1 artigo, acrescentada uma 2.ª mão de obra, mantida após recarregar (plano de teste apagado depois).
+
 ### fix(ordens): edição de OT com guarda de estado e reservas sincronizadas (closes #200)
 
 - **Antes:** o `PUT /ordens/:id` apagava e recriava `ot_artigos` e `ot_mao_obra` em qualquer estado, fora de uma transação. Isto acontecia com a OT Confirmada (reservas feitas), Finalizada (stock consumido) ou já faturada. As reservas ficavam dessincronizadas e a fatura deixava de bater com a OT.

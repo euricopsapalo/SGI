@@ -270,21 +270,28 @@ const PlanosPage: React.FC = () => {
         };
     });
 
-    const handleSave = (data: Omit<PlanoManutencao, 'id'>) => {
-        if (typeof modal === 'string' && modal !== 'new') {
-            updatePlano(modal, data);
-            showToast('Plano actualizado.');
-        } else {
-            const p = addPlano(data);
-            showToast(`Plano ${p.id} criado.`);
-        }
-        setModal(null);
+    // #205 — só fecha e confirma depois de o servidor gravar; em erro o modal fica aberto
+    // (a mensagem é mostrada pelo interceptor global, api.ts).
+    const handleSave = async (data: Omit<PlanoManutencao, 'id'>) => {
+        try {
+            if (typeof modal === 'string' && modal !== 'new') {
+                await updatePlano(modal, data);
+                showToast('Plano actualizado.');
+            } else {
+                const p = await addPlano(data);
+                showToast(`Plano ${p.id} criado.`);
+            }
+            setModal(null);
+        } catch { /* erro já apresentado */ }
     };
 
-    const handleRepetir = (equipIds: string[]) => {
+    const handleRepetir = async (equipIds: string[]) => {
         const plano = planos.find(p => p.id === repetirId)!;
-        equipIds.forEach(eid => addPlano({ ...plano, equipInstaladoId: eid }));
-        showToast(`Plano aplicado a ${equipIds.length} equipamento(s).`);
+        let feitos = 0;
+        for (const eid of equipIds) {
+            try { await addPlano({ ...plano, equipInstaladoId: eid }); feitos++; } catch { break; }
+        }
+        showToast(`Plano aplicado a ${feitos} de ${equipIds.length} equipamento(s).`);
         setRepetirId(null);
     };
 
