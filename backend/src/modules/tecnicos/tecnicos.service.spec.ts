@@ -202,6 +202,16 @@ describe('TecnicosService', () => {
             expect(repo.delete).not.toHaveBeenCalled();
         });
 
+        it('#201 — conta as OTs pelo técnico executante (executado_por_id), não pela coluna removida', async () => {
+            repo.findOne.mockResolvedValue(mockTecnico);
+            ds.query.mockResolvedValue([{ total: 0 }]);
+            await service.remove(1);
+            const [sql, params] = ds.query.mock.calls[0];
+            expect(sql).toMatch(/executado_por_id\s*=\s*\$1/);
+            expect(sql).not.toMatch(/responsavel/);
+            expect(params).toEqual([1]);
+        });
+
         it('elimina e retorna mensagem se sem OTs', async () => {
             repo.findOne.mockResolvedValue(mockTecnico);
             ds.query.mockResolvedValue([{ total: 0 }]);
