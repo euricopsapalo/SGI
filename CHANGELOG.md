@@ -22,6 +22,15 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
   - e2e contra BD real (criar com linhas, editar linhas e equipamento, editar só a descrição sem perder linhas);
   - verificado na app: criado um plano com 1 mão de obra e 1 artigo, acrescentada uma 2.ª mão de obra, mantida após recarregar (plano de teste apagado depois).
 
+### fix(tecnicos): eliminar um técnico deixa de dar erro 500 (closes #201)
+
+- **Antes:** o `DELETE /tecnicos/:id` contava as OTs do técnico por `ordens_trabalho.responsavel`, uma coluna removida no #76. Qualquer eliminação dava 500.
+- **Agora conta as OTs em que o técnico é o executante (`executado_por_id`).**
+  - Sem OTs: o técnico é eliminado.
+  - Com OTs: 409, com a mensagem a indicar quantas.
+- A guarda mantém-se porque a FK é `ON DELETE SET NULL`: sem ela, apagar o técnico tirava-o silenciosamente do histórico das OTs.
+- Teste: o service verifica o SQL e o parâmetro da contagem; os testes antigos simulavam a query e não apanharam a coluna errada.
+
 ### fix(ordens): edição de OT com guarda de estado e reservas sincronizadas (closes #200)
 
 - **Antes:** o `PUT /ordens/:id` apagava e recriava `ot_artigos` e `ot_mao_obra` em qualquer estado, fora de uma transação. Isto acontecia com a OT Confirmada (reservas feitas), Finalizada (stock consumido) ou já faturada. As reservas ficavam dessincronizadas e a fatura deixava de bater com a OT.
