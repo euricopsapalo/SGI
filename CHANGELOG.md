@@ -13,6 +13,15 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 - **CI:** o job "Build Check" passa a construir também o frontend com `CI=true` (os avisos do ESLint falham o build, como no deploy), com cache do npm para os dois `package-lock.json`.
 - Testes: `nomePdf` com caracteres de controlo e reservados. `CI=true npm run build` passa localmente.
 
+### fix(tecnicos): eliminar um técnico deixa de dar erro 500 (closes #201)
+
+- **Antes:** o `DELETE /tecnicos/:id` contava as OTs do técnico por `ordens_trabalho.responsavel`, uma coluna removida no #76. Qualquer eliminação dava 500.
+- **Agora conta as OTs em que o técnico é o executante (`executado_por_id`).**
+  - Sem OTs: o técnico é eliminado.
+  - Com OTs: 409, com a mensagem a indicar quantas.
+- A guarda mantém-se porque a FK é `ON DELETE SET NULL`: sem ela, apagar o técnico tirava-o silenciosamente do histórico das OTs.
+- Teste: o service verifica o SQL e o parâmetro da contagem; os testes antigos simulavam a query e não apanharam a coluna errada.
+
 ### fix(ordens): edição de OT com guarda de estado e reservas sincronizadas (closes #200)
 
 - **Antes:** o `PUT /ordens/:id` apagava e recriava `ot_artigos` e `ot_mao_obra` em qualquer estado, fora de uma transação. Isto acontecia com a OT Confirmada (reservas feitas), Finalizada (stock consumido) ou já faturada. As reservas ficavam dessincronizadas e a fatura deixava de bater com a OT.
