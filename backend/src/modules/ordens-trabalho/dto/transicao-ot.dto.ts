@@ -1,6 +1,10 @@
 import { IsBoolean, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
 
-/** DTOs das transições da máquina de estados da OT (RF-OT-001 + RF-OT-003). */
+/**
+ * DTOs das transições da máquina de estados da OT (RF-OT-001 + RF-OT-003).
+ * #209 — `usuario` é ignorado pelo controller (o autor vem do token JWT);
+ * continua aceite só para clientes antigos não receberem 400.
+ */
 
 export class AgendarOtDto {
   /** RF-OT-003 — data agendada da OT (antiga `dataProgInicio`, removida em #74). */

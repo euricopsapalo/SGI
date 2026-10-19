@@ -80,14 +80,15 @@ describe('Encomendas DTOs', () => {
       expect(errors.some(e => e.property === 'guiaRemessa')).toBe(true);
     });
 
-    it('should fail without operador', async () => {
+    // #209 — o operador vem do token; deixou de ser obrigatório no corpo.
+    it('should pass without operador', async () => {
       const dto = plainToInstance(ReceberLinhasDto, {
         recebidas: [],
         guiaRemessa: 'GR-001',
         armazem: 'ARM-01',
       });
       const errors = await validate(dto);
-      expect(errors.some(e => e.property === 'operador')).toBe(true);
+      expect(errors.some(e => e.property === 'operador')).toBe(false);
     });
   });
 });

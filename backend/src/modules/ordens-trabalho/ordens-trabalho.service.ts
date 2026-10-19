@@ -22,6 +22,7 @@ import { PlanoManutencao } from '../planos/plano-manutencao.entity';
 import { DocumentoVenda } from '../vendas/documento-venda.entity';
 import { MovimentoCc, OrigemMovimentoCc } from '../vendas/movimento-cc.entity';
 import { estadoFaturacao, numeroDocumento } from '../vendas/vendas.rules';
+import { utilizadorDoPedido } from '../auth/utilizador-do-pedido';
 
 export function calcNextDate(fromDate: string, periodicidade: string): string {
     const d = new Date(fromDate);
@@ -391,7 +392,7 @@ export class OrdensTrabalhoService {
 
         // 7. log OT_REGISTADA
         await this.sysLogs.create({
-            usuario: String(currentUser?.id ?? currentUser?.sub ?? 'sistema'),
+            usuario: utilizadorDoPedido({ user: currentUser }),
             modulo: 'OT',
             acao: 'OT_REGISTADA',
             detalhes: `#${saved.id} (${saved.numero}) registada por user ${registadoPorId ?? '—'}`,

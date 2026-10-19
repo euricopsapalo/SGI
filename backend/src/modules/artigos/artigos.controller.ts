@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe, Query, Request } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ArtigosService } from './artigos.service';
 import { CreateArtigoDto } from './dto/create-artigo.dto';
@@ -8,6 +8,7 @@ import { UpsertStockArmazemDto } from './dto/upsert-stock-armazem.dto';
 import { CreateMovimentoStockDto } from './dto/create-movimento-stock.dto';
 import { TransferenciaStockDto } from './dto/transferencia-stock.dto';
 import { RolesEscrita, ESCRITORIO, Roles } from '../auth/roles.decorator';
+import { utilizadorDoPedido } from '../auth/utilizador-do-pedido';
 
 @ApiTags('artigos')
 @ApiBearerAuth('access-token')
@@ -62,13 +63,13 @@ export class ArtigosController {
 
     /** #37 — transferência atómica de stock entre armazéns. */
     @Post(':id/transferencia')
-    transferencia(@Param('id', ParseIntPipe) id: number, @Body() dto: TransferenciaStockDto) {
+    transferencia(@Param('id', ParseIntPipe) id: number, @Body() dto: TransferenciaStockDto, @Request() req: any) {
         return this.service.transferencia(
             id,
             dto.armazemOrigemId,
             dto.armazemDestinoId,
             dto.quantidade,
-            dto.usuario,
+            utilizadorDoPedido(req),
             dto.observacao,
         );
     }
@@ -88,7 +89,9 @@ export class MovimentosStockController {
     findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOneMovimento(id); }
 
     @Post()
-    create(@Body() dto: CreateMovimentoStockDto) { return this.service.createMovimento(dto); }
+    create(@Body() dto: CreateMovimentoStockDto, @Request() req: any) {
+        return this.service.createMovimento({ ...dto, usuario: utilizadorDoPedido(req) });
+    }
 
     @Delete(':id')
     remove(@Param('id', ParseIntPipe) id: number) { return this.service.removeMovimento(id); }
