@@ -4,6 +4,18 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(api): violações de FK passam a devolver 409 com mensagem legível em vez de 500 (closes #211)
+
+- **Antes:** só o Parque traduzia a violação de FK do Postgres (`23503`). Nos outros módulos, apagar algo ainda referenciado dava 500. Exemplos: um cliente com documentos de venda, um utilizador ligado a um técnico, ou um registo das tabelas do sistema em uso.
+- **Novo filtro global `QueryFailedFilter`** (registado com `APP_FILTER`):
+  - `23503` ao apagar ou alterar algo referenciado → **409**, "está a ser usado em documentos de venda" (nome legível da tabela);
+  - `23503` ao gravar uma referência inexistente → **400**;
+  - `23505` (valor único repetido) → **409**;
+  - os restantes erros da BD continuam a dar 500, sem expor o SQL na resposta.
+- As mensagens específicas que os services já lançam (por exemplo, o Parque e a contagem do cliente) continuam a ter prioridade.
+- O frontend já mostra o `message` da resposta no toast.
+- Testes: os três casos da issue, a referência inexistente, o valor repetido e o 500 sem SQL.
+
 ### feat(deploy): imagem de produção do frontend (build estático + nginx) (closes #208)
 
 - **Antes:** `frontend/Dockerfile` corria `npm start` (servidor de desenvolvimento) e o `docker-compose.prod.yml` não definia o serviço frontend. Em produção ficava o servidor de dev, com bind-mount do código.
