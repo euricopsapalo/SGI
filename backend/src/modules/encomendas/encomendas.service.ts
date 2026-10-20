@@ -6,6 +6,7 @@ import { EncomendaLinha } from './encomenda-linha.entity';
 import { Rececao, RececaoItem } from './rececao.entity';
 import { Artigo } from '../artigos/artigo.entity';
 import { entradaStock, saidaStock } from '../artigos/stock-armazem.ops';
+import { MovimentoStock, TipoMovimento } from '../artigos/movimento-stock.entity';
 
 @Injectable()
 export class EncomendaService {
@@ -107,6 +108,7 @@ export class EncomendaService {
         guiaRemessa: string,
         operador: string,
         armazem: string,
+        usuario?: string,
     ) {
         // Toda a receção (cabeçalho + linhas + acumulados + stock + estado) numa
         // única transação — se qualquer passo falhar, faz rollback (issue #37).
@@ -152,6 +154,17 @@ export class EncomendaService {
                 if (artigo) {
                     // #204 — entra no armazém de destino da receção (stock_armazem).
                     await entradaStock(manager, artigoIdNum, rec.qtd, armazem);
+                    // #213 — o movimento é registado aqui, na mesma transação (antes era o frontend).
+                    await manager.save(MovimentoStock, manager.create(MovimentoStock, {
+                        artigo: { id: artigoIdNum } as Artigo,
+                        tipo: TipoMovimento.ENTRADA,
+                        quantidade: rec.qtd,
+                        armazemId: armazem,
+                        referencia: encomenda.numero ?? `ENC-${id}`,
+                        usuario: usuario ?? operador,
+                        observacao: `Receção ${encomenda.numero ?? id} · GR: ${guiaRemessa.trim()}`,
+                    }));
+                    await artigoRepo.update(artigoIdNum, { dataUltimaEntrada: new Date() });
                     await artigoRepo.update(artigoIdNum, {
                         stockEncomendado: Math.max(0, Number(artigo.stockEncomendado) - rec.qtd),
                     });
@@ -176,7 +189,7 @@ export class EncomendaService {
         return this.findOne(id);
     }
 
-    async anularRececao(rececaoId: number) {
+    async anularRececao(rececaoId: number, usuario?: string) {
         const rececao = await this.rececaoRepo.findOne({
             where: { id: rececaoId },
             relations: ['itens', 'encomenda', 'encomenda.linhas'],
@@ -203,7 +216,19 @@ export class EncomendaService {
 
                 const artigo = await m.findOne(Artigo, { where: { id: artigoIdNum } });
                 if (artigo) {
-                    await saidaStock(m, artigoIdNum, item.qtd, { armazem: rececao.armazem, limitarAoExistente: true });
+                    const saiu = await saidaStock(m, artigoIdNum, item.qtd, { armazem: rececao.armazem, limitarAoExistente: true });
+                    // #213 — a reversão também fica no histórico de movimentos.
+                    if (saiu > 0) {
+                        await m.save(MovimentoStock, m.create(MovimentoStock, {
+                            artigo: { id: artigoIdNum } as Artigo,
+                            tipo: TipoMovimento.SAIDA,
+                            quantidade: saiu,
+                            armazemId: rececao.armazem,
+                            referencia: rececao.encomenda.numero ?? `ENC-${encomendaId}`,
+                            usuario: usuario ?? 'sistema',
+                            observacao: `Anulação da receção ${rececaoId}`,
+                        }));
+                    }
                     await m.update(Artigo, artigoIdNum, {
                         stockEncomendado: Number(artigo.stockEncomendado) + item.qtd,
                     });

@@ -1485,9 +1485,15 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             entrada: 'Entrada', saida: 'Saída', ajuste: 'Ajuste',
             transferencia: 'Transferência', devolucao: 'Devolução',
         };
-        const { data } = await api.post(`/movimentos-stock`, m);
+        // #213 — o servidor valida, aplica o movimento ao stock e regista-o numa só transação.
+        // Envia só os campos do DTO (a data é a do servidor; `data` dava 400 com forbidNonWhitelisted).
+        const { data } = await api.post(`/movimentos-stock`, {
+            artigoId: Number(m.artigoId), tipo: m.tipo, quantidade: m.quantidade,
+            armazemId: m.armazemId || undefined, referencia: m.referencia || undefined,
+            observacao: m.observacao || undefined,
+        });
         const n = normMovimento(data);
-        setMovimentosStock(p => [...p, n]);
+        await refreshStock().catch(() => setMovimentosStock(p => [...p, n]));
         const artCodigo = artigos.find(a => a.id === m.artigoId)?.codigo ?? m.artigoId;
         const qtdStr = m.quantidade > 0 ? `+${m.quantidade}` : String(m.quantidade);
         const armazemStr = m.armazemDestinoId
@@ -1531,8 +1537,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         });
         const enc = normEncomenda(data);
         setEncomendas(p => p.map(x => x.id === encId ? enc : x));
-        const artRes = await api.get(`/artigos`);
-        setArtigos(artRes.data.map(normArtigo));
+        await refreshStock().catch(() => {}); // #213 — o movimento de entrada é registado pelo servidor
         log('Encomendas', 'Receção registada', `Encomenda ${encId} · GR: ${guiaRemessa} · ${recebidas.length} linha(s)`);
         return enc;
     };
@@ -1541,8 +1546,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const { data } = await api.post(`/compras/rececoes/${rececaoId}/anular`);
         const enc = normEncomenda(data);
         setEncomendas(p => p.map(x => x.id === enc.id ? enc : x));
-        const artRes = await api.get(`/artigos`);
-        setArtigos(artRes.data.map(normArtigo));
+        await refreshStock().catch(() => {}); // #213 — o movimento de saída é registado pelo servidor
         log('Encomendas', 'Receção anulada', `Receção ID: ${rececaoId}`);
         return enc;
     };
