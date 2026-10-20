@@ -19,6 +19,25 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
   - o Dashboard mostra 102 600,00 Kz faturado e 102 600,00 Kz recebido em outubro (igual ao SQL: 3 × 51 300 − NC 51 300);
   - a Faturação Mensal mostra setembro 51 300 e outubro 102 600, com 153 900 no total.
 
+### fix(stock): a transferência entre armazéns deixa de reduzir a existência total (closes #203)
+
+- **Antes:** o modal de Transferência fazia `adjustExistencia(-qtd)` (a existência total descia), mudava o `codigoArmazem` do artigo inteiro e registava o movimento à parte. Também listava os artigos pelo armazém por omissão e mostrava a existência total como se fosse a da origem.
+- **Agora usa o endpoint transacional `POST /artigos/:id/transferencia`** (#37), através de `transferirStock` no contexto:
+  - debita a origem e credita o destino em `stock_armazem`;
+  - regista o movimento;
+  - a existência total e o armazém do artigo não mudam;
+  - no fim, recarrega artigos, stock por armazém e movimentos.
+- **Modal:**
+  - lista só os artigos com stock no armazém de origem e mostra quanto há lá;
+  - assinala e bloqueia quantidades acima desse stock;
+  - espera pela resposta da API e só fecha em sucesso.
+- **Endpoint:** lock na linha de origem; o armazém de destino tem de existir (antes, a FK dava 500); a mensagem de stock insuficiente indica quanto existe.
+- Depende do #204: a transferência trabalha sobre `stock_armazem`, agora preenchido.
+- Testes:
+  - unitário (destino inexistente);
+  - e2e contra BD real: move 3 un ARM-01 → ARM-02 com a existência total igual e o movimento registado; mais do que existe → 400 sem alterações.
+  - Verificado na app: 2 un do artigo `001` de ARM-01 para ARM-02 (total 46 mantido); repostas depois.
+
 ### fix(stock): stock_armazem passa a ser a fonte única de verdade do stock (closes #204)
 
 - **Antes:**

@@ -4,6 +4,7 @@ import { DataSource, In, Repository } from 'typeorm';
 import { Artigo } from './artigo.entity';
 import { MovimentoStock, TipoMovimento } from './movimento-stock.entity';
 import { StockArmazem } from './stock-armazem.entity';
+import { Armazem } from '../armazens/armazem.entity';
 import { OtArtigo } from '../ordens-trabalho/ot-artigo.entity';
 import { normalizarRetencao } from './artigo.rules';
 import { erroValidacao } from '../vendas-config/erros';
@@ -140,11 +141,19 @@ export class ArtigosService {
             const saRepo = manager.getRepository(StockArmazem);
             const movRepo = manager.getRepository(MovimentoStock);
 
+            // #203 — o armazém de destino tem de existir (senão a FK daria 500).
+            const destinoExiste = await manager.getRepository(Armazem).findOne({ where: { id: armazemDestinoId } });
+            if (!destinoExiste) throw new BadRequestException('Armazém de destino não encontrado.');
+
+            // Lock na linha de origem: duas transferências em simultâneo não movem o mesmo stock.
             const origem = await saRepo.findOne({
                 where: { artigo: { id: artigoId }, armazem: { id: armazemOrigemId } },
+                lock: { mode: 'pessimistic_write' },
             });
             if (!origem || Number(origem.quantidade) < quantidade) {
-                throw new BadRequestException('Stock insuficiente no armazém de origem.');
+                throw new BadRequestException(
+                    `Stock insuficiente no armazém de origem: existem ${Number(origem?.quantidade ?? 0)}, pedidas ${quantidade}.`,
+                );
             }
             origem.quantidade = Number(origem.quantidade) - quantidade;
             await saRepo.save(origem);
