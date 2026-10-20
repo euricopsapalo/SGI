@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe, Request } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { EncomendaService } from './encomendas.service';
 import { CreateEncomendaDto } from './dto/create-encomenda.dto';
 import { UpdateEncomendaDto } from './dto/update-encomenda.dto';
 import { ReceberLinhasDto } from './dto/receber-linhas.dto';
 import { Roles, ESCRITORIO } from '../auth/roles.decorator';
+import { nomeDoPedido } from '../auth/utilizador-do-pedido';
 
 @ApiTags('compras')
 @ApiBearerAuth('access-token')
@@ -32,12 +33,13 @@ export class EncomendaController {
     receberLinhas(
         @Param('id', ParseIntPipe) id: number,
         @Body() dto: ReceberLinhasDto,
+        @Request() req: any,
     ) {
         return this.service.receberLinhas(
             id,
             dto.recebidas ?? [],
             dto.guiaRemessa ?? '',
-            dto.operador ?? 'Sistema',
+            nomeDoPedido(req),
             dto.armazem ?? '',
         );
     }

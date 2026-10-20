@@ -13,6 +13,7 @@ import {
 } from './dto/transicao-ot.dto';
 import { RegistarConsumoDto } from './dto/registar-consumo.dto';
 import { Roles, ESCRITORIO } from '../auth/roles.decorator';
+import { utilizadorDoPedido } from '../auth/utilizador-do-pedido';
 
 @ApiTags('ordens')
 @ApiBearerAuth('access-token')
@@ -35,7 +36,7 @@ export class OrdensTrabalhoController {
 
     @Put(':id')
     update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateOrdemTrabalhoDto, @Request() req: any) {
-        return this.service.update(id, dto, req?.user?.email ?? 'sistema');
+        return this.service.update(id, dto, utilizadorDoPedido(req));
     }
 
     // #198 — o técnico de campo executa OTs mas não as elimina.
@@ -46,56 +47,56 @@ export class OrdensTrabalhoController {
     // ── Máquina de estados (RF-OT-001) ───────────────────────────────
 
     @Put(':id/agendar')
-    agendar(@Param('id', ParseIntPipe) id: number, @Body() dto: AgendarOtDto) {
+    agendar(@Param('id', ParseIntPipe) id: number, @Body() dto: AgendarOtDto, @Request() req: any) {
         return this.service.agendar(id, {
             dataAgendada: dto.dataAgendada,
-            usuario: dto.usuario,
+            usuario: utilizadorDoPedido(req),
         });
     }
 
     @Put(':id/confirmar')
-    confirmar(@Param('id', ParseIntPipe) id: number, @Body() dto: ConfirmarOtDto) {
+    confirmar(@Param('id', ParseIntPipe) id: number, @Body() dto: ConfirmarOtDto, @Request() req: any) {
         return this.service.confirmar(id, {
             dataExecucao: dto.dataExecucao,
             executadoPorId: dto.executadoPorId,
-            usuario: dto.usuario,
+            usuario: utilizadorDoPedido(req),
         });
     }
 
     @Put(':id/adiar')
-    adiar(@Param('id', ParseIntPipe) id: number, @Body() dto: AdiarOtDto) {
+    adiar(@Param('id', ParseIntPipe) id: number, @Body() dto: AdiarOtDto, @Request() req: any) {
         return this.service.adiar(id, {
             novaData: dto.novaData,
             motivo: dto.motivo,
             aprovadoPor: dto.aprovadoPor,
             aprovacaoMotivo: dto.aprovacaoMotivo,
-            usuario: dto.usuario,
+            usuario: utilizadorDoPedido(req),
         });
     }
 
     @Put(':id/iniciar')
-    iniciar(@Param('id', ParseIntPipe) id: number, @Body() dto: IniciarOtDto) {
-        return this.service.iniciar(id, dto.dataInicio, dto.usuario);
+    iniciar(@Param('id', ParseIntPipe) id: number, @Body() dto: IniciarOtDto, @Request() req: any) {
+        return this.service.iniciar(id, dto.dataInicio, utilizadorDoPedido(req));
     }
 
     @Put(':id/consumo')
-    registarConsumo(@Param('id', ParseIntPipe) id: number, @Body() dto: RegistarConsumoDto) {
-        return this.service.registarConsumo(id, dto.linhas, dto.usuario);
+    registarConsumo(@Param('id', ParseIntPipe) id: number, @Body() dto: RegistarConsumoDto, @Request() req: any) {
+        return this.service.registarConsumo(id, dto.linhas, utilizadorDoPedido(req));
     }
 
     @Put(':id/finalizar')
-    finalizar(@Param('id', ParseIntPipe) id: number, @Body() dto: FinalizarOtDto) {
+    finalizar(@Param('id', ParseIntPipe) id: number, @Body() dto: FinalizarOtDto, @Request() req: any) {
         return this.service.finalizar(id, {
             dataFim: dto.dataFim,
             assinadaCliente: dto.assinadaCliente,
             assinaturaRef: dto.assinaturaRef,
-            usuario: dto.usuario,
+            usuario: utilizadorDoPedido(req),
         });
     }
 
     @Post(':id/reprogramar')
-    reprogramar(@Param('id', ParseIntPipe) id: number, @Body() dto: ReprogramarOtDto) {
-        return this.service.reprogramar(id, dto.novaData, dto.dataAnterior, dto.motivo, dto.usuario);
+    reprogramar(@Param('id', ParseIntPipe) id: number, @Body() dto: ReprogramarOtDto, @Request() req: any) {
+        return this.service.reprogramar(id, dto.novaData, dto.dataAnterior, dto.motivo, utilizadorDoPedido(req));
     }
 
     // ── Aliases descontinuados (410 Gone) — remover após 1 sprint ─────
