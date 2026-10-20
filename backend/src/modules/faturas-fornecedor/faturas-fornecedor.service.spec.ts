@@ -12,11 +12,19 @@ import { LinhaFaturaFornecedor } from './linha-fatura-fornecedor.entity';
 import { VncFaturaAssociada } from './vnc-fatura-associada.entity';
 import { Artigo } from '../artigos/artigo.entity';
 import { MovimentoStock } from '../artigos/movimento-stock.entity';
+import { entradaStock, saidaStock } from '../artigos/stock-armazem.ops';
+
+// #204 — o stock entra/sai via stock-armazem.ops (testado à parte).
+jest.mock('../artigos/stock-armazem.ops', () => ({
+    entradaStock: jest.fn(async () => 0),
+    saidaStock: jest.fn(async () => 0),
+}));
 
 describe('FaturasFornecedorService (regression #14)', () => {
     let service: FaturasFornecedorService;
     let vncAssociadaRepo: any;
     let faturaRepo: any;
+    let manager: any;
     let module: TestingModule;
 
     beforeEach(async () => {
@@ -48,7 +56,15 @@ describe('FaturasFornecedorService (regression #14)', () => {
         };
 
         const linhaRepo = { save: jest.fn(), create: jest.fn(), delete: jest.fn() };
-        const artigoRepo = { findOne: jest.fn(), update: jest.fn() };
+        jest.clearAllMocks();
+        manager = {
+            findOne: jest.fn(async (_e: any, { where }: any) => ({ id: where.id, existencia: 10, custoMedio: 100 })),
+            update: jest.fn(async () => ({ affected: 1 })),
+            create: jest.fn((_e: any, v: any) => v),
+            save: jest.fn(async (_e: any, v: any) => v),
+            transaction: jest.fn(async (cb: any) => cb(manager)),
+        };
+        const artigoRepo = { findOne: jest.fn(), update: jest.fn(), manager };
         const movimentoRepo = { save: jest.fn(), create: jest.fn() };
 
         module = await Test.createTestingModule({
@@ -67,6 +83,27 @@ describe('FaturasFornecedorService (regression #14)', () => {
 
     afterEach(async () => {
         await module?.close();
+    });
+
+    it('#204 — compra direta (VFA) dá entrada no stock_armazem e atualiza o custo médio', async () => {
+        await service.create({
+            tipoDocumento: 'VFA', fornecedorId: 1,
+            linhas: [{ produtoId: 5, quantidade: 10, precoUnitarioNet: 200 }],
+        } as any);
+        expect(entradaStock).toHaveBeenCalledWith(manager, 5, 10);
+        // custo médio: (10×100 + 10×200) / 20 = 150
+        expect(manager.update).toHaveBeenCalledWith(Artigo, 5, expect.objectContaining({ custoMedio: 150 }));
+        expect(manager.update).not.toHaveBeenCalledWith(Artigo, 5, expect.objectContaining({ existencia: expect.anything() }));
+    });
+
+    it('#204 — validar uma VNC de devolução tira o stock do stock_armazem e regista o movimento', async () => {
+        faturaRepo.findOne.mockResolvedValueOnce({
+            id: 9, tipoDocumento: 'VNC', estadoDocumento: 'AguardaAprovacao', tipoNotaCredito: 'Devolucao',
+            numFaturaExterno: 'NC-1', linhas: [{ produtoId: 5, quantidade: 3 }],
+        });
+        await service.updateEstado(9, 'Validado', 'op@x');
+        expect(saidaStock).toHaveBeenCalledWith(manager, 5, 3);
+        expect(manager.save).toHaveBeenCalledWith(MovimentoStock, expect.objectContaining({ quantidade: 3, tipo: 'devolucao' }));
     });
 
     it('create(VNC) — lê faturasAssociadas e cria uma linha vnc_faturas_associadas por cada {faturaAssociadaId}', async () => {

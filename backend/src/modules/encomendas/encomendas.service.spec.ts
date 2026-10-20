@@ -8,6 +8,13 @@ import { Encomenda, EstadoEncomenda } from './encomenda.entity';
 import { EncomendaLinha } from './encomenda-linha.entity';
 import { Rececao, RececaoItem } from './rececao.entity';
 import { Artigo } from '../artigos/artigo.entity';
+import { entradaStock, saidaStock } from '../artigos/stock-armazem.ops';
+
+// #204 — o stock entra/sai via stock-armazem.ops (testado à parte).
+jest.mock('../artigos/stock-armazem.ops', () => ({
+    entradaStock: jest.fn(async () => 0),
+    saidaStock: jest.fn(async () => 0),
+}));
 
 /** Unit — EncomendaService (issue #38, cobertura ≥80%). */
 describe('EncomendaService', () => {
@@ -19,18 +26,24 @@ describe('EncomendaService', () => {
     let artigos: Record<number, any>;
 
     // Manager em memória para dataSource.transaction (receberLinhas).
-    const makeManager = (repos: any) => ({
-        getRepository: (entity: any) => {
+    const makeManager = (repos: any) => {
+        const repo = (entity: any) => {
             if (entity === Encomenda) return repos.enc;
             if (entity === EncomendaLinha) return repos.linha;
             if (entity === Rececao) return repos.rececao;
             if (entity === RececaoItem) return repos.rececaoItem;
             if (entity === Artigo) return repos.artigo;
             return {};
-        },
-    });
+        };
+        return {
+            getRepository: repo,
+            findOne: (entity: any, opts: any) => repo(entity).findOne(opts),
+            update: (entity: any, id: any, patch: any) => repo(entity).update(id, patch),
+        };
+    };
 
     beforeEach(async () => {
+        jest.clearAllMocks();
         artigos = { 1: { id: 1, existencia: 10, stockEncomendado: 4 } };
         encomendaRepo = {
             find: jest.fn(async () => [{ id: 1 }]),
@@ -50,7 +63,7 @@ describe('EncomendaService', () => {
         const dataSource = {
             transaction: jest.fn(async (cb: any) => cb(makeManager({
                 enc: encomendaRepo, linha: linhaRepo,
-                rececao: { create: jest.fn((e: any) => ({ ...e })), save: jest.fn(async (e: any) => e) },
+                rececao: { create: jest.fn((e: any) => ({ ...e })), save: jest.fn(async (e: any) => e), update: rececaoRepo.update },
                 rececaoItem: { create: jest.fn((e: any) => ({ ...e })) },
                 artigo: artigoRepo,
             }))),
@@ -115,8 +128,9 @@ describe('EncomendaService', () => {
             .mockResolvedValue({ id: 1, estado: EstadoEncomenda.RECEBIDA }); // return final
 
         await service.receberLinhas(1, [{ artigoId: '1', qtd: 5 }], 'GR-001', 'op@x', 'ARM-01');
-        // existencia 10 + 5 = 15; encomendado 4 - 5 → max(0,-1)=0
-        expect(artigos[1].existencia).toBe(15);
+        // #204 — entra no armazém de destino; encomendado 4 - 5 → max(0,-1)=0
+        expect(entradaStock).toHaveBeenCalledWith(expect.anything(), 1, 5, 'ARM-01');
+        expect(artigos[1].existencia).toBe(10); // a existência é recalculada pelo helper
         expect(artigos[1].stockEncomendado).toBe(0);
         expect(encomendaRepo.update).toHaveBeenCalledWith(1, { estado: EstadoEncomenda.RECEBIDA });
     });
@@ -129,7 +143,7 @@ describe('EncomendaService', () => {
 
     it('anularRececao reverte stock e recalcula estado', async () => {
         rececaoRepo.findOne.mockResolvedValue({
-            id: 1, estado: 'Ativa',
+            id: 1, estado: 'Ativa', armazem: 'ARM-02',
             encomenda: { id: 1, linhas: [{ id: 1, artigoId: 1, qtdRecebida: 5 }] },
             itens: [{ artigoId: '1', qtd: 5 }],
         });
@@ -137,8 +151,8 @@ describe('EncomendaService', () => {
         encomendaRepo.findOne.mockResolvedValue({ id: 1, estado: EstadoEncomenda.RECEBIDA, linhas: [{ qtdEncomendada: 5, qtdRecebida: 0 }] });
 
         await service.anularRececao(1);
-        // existencia 10 - 5 = 5; encomendado 4 + 5 = 9
-        expect(artigos[1].existencia).toBe(5);
+        // #204 — sai do armazém da receção (no máximo o que lá existe); encomendado 4 + 5 = 9
+        expect(saidaStock).toHaveBeenCalledWith(expect.anything(), 1, 5, { armazem: 'ARM-02', limitarAoExistente: true });
         expect(artigos[1].stockEncomendado).toBe(9);
         expect(rececaoRepo.update).toHaveBeenCalledWith(1, { estado: 'Anulada' });
         // nada recebido → volta a APROVADA

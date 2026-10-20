@@ -39,7 +39,7 @@ export class ArtigosController {
 
     @Put(':id/ajuste')
     ajusteExistencia(@Param('id', ParseIntPipe) id: number, @Body() dto: AjusteExistenciaDto) {
-        return this.service.ajusteExistencia(id, dto.delta);
+        return this.service.ajusteExistencia(id, dto.delta, dto.armazem);
     }
 
     @Put(':id/reserva')
