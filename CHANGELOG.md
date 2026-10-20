@@ -25,6 +25,7 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
   - no browser, todos os pedidos vão para `/api` na mesma origem.
 - Depende do #207: sem ele, o build com `CI=true` falhava.
 
+
 ### fix(ci): o build do frontend passa com CI=true e o CI passa a construí-lo (closes #207)
 
 - **Antes:**
