@@ -13,6 +13,21 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 - **CI:** o job "Build Check" passa a construir também o frontend com `CI=true` (os avisos do ESLint falham o build, como no deploy), com cache do npm para os dois `package-lock.json`.
 - Testes: `nomePdf` com caracteres de controlo e reservados. `CI=true npm run build` passa localmente.
 
+### fix(dashboard,relatorios): a faturação passa a vir dos documentos de venda (closes #206)
+
+- **Antes:** o Dashboard (faturas em aberto, faturação emitida e recebida no mês) e os Relatórios (Faturação Mensal, Comissões, Carteira, Ranking, Regiões) liam a tabela antiga `faturas`. Desde o #165 tudo é emitido em `documentos_venda`, por isso mostravam 0 (na BD de dev: `faturas` = 0 linhas, `documentos_venda` = 5).
+- **Agora** usam os documentos de venda emitidos e as liquidações (`utils/faturacaoResumo` + `useResumoFaturacao`):
+  - **faturado** = Σ dos documentos emitidos; as NC (`natureza = A_PAGAR`) abatem, como em /vendas/relatorios;
+  - **recebido no mês** = Σ das liquidações do mês (inclui as automáticas das FR); um estorno de liquidação (ERE) abate;
+  - **faturas em aberto** = faturas Pendentes ou Parcialmente pagas;
+  - datas pela hora local, sem desvio de dia em UTC.
+- A API de documentos expõe `naturezaDocumento`.
+- O técnico de campo não carrega estes dados: não tem acesso a Vendas (#198) nem vê os indicadores de faturação.
+- Testes: `faturacaoResumo` (sinal das NC, em aberto, recebido com ERE, somas por OT e cliente, data local).
+- Verificado na BD de dev:
+  - o Dashboard mostra 102 600,00 Kz faturado e 102 600,00 Kz recebido em outubro (igual ao SQL: 3 × 51 300 − NC 51 300);
+  - a Faturação Mensal mostra setembro 51 300 e outubro 102 600, com 153 900 no total.
+
 ### fix(planos): criar e editar planos grava a mão de obra, os artigos e o equipamento (closes #205)
 
 - **Editar:** `planos.service.ts` descartava `maosObra`/`maosDeObra`, `artigos` e `equipInstaladoId` e só atualizava os escalares. O frontend aplicava a alteração no estado local, por isso parecia gravado até recarregar.

@@ -27,6 +27,8 @@ export type EstadoFaturacao = 'Não faturada' | 'Pendente' | 'Parcialmente paga'
 
 export interface DocumentoVenda {
     id: number; documentoConfigId: number; documentoCodigo: string; documentoDescricao: string; tipoFiscal: string | null;
+    /** #206 — natureza do tipo de documento: A_PAGAR (NC) abate nos totais. */
+    naturezaDocumento?: string | null;
     serieId: number | null; serieCodigo: string | null; numero: number | null; numeroDocumento: string | null;
     dataHora: string | null; estado: EstadoDocumentoVenda;
     clienteId: number; clienteNome: string; clienteNif: string | null;

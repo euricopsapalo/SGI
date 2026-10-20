@@ -5,6 +5,8 @@ import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { BarChart3, TrendingUp, Users, Download, Package, Search, Briefcase, Trophy, MapPin, Receipt } from 'lucide-react';
 import { useGlobal } from '../../contexts/GlobalContext';
 import VendasRelatorioTab from './VendasRelatorioTab';
+import { useResumoFaturacao } from '../../utils/useResumoFaturacao';
+import { somarPor } from '../../utils/faturacaoResumo';
 
 /* fmtDate, fmtMoney, fmt vêm do GlobalContext */
 
@@ -99,8 +101,14 @@ const COLS: Record<Exclude<RelTab, 'vendas'>, ExportCol[]> = {
 
 /* ══════════════════════════════════════════════════════════ */
 const RelatoriosPage: React.FC = () => {
-    const { faturas, ordens, movimentosStock, artigos, armazens, clientes, equipInstalados, provincias, empresaConfig, fmtMoney, fmtDate, fmt: fmtNum } = useGlobal();
+    const { ordens, movimentosStock, artigos, armazens, clientes, equipInstalados, provincias, empresaConfig, fmtMoney, fmtDate, fmt: fmtNum } = useGlobal();
     const fmtKz = fmtMoney;
+
+    // #206 — faturação a partir dos documentos de venda emitidos (as NC abatem),
+    // não da tabela antiga `faturas` (vazia desde o #165).
+    const { resumo: faturasEmitidas } = useResumoFaturacao();
+    const faturadoPorOt      = useMemo(() => somarPor(faturasEmitidas, f => f.otId), [faturasEmitidas]);
+    const faturadoPorCliente = useMemo(() => somarPor(faturasEmitidas, f => f.clienteId), [faturasEmitidas]);
 
     // #170 — `?tab=vendas` abre directamente um separador.
     const [tab,        setTab]        = useState<RelTab>(() => {
@@ -109,25 +117,25 @@ const RelatoriosPage: React.FC = () => {
     });
     const [showExport, setShowExport] = useState(false);
 
-    /* ── Faturação mensal (computed from real faturas) ── */
+    /* ── Faturação mensal (documentos de venda emitidos) ── */
     const faturacaoMensal = useMemo(() => {
         const byMonth: Record<string, { mes: string; mes_key: string; os: number; montagem: number; preventiva: number; corretiva: number; total: number }> = {};
-        faturas.forEach(f => {
-            const mes_key = (f.dataEmissao ?? '').substring(0, 7);
+        faturasEmitidas.forEach(f => {
+            const mes_key = f.data.substring(0, 7);
             if (!mes_key || mes_key.length < 7) return;
             const [y, m] = mes_key.split('-');
             const mesLabel = `${MES_PT[m] ?? m} ${y}`;
             if (!byMonth[mes_key]) byMonth[mes_key] = { mes: mesLabel, mes_key, os: 0, montagem: 0, preventiva: 0, corretiva: 0, total: 0 };
-            byMonth[mes_key].total += Number(f.valorTotal);
-            byMonth[mes_key].os += 1;
+            byMonth[mes_key].total += f.valor;
+            if (f.valor > 0) byMonth[mes_key].os += 1;
             const ot = ordens.find(o => o.id === f.otId);
             const nat = ot?.naturezaIntervencao ?? '';
-            if (nat === 'Montagem / Instalação')    byMonth[mes_key].montagem   += Number(f.valorTotal);
-            else if (nat === 'Reparação de avaria') byMonth[mes_key].corretiva  += Number(f.valorTotal);
-            else                                    byMonth[mes_key].preventiva += Number(f.valorTotal);
+            if (nat === 'Montagem / Instalação')    byMonth[mes_key].montagem   += f.valor;
+            else if (nat === 'Reparação de avaria') byMonth[mes_key].corretiva  += f.valor;
+            else                                    byMonth[mes_key].preventiva += f.valor;
         });
         return Object.values(byMonth).sort((a, b) => a.mes_key.localeCompare(b.mes_key));
-    }, [faturas, ordens]);
+    }, [faturasEmitidas, ordens]);
 
     const mesKeys = faturacaoMensal.map(m => m.mes_key);
     const [fatDe,  setFatDe]  = useState('');
@@ -153,11 +161,10 @@ const RelatoriosPage: React.FC = () => {
             if (nat === 'Montagem / Instalação')    { t.montagem++;   t.comissao += rMont; }
             else if (nat === 'Reparação de avaria') { t.corretiva++;  t.comissao += rCorr; }
             else                                    { t.preventiva++; t.comissao += rPrev; }
-            const fat = faturas.find(f => f.otId === o.id);
-            if (fat) t.total += Number(fat.valorTotal);
+            t.total += faturadoPorOt.get(String(o.id)) ?? 0;
         });
         return Object.values(byTec).sort((a, b) => b.comissao - a.comissao);
-    }, [ordens, faturas, empresaConfig]);
+    }, [ordens, faturadoPorOt, empresaConfig]);
 
     /* ── Produtividade (real) — OTs por técnico ── */
     const produtividadeData = useMemo(() => {
@@ -177,13 +184,13 @@ const RelatoriosPage: React.FC = () => {
         const equips  = equipInstalados.filter(e => String(e.clienteId) === String(c.id));
         const cOrdens = ordens.filter(o => String(o.clienteId) === String(c.id));
         const otAtivas = cOrdens.filter(o => o.estado !== 'Finalizada').length;
-        const valorFaturado = faturas.filter(f => String(f.clienteId) === String(c.id)).reduce((s, f) => s + Number(f.valorTotal), 0);
+        const valorFaturado = faturadoPorCliente.get(String(c.id)) ?? 0;
         return {
             id: c.id, nome: c.nome, tipo: c.tipo === 'empresa' ? 'Empresa' : 'Particular',
             nEquipamentos: equips.length, nOT: cOrdens.length, otAtivas,
             valorFaturado, estado: c.ativo ? 'Activo' : 'Inactivo',
         };
-    }).sort((a, b) => b.nOT - a.nOT), [clientes, equipInstalados, ordens, faturas]);
+    }).sort((a, b) => b.nOT - a.nOT), [clientes, equipInstalados, ordens, faturadoPorCliente]);
 
     /* ── Ranking de Clientes ── */
     type RankSort = 'ot' | 'faturado';
@@ -210,7 +217,7 @@ const RelatoriosPage: React.FC = () => {
         return Array.from(byProv.values()).map(({ regiao, ids }) => {
             const regionClientes = clientes.filter(c => ids.includes(c.id));
             const nOT = ordens.filter(o => ids.some(id => String(o.clienteId) === id)).length;
-            const faturado = faturas.filter(f => ids.some(id => String(f.clienteId) === id)).reduce((s, f) => s + Number(f.valorTotal), 0);
+            const faturado = ids.reduce((s, id) => s + (faturadoPorCliente.get(String(id)) ?? 0), 0);
             return {
                 regiao, clientes: ids.length,
                 ativos:   regionClientes.filter(c => c.ativo).length,
@@ -218,7 +225,7 @@ const RelatoriosPage: React.FC = () => {
                 nOT, faturado,
             };
         }).sort((a, b) => b.clientes - a.clientes);
-    }, [clientes, ordens, faturas, provincias]);
+    }, [clientes, ordens, faturadoPorCliente, provincias]);
     const regiaoMaxClientes = Math.max(...regiaoData.map(r => r.clientes), 1);
 
     const [comTipo,    setComTipo]    = useState('');
