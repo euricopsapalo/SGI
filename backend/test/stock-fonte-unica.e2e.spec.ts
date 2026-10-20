@@ -59,7 +59,10 @@ describeDb('Stock — fonte única stock_armazem (#204) E2E, BD real', () => {
     });
 
     afterAll(async () => {
-        if (ds?.isInitialized && artigoId) await ds.query(`DELETE FROM artigos WHERE id = $1`, [artigoId]);
+        if (ds?.isInitialized && artigoId) {
+            await ds.query(`DELETE FROM movimentos_stock WHERE artigo_id = $1`, [artigoId]);
+            await ds.query(`DELETE FROM artigos WHERE id = $1`, [artigoId]);
+        }
         await app?.close();
     });
 
@@ -89,6 +92,25 @@ describeDb('Stock — fonte única stock_armazem (#204) E2E, BD real', () => {
         await request(srv()).put(`/artigos/${artigoId}`).send({ existencia: 7 }).expect(200);
         expect(await porArmazem()).toEqual({ 'ARM-01': 5, 'ARM-02': 2 });
         expect(await existencia()).toBe(7);
+    });
+
+    // #203 — transferência entre armazéns pelo endpoint transacional.
+    it('#203 — transferir move o stock entre armazéns e a existência total não muda', async () => {
+        const id = async (codigo: string) => Number((await q(`SELECT id FROM armazens WHERE codigo = $1`, [codigo])).id);
+        const [arm1, arm2] = [await id('ARM-01'), await id('ARM-02')];
+
+        await request(srv()).post(`/artigos/${artigoId}/transferencia`)
+            .send({ armazemOrigemId: arm1, armazemDestinoId: arm2, quantidade: 3 }).expect(201);
+        expect(await porArmazem()).toEqual({ 'ARM-01': 2, 'ARM-02': 5 });
+        expect(await existencia()).toBe(7);
+        const mov = await q(`SELECT tipo, quantidade::float AS q FROM movimentos_stock WHERE artigo_id = $1 ORDER BY id DESC LIMIT 1`, [artigoId]);
+        expect(mov).toEqual({ tipo: 'transferencia', q: 3 });
+
+        // Mais do que existe na origem → 400 e nada muda.
+        const res = await request(srv()).post(`/artigos/${artigoId}/transferencia`)
+            .send({ armazemOrigemId: arm1, armazemDestinoId: arm2, quantidade: 10 }).expect(400);
+        expect(res.body.message).toMatch(/existem 2, pedidas 10/);
+        expect(await porArmazem()).toEqual({ 'ARM-01': 2, 'ARM-02': 5 });
     });
 
     it('invariante: em todos os artigos, existência = Σ stock_armazem (inclui os migrados)', async () => {
