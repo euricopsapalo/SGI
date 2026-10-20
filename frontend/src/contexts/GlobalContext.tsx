@@ -314,6 +314,13 @@ const norm = (item: any) => ({ ...item, id: item.id?.toString() });
 const normProvincia = (p: any): Provincia => ({ id: p.id?.toString(), nome: p.nome, paisId: p.pais?.id?.toString() ?? '' });
 const normMunicipio = (m: any): Municipio => ({ id: m.id?.toString(), nome: m.nome, provinciaId: m.provincia?.id?.toString() ?? '' });
 const normFuncaoTecnico = (f: any): FuncaoTecnico => ({ id: f.id?.toString(), codigo: f.codigo, descricao: f.descricao, custo: Number(f.custo) });
+/** #202 — disponível e ruptura de um artigo, a partir do `stockReservado` do backend. */
+export const comDisponibilidade = (a: Artigo): Artigo => {
+    const stockDisponivel = Math.max(0, a.existencia - a.stockReservado);
+    const emRuptura = (stockDisponivel + a.stockEncomendado) < a.stockSeguranca;
+    return { ...a, stockDisponivel, emRuptura };
+};
+
 const normArtigo = (a: any): Artigo => ({ ...a, id: a.id?.toString(), tipo: a.tipo === 'SERVICO' ? 'SERVICO' : 'PRODUTO', sujeitoRetencao: a.tipo === 'SERVICO' && !!a.sujeitoRetencao, classe: a.classe ?? '', familia: a.familia ?? '', precoUnitario: Number(a.precoUnitario), existencia: Number(a.existencia), stockReservado: Number(a.stockReservado ?? 0), nivelMaximo: Number(a.nivelMaximo), stockSeguranca: Number(a.stockSeguranca), custoMedio: Number(a.custoMedio), precoCusto: Number(a.precoCusto ?? 0), stockEncomendado: Number(a.stockEncomendado ?? 0), stockInicial: Number(a.stockInicial ?? 0), unidadeMedida: a.unidadeMedida ?? 'UN', refFornecedor: a.refFornecedor ?? undefined, dataUltimaEntrada: a.dataUltimaEntrada ?? undefined, dataUltimaSaida: a.dataUltimaSaida ?? undefined });
 const normMovimento = (m: any): MovimentoStock => ({
     ...m,
@@ -1258,6 +1265,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const payload = { ...rest, ...(maosDeObra !== undefined ? { maosObra: maosDeObra } : {}) };
             const { data: updated } = await api.put(`/ordens/${id}`, payload);
             setOrdens(p => p.map(x => x.id === id ? normOrdem(updated) : x));
+            // #202 — numa OT Confirmada, mudar os artigos refaz as reservas (#200).
+            if (payload.artigos !== undefined) qc.invalidateQueries({ queryKey: queryKeys.artigos });
             log('Ordens de Trabalho', 'OT actualizada', `ID: ${id}`);
         } catch (e) { throw e; }
     };
@@ -1310,6 +1319,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (opts?.executadoPorId) body.executadoPorId = Number(opts.executadoPorId);
         const { data } = await api.put(`/ordens/${id}/confirmar`, body);
         setOrdens(p => p.map(x => x.id === id ? normOrdem(data) : x));
+        qc.invalidateQueries({ queryKey: queryKeys.artigos }); // #202 — reservou stock
         const avisosStock: AvisoStock[] = data?.avisosStock ?? [];
         log('Ordens de Trabalho', 'OT confirmada', `ID: ${id}${opts?.dataExecucao ? ` (execução: ${opts.dataExecucao})` : ''}${avisosStock.length ? ` — ${avisosStock.length} peça(s) em reposição` : ''}`, avisosStock.length ? 'warning' : 'info');
         return avisosStock;
@@ -1325,6 +1335,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (opts?.aprovacaoMotivo) body.aprovacaoMotivo = opts.aprovacaoMotivo;
         const { data } = await api.put(`/ordens/${id}/adiar`, body);
         setOrdens(p => p.map(x => x.id === id ? normOrdem(data) : x));
+        qc.invalidateQueries({ queryKey: queryKeys.artigos }); // #202 — libertou a reserva
         log('Ordens de Trabalho', 'OT adiada', `ID: ${id} → ${opts?.novaData ?? ''}; Motivo: ${opts?.motivo ?? ''}`, 'warning');
     };
 
@@ -1559,24 +1570,11 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } catch (e) { throw e; }
     };
 
-    /* ── Compute stockReservado dynamically from Programado OTs ── */
-    const artigosComReserva = useMemo(() => {
-        const reservaMap: Record<string, number> = {};
-        ordens.filter(o => o.estado !== 'Em execução' && o.estado !== 'Finalizada').forEach(o => {
-            (o.artigos ?? []).forEach(a => {
-                if (a.artigoId && a.quantidade > 0) {
-                    const k = String(a.artigoId);
-                    reservaMap[k] = (reservaMap[k] ?? 0) + a.quantidade;
-                }
-            });
-        });
-        return artigos.map(a => {
-            const stockReservado = reservaMap[a.id] ?? 0;
-            const stockDisponivel = Math.max(0, a.existencia - stockReservado);
-            const emRuptura = (stockDisponivel + a.stockEncomendado) < a.stockSeguranca;
-            return { ...a, stockReservado, stockDisponivel, emRuptura };
-        });
-    }, [artigos, ordens]);
+    /* ── Disponível e ruptura a partir do stock_reservado do backend ──
+     * #202 — o reservado vem de `artigos.stock_reservado`, mantido pelo backend
+     * (RF-OT-004: reserva na confirmação, liberta ao adiar, baixa no fecho).
+     * Não se recalcula aqui a partir das OTs. Invariante: disponivel = existencia − reservado. */
+    const artigosComReserva = useMemo(() => artigos.map(comDisponibilidade), [artigos]);
 
     /* ── Global formatters (derived from empresaConfig + moedas) ── */
     const casasDecimais = empresaConfig.casasDecimais ?? 2;
