@@ -361,6 +361,27 @@ const normPlano = (p: any): PlanoManutencao => ({
     artigos: (p.artigos ?? []).map((a: any) => ({ artigoId: a.artigoId?.toString() ?? '', quantidade: Number(a.quantidade), preco: Number(a.preco) })),
 });
 
+/**
+ * #205 — Payload que o Create/UpdatePlanoDto aceita: `maosObra` (não `maosDeObra`),
+ * ids numéricos, sem `id` nem strings vazias e sem linhas por preencher. O backend
+ * usa forbidNonWhitelisted, por isso qualquer campo a mais dava 400.
+ */
+export const toPlanoPayload = (p: Partial<PlanoManutencao>) => {
+    const num = (v: unknown) => (v === undefined || v === null || v === '' ? undefined : Number(v));
+    const out: Record<string, unknown> = {
+        equipInstaladoId: num(p.equipInstaladoId),
+        descricao: p.descricao,
+        tipoTrabalhoId: num(p.tipoTrabalhoId),
+        periodicidade: p.periodicidade,
+        previsaoTempo: p.previsaoTempo === undefined ? undefined : Number(p.previsaoTempo) || 0,
+        ativo: p.ativo,
+        maosObra: p.maosDeObra?.filter(m => m.funcaoId).map(m => ({ funcaoId: num(m.funcaoId), custo: Number(m.custo) || 0 })),
+        artigos: p.artigos?.filter(a => a.artigoId).map(a => ({ artigoId: num(a.artigoId), quantidade: Number(a.quantidade) || 1, preco: Number(a.preco) || 0 })),
+    };
+    Object.keys(out).forEach(k => out[k] === undefined && delete out[k]);
+    return out;
+};
+
 /** Mapeia estados legados (modelo de 4 estados) para a máquina de 6 estados. */
 const normEstado = (e: any): OTEstado => {
     switch (e) {
@@ -554,7 +575,7 @@ interface GlobalContextType {
     modelosEquipamento: ModeloEquipamento[]; addModelo: (m: Omit<ModeloEquipamento, 'id'>) => ModeloEquipamento; updateModelo: (id: string, m: Partial<ModeloEquipamento>) => void; removeModelo: (id: string) => Promise<void>;
     equipInstalados: EquipInstalado[]; addEquipInstalado: (e: Omit<EquipInstalado, 'id'>) => Promise<EquipInstalado>; updateEquipInstalado: (id: string, e: Partial<EquipInstalado>) => void; removeEquipInstalado: (id: string) => Promise<void>;
     // Plans
-    planos: PlanoManutencao[]; addPlano: (p: Omit<PlanoManutencao, 'id'>) => PlanoManutencao; updatePlano: (id: string, p: Partial<PlanoManutencao>) => void; removePlano: (id: string) => void;
+    planos: PlanoManutencao[]; addPlano: (p: Omit<PlanoManutencao, 'id'>) => Promise<PlanoManutencao>; updatePlano: (id: string, p: Partial<PlanoManutencao>) => Promise<void>; removePlano: (id: string) => void;
     // Work Orders
     ordens: OrdemTrabalho[]; addOrdem: (o: Omit<OrdemTrabalho, 'id'>) => Promise<OrdemTrabalho>; updateOrdem: (id: string, o: Partial<OrdemTrabalho>) => void; removeOrdem: (id: string) => void;
     agendarOT: (id: string, dataAgendada?: string) => Promise<void>;
@@ -568,6 +589,8 @@ interface GlobalContextType {
     armazens: Armazem[]; addArmazem: (a: Omit<Armazem, 'id'>) => Armazem; updateArmazem: (id: string, a: Partial<Armazem>) => void;
     // Stock
     artigos: Artigo[]; addArtigo: (a: Omit<Artigo, 'id'>) => Artigo; updateArtigo: (id: string, a: Partial<Artigo>) => void; adjustExistencia: (id: string, delta: number) => void; adjustReservado: (id: string, delta: number) => void;
+    /** #203 — transferência atómica entre armazéns (POST /artigos/:id/transferencia); a existência total não muda. */
+    transferirStock: (artigoId: string, armazemOrigem: string, armazemDestino: string, quantidade: number) => Promise<void>;
     stockArmazem: StockArmazem[]; upsertStockArmazem: (artigoId: string, armazemId: string, quantidade: number, stockMinimo: number) => Promise<void>; removeStockArmazem: (saId: string) => Promise<void>;
     movimentosStock: MovimentoStock[]; addMovimento: (m: Omit<MovimentoStock, 'id'>) => MovimentoStock;
     // Purchases
@@ -1217,21 +1240,16 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     /* ── Plans ──────────────────────────────────────────────── */
-    const addPlano = (p: Omit<PlanoManutencao, 'id'>): PlanoManutencao => {
-        const placeholder: PlanoManutencao = { ...p, id: '' };
-        api.post(`/planos`, p)
-            .then(({ data }) => {
-                const n = normPlano(data);
-                setPlanos(prev => [...prev, n]);
-            })
-            .catch(() => {});
-        return placeholder;
+    // #205 — espera pelo servidor, propaga o erro e guarda o plano devolvido (padrão #49).
+    const addPlano = async (p: Omit<PlanoManutencao, 'id'>): Promise<PlanoManutencao> => {
+        const { data } = await api.post(`/planos`, toPlanoPayload(p));
+        const n = normPlano(await api.get(`/planos/${data.id}`).then(r => r.data).catch(() => data));
+        setPlanos(prev => [...prev, n]);
+        return n;
     };
     const updatePlano = async (id: string, p: Partial<PlanoManutencao>) => {
-        try {
-            await api.put(`/planos/${id}`, p);
-            setPlanos(prev => prev.map(x => x.id === id ? { ...x, ...p } : x));
-        } catch (e) { throw e; }
+        const { data } = await api.put(`/planos/${id}`, toPlanoPayload(p));
+        setPlanos(prev => prev.map(x => x.id === id ? normPlano(data) : x));
     };
     const removePlano = async (id: string) => {
         try {
@@ -1277,12 +1295,28 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // ── Máquina de estados RF-OT-001 ─────────────────────────────────
     const refreshStock = async () => {
-        const [artigosRes, movRes] = await Promise.all([
+        const [artigosRes, movRes, saRes] = await Promise.all([
             api.get(`/artigos`),
             api.get(`/movimentos-stock`),
+            api.get(`/artigos/stock-armazem`),
         ]);
         setArtigos(artigosRes.data.map(normArtigo));
         setMovimentosStock(movRes.data.map(normMovimento));
+        setStockArmazem(saRes.data.map(normStockArmazem));
+    };
+
+    // #203 — armazéns por código (o que os modais usam) → id (o que a API pede).
+    const transferirStock = async (artigoId: string, armazemOrigem: string, armazemDestino: string, quantidade: number) => {
+        const idDe = (codigo: string) => Number(armazens.find(a => a.codigo === codigo)?.id);
+        await api.post(`/artigos/${artigoId}/transferencia`, {
+            armazemOrigemId: idDe(armazemOrigem),
+            armazemDestinoId: idDe(armazemDestino),
+            quantidade,
+            usuario: currentUserRef.current?.email ?? 'sistema',
+            observacao: `Transferência ${armazemOrigem} → ${armazemDestino}`,
+        });
+        await refreshStock();
+        log('Stock', 'Transferência', `Artigo ${artigoId}: ${quantidade} un ${armazemOrigem} → ${armazemDestino}`);
     };
 
     // RF-OT-003 §3.4 — Registada/Adiada → Programada
@@ -1625,7 +1659,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             planos, addPlano, updatePlano, removePlano,
             ordens, addOrdem, updateOrdem, removeOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, registarConsumoOT, finalizarOT, reprogramarOT,
             armazens, addArmazem, updateArmazem,
-            artigos: artigosComReserva, addArtigo, updateArtigo, adjustExistencia, adjustReservado,
+            artigos: artigosComReserva, addArtigo, updateArtigo, adjustExistencia, adjustReservado, transferirStock,
             stockArmazem, upsertStockArmazem, removeStockArmazem,
             movimentosStock, addMovimento,
             encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao,

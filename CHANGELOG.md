@@ -34,6 +34,43 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 - **CI:** o job "Build Check" passa a construir também o frontend com `CI=true` (os avisos do ESLint falham o build, como no deploy), com cache do npm para os dois `package-lock.json`.
 - Testes: `nomePdf` com caracteres de controlo e reservados. `CI=true npm run build` passa localmente.
 
+### fix(planos): criar e editar planos grava a mão de obra, os artigos e o equipamento (closes #205)
+
+- **Editar:** `planos.service.ts` descartava `maosObra`/`maosDeObra`, `artigos` e `equipInstaladoId` e só atualizava os escalares. O frontend aplicava a alteração no estado local, por isso parecia gravado até recarregar.
+- **Criar também falhava:** o modal enviava `maosDeObra` e ids em texto. O DTO só aceita `maosObra` e, com `forbidNonWhitelisted`, o `POST /planos` dava **400**. Como o `addPlano` era fire-and-forget e engolia o erro, o ecrã mostrava "Plano criado" sem nada gravado (na BD de dev havia 0 planos). O "Repetir plano" enviava ainda o `id` do plano original, que também é recusado.
+- **Backend:** o `update` grava os escalares, o equipamento e as linhas numa transação.
+  - Linhas enviadas substituem as existentes; uma lista vazia apaga-as; omitidas, ficam como estão.
+  - Aceita `maosObra` e `maosDeObra`.
+  - 404 se o plano não existir.
+- **Frontend:**
+  - `toPlanoPayload` monta exatamente o que o DTO aceita: `maosObra`, ids numéricos, sem `id`, sem vazios e sem linhas por preencher;
+  - `addPlano` e `updatePlano` esperam pelo servidor, propagam o erro e guardam o plano devolvido;
+  - a página só fecha o modal e confirma depois de gravar;
+  - "Repetir plano" indica quantos foram criados.
+- Testes:
+  - service de planos (antes sem testes) e `toPlanoPayload`;
+  - e2e contra BD real (criar com linhas, editar linhas e equipamento, editar só a descrição sem perder linhas);
+  - verificado na app: criado um plano com 1 mão de obra e 1 artigo, acrescentada uma 2.ª mão de obra, mantida após recarregar (plano de teste apagado depois).
+
+### fix(stock): a transferência entre armazéns deixa de reduzir a existência total (closes #203)
+
+- **Antes:** o modal de Transferência fazia `adjustExistencia(-qtd)` (a existência total descia), mudava o `codigoArmazem` do artigo inteiro e registava o movimento à parte. Também listava os artigos pelo armazém por omissão e mostrava a existência total como se fosse a da origem.
+- **Agora usa o endpoint transacional `POST /artigos/:id/transferencia`** (#37), através de `transferirStock` no contexto:
+  - debita a origem e credita o destino em `stock_armazem`;
+  - regista o movimento;
+  - a existência total e o armazém do artigo não mudam;
+  - no fim, recarrega artigos, stock por armazém e movimentos.
+- **Modal:**
+  - lista só os artigos com stock no armazém de origem e mostra quanto há lá;
+  - assinala e bloqueia quantidades acima desse stock;
+  - espera pela resposta da API e só fecha em sucesso.
+- **Endpoint:** lock na linha de origem; o armazém de destino tem de existir (antes, a FK dava 500); a mensagem de stock insuficiente indica quanto existe.
+- Depende do #204: a transferência trabalha sobre `stock_armazem`, agora preenchido.
+- Testes:
+  - unitário (destino inexistente);
+  - e2e contra BD real: move 3 un ARM-01 → ARM-02 com a existência total igual e o movimento registado; mais do que existe → 400 sem alterações.
+  - Verificado na app: 2 un do artigo `001` de ARM-01 para ARM-02 (total 46 mantido); repostas depois.
+
 ### fix(stock): stock_armazem passa a ser a fonte única de verdade do stock (closes #204)
 
 - **Antes:**

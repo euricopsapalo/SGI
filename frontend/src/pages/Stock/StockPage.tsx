@@ -925,30 +925,46 @@ interface TransferenciaModalProps {
     artigos: Artigo[];
     armazens: Armazem[];
     onClose: () => void;
-    onConfirm: (de: string, para: string, lines: TransfLine[]) => void;
+    onConfirm: (de: string, para: string, lines: TransfLine[]) => Promise<boolean>;
 }
 
 const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, armazens, onClose, onConfirm }) => {
-    const { fmt } = useGlobal();
-    const [armazDe,   setArmazDe]   = useState('ARM-01');
-    const [armazPara, setArmazPara] = useState('ARM-02');
+    const { fmt, stockArmazem } = useGlobal();
+    const ativos = armazens.filter(a => a.ativo);
+    const [armazDe,   setArmazDe]   = useState(ativos[0]?.codigo ?? '');
+    const [armazPara, setArmazPara] = useState(ativos[1]?.codigo ?? '');
     const [lines, setLines]         = useState<TransfLine[]>([]);
+    const [busy, setBusy]           = useState(false);
 
-    const artigoOpts = artigos.filter(a => !a.inativo && a.codigoArmazem === armazDe).map(a => ({
+    // #203 — o que se transfere é o stock do armazém de origem (stock_armazem), não a existência total.
+    const naOrigem = (artigoId: string) =>
+        stockArmazem.find(sa => sa.artigoId === artigoId && sa.armazem.codigo === armazDe)?.quantidade ?? 0;
+
+    const artigoOpts = artigos.filter(a => !a.inativo && naOrigem(a.id) > 0).map(a => ({
         value: a.id, label: a.descricao,
-        sub: `${a.codigo} · Stk: ${fmt(a.existencia)}`,
+        sub: `${a.codigo} · Em ${armazDe}: ${fmt(naOrigem(a.id))}`,
     }));
+
+    const mudarOrigem = (codigo: string) => {
+        setArmazDe(codigo);
+        setLines([]);
+        if (armazPara === codigo) setArmazPara(ativos.find(a => a.codigo !== codigo)?.codigo ?? '');
+    };
+    const excede = (l: TransfLine) => !!l.artigoId && Number(l.qtd) > naOrigem(l.artigoId);
+    const validas = lines.filter(l => l.artigoId && Number(l.qtd) > 0);
+    const podeConfirmar = !busy && !!armazPara && armazPara !== armazDe && validas.length > 0 && !lines.some(excede);
 
     const addLine = () => setLines(ls => [...ls, { artigoId: '', qtd: '1' }]);
     const removeLine = (i: number) => setLines(ls => ls.filter((_, j) => j !== i));
     const setLine = (i: number, field: 'artigoId' | 'qtd', val: string) =>
         setLines(ls => ls.map((l, j) => j === i ? { ...l, [field]: val } : l));
 
-    const handleConfirm = () => {
-        const valid = lines.filter(l => l.artigoId && Number(l.qtd) > 0);
-        if (valid.length === 0) return;
-        onConfirm(armazDe, armazPara, valid);
-        onClose();
+    const handleConfirm = async () => {
+        if (!podeConfirmar) return;
+        setBusy(true);
+        const ok = await onConfirm(armazDe, armazPara, validas);
+        setBusy(false);
+        if (ok) onClose();
     };
 
     return (
@@ -964,7 +980,7 @@ const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, armaze
                     <div className="form-row">
                         <div className="form-group">
                             <label className="form-label req">Armazém de Origem</label>
-                            <select className="form-select" value={armazDe} onChange={e => { setArmazDe(e.target.value); setLines([]); }}>
+                            <select className="form-select" value={armazDe} onChange={e => mudarOrigem(e.target.value)}>
                                 {armazens.filter(a => a.ativo).map(a => <option key={a.id} value={a.codigo}>{a.codigo} — {a.nome}</option>)}
                             </select>
                         </div>
@@ -1002,13 +1018,15 @@ const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, armaze
                                         placeholder="Seleccionar artigo..."
                                     />
                                     {artigo && (
-                                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                                            Disponível: {fmt(artigo.existencia)} un
+                                        <div style={{ fontSize: '0.72rem', color: excede(line) ? 'var(--red,#ef4444)' : 'var(--text-muted)', marginTop: 2 }}>
+                                            {excede(line)
+                                                ? `Só existem ${fmt(naOrigem(artigo.id))} un em ${armazDe}.`
+                                                : `Em ${armazDe}: ${fmt(naOrigem(artigo.id))} un`}
                                         </div>
                                     )}
                                 </div>
                                 <div style={{ width: 100 }}>
-                                    <input type="number" min={1} max={artigo?.existencia ?? 9999}
+                                    <input type="number" min={1} max={artigo ? naOrigem(artigo.id) : undefined} aria-invalid={excede(line)}
                                         className="form-input" style={{ padding: '5px 8px' }}
                                         value={line.qtd} onChange={e => setLine(i, 'qtd', e.target.value)}
                                         placeholder="Qtd" />
@@ -1023,9 +1041,9 @@ const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, armaze
                 <div className="modal-footer">
                     <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
                     <button type="button" className="abtn abtn-primary"
-                        disabled={lines.filter(l => l.artigoId && Number(l.qtd) > 0).length === 0}
+                        disabled={!podeConfirmar}
                         onClick={handleConfirm}>
-                        <Check size={12} /> Confirmar Transferência
+                        <Check size={12} /> {busy ? 'A transferir…' : 'Confirmar Transferência'}
                     </button>
                 </div>
             </div>
@@ -1159,7 +1177,7 @@ const StatsModal: React.FC<{ artigos: Artigo[]; onClose: () => void }> = ({ arti
 type OpState = 'inventario' | 'transferencia' | 'reposicao' | 'devolucao' | 'guia' | 'stats' | null;
 
 const StockPage: React.FC = () => {
-    const { artigos, addArtigo, updateArtigo, adjustExistencia, armazens, addMovimento, currentUser, stockArmazem, fmt, fmtMoney, classesArtigo, familiasArtigo, loadingData } = useGlobal();
+    const { artigos, addArtigo, updateArtigo, adjustExistencia, transferirStock, armazens, addMovimento, currentUser, stockArmazem, fmt, fmtMoney, classesArtigo, familiasArtigo, loadingData } = useGlobal();
 
     // Resolve warehouse code from either a code string or a numeric ID (legacy data)
     const resolveArmazem = (val: string) =>
@@ -1221,15 +1239,22 @@ const StockPage: React.FC = () => {
         showToast(`Inventário actualizado — ${count} artigo(s) ajustado(s).`);
     };
 
-    const handleTransferencia = (de: string, para: string, lines: TransfLine[]) => {
-        const hoje = new Date().toISOString().split('T')[0];
-        lines.forEach(l => {
-            const qtd = Number(l.qtd);
-            adjustExistencia(l.artigoId, -qtd);
-            updateArtigo(l.artigoId, { codigoArmazem: para });
-            addMovimento({ artigoId: l.artigoId, tipo: 'transferencia', quantidade: qtd, armazemId: de, armazemDestinoId: para, usuario: currentUser?.email, observacao: `Transferência ${de} → ${para}`, data: hoje });
-        });
-        showToast(`Transferência ${de} → ${para} registada (${lines.length} artigo(s)).`);
+    // #203 — cada linha é uma transferência atómica no backend (stock_armazem de origem → destino
+    // e o movimento); a existência total não muda e o armazém do artigo também não.
+    const handleTransferencia = async (de: string, para: string, lines: TransfLine[]): Promise<boolean> => {
+        let feitas = 0;
+        for (const l of lines) {
+            try {
+                await transferirStock(l.artigoId, de, para, Number(l.qtd));
+                feitas++;
+            } catch {
+                // o erro (ex.: stock insuficiente) já é mostrado pelo interceptor global (api.ts)
+                if (feitas > 0) notify(`${feitas} de ${lines.length} artigo(s) transferidos antes do erro.`, 'warning');
+                return false;
+            }
+        }
+        showToast(`Transferência ${de} → ${para} registada (${feitas} artigo(s)).`);
+        return true;
     };
 
     const handleSimpleOp = (tipo: SimpleOpType, artigoId: string, quantidade: number) => {
