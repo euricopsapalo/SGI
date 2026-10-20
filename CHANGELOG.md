@@ -4,6 +4,15 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(ci): o build do frontend passa com CI=true e o CI passa a construí-lo (closes #207)
+
+- **Antes:**
+  - `npm run build` com `CI=true` falhava: `no-control-regex` em `utils/imprimirPdf.ts` (a regex `\u0000-\u001f` do `nomePdf`);
+  - o job "Build Check" do CI só construía o backend, por isso a falha passava sem aviso.
+- **`nomePdf`:** os caracteres de controlo (0x00–0x1F) passam a `-` com uma verificação do código do carácter, em vez de regex. O resultado é o mesmo; os reservados (`\ / : * ? " < > |`) continuam por regex.
+- **CI:** o job "Build Check" passa a construir também o frontend com `CI=true` (os avisos do ESLint falham o build, como no deploy), com cache do npm para os dois `package-lock.json`.
+- Testes: `nomePdf` com caracteres de controlo e reservados. `CI=true npm run build` passa localmente.
+
 ### fix(dashboard,relatorios): a faturação passa a vir dos documentos de venda (closes #206)
 
 - **Antes:** o Dashboard (faturas em aberto, faturação emitida e recebida no mês) e os Relatórios (Faturação Mensal, Comissões, Carteira, Ranking, Regiões) liam a tabela antiga `faturas`. Desde o #165 tudo é emitido em `documentos_venda`, por isso mostravam 0 (na BD de dev: `faturas` = 0 linhas, `documentos_venda` = 5).

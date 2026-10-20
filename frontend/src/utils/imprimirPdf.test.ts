@@ -75,6 +75,9 @@ describe('imprimirPdf', () => {
         expect(nomePdf('FT 2026/1')).toBe('FT 2026-1.pdf');
         expect(nomePdf('x.PDF')).toBe('x.pdf');
         expect(nomePdf('  ')).toBe('documento.pdf');
+        // #207 — caracteres de controlo e reservados passam a '-'.
+        expect(nomePdf('a\u0000b\u001fc\td')).toBe('a-b-c-d.pdf');
+        expect(nomePdf('a:b*c?"d<e>f|g\\h')).toBe('a-b-c--d-e-f-g-h.pdf');
         expect(semScripts('<p>a</p><script type="x">b</script><SCRIPT>c</SCRIPT>')).toBe('<p>a</p>');
     });
 });

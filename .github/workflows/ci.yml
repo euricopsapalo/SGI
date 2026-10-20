@@ -78,6 +78,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
       - name: Build backend
         working-directory: backend
+        run: npm ci && npm run build
+      # #207 — o build de produção do frontend; com CI=true os avisos do ESLint
+      # (ex.: no-control-regex) fazem falhar o build, como no deploy.
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          CI: true
         run: npm ci && npm run build

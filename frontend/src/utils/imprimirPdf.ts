@@ -17,7 +17,10 @@ export const semScripts = (html: string) => html.replace(/<script\b[\s\S]*?<\/sc
 
 /** Nome do ficheiro sem caracteres inválidos, sempre `.pdf` (o servidor aplica a mesma regra). */
 export function nomePdf(nome: string): string {
-    const base = nome.replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/\s+/g, ' ').trim();
+    // #207 — os caracteres de controlo (0x00–0x1F) saem por código, não por regex
+    // (`no-control-regex` partia o build com CI=true).
+    const semControlo = Array.from(nome.replace(/\.pdf$/i, ''), c => (c.charCodeAt(0) < 0x20 ? '-' : c)).join('');
+    const base = semControlo.replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
     return `${base || 'documento'}.pdf`;
 }
 
