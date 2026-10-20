@@ -6,14 +6,18 @@ import {
     AlertTriangle, CheckCircle2, Clock, ClipboardList,
     TrendingUp, Users, Package, Wrench, FileText, ShoppingCart,
 } from 'lucide-react';
+import { useResumoFaturacao } from '../../utils/useResumoFaturacao';
+import { faturadoNoMes, recebidoNoMes } from '../../utils/faturacaoResumo';
 
 const DashboardPage: React.FC = () => {
-    const { ordens, clientes, tecnicos, artigos, faturas, equipInstalados, encomendas, currentUser, fmtMoney } = useGlobal();
+    const { ordens, clientes, tecnicos, artigos, equipInstalados, encomendas, currentUser, fmtMoney } = useGlobal();
 
     const today = new Date().toISOString().split('T')[0];
     const thisMonth = today.slice(0, 7);
 
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
+    // #206 — faturação a partir dos documentos de venda e das liquidações (não da tabela antiga `faturas`).
+    const { resumo, liquidacoes } = useResumoFaturacao(!isTecnicoCampo);
     const minhasOrdens = isTecnicoCampo
         ? ordens.filter(o => o.responsavel === (currentUser?.tecnicoNome ?? currentUser?.nome))
         : ordens;
@@ -39,7 +43,7 @@ const DashboardPage: React.FC = () => {
     const artigosAbaixo = artigos.filter(a => a.critico && a.existencia <= a.stockSeguranca);
     const semStock      = artigos.filter(a => a.existencia === 0);
     const otAtrasadas   = minhasOrdens.filter(o => (o.estado === 'Programada' || o.estado === 'Confirmada') && o.dataAgendada && o.dataAgendada < today);
-    const fatPendentes  = faturas.filter(f => f.estado === 'Pendente').length;
+    const fatPendentes  = resumo.filter(f => f.emAberto).length;
     const encAbertas    = encomendas.filter(e => e.estado === 'Aberta' || e.estado === 'Parcial').length;
 
     const alertas: { msg: string; tipo: 'error' | 'warning' | 'info' }[] = [
@@ -66,8 +70,8 @@ const DashboardPage: React.FC = () => {
         : tecnicos.filter(t => t.ativo);
     const otHoje = minhasOrdens.filter(o => o.dataAgendada === today);
 
-    const totalFaturado   = faturas.filter(f => f.dataEmissao.startsWith(thisMonth)).reduce((s, f) => s + f.valorTotal, 0);
-    const totalFatPagas   = faturas.filter(f => f.estado === 'Paga' && f.dataEmissao.startsWith(thisMonth)).reduce((s, f) => s + f.valorTotal, 0);
+    const totalFaturado   = faturadoNoMes(resumo, thisMonth);
+    const totalFatPagas   = recebidoNoMes(liquidacoes, thisMonth);
     const artigosAtivos   = artigos.filter(a => !a.inativo).length;
 
     // Resumo mini-cards
@@ -79,7 +83,7 @@ const DashboardPage: React.FC = () => {
     ] : [
         { label: 'OT Terminadas',    value: String(terminadasMes),      sub: 'este mês',       icon: <CheckCircle2 size={16} />, color: 'var(--green)' },
         { label: 'Faturação emitida',value: fmtMoney(totalFaturado),    sub: 'este mês',       icon: <FileText size={16} />,     color: 'var(--blue)' },
-        { label: 'Faturação recebida',value: fmtMoney(totalFatPagas),   sub: 'recebido',       icon: <TrendingUp size={16} />,   color: totalFatPagas > 0 ? 'var(--green)' : 'var(--text-muted)' },
+        { label: 'Faturação recebida',value: fmtMoney(totalFatPagas),   sub: 'recebido este mês',       icon: <TrendingUp size={16} />,   color: totalFatPagas > 0 ? 'var(--green)' : 'var(--text-muted)' },
         { label: 'Clientes activos', value: String(clientes.filter(c => c.ativo).length), sub: 'em carteira', icon: <Users size={16} />, color: 'var(--blue)' },
         { label: 'Artigos em stock', value: String(artigosAtivos),      sub: `${semStock.length} sem stock`, icon: <Package size={16} />, color: semStock.length > 0 ? 'var(--orange)' : 'var(--text-muted)' },
         { label: 'Encomendas abertas',value: String(encAbertas),        sub: 'a fornecedores', icon: <ShoppingCart size={16} />, color: encAbertas > 0 ? 'var(--orange)' : 'var(--text-muted)' },

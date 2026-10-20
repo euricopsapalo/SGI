@@ -597,6 +597,8 @@ export class DocumentosVendaService {
             documentoCodigo: documentoConfig?.codigo,
             documentoDescricao: documentoConfig?.descricao,
             tipoFiscal: documentoConfig?.tipoFiscal,
+            // #206 — A_PAGAR (NC) abate nos totais de faturação do Dashboard e dos Relatórios.
+            naturezaDocumento: documentoConfig?.natureza ?? null,
             serieCodigo: serie?.codigo ?? null,
             numeroDocumento: numeroDocumento(documentoConfig?.codigo ?? '', serie?.codigo, d.numero),
             clienteNome: cliente?.nome,
