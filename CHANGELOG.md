@@ -23,6 +23,7 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
   - e2e contra BD real: move 3 un ARM-01 → ARM-02 com a existência total igual e o movimento registado; mais do que existe → 400 sem alterações.
   - Verificado na app: 2 un do artigo `001` de ARM-01 para ARM-02 (total 46 mantido); repostas depois.
 
+
 ### fix(stock): stock_armazem passa a ser a fonte única de verdade do stock (closes #204)
 
 - **Antes:**
