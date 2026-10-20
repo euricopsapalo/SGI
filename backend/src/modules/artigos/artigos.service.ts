@@ -7,6 +7,7 @@ import { StockArmazem } from './stock-armazem.entity';
 import { OtArtigo } from '../ordens-trabalho/ot-artigo.entity';
 import { normalizarRetencao } from './artigo.rules';
 import { erroValidacao } from '../vendas-config/erros';
+import { entradaStock, resyncExistencia, saidaStock } from './stock-armazem.ops';
 
 @Injectable()
 export class ArtigosService {
@@ -55,12 +56,28 @@ export class ArtigosService {
         const a = await this.artigosRepo.findOne({ where: { id } });
         return a ? this.withDisponivel(a) : a;
     }
+    /** #204 — a existência inicial entra no armazém do artigo (`stock_armazem`). */
     async create(body: Partial<Artigo>) {
-        return this.artigosRepo.save(this.artigosRepo.create(this.comRetencaoValida(null, body)));
+        const { existencia, ...resto } = this.comRetencaoValida(null, body) as Partial<Artigo>;
+        const id = await this.dataSource.transaction(async (m) => {
+            const novo = await m.save(Artigo, m.create(Artigo, { ...resto, existencia: 0 }));
+            if (Number(existencia) > 0) await entradaStock(m, novo.id, Number(existencia));
+            return novo.id;
+        });
+        return this.findOne(id);
     }
+    /** #204 — mudar a existência na ficha é um ajuste no armazém do artigo. */
     async update(id: number, body: Partial<Artigo>) {
-        const atual = await this.artigosRepo.findOne({ where: { id }, select: ['id', 'tipo', 'sujeitoRetencao'] });
-        await this.artigosRepo.update(id, this.comRetencaoValida(atual, body));
+        const atual = await this.artigosRepo.findOne({ where: { id }, select: ['id', 'tipo', 'sujeitoRetencao', 'existencia'] });
+        const { existencia, ...patch } = this.comRetencaoValida(atual, body) as Partial<Artigo>;
+        await this.dataSource.transaction(async (m) => {
+            if (Object.keys(patch).length > 0) await m.update(Artigo, id, patch);
+            if (existencia !== undefined && atual) {
+                const delta = Number(existencia) - Number(atual.existencia);
+                if (delta > 0) await entradaStock(m, id, delta);
+                if (delta < 0) await saidaStock(m, id, -delta);
+            }
+        });
         return this.findOne(id);
     }
 
@@ -72,11 +89,14 @@ export class ArtigosService {
     }
     remove(id: number) { return this.artigosRepo.delete(id); }
 
-    async ajusteExistencia(id: number, delta: number) {
+    /** #204 — ajuste no armazém indicado (ou no do artigo), via `stock_armazem`. */
+    async ajusteExistencia(id: number, delta: number, armazem?: number | string) {
         const artigo = await this.findOne(id);
         if (!artigo) return null;
-        const novaExistencia = Number(artigo.existencia) + delta;
-        await this.artigosRepo.update(id, { existencia: novaExistencia });
+        await this.dataSource.transaction(async (m) => {
+            if (delta > 0) await entradaStock(m, id, delta, armazem);
+            if (delta < 0) await saidaStock(m, id, -delta, { armazem });
+        });
         return this.findOne(id);
     }
 
@@ -202,8 +222,8 @@ export class ArtigosService {
             });
             await this.stockArmazemRepo.save(entry);
         }
-        // Resync artigo.existencia with the sum of all warehouse quantities
-        await this.resyncExistencia(artigoId);
+        // #204 — a existência é sempre a soma dos armazéns.
+        await resyncExistencia(this.dataSource.manager, artigoId);
         return this.findAllStockArmazem(artigoId).then(r => r.find(s => s.artigo?.id === artigoId && (s.armazem as any)?.id === armazemId) ?? r[0]);
     }
 
@@ -211,15 +231,9 @@ export class ArtigosService {
         const entry = await this.stockArmazemRepo.findOne({ where: { id }, relations: ['artigo'] });
         await this.stockArmazemRepo.delete(id);
         if (entry?.artigo?.id) {
-            await this.resyncExistencia(entry.artigo.id);
+            await resyncExistencia(this.dataSource.manager, entry.artigo.id);
         }
     }
 
-    /** Recalculates artigo.existencia as the sum of all stock_armazem quantities */
-    private async resyncExistencia(artigoId: number) {
-        const all = await this.stockArmazemRepo.find({ where: { artigo: { id: artigoId } } });
-        const total = all.reduce((s, e) => s + Number(e.quantidade), 0);
-        await this.artigosRepo.update(artigoId, { existencia: total });
-    }
 }
 
