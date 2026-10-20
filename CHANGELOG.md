@@ -4,6 +4,18 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(context): as criações esperam pelo servidor e deixam de mostrar sucesso falso (closes #212)
+
+- **Antes:** `addCliente`, `addFornecedor`, `addModelo`, `addArmazem`, `addArtigo`, `addMovimento` e `addEncomenda` devolviam logo um registo provisório com `id: ''` e engoliam o erro (`.catch(() => {})`). As páginas mostravam "registado" e fechavam o modal mesmo quando o servidor recusava.
+- **Agora são `async`:** esperam pela resposta, guardam e devolvem o registo do servidor (com o id real) e propagam o erro, como no padrão do #49. Nenhum registo com `id: ''` entra no estado.
+- **Modais que agora esperam pela resposta:**
+  - artigo (Stock), modelo (Parque) e encomenda (Compras);
+  - em erro, ficam abertos com o motivo e os erros de campo;
+  - o botão Guardar fica desativado enquanto grava.
+- **Inventário, reposição, devolução, receção e "converter em encomenda":** esperam por cada pedido, param no primeiro erro e só confirmam o sucesso no fim. A atomicidade no servidor fica para o #213.
+- **Tabelas do sistema (armazéns e restantes):** a linha nova só é limpa depois de o servidor aceitar.
+- Teste: com o servidor a recusar, as 7 funções rejeitam e o estado não ganha registos sem id; com sucesso, guardam o registo devolvido.
+
 ### feat(deploy): imagem de produção do frontend (build estático + nginx) (closes #208)
 
 - **Antes:** `frontend/Dockerfile` corria `npm start` (servidor de desenvolvimento) e o `docker-compose.prod.yml` não definia o serviço frontend. Em produção ficava o servidor de dev, com bind-mount do código.
