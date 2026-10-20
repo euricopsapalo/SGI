@@ -361,6 +361,27 @@ const normPlano = (p: any): PlanoManutencao => ({
     artigos: (p.artigos ?? []).map((a: any) => ({ artigoId: a.artigoId?.toString() ?? '', quantidade: Number(a.quantidade), preco: Number(a.preco) })),
 });
 
+/**
+ * #205 — Payload que o Create/UpdatePlanoDto aceita: `maosObra` (não `maosDeObra`),
+ * ids numéricos, sem `id` nem strings vazias e sem linhas por preencher. O backend
+ * usa forbidNonWhitelisted, por isso qualquer campo a mais dava 400.
+ */
+export const toPlanoPayload = (p: Partial<PlanoManutencao>) => {
+    const num = (v: unknown) => (v === undefined || v === null || v === '' ? undefined : Number(v));
+    const out: Record<string, unknown> = {
+        equipInstaladoId: num(p.equipInstaladoId),
+        descricao: p.descricao,
+        tipoTrabalhoId: num(p.tipoTrabalhoId),
+        periodicidade: p.periodicidade,
+        previsaoTempo: p.previsaoTempo === undefined ? undefined : Number(p.previsaoTempo) || 0,
+        ativo: p.ativo,
+        maosObra: p.maosDeObra?.filter(m => m.funcaoId).map(m => ({ funcaoId: num(m.funcaoId), custo: Number(m.custo) || 0 })),
+        artigos: p.artigos?.filter(a => a.artigoId).map(a => ({ artigoId: num(a.artigoId), quantidade: Number(a.quantidade) || 1, preco: Number(a.preco) || 0 })),
+    };
+    Object.keys(out).forEach(k => out[k] === undefined && delete out[k]);
+    return out;
+};
+
 /** Mapeia estados legados (modelo de 4 estados) para a máquina de 6 estados. */
 const normEstado = (e: any): OTEstado => {
     switch (e) {
@@ -554,7 +575,7 @@ interface GlobalContextType {
     modelosEquipamento: ModeloEquipamento[]; addModelo: (m: Omit<ModeloEquipamento, 'id'>) => ModeloEquipamento; updateModelo: (id: string, m: Partial<ModeloEquipamento>) => void; removeModelo: (id: string) => Promise<void>;
     equipInstalados: EquipInstalado[]; addEquipInstalado: (e: Omit<EquipInstalado, 'id'>) => Promise<EquipInstalado>; updateEquipInstalado: (id: string, e: Partial<EquipInstalado>) => void; removeEquipInstalado: (id: string) => Promise<void>;
     // Plans
-    planos: PlanoManutencao[]; addPlano: (p: Omit<PlanoManutencao, 'id'>) => PlanoManutencao; updatePlano: (id: string, p: Partial<PlanoManutencao>) => void; removePlano: (id: string) => void;
+    planos: PlanoManutencao[]; addPlano: (p: Omit<PlanoManutencao, 'id'>) => Promise<PlanoManutencao>; updatePlano: (id: string, p: Partial<PlanoManutencao>) => Promise<void>; removePlano: (id: string) => void;
     // Work Orders
     ordens: OrdemTrabalho[]; addOrdem: (o: Omit<OrdemTrabalho, 'id'>) => Promise<OrdemTrabalho>; updateOrdem: (id: string, o: Partial<OrdemTrabalho>) => void; removeOrdem: (id: string) => void;
     agendarOT: (id: string, dataAgendada?: string) => Promise<void>;
@@ -1219,21 +1240,16 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     /* ── Plans ──────────────────────────────────────────────── */
-    const addPlano = (p: Omit<PlanoManutencao, 'id'>): PlanoManutencao => {
-        const placeholder: PlanoManutencao = { ...p, id: '' };
-        api.post(`/planos`, p)
-            .then(({ data }) => {
-                const n = normPlano(data);
-                setPlanos(prev => [...prev, n]);
-            })
-            .catch(() => {});
-        return placeholder;
+    // #205 — espera pelo servidor, propaga o erro e guarda o plano devolvido (padrão #49).
+    const addPlano = async (p: Omit<PlanoManutencao, 'id'>): Promise<PlanoManutencao> => {
+        const { data } = await api.post(`/planos`, toPlanoPayload(p));
+        const n = normPlano(await api.get(`/planos/${data.id}`).then(r => r.data).catch(() => data));
+        setPlanos(prev => [...prev, n]);
+        return n;
     };
     const updatePlano = async (id: string, p: Partial<PlanoManutencao>) => {
-        try {
-            await api.put(`/planos/${id}`, p);
-            setPlanos(prev => prev.map(x => x.id === id ? { ...x, ...p } : x));
-        } catch (e) { throw e; }
+        const { data } = await api.put(`/planos/${id}`, toPlanoPayload(p));
+        setPlanos(prev => prev.map(x => x.id === id ? normPlano(data) : x));
     };
     const removePlano = async (id: string) => {
         try {
