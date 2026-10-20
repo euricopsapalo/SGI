@@ -11,6 +11,22 @@ import { EncomendaLinha } from '../src/modules/encomendas/encomenda-linha.entity
 import { Rececao, RececaoItem } from '../src/modules/encomendas/rececao.entity';
 import { Artigo } from '../src/modules/artigos/artigo.entity';
 
+// #204 — o stock passa por stock-armazem.ops; aqui é simulado sobre o mesmo
+// artigoStore em memória (pelo artigoRepo.update, para a falha simulada e o rollback).
+const mockArtigos: { get?: (id: number) => any; update?: (id: number, patch: any) => Promise<any> } = {};
+jest.mock('../src/modules/artigos/stock-armazem.ops', () => ({
+    entradaStock: async (_m: any, id: number, qtd: number) => {
+        const a = mockArtigos.get!(id);
+        await mockArtigos.update!(id, { existencia: Number(a.existencia) + qtd });
+    },
+    saidaStock: async (_m: any, id: number, qtd: number) => {
+        const a = mockArtigos.get!(id);
+        const sai = Math.min(qtd, Number(a.existencia));
+        await mockArtigos.update!(id, { existencia: Number(a.existencia) - sai });
+        return sai;
+    },
+}));
+
 /**
  * E2E — fluxo de compras/encomendas (issues #39, #37):
  * criar → receção parcial (Parcial) → receção completa (Recebida), com atualização
@@ -70,6 +86,9 @@ describe('Encomendas E2E — receção transacional (criar → parcial → compl
             },
         };
 
+        mockArtigos.get = (id: number) => artigoStore[id];
+        mockArtigos.update = (id: number, patch: any) => artigoRepo.update(id, patch);
+
         // Mapa entidade → repo, partilhado entre injeção directa e manager transacional
         const repoFor = (E: any) => {
             if (E === Encomenda) return encomendaRepo;
@@ -86,7 +105,11 @@ describe('Encomendas E2E — receção transacional (criar → parcial → compl
                 const snapLinhas = Object.fromEntries(Object.entries(linhaStore).map(([k, v]: any) => [k, v.qtdRecebida]));
                 const snapArtigos = Object.fromEntries(Object.entries(artigoStore).map(([k, v]: any) => [k, { e: v.existencia, s: v.stockEncomendado }]));
                 const snapEnc = Object.fromEntries(Object.entries(encStore).map(([k, v]: any) => [k, { estado: v.estado, recLen: v.rececoes.length }]));
-                const manager = { getRepository: (E: any) => repoFor(E) };
+                const manager = {
+                    getRepository: (E: any) => repoFor(E),
+                    findOne: (E: any, opts: any) => (repoFor(E) as any).findOne(opts),
+                    update: (E: any, id: any, patch: any) => (repoFor(E) as any).update(id, patch),
+                };
                 try {
                     return await fn(manager);
                 } catch (err) {

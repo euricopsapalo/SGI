@@ -34,6 +34,31 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 - **CI:** o job "Build Check" passa a construir também o frontend com `CI=true` (os avisos do ESLint falham o build, como no deploy), com cache do npm para os dois `package-lock.json`.
 - Testes: `nomePdf` com caracteres de controlo e reservados. `CI=true npm run build` passa localmente.
 
+### fix(stock): stock_armazem passa a ser a fonte única de verdade do stock (closes #204)
+
+- **Antes:**
+  - `artigos.existencia` era alterada diretamente por vários caminhos (ajuste, receção e anulação de encomendas, compras diretas, VNC de devolução, consumo de OT), sem tocar em `stock_armazem`;
+  - mas `upsertStockArmazem` e `removeStockArmazem` recalculavam a existência como Σ `stock_armazem` e apagavam esses movimentos;
+  - na BD de dev, o artigo `001` tinha existência 46 e nenhuma linha por armazém: o primeiro upsert pô-lo-ia a 0.
+- **Helper `stock-armazem.ops`** (`entradaStock` / `saidaStock` / `resyncExistencia`), usado com o `EntityManager` da transação de cada operação:
+  - a entrada vai para o armazém indicado (id ou código) ou para o armazém do artigo;
+  - a saída tira do armazém indicado ou, sem armazém, primeiro do armazém do artigo e depois dos restantes;
+  - sem stock suficiente → **422** com a explicação (antes era 500, por violação do CHECK);
+  - `existencia` é sempre recalculada como Σ `stock_armazem`.
+- **Caminhos migrados:**
+  - ajuste (`PUT /artigos/:id/ajuste`, com `armazem` opcional);
+  - existência inicial ao criar o artigo e alteração da existência na ficha;
+  - receção de encomenda, no armazém de destino;
+  - anulação de receção, que passa a ser transacional e sai do armazém da receção;
+  - compras diretas VFA/VFR;
+  - validação de VNC de devolução, com os movimentos na mesma transação;
+  - baixa do consumo no fecho da OT.
+- **Migração `StockArmazemFonteUnica`** (só dados): a existência que não estava em nenhum armazém passa para o armazém do artigo. Depois, `existencia` = Σ armazéns.
+- Testes:
+  - helper com um `EntityManager` em memória (armazém do artigo, outros armazéns, 422, `limitarAoExistente`);
+  - services de artigos, encomendas e faturas de fornecedor;
+  - e2e contra BD real, incluindo a invariante `existencia = Σ stock_armazem` em todos os artigos.
+
 ### fix(stock): o stock reservado deixa de ser recalculado no frontend (closes #202)
 
 - **Antes:** o `GlobalContext` somava as quantidades de **todas** as OTs abertas (Registada, Programada, Adiada e Confirmada) e sobrepunha esse valor ao `stock_reservado` do backend. Mas o backend (RF-OT-004) só reserva na **confirmação**, por isso Stock, Encomendas e Dashboard mostravam disponível e ruptura errados. Ex.: na BD de dev, o artigo `001` tem 0 reservado, mas o ecrã mostrava 1 reservado e 45 disponíveis em vez de 46.
