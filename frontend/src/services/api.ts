@@ -1,7 +1,9 @@
 import axios from 'axios';
 import { showToast, extractErrorMessage } from '../utils/errorHandler';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+// #208 — vazio ('') = mesma origem (`/api`), como na imagem de produção, em que o
+// nginx serve o frontend e faz proxy de /api para o backend. Sem a variável: dev.
+const API_URL = process.env.REACT_APP_API_URL ?? 'http://localhost:3001';
 
 const api = axios.create({
     baseURL: `${API_URL}/api`,

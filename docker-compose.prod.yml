@@ -1,8 +1,12 @@
 # #53 — Override de PRODUÇÃO: segredos via Docker secrets (montados em /run/secrets/*)
 # em vez de variáveis de ambiente do processo.
 #
-# Uso (Docker Swarm):
-#   docker stack deploy -c docker-compose.yml -c docker-compose.prod.yml sgi
+# Uso (Docker Swarm) — #208: os `!override`/`!reset` abaixo exigem resolver o merge
+# com o Docker Compose (≥ 2.24) antes do deploy; o `stack deploy` não constrói imagens:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml config > sgi-stack.yml
+#   docker stack deploy -c sgi-stack.yml sgi
+# (Sem Swarm: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`.)
 #
 # Os segredos são `external: true` — têm de ser criados ANTES do deploy:
 #   printf '%s' "$(openssl rand -hex 32)" | docker secret create sgi_jwt_secret -
@@ -49,12 +53,28 @@ services:
       MAIL_FROM: '"SGI — Aquatex" <${MAIL_USER:-noreply@aquatex.ao}>'
       # #47 — fotos/assinaturas persistem num volume nomeado (não no filesystem efémero).
       UPLOADS_DIR: /app/uploads
-    volumes:
+    # #208 — `!override` substitui os volumes de dev (bind-mount ./backend:/app e
+    # node_modules), que o Compose juntaria aos de produção em vez de os trocar.
+    volumes: !override
       - sgi_uploads:/app/uploads
     secrets:
       - sgi_db_password
       - sgi_jwt_secret
       - sgi_mail_pass
+
+  # #208 — Frontend de produção: build estático servido por nginx (Dockerfile.prod),
+  # que faz proxy de /api para o backend na mesma origem. Substitui o servidor de
+  # desenvolvimento (`npm start`, hot-reload, bind-mount) do docker-compose.yml.
+  frontend:
+    image: ${SGI_FRONTEND_IMAGE:-sgi-frontend:latest}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    environment: !reset {}
+    volumes: !reset []
+    ports: !override
+      - "${SGI_HTTP_PORT:-80}:80"
+    mem_limit: 256m
 
 volumes:
   sgi_uploads:

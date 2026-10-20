@@ -4,6 +4,28 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(deploy): imagem de produção do frontend (build estático + nginx) (closes #208)
+
+- **Antes:** `frontend/Dockerfile` corria `npm start` (servidor de desenvolvimento) e o `docker-compose.prod.yml` não definia o serviço frontend. Em produção ficava o servidor de dev, com bind-mount do código.
+- **`frontend/Dockerfile.prod`** (multi-stage): `npm ci` + `npm run build` com `CI=true` → nginx 1.27-alpine (cerca de 76 MB).
+- **`frontend/nginx.conf`:**
+  - serve a SPA, com fallback das rotas para o `index.html`;
+  - faz proxy de `/api` para o backend (mesma origem, sem CORS);
+  - cache longa em `/static` e `no-cache` no `index.html`;
+  - gzip e `client_max_body_size 60m` para os anexos das OTs.
+- **`api.ts`:** `REACT_APP_API_URL` vazio passa a significar a mesma origem (`/api`), com `??` em vez de `||`. Em dev nada muda.
+- **`docker-compose.prod.yml`:**
+  - novo serviço `frontend` com a imagem de produção na porta 80, sem os volumes e o ambiente de dev (`!reset`/`!override`);
+  - o backend deixa também de herdar o bind-mount `./backend:/app` de dev. O Compose juntava os volumes de dev aos de produção em vez de os substituir.
+- O procedimento de deploy (build → `compose config` → `stack deploy`) está em `docs/producao-frontend.md`.
+- Verificado com a imagem real na rede do compose:
+  - SPA e rota direta → 200;
+  - `/api/health` e login pelo proxy → 200;
+  - cabeçalhos de cache corretos;
+  - no browser, todos os pedidos vão para `/api` na mesma origem.
+- Depende do #207: sem ele, o build com `CI=true` falhava.
+
+
 ### fix(ci): o build do frontend passa com CI=true e o CI passa a construí-lo (closes #207)
 
 - **Antes:**
