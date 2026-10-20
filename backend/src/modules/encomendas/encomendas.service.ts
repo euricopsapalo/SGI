@@ -5,6 +5,7 @@ import { Encomenda, EstadoEncomenda } from './encomenda.entity';
 import { EncomendaLinha } from './encomenda-linha.entity';
 import { Rececao, RececaoItem } from './rececao.entity';
 import { Artigo } from '../artigos/artigo.entity';
+import { entradaStock, saidaStock } from '../artigos/stock-armazem.ops';
 
 @Injectable()
 export class EncomendaService {
@@ -149,8 +150,9 @@ export class EncomendaService {
 
                 const artigo = await artigoRepo.findOne({ where: { id: artigoIdNum } });
                 if (artigo) {
+                    // #204 — entra no armazém de destino da receção (stock_armazem).
+                    await entradaStock(manager, artigoIdNum, rec.qtd, armazem);
                     await artigoRepo.update(artigoIdNum, {
-                        existencia: Number(artigo.existencia) + rec.qtd,
                         stockEncomendado: Math.max(0, Number(artigo.stockEncomendado) - rec.qtd),
                     });
                 }
@@ -182,28 +184,32 @@ export class EncomendaService {
         if (!rececao) throw new NotFoundException(`Receção ${rececaoId} não encontrada`);
         if (rececao.estado === 'Anulada') throw new NotFoundException(`Receção ${rececaoId} já se encontra anulada`);
 
-        // 1. Marcar como anulada
-        await this.rececaoRepo.update(rececaoId, { estado: 'Anulada' });
-
-        // 2. Para cada item: subtrair do acumulado, reverter stock
+        // #204 — anulação numa só transação; o stock sai do armazém onde a receção entrou
+        // (no máximo o que lá existe, se entretanto já foi consumido).
         const encomendaId = rececao.encomenda.id;
-        for (const item of rececao.itens) {
-            const artigoIdNum = Number(item.artigoId);
-            const linha = rececao.encomenda.linhas.find((l) => Number(l.artigoId) === artigoIdNum);
+        await this.dataSource.transaction(async (m) => {
+            // 1. Marcar como anulada
+            await m.update(Rececao, rececaoId, { estado: 'Anulada' });
 
-            if (linha) {
-                const novaQtd = Math.max(0, Number(linha.qtdRecebida) - item.qtd);
-                await this.linhaRepo.update(linha.id, { qtdRecebida: novaQtd });
-            }
+            // 2. Para cada item: subtrair do acumulado, reverter stock
+            for (const item of rececao.itens) {
+                const artigoIdNum = Number(item.artigoId);
+                const linha = rececao.encomenda.linhas.find((l) => Number(l.artigoId) === artigoIdNum);
 
-            const artigo = await this.artigoRepo.findOne({ where: { id: artigoIdNum } });
-            if (artigo) {
-                await this.artigoRepo.update(artigoIdNum, {
-                    existencia: Math.max(0, Number(artigo.existencia) - item.qtd),
-                    stockEncomendado: Number(artigo.stockEncomendado) + item.qtd,
-                });
+                if (linha) {
+                    const novaQtd = Math.max(0, Number(linha.qtdRecebida) - item.qtd);
+                    await m.update(EncomendaLinha, linha.id, { qtdRecebida: novaQtd });
+                }
+
+                const artigo = await m.findOne(Artigo, { where: { id: artigoIdNum } });
+                if (artigo) {
+                    await saidaStock(m, artigoIdNum, item.qtd, { armazem: rececao.armazem, limitarAoExistente: true });
+                    await m.update(Artigo, artigoIdNum, {
+                        stockEncomendado: Number(artigo.stockEncomendado) + item.qtd,
+                    });
+                }
             }
-        }
+        });
 
         // 3. Recalcular estado da encomenda
         await this.recalcularEstado(encomendaId);

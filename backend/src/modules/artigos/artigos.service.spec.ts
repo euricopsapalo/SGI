@@ -6,6 +6,14 @@ import { ArtigosService } from './artigos.service';
 import { Artigo } from './artigo.entity';
 import { MovimentoStock } from './movimento-stock.entity';
 import { StockArmazem } from './stock-armazem.entity';
+import { entradaStock, resyncExistencia, saidaStock } from './stock-armazem.ops';
+
+// #204 — os movimentos de stock passam por stock-armazem.ops (testado à parte).
+jest.mock('./stock-armazem.ops', () => ({
+    entradaStock: jest.fn(async () => 0),
+    saidaStock: jest.fn(async () => 0),
+    resyncExistencia: jest.fn(async () => 0),
+}));
 
 /** Unit — ArtigosService (issue #38, cobertura ≥80%). */
 describe('ArtigosService', () => {
@@ -13,8 +21,11 @@ describe('ArtigosService', () => {
     let artigosRepo: any;
     let movimentosRepo: any;
     let stockArmazemRepo: any;
+    let manager: any;
+    let dataSource: any;
 
     beforeEach(async () => {
+        jest.clearAllMocks();
         artigosRepo = {
             find: jest.fn(async () => [{ id: 1 }]),
             findOne: jest.fn(async ({ where }: any) => ({ id: where.id, existencia: 10, stockReservado: 2, stockEncomendado: 5 })),
@@ -38,7 +49,12 @@ describe('ArtigosService', () => {
             delete: jest.fn(async () => ({ affected: 1 })),
         };
         // RF-OT-004 (#57) — o service passou a injetar DataSource (filtro ?paraReposicao).
-        const dataSource = { getRepository: jest.fn() };
+        manager = {
+            create: jest.fn((_e: any, v: any) => ({ ...v })),
+            save: jest.fn(async (_e: any, v: any) => ({ ...v, id: 1 })),
+            update: jest.fn(async () => ({ affected: 1 })),
+        };
+        dataSource = { getRepository: jest.fn(), transaction: jest.fn(async (cb: any) => cb(manager)), manager };
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 ArtigosService,
@@ -58,8 +74,8 @@ describe('ArtigosService', () => {
         await service.update(1, { descricao: 'x' } as any);
         await service.remove(1);
         expect(artigosRepo.find).toHaveBeenCalled();
-        expect(artigosRepo.save).toHaveBeenCalled();
-        expect(artigosRepo.update).toHaveBeenCalledWith(1, { descricao: 'x' });
+        expect(manager.save).toHaveBeenCalledWith(Artigo, expect.objectContaining({ codigo: 'A1', existencia: 0 }));
+        expect(manager.update).toHaveBeenCalledWith(Artigo, 1, { descricao: 'x' });
         expect(artigosRepo.delete).toHaveBeenCalledWith(1);
     });
 
@@ -69,12 +85,34 @@ describe('ArtigosService', () => {
         });
         artigosRepo.findOne.mockResolvedValueOnce({ id: 1, tipo: 'SERVICO', sujeitoRetencao: true });
         await service.update(1, { tipo: 'PRODUTO' } as any);
-        expect(artigosRepo.update).toHaveBeenCalledWith(1, { tipo: 'PRODUTO', sujeitoRetencao: false });
+        expect(manager.update).toHaveBeenCalledWith(Artigo, 1, { tipo: 'PRODUTO', sujeitoRetencao: false });
     });
 
-    it('ajusteExistencia soma o delta à existência', async () => {
+    it('#204 — ajusteExistencia positivo é uma entrada no armazém (indicado ou do artigo)', async () => {
         await service.ajusteExistencia(1, 5);
-        expect(artigosRepo.update).toHaveBeenCalledWith(1, { existencia: 15 });
+        expect(entradaStock).toHaveBeenCalledWith(manager, 1, 5, undefined);
+        await service.ajusteExistencia(1, 2, 'ARM-02');
+        expect(entradaStock).toHaveBeenCalledWith(manager, 1, 2, 'ARM-02');
+        expect(artigosRepo.update).not.toHaveBeenCalledWith(1, expect.objectContaining({ existencia: expect.anything() }));
+    });
+
+    it('#204 — ajusteExistencia negativo é uma saída', async () => {
+        await service.ajusteExistencia(1, -3, 'ARM-01');
+        expect(saidaStock).toHaveBeenCalledWith(manager, 1, 3, { armazem: 'ARM-01' });
+    });
+
+    it('#204 — a existência inicial entra no armazém do artigo', async () => {
+        await service.create({ codigo: 'A2', existencia: 7 } as any);
+        expect(manager.save).toHaveBeenCalledWith(Artigo, expect.objectContaining({ existencia: 0 }));
+        expect(entradaStock).toHaveBeenCalledWith(manager, 1, 7);
+    });
+
+    it('#204 — mudar a existência na ficha é um ajuste pela diferença', async () => {
+        await service.update(1, { existencia: 12 } as any);   // atual 10
+        expect(entradaStock).toHaveBeenCalledWith(manager, 1, 2);
+        await service.update(1, { existencia: 8 } as any);
+        expect(saidaStock).toHaveBeenCalledWith(manager, 1, 2);
+        expect(manager.update).not.toHaveBeenCalledWith(Artigo, 1, expect.objectContaining({ existencia: expect.anything() }));
     });
 
     it('ajusteExistencia devolve null se o artigo não existe', async () => {
@@ -116,8 +154,7 @@ describe('ArtigosService', () => {
         stockArmazemRepo.find.mockResolvedValue([{ quantidade: 4 }, { quantidade: 6 }]);
         await service.upsertStockArmazem(1, 2, 4, 1);
         expect(stockArmazemRepo.create).toHaveBeenCalled();
-        // resync: soma 4+6 = 10
-        expect(artigosRepo.update).toHaveBeenCalledWith(1, { existencia: 10 });
+        expect(resyncExistencia).toHaveBeenCalledWith(manager, 1);
     });
 
     it('upsertStockArmazem atualiza linha existente', async () => {
@@ -132,7 +169,7 @@ describe('ArtigosService', () => {
         stockArmazemRepo.find.mockResolvedValue([{ quantidade: 3 }]);
         await service.removeStockArmazem(5);
         expect(stockArmazemRepo.delete).toHaveBeenCalledWith(5);
-        expect(artigosRepo.update).toHaveBeenCalledWith(1, { existencia: 3 });
+        expect(resyncExistencia).toHaveBeenCalledWith(manager, 1);
     });
 
     it('findAllMovimentos / findOneMovimento / removeMovimento delegam no repo', async () => {
