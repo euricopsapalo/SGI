@@ -19,6 +19,17 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
   - o Dashboard mostra 102 600,00 Kz faturado e 102 600,00 Kz recebido em outubro (igual ao SQL: 3 × 51 300 − NC 51 300);
   - a Faturação Mensal mostra setembro 51 300 e outubro 102 600, com 153 900 no total.
 
+### fix(stock): o stock reservado deixa de ser recalculado no frontend (closes #202)
+
+- **Antes:** o `GlobalContext` somava as quantidades de **todas** as OTs abertas (Registada, Programada, Adiada e Confirmada) e sobrepunha esse valor ao `stock_reservado` do backend. Mas o backend (RF-OT-004) só reserva na **confirmação**, por isso Stock, Encomendas e Dashboard mostravam disponível e ruptura errados. Ex.: na BD de dev, o artigo `001` tem 0 reservado, mas o ecrã mostrava 1 reservado e 45 disponíveis em vez de 46.
+- **Agora usa o `stockReservado` do backend.** O disponível (`existencia − reservado`, nunca negativo) e a ruptura (`disponível + encomendado < segurança`) são calculados em `comDisponibilidade`.
+- A lista de artigos é recarregada quando o reservado muda no backend:
+  - ao confirmar uma OT;
+  - ao adiar uma OT;
+  - ao editar os artigos de uma OT (#200);
+  - o fecho da OT já a recarregava.
+- Testes: `comDisponibilidade` (disponível, nunca negativo, ruptura). Verificado na app: o artigo `001` mostra 0 reservado e 46 disponíveis.
+
 ### fix(tecnicos): eliminar um técnico deixa de dar erro 500 (closes #201)
 
 - **Antes:** o `DELETE /tecnicos/:id` contava as OTs do técnico por `ordens_trabalho.responsavel`, uma coluna removida no #76. Qualquer eliminação dava 500.
