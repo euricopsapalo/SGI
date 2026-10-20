@@ -568,6 +568,8 @@ interface GlobalContextType {
     armazens: Armazem[]; addArmazem: (a: Omit<Armazem, 'id'>) => Armazem; updateArmazem: (id: string, a: Partial<Armazem>) => void;
     // Stock
     artigos: Artigo[]; addArtigo: (a: Omit<Artigo, 'id'>) => Artigo; updateArtigo: (id: string, a: Partial<Artigo>) => void; adjustExistencia: (id: string, delta: number) => void; adjustReservado: (id: string, delta: number) => void;
+    /** #203 — transferência atómica entre armazéns (POST /artigos/:id/transferencia); a existência total não muda. */
+    transferirStock: (artigoId: string, armazemOrigem: string, armazemDestino: string, quantidade: number) => Promise<void>;
     stockArmazem: StockArmazem[]; upsertStockArmazem: (artigoId: string, armazemId: string, quantidade: number, stockMinimo: number) => Promise<void>; removeStockArmazem: (saId: string) => Promise<void>;
     movimentosStock: MovimentoStock[]; addMovimento: (m: Omit<MovimentoStock, 'id'>) => MovimentoStock;
     // Purchases
@@ -1277,12 +1279,28 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // ── Máquina de estados RF-OT-001 ─────────────────────────────────
     const refreshStock = async () => {
-        const [artigosRes, movRes] = await Promise.all([
+        const [artigosRes, movRes, saRes] = await Promise.all([
             api.get(`/artigos`),
             api.get(`/movimentos-stock`),
+            api.get(`/artigos/stock-armazem`),
         ]);
         setArtigos(artigosRes.data.map(normArtigo));
         setMovimentosStock(movRes.data.map(normMovimento));
+        setStockArmazem(saRes.data.map(normStockArmazem));
+    };
+
+    // #203 — armazéns por código (o que os modais usam) → id (o que a API pede).
+    const transferirStock = async (artigoId: string, armazemOrigem: string, armazemDestino: string, quantidade: number) => {
+        const idDe = (codigo: string) => Number(armazens.find(a => a.codigo === codigo)?.id);
+        await api.post(`/artigos/${artigoId}/transferencia`, {
+            armazemOrigemId: idDe(armazemOrigem),
+            armazemDestinoId: idDe(armazemDestino),
+            quantidade,
+            usuario: currentUserRef.current?.email ?? 'sistema',
+            observacao: `Transferência ${armazemOrigem} → ${armazemDestino}`,
+        });
+        await refreshStock();
+        log('Stock', 'Transferência', `Artigo ${artigoId}: ${quantidade} un ${armazemOrigem} → ${armazemDestino}`);
     };
 
     // RF-OT-003 §3.4 — Registada/Adiada → Programada
@@ -1625,7 +1643,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             planos, addPlano, updatePlano, removePlano,
             ordens, addOrdem, updateOrdem, removeOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, registarConsumoOT, finalizarOT, reprogramarOT,
             armazens, addArmazem, updateArmazem,
-            artigos: artigosComReserva, addArtigo, updateArtigo, adjustExistencia, adjustReservado,
+            artigos: artigosComReserva, addArtigo, updateArtigo, adjustExistencia, adjustReservado, transferirStock,
             stockArmazem, upsertStockArmazem, removeStockArmazem,
             movimentosStock, addMovimento,
             encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao,
