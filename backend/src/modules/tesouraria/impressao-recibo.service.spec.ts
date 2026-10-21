@@ -39,6 +39,20 @@ describe('ImpressaoReciboService', () => {
         expect(r.totais).toEqual({ valorDocumento: 138400, valorAtribuido: 78400, desconto: 10000, retencao: 0, pendente: 0 });
     });
 
+    it('#179 — coluna Retenção: o valor do documento é o total e a retenção a do documento', async () => {
+        ds.query.mockImplementation(async (sql: string) => {
+            if (sql.startsWith('UPDATE')) return [[{ impressoes: 1 }], 1];
+            if (sql.includes('FROM liquidacoes_linhas ll')) return [{ id: 5, numeroDocumento: 'FT 2026/1', valorDocumento: 114000, retencao: 3900, prestacao: 1 }];
+            return [];
+        });
+        liq.linhas = [{ id: 5, movimentoCcId: 1, valorPago: '110100.00', desconto: '0', pendenteAnterior: '110100.00' }];
+        const r: any = await svc.imprimir(9);
+        expect(r.documentos[0]).toMatchObject({ valorDocumento: 114000, retencao: 3900, valorAtribuido: 110100, pendente: 0 });
+        expect(r.totais).toMatchObject({ retencao: 3900 });
+        const sql = ds.query.mock.calls.map((c: any[]) => c[0]).find((q: string) => q.includes('FROM liquidacoes_linhas ll'));
+        expect(sql).toMatch(/COALESCE\(d\.retencao_valor, 0\)/);
+    });
+
     it('sem cópia gravada usa os dados actuais; sem banco usa a descrição da conta; 404', async () => {
         liq.snapshotCliente = null; liq.snapshotEmpresa = null; liq.contaBancaria = { descricao: 'Caixa' };
         mcs = [{ valor: '10', modoPagamento: null }];

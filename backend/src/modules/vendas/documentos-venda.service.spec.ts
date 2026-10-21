@@ -6,6 +6,7 @@ import { DocumentoConfig } from '../vendas-config/documento-config.entity';
 import { Serie } from '../vendas-config/serie.entity';
 import { OrdemTrabalho } from '../ordens-trabalho/ordem-trabalho.entity';
 import { OtArtigo } from '../ordens-trabalho/ot-artigo.entity';
+import { Artigo } from '../artigos/artigo.entity';
 import { Cliente } from '../clientes/cliente.entity';
 import { Fatura } from '../faturas/fatura.entity';
 import { anoLocal } from '../vendas-config/series.rules';
@@ -112,7 +113,7 @@ describe('DocumentosVendaService', () => {
         dataSource = {
             query: jest.fn(async () => []),
             manager: m,
-            getRepository: jest.fn(() => ({ find: jest.fn(async () => st.otArtigos) })),
+            getRepository: jest.fn(() => ({ find: jest.fn(async () => st.otArtigos), findOne: jest.fn(async () => st.cliente) })),
             transaction: jest.fn(async (cb: any) => cb(m)),
         };
         svc = new DocumentosVendaService(repo, configRepo, otRepo, movRepo, taxaRepo, empresaRepo, sysLogs, dataSource);
@@ -270,6 +271,53 @@ describe('DocumentosVendaService', () => {
             const locks = m.findOne.mock.calls.filter((c: any[]) => c[1]?.lock).map((c: any[]) => c[0]);
             expect(locks).toEqual([DocumentoVenda, Serie, OrdemTrabalho]);
             expect(sysLogs.create).toHaveBeenCalledWith(expect.objectContaining({ acao: 'VENDA_EMITIDA', detalhes: expect.stringMatching(/FT 2026\/1/) }));
+        });
+
+        // ── #179 — retenção na fonte ─────────────────────────────────────
+        describe('retenção na fonte (#179)', () => {
+            const comArtigos = (artigos: any[]) => {
+                const orig = m.find.getMockImplementation();
+                m.find.mockImplementation(async (entity: any, opts?: any) => (entity === Artigo ? artigos : orig(entity, opts)));
+            };
+            const clienteComRetencao = () => {
+                st.cliente = { id: 3, condicaoPagamento: { numDias: 30 }, retencaoAtiva: true, retencaoPercentagem: '6.50', retencaoDescricao: 'Retenção Clientes — Lei 19/14' };
+            };
+
+            it('fatura mista: só o serviço sujeito entra na incidência; o pendente nasce líquido', async () => {
+                clienteComRetencao();
+                comArtigos([{ id: 101, tipo: 'SERVICO', sujeitoRetencao: true }, { id: 102, tipo: 'PRODUTO', sujeitoRetencao: false }]);
+                await svc.emitir(50, { dataHora: agora });
+                expect(m.update).toHaveBeenCalledWith(DocumentoVenda, 50, expect.objectContaining({
+                    total: 114000, retencaoIncidencia: 60000, retencaoPercentagem: 6.5, retencaoValor: 3900,
+                    retencaoDescricao: 'Retenção Clientes — Lei 19/14',
+                }));
+                const mov = m.save.mock.calls.find((c: any[]) => c[0] === MovimentoCc)[1];
+                expect(mov).toMatchObject({ valorOriginal: 110100, valorPendente: 110100 });
+                expect(sysLogs.create).toHaveBeenCalledWith(expect.objectContaining({ detalhes: expect.stringMatching(/retenção 6\.5%: 3900 AOA; a receber 110100/) }));
+            });
+
+            it('só produtos, ou serviço sem retenção habilitada: não há retenção mesmo com o cliente configurado', async () => {
+                clienteComRetencao();
+                comArtigos([{ id: 101, tipo: 'SERVICO', sujeitoRetencao: false }, { id: 102, tipo: 'PRODUTO', sujeitoRetencao: false }]);
+                await svc.emitir(50, { dataHora: agora });
+                expect(m.update).toHaveBeenCalledWith(DocumentoVenda, 50, expect.objectContaining({ retencaoValor: 0, retencaoIncidencia: 0 }));
+                expect(m.save.mock.calls.find((c: any[]) => c[0] === MovimentoCc)[1]).toMatchObject({ valorOriginal: 114000 });
+            });
+
+            it('cliente sem retenção: nada muda', async () => {
+                comArtigos([{ id: 101, tipo: 'SERVICO', sujeitoRetencao: true }]);
+                await svc.emitir(50, { dataHora: agora });
+                expect(m.update).toHaveBeenCalledWith(DocumentoVenda, 50, expect.objectContaining({ retencaoValor: 0, retencaoPercentagem: 0, retencaoDescricao: null }));
+                expect(m.save.mock.calls.find((c: any[]) => c[0] === MovimentoCc)[1]).toMatchObject({ valorOriginal: 114000, valorPendente: 114000 });
+            });
+
+            it('o rascunho também calcula a retenção (com o desconto global)', async () => {
+                clienteComRetencao();
+                comArtigos([{ id: 101, tipo: 'SERVICO', sujeitoRetencao: true }, { id: 102, tipo: 'PRODUTO', sujeitoRetencao: false }]);
+                await svc.update(50, { descontoGlobal: 10 } as any);
+                // incidência = 60 000 × 0,9 = 54 000; 6,5 % = 3 510
+                expect(m.update).toHaveBeenCalledWith(DocumentoVenda, 50, expect.objectContaining({ retencaoIncidencia: 54000, retencaoValor: 3510 }));
+            });
         });
 
         it('sem data-hora usa a data do sistema quando a série o sugere', async () => {

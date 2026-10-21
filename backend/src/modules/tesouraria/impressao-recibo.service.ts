@@ -34,7 +34,9 @@ export class ImpressaoReciboService {
             // Documento de origem de cada linha e a prestação: quantas liquidações (até esta, inclusive) já tocaram o pendente.
             this.dataSource.query(`
                 SELECT ll.id, (dc.codigo || ' ' || s.codigo || '/' || d.numero) AS "numeroDocumento",
-                       m.valor_original::float AS "valorDocumento",
+                       -- #179 — valor do documento (total) e a retenção; o pendente em CC já vem líquido.
+                       COALESCE(d.total, m.valor_original)::float AS "valorDocumento",
+                       COALESCE(d.retencao_valor, 0)::float AS retencao,
                        (SELECT count(*)::int FROM liquidacoes_linhas x JOIN liquidacoes lx ON lx.id = x.liquidacao_id
                          WHERE x.movimento_cc_id = ll.movimento_cc_id
                            AND (lx.data_hora, lx.id) <= (l.data_hora, l.id)) AS prestacao
@@ -57,7 +59,7 @@ export class ImpressaoReciboService {
                 valorDocumento: o?.valorDocumento ?? 0,
                 valorAtribuido: pago,
                 desconto,
-                retencao: 0, // #179
+                retencao: o?.retencao ?? 0,
                 pendente: round2(Number(l.pendenteAnterior) - pago - desconto),
             };
         });

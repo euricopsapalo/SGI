@@ -1,6 +1,6 @@
 import {
     calcularTotais, codigoHash, dataLocal, dataVencimento, EstadoFaturacao, estadoFaturacao, hashDocumento, naturezaMovimento,
-    numeroDocumento, round2, classificacaoLinha,
+    numeroDocumento, round2, classificacaoLinha, calcularRetencao, linhaComRetencao,
 } from './vendas.rules';
 import { TipoArtigo } from '../artigos/artigo.entity';
 
@@ -111,5 +111,45 @@ describe('#195 — classificacaoLinha', () => {
 
     it('um Produto nunca fica sujeito a retenção, mesmo com dados inconsistentes', () => {
         expect(classificacaoLinha({ tipo: TipoArtigo.PRODUTO, sujeitoRetencao: true })).toEqual({ tipoArtigo: 'PRODUTO', sujeitoRetencao: false });
+    });
+
+    // ── #179 — retenção na fonte (Lei 19/14) ──
+    describe('calcularRetencao (#179)', () => {
+        const S = { tipoArtigo: 'SERVICO', sujeitoRetencao: true };
+        const SN = { tipoArtigo: 'SERVICO', sujeitoRetencao: false };
+        const P = { tipoArtigo: 'PRODUTO', sujeitoRetencao: false };
+        const cliente = { retencaoAtiva: true, retencaoPercentagem: 6.5, retencaoDescricao: 'Retenção Clientes — Lei 19/14' };
+
+        it('critério de aceitação: serviços sujeitos somam 106 951,87 → 6,5 % = 6 951,87', () => {
+            expect(calcularRetencao([S], [106951.87], 0, cliente)).toEqual({
+                incidencia: 106951.87, percentagem: 6.5, valor: 6951.87, descricao: 'Retenção Clientes — Lei 19/14',
+            });
+        });
+
+        it.each([
+            ['Produto', P, true, 0],
+            ['Serviço sem retenção habilitada', SN, true, 0],
+            ['Serviço sujeito, cliente sem retenção', S, false, 0],
+            ['Serviço sujeito, cliente com retenção', S, true, 65],
+        ])('%s → %p', (_n, linha, ativa, valor) => {
+            const r = calcularRetencao([linha], [1000], 0, { ...cliente, retencaoAtiva: ativa as boolean });
+            expect(r.valor).toBe(valor);
+        });
+
+        it('fatura mista: só os serviços sujeitos entram; o desconto global reduz a incidência', () => {
+            const r = calcularRetencao([S, P, SN, S], [1000, 5000, 2000, 500], 10, cliente);
+            expect(r.incidencia).toBe(1350);           // (1000 + 500) × 0,9
+            expect(r.valor).toBe(87.75);               // 1350 × 6,5 %
+        });
+
+        it('cliente com retenção activa mas 0 % → sem retenção; sem limiar mínimo para valores pequenos', () => {
+            expect(calcularRetencao([S], [1000], 0, { ...cliente, retencaoPercentagem: 0 }).valor).toBe(0);
+            expect(calcularRetencao([S], [1], 0, cliente).valor).toBe(0.07);
+            expect(calcularRetencao([S], [1000], 0, null)).toEqual({ incidencia: 0, percentagem: 0, valor: 0, descricao: null });
+        });
+
+        it('linhaComRetencao exige Serviço e retenção habilitada', () => {
+            expect([S, SN, P, {}].map(linhaComRetencao)).toEqual([true, false, false, false]);
+        });
     });
 });

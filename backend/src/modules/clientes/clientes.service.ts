@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, ConflictException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Cliente } from './cliente.entity';
+import { erroValidacao } from '../vendas-config/erros';
 
 @Injectable()
 export class ClientesService {
@@ -26,6 +27,13 @@ export class ClientesService {
         const enderecos = body.enderecos ?? [];
         if (!enderecos.length || !enderecos.some((e: any) => e.morada?.trim() && e.cidade?.trim())) {
             throw new BadRequestException('O cliente deve ter pelo menos um endereço com morada e cidade.');
+        }
+        // #179 — retenção activa exige percentagem > 0.
+        if (body.retencaoAtiva === true && body.retencaoPercentagem !== undefined && !(Number(body.retencaoPercentagem) > 0)) {
+            throw erroValidacao({ retencaoPercentagem: 'Com a retenção activa, a percentagem tem de ser superior a zero' });
+        }
+        if (body.retencaoDescricao !== undefined && !String(body.retencaoDescricao).trim()) {
+            throw erroValidacao({ retencaoDescricao: 'Indique a descrição da retenção' });
         }
     }
 

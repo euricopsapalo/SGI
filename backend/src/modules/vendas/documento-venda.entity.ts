@@ -39,6 +39,7 @@ export enum EstadoDocumentoVenda {
 @Check('chk_documentos_venda_numeracao', `("estado" = 'RASCUNHO' AND "numero" IS NULL AND "serie_id" IS NULL) OR ("estado" = 'EMITIDO' AND "numero" IS NOT NULL AND "serie_id" IS NOT NULL AND "data_hora" IS NOT NULL)`)
 @Check('chk_documentos_venda_desconto', `"desconto_global" >= 0 AND "desconto_global" <= 100`)
 @Check('chk_documentos_venda_totais_nn', `"subtotal" >= 0 AND "desconto" >= 0 AND "valor_iva" >= 0 AND "total" >= 0`)
+@Check('chk_documentos_venda_retencao', `"retencao_incidencia" >= 0 AND "retencao_percentagem" >= 0 AND "retencao_percentagem" <= 100 AND "retencao_valor" >= 0 AND "retencao_valor" <= "total"`)
 export class DocumentoVenda {
     @PrimaryGeneratedColumn()
     id: number;
@@ -147,6 +148,23 @@ export class DocumentoVenda {
 
     @Column({ type: 'numeric', precision: 14, scale: 2, default: 0 })
     total: number;
+
+    /**
+     * #179 — Retenção na fonte: base (Σ líquido das linhas de Serviço sujeitas, após
+     * descontos), % e valor do cliente. Calculada no rascunho e fixada na emissão.
+     * O pendente em conta corrente é `total − retencao_valor`.
+     */
+    @Column({ name: 'retencao_incidencia', type: 'numeric', precision: 14, scale: 2, default: 0 })
+    retencaoIncidencia: number;
+
+    @Column({ name: 'retencao_percentagem', type: 'numeric', precision: 5, scale: 2, default: 0 })
+    retencaoPercentagem: number;
+
+    @Column({ name: 'retencao_valor', type: 'numeric', precision: 14, scale: 2, default: 0 })
+    retencaoValor: number;
+
+    @Column({ name: 'retencao_descricao', type: 'varchar', length: 120, nullable: true })
+    retencaoDescricao: string | null;
 
     @Column({ length: 10, default: 'AOA' })
     moeda: string;

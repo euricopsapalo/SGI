@@ -10,7 +10,7 @@ import { useConfirm } from '../../components/useConfirm';
 import { useGlobal, type TipoArtigo } from '../../contexts/GlobalContext';
 import { extractErrorMessage, extractFieldErrors, showToast } from '../../utils/errorHandler';
 import {
-    vendasApi, calcularTotais, paraDataHoraLocal, PERFIS_FATURACAO,
+    vendasApi, calcularTotais, calcularRetencao, linhaComRetencao, paraDataHoraLocal, PERFIS_FATURACAO,
     type DocumentoVenda, type EstadoFaturacao, type OtDisponivel,
 } from '../../services/vendas';
 import { vendasConfigApi, type ContaBancaria, type DocumentoConfig } from '../../services/vendasConfig';
@@ -60,7 +60,11 @@ const eFaturaDeOt = (d: DocumentoConfig) =>
     d.ativo && d.tipoCodigo === 'FINANCEIRO' && d.natureza === 'A_RECEBER'
     && ['FT', 'FR'].includes(d.tipoFiscal ?? '');
 
-const Totais: React.FC<{ t: { subtotal: number; desconto: number; valorIva: number; total: number }; moeda: string; extra?: React.ReactNode }> = ({ t, moeda, extra }) => {
+const Totais: React.FC<{
+    t: { subtotal: number; desconto: number; valorIva: number; total: number }; moeda: string; extra?: React.ReactNode;
+    /** #179 — retenção na fonte: mostra o valor retido e o que o cliente paga. */
+    retencao?: { percentagem: number; valor: number } | null;
+}> = ({ t, moeda, extra, retencao }) => {
     const { fmtMoney } = useGlobal();
     const linha = (label: string, v: number, forte = false) => (
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, fontWeight: forte ? 800 : 500, fontSize: forte ? '0.95rem' : '0.8rem' }}>
@@ -73,6 +77,10 @@ const Totais: React.FC<{ t: { subtotal: number; desconto: number; valorIva: numb
             {t.desconto > 0 && linha('Desconto global', -t.desconto)}
             {linha('IVA', t.valorIva)}
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 4 }}>{linha('Total', t.total, true)}</div>
+            {retencao && retencao.valor > 0 && <>
+                {linha(`Retenção na fonte (${retencao.percentagem}%)`, -retencao.valor)}
+                {linha('A receber do cliente', Math.round((t.total - retencao.valor) * 100) / 100, true)}
+            </>}
             {extra}
         </div>
     );
@@ -155,6 +163,12 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
 
     const incluidas = linhas.filter(l => l.incluida);
     const totais = useMemo(() => calcularTotais(incluidas, descontoGlobal), [incluidas, descontoGlobal]);
+    // #179 — pré-visualização da retenção com a ficha actual do cliente (fixada na emissão).
+    const retencao = useMemo(
+        () => calcularRetencao(incluidas, totais.linhas, descontoGlobal, doc?.clienteRetencao),
+        [incluidas, totais, descontoGlobal, doc?.clienteRetencao],
+    );
+    const clienteComRetencao = !!doc?.clienteRetencao?.ativa && (doc?.clienteRetencao?.percentagem ?? 0) > 0;
     const set = (otArtigoId: number, patch: Partial<LinhaEdit>) =>
         setLinhas(ls => ls.map(l => (l.otArtigoId === otArtigoId ? { ...l, ...patch } : l)));
 
@@ -286,6 +300,11 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
                                         <input className="form-control" value={l.descricao} disabled={ro || !l.incluida} maxLength={300} aria-label={`Descrição da linha ${i + 1}`}
                                             onChange={e => set(l.otArtigoId, { descricao: e.target.value })} />
                                         <EtiquetaTipo tipo={l.tipoArtigo} retencao={l.sujeitoRetencao} />
+                                        {clienteComRetencao && l.incluida && linhaComRetencao(l) && (
+                                            <span title="Entra na incidência da retenção na fonte" style={{ marginLeft: 6, fontSize: '0.66rem', fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: '#FEF3C7', color: '#92400E' }}>
+                                                Retenção {doc.clienteRetencao!.percentagem}%
+                                            </span>
+                                        )}
                                         <FieldError id={`vd-art-${l.otArtigoId}`} message={eArt} />
                                     </td>
                                     <td>
@@ -321,8 +340,14 @@ const EditorRascunho: React.FC<{ id: number; configs: DocumentoConfig[]; podeFat
                         <textarea id="vd-obs" className="form-control" rows={2} value={observacoes} disabled={ro} onChange={e => setObservacoes(e.target.value)} />
                     </div>
                 </div>
-                <Totais t={totais} moeda={doc.moeda} />
+                <Totais t={totais} moeda={doc.moeda} retencao={retencao} />
             </div>
+            {clienteComRetencao && (
+                <div style={{ ...muted, marginTop: 6 }}>
+                    O cliente tem retenção na fonte de {doc.clienteRetencao!.percentagem}% ({doc.clienteRetencao!.descricao ?? 'Lei 19/14'}):
+                    incide só sobre as linhas de Serviço sujeitas a retenção. O pendente em conta corrente nasce já líquido.
+                </div>
+            )}
 
             {emitir && (
                 <div style={{ marginTop: 14, padding: 12, border: '1px solid #BFDBFE', background: '#EFF6FF', borderRadius: 6 }}>
@@ -414,7 +439,9 @@ const DocumentoDetalhe: React.FC<{ id: number; onClose: () => void; onAbrir: (id
                     </tr>
                 ))}</tbody>
             </table>
-            <Totais t={doc} moeda={doc.moeda} extra={doc.valorPendente !== null && (
+            <Totais t={doc} moeda={doc.moeda}
+                retencao={doc.retencaoValor ? { percentagem: doc.retencaoPercentagem ?? 0, valor: doc.retencaoValor } : null}
+                extra={doc.valorPendente !== null && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#E65100', fontWeight: 700 }}>
                     <span>Pendente</span><span style={num}>{fmtMoney(doc.valorPendente, doc.moeda)}</span>
                 </div>

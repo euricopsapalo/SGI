@@ -192,4 +192,45 @@ describe('EstornosVendaService', () => {
                 .rejects.toBeInstanceOf(ConflictException);
         });
     });
+
+    // ── #179 — retenção na fonte no estorno ──
+    describe('retenção na fonte (#179)', () => {
+        beforeEach(() => {
+            // FT: Filtro (serviço sujeito, 60 000) + Membrana (produto, 40 000); 6,5 % × 60 000 = 3 900; pendente líquido 110 100.
+            Object.assign(st.origem, { retencaoIncidencia: '60000.00', retencaoPercentagem: '6.50', retencaoValor: '3900.00', retencaoDescricao: 'Retenção Clientes — Lei 19/14' });
+            st.linhas[0].tipoArtigo = 'SERVICO'; st.linhas[0].sujeitoRetencao = true;
+            st.linhas[1].tipoArtigo = 'PRODUTO'; st.linhas[1].sujeitoRetencao = false;
+            st.mov = { id: 70, natureza: 'D', valorOriginal: '110100.00', valorPendente: '110100.00' };
+        });
+
+        it('NC parcial do serviço: mesma %, e o crédito em CC é o valor líquido', async () => {
+            await svc.estornar(50, pedido(), { id: 9 });
+            // 1 × 30 000 + IVA 14 % = 34 200; retenção 6,5 % × 30 000 = 1 950; líquido 32 250
+            expect(salvo()).toMatchObject({ total: 34200, retencaoIncidencia: 30000, retencaoPercentagem: 6.5, retencaoValor: 1950 });
+            expect(movSalvo()).toMatchObject({ natureza: 'C', valorOriginal: 32250 });
+            expect(m.update).toHaveBeenCalledWith(MovimentoCc, 70, { valorPendente: 77850 });
+        });
+
+        it('NC do produto: sem retenção (o produto não entra na incidência)', async () => {
+            await svc.estornar(50, pedido([{ linhaId: 2, quantidade: 1, motivoEstornoId: 10 }]), { id: 9 });
+            expect(salvo()).toMatchObject({ total: 45600, retencaoValor: 0 });
+            expect(movSalvo()).toMatchObject({ valorOriginal: 45600 });
+        });
+
+        it('NC que fecha a fatura: a retenção é o que falta da retenção da origem (pendente fica a zero)', async () => {
+            m.query.mockImplementation(async (sql: string) => (sql.includes('FROM documentos_venda WHERE documento_origem_id')
+                ? [{ valor: 1950, incidencia: 30000 }]
+                : sql.includes('FROM clientes') ? [{ id: 3, nome: 'Cliente' }] : [{ nome: 'AQUATEX' }]));
+            st.linhas[0].qtdEstornada = '1';
+            st.mov.valorPendente = '77850.00';
+            await svc.estornar(50, pedido([
+                { linhaId: 1, quantidade: 1, motivoEstornoId: 10 },
+                { linhaId: 2, quantidade: 1, motivoEstornoId: 10 },
+            ]), { id: 9 });
+            // 30 000 + 40 000 + IVA = 79 800; retenção = 3 900 − 1 950 = 1 950; líquido 77 850 → pendente 0
+            expect(salvo()).toMatchObject({ total: 79800, retencaoValor: 1950, retencaoIncidencia: 30000 });
+            expect(m.update).toHaveBeenCalledWith(MovimentoCc, 70, { valorPendente: 0 });
+            expect(movSalvo()).toMatchObject({ valorOriginal: 77850, valorPendente: 0 });
+        });
+    });
 });

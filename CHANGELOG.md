@@ -4,6 +4,30 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(vendas): retenção na fonte configurada na ficha do cliente (Lei 19/14) (closes #179)
+
+- **Ficha do cliente** (separador Dados Comerciais): "Retenção na fonte", com a opção de aplicar, a percentagem (6,5 % por omissão) e a descrição impressa na fatura. Com a retenção ativa, a percentagem tem de ser maior que zero.
+- **Regra** (`calcularRetencao`, pura): só há retenção quando a linha é de um Serviço com retenção habilitada (#195) **e** o cliente tem a retenção ativa com % > 0.
+  - A incidência é a soma dos líquidos dessas linhas, depois do desconto de linha e do global.
+  - O valor é a incidência × %, a 2 casas.
+  - Sem limiar mínimo.
+- **Documento de venda:**
+  - o rascunho calcula a retenção com a ficha atual do cliente;
+  - a emissão fixa a incidência, a %, o valor e a descrição no documento, por isso alterar a ficha depois não muda faturas emitidas.
+- **Conta corrente:** o pendente nasce **já líquido** (total − retenção). A Fatura Recibo liquida esse valor.
+- **Estorno (NC/ND):** herda a percentagem da origem, só sobre as linhas sujeitas, e abate o valor líquido. Quando fecha a fatura, a retenção é a que falta, para não ficar pendente nenhum cêntimo de arredondamento.
+- **Impressão e extrato:**
+  - "Quadro de Retenção" na fatura (Entidade, Incidência, %, Valor), com as linhas "Retenção na Fonte" e "Total a Pagar";
+  - coluna Retenção no recibo, com o valor do documento pelo total;
+  - no extrato, o documento aparece pelo total e há uma linha "Retenção" associada.
+- **Editor de rascunho e detalhe:** assinalam as linhas que entram na incidência e mostram a retenção e o valor a receber do cliente.
+- **Migração `RetencaoNaFonte`:** novas colunas em `clientes` e `documentos_venda`, com CHECKs.
+- Testes:
+  - regra (Produto/Serviço × sujeito × cliente, fatura mista, desconto global, critério dos 106 951,87);
+  - emissão com e sem retenção, rascunho, estorno parcial e de fecho, recibo e extrato;
+  - impressão e regra espelhada no frontend;
+  - e2e contra BD real (`vendas-retencao.e2e.spec.ts`).
+
 ### fix(users): o `update` aplica a política de comprimento mínimo de password
 
 - **Antes:** `UsersService.update` gravava o `passwordHash` sem validar a password, ao contrário do `create` e do change-password. Um admin conseguia definir uma password curta a outro utilizador.
