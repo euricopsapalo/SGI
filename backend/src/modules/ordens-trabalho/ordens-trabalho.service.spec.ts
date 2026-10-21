@@ -21,7 +21,7 @@ import { EquipInstalado } from '../parque/equip-instalado.entity';
 import { User } from '../users/user.entity';
 import { ConfiguracaoEmpresa } from '../configuracao/configuracao-empresa.entity';
 import { PlanoManutencao } from '../planos/plano-manutencao.entity';
-import { UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { DocumentoVenda } from '../vendas/documento-venda.entity';
 
 describe('OrdensTrabalhoService (regression #15)', () => {
@@ -413,6 +413,215 @@ describe('OrdensTrabalhoService (regression #15)', () => {
             const ot: any = await service.findOne(1);
             expect(ot.estadoFaturacao).toBe('Pendente');
             expect(ot.documentoVendaNumero).toBe('FT 2026/1');
+        });
+    });
+
+    // ── #223 — cobertura: periódica, validações de criação, aprovação de adiamentos, compat ──
+    describe('cobertura (#223)', () => {
+        const hoje = () => new Date().toISOString().split('T')[0];
+        const futuro = (dias: number) => new Date(Date.now() + dias * 86400000).toISOString().split('T')[0];
+        const logs = () => (service as any).sysLogsMock.create.mock.calls.map((c: any[]) => c[0]);
+        const novaOt = () => managerMock.save.mock.calls.map((c: any[]) => c[c.length - 1]).find((o: any) => o?.geradaDeOtId);
+        const plano = () => module.get(getRepositoryToken(PlanoManutencao));
+        const equip = () => module.get(getRepositoryToken(EquipInstalado));
+        const tecnicos = () => module.get(getRepositoryToken(Tecnico));
+        const users = () => module.get(getRepositoryToken(User));
+        const periodica = (over: any = {}) => ({
+            id: 1, estado: OTEstado.EM_EXECUCAO, tipo: 'periodica', periodicidade: 'Mensal',
+            dataAgendada: '2099-01-10', planoId: 3, equipInstaladoId: 4, descricao: 'Manutenção', artigos: [],
+            maosObra: [{ funcao: 'Técnico', custo: 25000, hora: 2 }], reprogramacoes: [], ...over,
+        });
+
+        describe('finalizar periódica → próxima OT (RF-OT-006 §3.2)', () => {
+            it('gera a seguinte, Programada, datada da planeada + intervalo, com mão de obra e peças previstas', async () => {
+                repo.findOne.mockResolvedValue(periodica({
+                    artigos: [
+                        { artigoId: 9, descricao: 'Filtro', qtdPrevista: 2, quantidade: 2, preco: 100, qtdConsumida: 2 },
+                        { artigoId: 8, descricao: 'Extra', qtdPrevista: 0, quantidade: 0, preco: 5, qtdConsumida: 1 },
+                    ],
+                }));
+                await service.finalizar(1, { assinadaCliente: true, usuario: 'u' });
+                expect(novaOt()).toMatchObject({ estado: OTEstado.PROGRAMADA, dataAgendada: '2099-02-10', geradaDeOtId: 1, periodicidade: 'Mensal' });
+                const copias = managerMock.save.mock.calls.map((c: any[]) => c[c.length - 1]).filter(Array.isArray);
+                expect(copias.some((a: any[]) => a[0]?.funcao === 'Técnico')).toBe(true);
+                // só as peças previstas (> 0) passam para a seguinte
+                expect(copias.find((a: any[]) => a[0]?.artigoId)).toEqual([expect.objectContaining({ artigoId: 9, qtdPrevista: 2 })]);
+                expect(logs().some((l: any) => l.acao === 'OT_PERIODICA_GERADA' && !/passado/.test(l.detalhes))).toBe(true);
+            });
+
+            it('anti-deriva: parte da data planeada original (1.ª reprogramação), não da executada', async () => {
+                repo.findOne.mockResolvedValue(periodica({
+                    dataAgendada: '2099-03-20',
+                    reprogramacoes: [
+                        { dataAnterior: '2099-03-15', criadoEm: '2099-03-02' },
+                        { dataAnterior: '2099-03-01', criadoEm: '2099-02-20' },
+                    ],
+                }));
+                await service.finalizar(1, { assinadaCliente: true });
+                expect(novaOt().dataAgendada).toBe('2099-04-01');
+            });
+
+            it('planeada + intervalo no passado → hoje, com aviso no log', async () => {
+                repo.findOne.mockResolvedValue(periodica({ dataAgendada: '2020-01-01' }));
+                await service.finalizar(1, { assinadaCliente: true });
+                expect(novaOt().dataAgendada).toBe(hoje());
+                expect(logs().some((l: any) => l.acao === 'OT_PERIODICA_GERADA' && /passado/.test(l.detalhes))).toBe(true);
+            });
+
+            it('plano inativo ou equipamento inativo → não gera e regista o motivo', async () => {
+                plano().findOne.mockResolvedValueOnce({ id: 3, ativo: false });
+                repo.findOne.mockResolvedValue(periodica());
+                await service.finalizar(1, { assinadaCliente: true });
+                expect(novaOt()).toBeUndefined();
+                expect(logs()).toEqual(expect.arrayContaining([expect.objectContaining({ acao: 'OT_PERIODICA_NAO_GERADA', detalhes: expect.stringMatching(/plano inativo/) })]));
+
+                managerMock.save.mockClear();
+                equip().findOne.mockResolvedValueOnce({ id: 4, estado: 'inativo' });
+                await service.finalizar(1, { assinadaCliente: true });
+                expect(novaOt()).toBeUndefined();
+                expect(logs()).toEqual(expect.arrayContaining([expect.objectContaining({ detalhes: expect.stringMatching(/equipamento inativo/) })]));
+            });
+
+            it('periodicidade "Única" não gera; data de fim anterior à de início → 400', async () => {
+                repo.findOne.mockResolvedValue(periodica({ periodicidade: 'Única' }));
+                await service.finalizar(1, { assinadaCliente: true });
+                expect(novaOt()).toBeUndefined();
+
+                repo.findOne.mockResolvedValue(periodica({ dataInicio: '2099-05-10' }));
+                await expect(service.finalizar(1, { assinadaCliente: true, dataFim: '2099-05-01' })).rejects.toBeInstanceOf(BadRequestException);
+            });
+        });
+
+        describe('create — validações', () => {
+            it('máquina inexistente → 400; cliente diferente do da máquina → 400; sem cliente deriva-o da máquina', async () => {
+                equip().findOne.mockResolvedValueOnce(null);
+                await expect(service.create({ equipInstaladoId: 4, descricao: 'x' }, { id: 1 })).rejects.toThrow(/não existe/);
+                await expect(service.create({ equipInstaladoId: 4, clienteId: 7, descricao: 'x' }, { id: 1 })).rejects.toThrow(/não coincide/);
+                await service.create({ equipInstaladoId: 4, descricao: 'x' }, { id: 1 });
+                expect(repo.create).toHaveBeenLastCalledWith(expect.objectContaining({ cliente: { id: 99 } }));
+            });
+
+            it('periódica sem periodicidade → 400; técnico inexistente ou inativo → 400', async () => {
+                await expect(service.create({ tipo: 'periodica', descricao: 'x' }, { id: 1 })).rejects.toThrow(/Periodicidade/);
+                tecnicos().findOne.mockResolvedValueOnce(null);
+                await expect(service.create({ executadoPorId: 5, descricao: 'x' }, { id: 1 })).rejects.toThrow(/não encontrado/);
+                tecnicos().findOne.mockResolvedValueOnce({ id: 5, ativo: false });
+                await expect(service.create({ executadoPorId: 5, descricao: 'x' }, { id: 1 })).rejects.toThrow(/inativo/);
+            });
+        });
+
+        describe('confirmar — validações (RF-OT-003 §3.2)', () => {
+            const programada = (over: any = {}) => repo.findOne.mockResolvedValue({
+                id: 1, estado: OTEstado.PROGRAMADA, artigos: [], descricao: 'x', executadoPorId: 1,
+                dataRegisto: hoje(), janelaFim: futuro(180), adiamentos: 0, ...over,
+            });
+
+            it.each([
+                ['sem data de execução', {}, {}, /obrigatória/],
+                ['data no passado', { dataRegisto: '2020-01-01' }, { dataExecucao: '2020-06-01' }, /anterior a hoje/],
+                ['sem técnico', { executadoPorId: null }, { dataExecucao: 'F' }, /obrigatório/],
+                ['sem descrição', { descricao: '' }, { dataExecucao: 'F' }, /Descrição em falta/],
+            ])('%s → 400', async (_n, ot, opts: any, msg) => {
+                programada(ot);
+                if (opts.dataExecucao === 'F') opts = { ...opts, dataExecucao: futuro(5) };
+                await expect(service.confirmar(1, opts)).rejects.toThrow(msg);
+            });
+
+            it('técnico inexistente ou inativo → 400', async () => {
+                programada();
+                tecnicos().findOne.mockResolvedValueOnce(null);
+                await expect(service.confirmar(1, { dataExecucao: futuro(5) })).rejects.toThrow(/não existe/);
+                tecnicos().findOne.mockResolvedValueOnce({ id: 1, ativo: false });
+                await expect(service.confirmar(1, { dataExecucao: futuro(5) })).rejects.toThrow(/inativo/);
+            });
+
+            it('fora da janela de 6 meses ou antes da data de registo → 422', async () => {
+                programada({ janelaFim: futuro(30) });
+                await expect(service.confirmar(1, { dataExecucao: futuro(60) })).rejects.toBeInstanceOf(UnprocessableEntityException);
+                programada({ dataRegisto: futuro(10), janelaFim: futuro(200) });
+                await expect(service.confirmar(1, { dataExecucao: futuro(5) })).rejects.toThrow(/anterior à data de registo/);
+            });
+        });
+
+        describe('adiar acima do limite — aprovação (RF-OT-003 §3.3.1)', () => {
+            const noLimite = () => repo.findOne.mockResolvedValue({
+                id: 1, estado: OTEstado.PROGRAMADA, artigos: [], dataAgendada: futuro(5),
+                dataRegisto: hoje(), janelaFim: futuro(30), adiamentos: 3,
+            });
+            const pedido = (over: any = {}) => ({ novaData: futuro(300), motivo: 'chuva forte', ...over });
+
+            it('sem aprovação → 403; aprovador inexistente → 400; aprovador não admin → 403', async () => {
+                noLimite();
+                await expect(service.adiar(1, pedido())).rejects.toBeInstanceOf(ForbiddenException);
+                users().findOne.mockResolvedValueOnce(null);
+                await expect(service.adiar(1, pedido({ aprovadoPor: 2, aprovacaoMotivo: 'urgente cliente' }))).rejects.toThrow(/não existe/);
+                users().findOne.mockResolvedValueOnce({ id: 2, role: 'coordenador' });
+                await expect(service.adiar(1, pedido({ aprovadoPor: 2, aprovacaoMotivo: 'urgente cliente' }))).rejects.toBeInstanceOf(ForbiddenException);
+            });
+
+            it('admin aprova: aceita a data fora da janela, estende-a +6 meses e regista a aprovação', async () => {
+                noLimite();
+                users().findOne.mockResolvedValueOnce({ id: 2, role: 'admin' });
+                const novaData = futuro(300);
+                await service.adiar(1, { novaData, motivo: 'chuva forte', aprovadoPor: 2, aprovacaoMotivo: 'urgente cliente' });
+                const upd = repo.update.mock.calls.find((c: any[]) => c[1]?.estado === OTEstado.ADIADA)[1];
+                expect(upd).toMatchObject({ adiamentos: 4, aprovadoPorId: 2, dataAgendada: novaData });
+                expect(upd.janelaFim > novaData).toBe(true);
+                expect(logs().some((l: any) => l.acao === 'OT_ADIAMENTO_APROVADO')).toBe(true);
+            });
+
+            it('sem nova data ou motivo curto → 400', async () => {
+                noLimite();
+                await expect(service.adiar(1, { motivo: 'chuva forte' })).rejects.toThrow(/Nova data/);
+                await expect(service.adiar(1, { novaData: futuro(5), motivo: 'x' })).rejects.toThrow(/Motivo/);
+            });
+        });
+
+        describe('reprogramar, agendar, remove e leitura', () => {
+            it('reprogramar numa OT Registada: compat — histórico e data agendada', async () => {
+                repo.findOne.mockResolvedValue({ id: 1, estado: OTEstado.REGISTADA, artigos: [] });
+                await service.reprogramar(1, '2099-01-01', '2098-12-01', 'pedido do cliente', 'u');
+                expect(repo.update).toHaveBeenCalledWith(1, { dataAgendada: '2099-01-01' });
+            });
+
+            it('reprogramar numa OT Programada delega em adiar (motivo por omissão quando curto)', async () => {
+                repo.findOne.mockResolvedValue({ id: 1, estado: OTEstado.PROGRAMADA, artigos: [], dataRegisto: hoje(), janelaFim: futuro(180), adiamentos: 0 });
+                const adiar = jest.spyOn(service, 'adiar');
+                await service.reprogramar(1, futuro(10), undefined, 'x', 'u');
+                expect(adiar).toHaveBeenCalledWith(1, expect.objectContaining({ motivo: 'Reprogramação via Agenda' }));
+            });
+
+            it('agendar sem data → 400; OT inexistente → 404', async () => {
+                repo.findOne.mockResolvedValue({ id: 1, estado: OTEstado.REGISTADA, artigos: [] });
+                await expect(service.agendar(1, {})).rejects.toThrow(/obrigatória/);
+                repo.findOne.mockResolvedValue(null);
+                await expect(service.agendar(9, { dataAgendada: futuro(1) })).rejects.toBeInstanceOf(NotFoundException);
+            });
+
+            it('remove: só Registada', async () => {
+                repo.findOne.mockResolvedValue({ id: 1, estado: OTEstado.PROGRAMADA, artigos: [] });
+                await expect(service.remove(1)).rejects.toThrow(/Apenas OTs em "Registada"/);
+                repo.findOne.mockResolvedValue({ id: 1, estado: OTEstado.REGISTADA, artigos: [] });
+                await service.remove(1);
+                expect(repo.delete).toHaveBeenCalledWith(1);
+            });
+
+            it('limite de adiamentos: usa o valor por omissão se a configuração falhar', async () => {
+                module.get(getRepositoryToken(ConfiguracaoEmpresa)).find.mockRejectedValueOnce(new Error('bd'));
+                repo.findOne.mockResolvedValue({ id: 1, estado: OTEstado.REGISTADA, artigos: [], adiamentos: 3 });
+                const ot: any = await service.findOne(1);
+                expect(ot.requerAprovacaoAdiar).toBe(true);
+            });
+
+            it('custos previsto e real somam peças e mão de obra', async () => {
+                repo.findOne.mockResolvedValue({
+                    id: 1, estado: OTEstado.EM_EXECUCAO,
+                    artigos: [{ qtdPrevista: 2, qtdConsumida: 3, preco: 100 }],
+                    maosObra: [{ custo: 50 }],
+                });
+                const ot: any = await service.findOne(1);
+                expect([ot.custoPrevisto, ot.custoReal]).toEqual([250, 350]);
+            });
         });
     });
 });

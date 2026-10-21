@@ -100,6 +100,11 @@
       "**/modules/tesouraria/*.service.ts": {
         "statements": 80,
         "lines": 80
+      },
+      "**/modules/ordens-trabalho/ordens-trabalho.service.ts": {
+        "statements": 90,
+        "lines": 90,
+        "branches": 70
       }
     }
   },
