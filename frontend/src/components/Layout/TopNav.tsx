@@ -11,7 +11,7 @@ import AquatexLogo from '../AquatexLogo';
 import AlterarPasswordModal from '../AlterarPasswordModal';
 import { useGlobal } from '../../contexts/GlobalContext';
 
-interface NavItem { to: string; icon: LucideIcon; label: string; }
+interface NavItem { to: string; icon: LucideIcon; label: string; adminOnly?: boolean; }
 
 interface NavGroup {
     label: string;
@@ -61,7 +61,7 @@ const NAV_GROUPS: NavGroup[] = [
         items: [
             { to: '/utilizadores',  icon: Users,       label: 'Utilizadores'   },
             { to: '/relatorios',    icon: BarChart3,   label: 'Relatórios'     },
-            { to: '/logs',          icon: ScrollText,  label: 'Logs do Sistema' },
+            { to: '/logs',          icon: ScrollText,  label: 'Logs do Sistema', adminOnly: true }, // #210
             { to: '/configuracoes', icon: Settings,    label: 'Configurações'  },
         ],
     },
@@ -177,9 +177,11 @@ const TopNav: React.FC = () => {
         await reloadData();
         setReloading(false);
     };
-    const visibleGroups = isTecnicoCampo
+    const isAdmin = currentUser?.role === 'Administrador';
+    const visibleGroups = (isTecnicoCampo
         ? NAV_GROUPS.filter(g => TECNICO_CAMPO_GROUPS.has(g.label))
-        : NAV_GROUPS;
+        : NAV_GROUPS
+    ).map(g => ({ ...g, items: g.items.filter(i => !i.adminOnly || isAdmin) }));
 
     const handleLogout = () => {
         addLog({ usuario: currentUser?.email ?? 'sistema', modulo: 'Autenticação', acao: 'Logout', detalhes: `Utilizador: ${currentUser?.nome ?? ''}`, tipo: 'info' });
