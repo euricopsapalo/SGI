@@ -1,12 +1,13 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, In, Repository, SelectQueryBuilder } from 'typeorm';
 import { Artigo } from './artigo.entity';
 import { MovimentoStock, TipoMovimento } from './movimento-stock.entity';
 import { StockArmazem } from './stock-armazem.entity';
 import { Armazem } from '../armazens/armazem.entity';
 import { OtArtigo } from '../ordens-trabalho/ot-artigo.entity';
 import { normalizarRetencao } from './artigo.rules';
+import { ListarMovimentosDto } from './dto/listar-movimentos.dto';
 import { erroValidacao } from '../vendas-config/erros';
 import { entradaStock, resyncExistencia, saidaStock } from './stock-armazem.ops';
 
@@ -188,7 +189,34 @@ export class ArtigosService {
     }
 
     // MovimentoStock
-    findAllMovimentos() { return this.movimentosRepo.find({ relations: ['artigo'] }); }
+    /** #221 — paginado e filtrado no servidor (mais recentes primeiro). */
+    async findAllMovimentos(f: ListarMovimentosDto = {}) {
+        const pagina = f.pagina ?? 1;
+        const porPagina = f.porPagina ?? 50;
+        const filtrar = (qb: SelectQueryBuilder<MovimentoStock>, comTipo: boolean) => {
+            if (comTipo && f.tipo) qb.andWhere('m.tipo = :tipo', { tipo: f.tipo });
+            if (f.artigoId) qb.andWhere('a.id = :artigoId', { artigoId: f.artigoId });
+            if (f.q?.trim()) qb.andWhere('(a.codigo ILIKE :q OR a.descricao ILIKE :q)', { q: `%${f.q.trim()}%` });
+            if (f.de) qb.andWhere('m.data >= CAST(:de AS date)', { de: f.de });
+            if (f.ate) qb.andWhere(`m.data < CAST(:ate AS date) + INTERVAL '1 day'`, { ate: f.ate });
+            return qb;
+        };
+        const [items, total] = await filtrar(this.movimentosRepo.createQueryBuilder('m').leftJoinAndSelect('m.artigo', 'a'), true)
+            .orderBy('m.data', 'DESC')
+            .addOrderBy('m.id', 'DESC')
+            .skip((pagina - 1) * porPagina)
+            .take(porPagina)
+            .getManyAndCount();
+        // Contagem por tipo com os mesmos filtros (exceto o tipo), para os cartões do relatório.
+        const contagens: { tipo: string; n: string }[] = await filtrar(this.movimentosRepo.createQueryBuilder('m').leftJoin('m.artigo', 'a'), false)
+            .select('m.tipo', 'tipo')
+            .addSelect('COUNT(*)', 'n')
+            .groupBy('m.tipo')
+            .getRawMany();
+        const porTipo: Record<string, number> = { entrada: 0, saida: 0, ajuste: 0, transferencia: 0, devolucao: 0 };
+        for (const c of contagens) porTipo[c.tipo] = Number(c.n);
+        return { items, total, pagina, porPagina, porTipo };
+    }
     findOneMovimento(id: number) { return this.movimentosRepo.findOne({ where: { id }, relations: ['artigo'] }); }
     async createMovimento(body: any) {
         const { artigoId, ...rest } = body;
