@@ -35,6 +35,11 @@ export interface DocumentoVenda {
     otId: number; otNumero: string | null; referencia: string | null; observacoes: string | null; requisicao: string | null;
     modoPagamentoId: number | null; modoPagamentoDescricao: string | null;
     descontoGlobal: number; subtotal: number; desconto: number; valorIva: number; total: number; moeda: string;
+    /** #179 — retenção na fonte do documento e o que o cliente paga (total − retenção). */
+    retencaoIncidencia?: number; retencaoPercentagem?: number; retencaoValor?: number; retencaoDescricao?: string | null;
+    totalAReceber?: number;
+    /** #179 — configuração actual do cliente (pré-visualização no rascunho). */
+    clienteRetencao?: RetencaoCliente | null;
     emitidoEm: string | null; createdAt: string;
     valorPendente: number | null; dataVencimento: string | null; estadoFaturacao: EstadoFaturacao | null;
     /** #169 — NC/ND: documento estornado. */
@@ -100,7 +105,9 @@ export interface FaturaImpressao {
         /** #170 — NC/ND: motivo do estorno da linha. */
         motivoEstorno?: string | null;
     }[];
-    totais: { mercadoriaServicos: number; descontosComerciais: number; valorIva: number; total: number; valorPendente: number | null };
+    totais: { mercadoriaServicos: number; descontosComerciais: number; valorIva: number; total: number; valorPendente: number | null;
+        /** #179 — retenção na fonte e o que o cliente paga (total − retenção). */
+        retencao?: number; totalAReceber?: number };
     impostos: { codigoIva: string | null; taxa: number; incidencia: number; valor: number; motivoIsencao: string | null }[];
     retencao: { entidade: string; incidencia: number; percentagem: number; valor: number } | null;
     codigoHash: string | null;
@@ -175,6 +182,32 @@ export function calcularTotais(
     const desconto = round2(subtotal * (1 - fator));
     const valorIva = round2(linhas.reduce((s, l, i) => s + round2(liquidos[i] * fator * Number(l.taxaIva) / 100), 0));
     return { linhas: liquidos, subtotal, desconto, valorIva, total: round2(subtotal - desconto + valorIva) };
+}
+
+/** #179 — configuração de retenção na fonte do cliente (Lei 19/14). */
+export interface RetencaoCliente { ativa: boolean; percentagem: number; descricao: string | null }
+
+/** #179 — a linha entra na incidência: Serviço com retenção habilitada no artigo (#195). */
+export const linhaComRetencao = (l: { tipoArtigo?: string; sujeitoRetencao?: boolean }) =>
+    l.tipoArtigo === 'SERVICO' && l.sujeitoRetencao === true;
+
+/**
+ * #179 — Pré-visualização da retenção na fonte — mesma regra do backend (`calcularRetencao`):
+ * só linhas de Serviço sujeitas, cliente com a retenção activa e % > 0, sem limiar mínimo;
+ * incidência após os descontos de linha e global. O valor que conta é o do servidor.
+ */
+export function calcularRetencao(
+    linhas: { tipoArtigo?: string; sujeitoRetencao?: boolean }[],
+    totaisLinhas: number[],
+    descontoGlobal: number,
+    cliente: RetencaoCliente | null | undefined,
+) {
+    const percentagem = Number(cliente?.percentagem ?? 0);
+    if (!cliente?.ativa || !(percentagem > 0)) return { incidencia: 0, percentagem: 0, valor: 0 };
+    const fator = 1 - (Number(descontoGlobal) || 0) / 100;
+    const incidencia = round2(linhas.reduce((s, l, i) => s + (linhaComRetencao(l) ? round2(Number(totaisLinhas[i] ?? 0) * fator) : 0), 0));
+    if (incidencia <= 0) return { incidencia: 0, percentagem: 0, valor: 0 };
+    return { incidencia, percentagem: round2(percentagem), valor: round2(incidencia * percentagem / 100) };
 }
 
 /** Valor para um `<input type="datetime-local">` a partir de um instante (hora local do browser). */

@@ -16,7 +16,8 @@ import { ConfiguracaoEmpresa } from '../configuracao/configuracao-empresa.entity
 import { EstadoFatura, Fatura } from '../faturas/fatura.entity';
 import { SysLogsService } from '../sys-logs/sys-logs.service';
 import {
-    calcularTotais, classificacaoLinha, dataLocal, dataVencimento, estadoFaturacao, hashDocumento, naturezaMovimento, numeroDocumento,
+    calcularRetencao, calcularTotais, classificacaoLinha, dataLocal, dataVencimento, estadoFaturacao, hashDocumento, naturezaMovimento,
+    numeroDocumento, Retencao, round2,
 } from './vendas.rules';
 import { snapshotCliente, snapshotEmpresa } from './snapshot';
 import { liquidarNaTransacao, mensagemCaixaFechadaFR } from '../tesouraria/liquidacoes.service';
@@ -190,6 +191,9 @@ export class DocumentosVendaService {
             }));
         await this.classificarLinhas(this.dataSource.manager, linhas);
         const totais = calcularTotais(linhas, 0);
+        // #179 — retenção na fonte com a configuração actual do cliente (fixada na emissão).
+        // `classificarLinhas` acrescentou tipoArtigo/sujeitoRetencao a cada linha.
+        const retencao = calcularRetencao(linhas as { tipoArtigo?: unknown; sujeitoRetencao?: unknown }[], totais.linhas, 0, cliente);
 
         const doc = await this.repo.save(this.repo.create({
             documentoConfigId: config!.id,
@@ -204,6 +208,7 @@ export class DocumentosVendaService {
             desconto: totais.desconto,
             valorIva: totais.valorIva,
             total: totais.total,
+            ...colunasRetencao(retencao),
             moeda: 'AOA',
             criadoPorId: user?.id ?? null,
             linhas: linhas.map((l, i) => ({ ...l, totalLiquido: totais.linhas[i] })) as DocumentoVendaLinha[],
@@ -266,11 +271,14 @@ export class DocumentosVendaService {
                 };
             }).filter(Boolean) as any[];
             if (temErros(erros)) throw erroValidacao(erros);
-            await this.classificarLinhas(this.dataSource.manager, linhas);
         }
+        // #179 — reclassifica sempre (o artigo pode ter mudado desde a última gravação): base da retenção.
+        await this.classificarLinhas(this.dataSource.manager, linhas);
 
         const descontoGlobal = dto.descontoGlobal ?? Number(doc.descontoGlobal);
         const totais = calcularTotais(linhas, descontoGlobal);
+        const cliente = await this.dataSource.getRepository(Cliente).findOne({ where: { id: doc.clienteId } });
+        const retencao = calcularRetencao(linhas, totais.linhas, descontoGlobal, cliente);
 
         await this.dataSource.transaction(async (m) => {
             await m.delete(DocumentoVendaLinha, { documentoId: id });
@@ -287,6 +295,7 @@ export class DocumentosVendaService {
                 desconto: totais.desconto,
                 valorIva: totais.valorIva,
                 total: totais.total,
+                ...colunasRetencao(retencao),
             });
         });
         return this.findOne(id);
@@ -371,6 +380,13 @@ export class DocumentosVendaService {
                 })), Number(doc.descontoGlobal));
                 if (totais.total <= 0) throw erroValidacao({ total: 'O total do documento tem de ser superior a zero' });
 
+                // #195 — fixa a classificação do artigo (tipo/retenção) tal como está na emissão.
+                await this.classificarLinhas(m, linhas);
+                // #179 — retenção com a ficha do cliente na emissão (cópia: alterar a ficha depois não muda o documento).
+                const cliente = await m.findOne(Cliente, { where: { id: doc.clienteId }, relations: ['condicaoPagamento'] });
+                const retencao = calcularRetencao(linhas, totais.linhas, Number(doc.descontoGlobal), cliente);
+                const aReceber = round2(totais.total - retencao.valor);
+
                 // #178 — hash encadeado com o documento anterior da série (bloqueada) e
                 // cópia dos dados do cliente e da empresa, para a segunda via sair igual.
                 const anterior = numero > serie.limiteInferior + 1
@@ -385,8 +401,6 @@ export class DocumentosVendaService {
                 });
                 const [snapCliente, snapEmpresa] = await Promise.all([snapshotCliente(m, doc.clienteId), snapshotEmpresa(m)]);
 
-                // #195 — fixa a classificação do artigo (tipo/retenção) tal como está na emissão.
-                await this.classificarLinhas(m, linhas);
                 for (const [i, l] of linhas.entries()) {
                     await m.update(DocumentoVendaLinha, l.id, {
                         totalLiquido: totais.linhas[i], tipoArtigo: l.tipoArtigo, sujeitoRetencao: l.sujeitoRetencao,
@@ -403,6 +417,7 @@ export class DocumentosVendaService {
                     desconto: totais.desconto,
                     valorIva: totais.valorIva,
                     total: totais.total,
+                    ...colunasRetencao(retencao),
                     hash,
                     dataDisposicao: ot.dataFim ?? dataLocal(dataHora),
                     snapshotCliente: snapCliente as any,
@@ -417,7 +432,6 @@ export class DocumentosVendaService {
                     if (!config!.ccTipoId || !config!.ccEstadoId) {
                         throw erroValidacao({ documentoConfigId: `O documento ${config!.codigo} gera movimento em conta corrente mas não tem conta/estado configurados` });
                     }
-                    const cliente = await m.findOne(Cliente, { where: { id: doc.clienteId }, relations: ['condicaoPagamento'] });
                     const dataDocumento = dataLocal(dataHora);
                     mov = await m.save(MovimentoCc, m.create(MovimentoCc, {
                         ccTipoId: config!.ccTipoId,
@@ -426,15 +440,17 @@ export class DocumentosVendaService {
                         origemTipo: OrigemMovimentoCc.DOCUMENTO_VENDA,
                         origemId: id,
                         natureza: naturezaMovimento(config!.natureza),
-                        valorOriginal: totais.total,
-                        valorPendente: totais.total,
+                        // #179 — o pendente nasce já líquido da retenção (entregue ao Estado pelo cliente).
+                        valorOriginal: aReceber,
+                        valorPendente: aReceber,
                         modoPagamentoId: doc.modoPagamentoId,
                         dataDocumento,
                         dataVencimento: dataVencimento(dataDocumento, cliente?.condicaoPagamento?.numDias ?? 0),
                     }));
                 }
                 const numeroDoc = numeroDocumento(config!.codigo, serie.codigo, numero)!;
-                resumo = `${numeroDoc} da OT ${ot.numero ?? ot.id} — total ${totais.total} AOA`;
+                resumo = `${numeroDoc} da OT ${ot.numero ?? ot.id} — total ${totais.total} AOA`
+                    + (retencao.valor > 0 ? ` (retenção ${retencao.percentagem}%: ${retencao.valor} AOA; a receber ${aReceber} AOA)` : '');
 
                 // #168 — Fatura Recibo: cadeia FR → RE → MC na mesma transacção (R5).
                 if (config!.liquidacaoAutomatica) {
@@ -594,6 +610,11 @@ export class DocumentosVendaService {
             desconto: Number(d.desconto),
             valorIva: Number(d.valorIva),
             total: Number(d.total),
+            // #179 — retenção na fonte e valor a receber do cliente (total − retenção).
+            retencaoIncidencia: Number(d.retencaoIncidencia ?? 0),
+            retencaoPercentagem: Number(d.retencaoPercentagem ?? 0),
+            retencaoValor: Number(d.retencaoValor ?? 0),
+            totalAReceber: round2(Number(d.total) - Number(d.retencaoValor ?? 0)),
             documentoCodigo: documentoConfig?.codigo,
             documentoDescricao: documentoConfig?.descricao,
             tipoFiscal: documentoConfig?.tipoFiscal,
@@ -603,6 +624,12 @@ export class DocumentosVendaService {
             numeroDocumento: numeroDocumento(documentoConfig?.codigo ?? '', serie?.codigo, d.numero),
             clienteNome: cliente?.nome,
             clienteNif: cliente?.nif ?? null,
+            // #179 — configuração actual do cliente (o editor de rascunho pré-visualiza a retenção).
+            clienteRetencao: cliente ? {
+                ativa: !!cliente.retencaoAtiva,
+                percentagem: Number(cliente.retencaoPercentagem ?? 0),
+                descricao: cliente.retencaoDescricao ?? null,
+            } : null,
             otNumero: ot?.numero,
             modoPagamentoDescricao: modoPagamento?.descricao ?? null,
             valorPendente: mov ? Number(mov.valorPendente) : null,
@@ -628,4 +655,14 @@ export class DocumentosVendaService {
             } : {}),
         };
     }
+}
+
+/** #179 — colunas de retenção do documento a partir do cálculo. */
+export function colunasRetencao(r: Retencao) {
+    return {
+        retencaoIncidencia: r.incidencia,
+        retencaoPercentagem: r.percentagem,
+        retencaoValor: r.valor,
+        retencaoDescricao: r.descricao,
+    };
 }

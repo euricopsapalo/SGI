@@ -161,14 +161,22 @@ export class ImpressaoFaturaService {
                 descontosComerciais: round2(bruto - liquidoSemIva),
                 valorIva: Number(doc.valorIva),
                 total: Number(doc.total),
+                // #179 — o que o cliente paga: total − retenção.
+                retencao: Number(doc.retencaoValor ?? 0),
+                totalAReceber: round2(Number(doc.total) - Number(doc.retencaoValor ?? 0)),
                 valorPendente: mov?.valorPendente ?? null,
             },
             impostos: resumoImpostos(
                 linhas.map((l) => ({ codigoIva: l.codigoIva, taxaIva: l.taxaIva, totalLiquido: l.valor })),
                 Number(doc.descontoGlobal), motivos,
             ),
-            // #179 — retenção na fonte ainda não modelada: quadro vazio.
-            retencao: null,
+            // #179 — Quadro de Retenção (Entidade, Incidência, %, Valor); vazio sem retenção.
+            retencao: Number(doc.retencaoValor ?? 0) > 0 ? {
+                entidade: doc.retencaoDescricao ?? 'Retenção na fonte',
+                incidencia: Number(doc.retencaoIncidencia),
+                percentagem: Number(doc.retencaoPercentagem),
+                valor: Number(doc.retencaoValor),
+            } : null,
             codigoHash: codigoHash(doc.hash),
         };
     }

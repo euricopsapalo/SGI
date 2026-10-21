@@ -38,6 +38,10 @@ export interface Cliente {
     enderecos: Endereco[];
     condicaoPagamentoId?: string;
     modoPagamentoId?: string;
+    /** #179 — retenção na fonte (Lei 19/14). */
+    retencaoAtiva?: boolean;
+    retencaoPercentagem?: number | string;
+    retencaoDescricao?: string;
 }
 
 /* ── Helpers ── */
@@ -60,10 +64,17 @@ type FormData = {
     enderecos: Endereco[];
     condicaoPagamentoId?: string;
     modoPagamentoId?: string;
+    retencaoAtiva: boolean;
+    retencaoPercentagem: number;
+    retencaoDescricao: string;
 };
 
+/** #179 — valores por omissão da retenção na fonte (Lei 19/14). */
+const RETENCAO_OMISSAO = { retencaoAtiva: false, retencaoPercentagem: 6.5, retencaoDescricao: 'Retenção Clientes — Lei 19/14' };
+type RetErrors = Partial<Record<'retencaoPercentagem' | 'retencaoDescricao', string>>;
+
 const BLANK_END: Endereco = { descricao: '', morada: '', cidade: '', principal: true, provinciaId: '', municipioId: '' };
-const BLANK: FormData = { tipo: 'empresa', nome: '', nif: '', email: '', telefone: '', ativo: true, enderecos: [{ ...BLANK_END }] };
+const BLANK: FormData = { tipo: 'empresa', nome: '', nif: '', email: '', telefone: '', ativo: true, enderecos: [{ ...BLANK_END }], ...RETENCAO_OMISSAO };
 
 /* ══════════════════════════════════════════
    Field
@@ -101,6 +112,7 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
     const [form, setForm] = useState<FormData>(BLANK);
     const [errors, setErrors] = useState<FormErrors>({});
     const [endErrors, setEndErrors] = useState<EndErrors>([]);
+    const [retErrors, setRetErrors] = useState<RetErrors>({});
     const [submitting, setSubmitting] = useState(false);
     const modalRef = useModalA11y<HTMLDivElement>(onClose);
 
@@ -119,6 +131,9 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
                     : [{ ...BLANK_END }],
                 condicaoPagamentoId: initial.condicaoPagamentoId ?? '',
                 modoPagamentoId: initial.modoPagamentoId ?? '',
+                retencaoAtiva: !!initial.retencaoAtiva,
+                retencaoPercentagem: initial.retencaoPercentagem != null ? Number(initial.retencaoPercentagem) : RETENCAO_OMISSAO.retencaoPercentagem,
+                retencaoDescricao: initial.retencaoDescricao ?? RETENCAO_OMISSAO.retencaoDescricao,
             });
         } else {
             setForm({ ...BLANK, enderecos: [{ ...BLANK_END }] });
@@ -126,6 +141,7 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
         setTab('geral');
         setErrors({});
         setEndErrors([]);
+        setRetErrors({});
     }, [initial]);
 
     const set = (k: ScalarField) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -182,9 +198,18 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
             return err;
         });
 
+        // #179 — retenção activa exige uma percentagem entre 0 (exclusive) e 100.
+        const re: RetErrors = {};
+        if (form.retencaoAtiva && !(form.retencaoPercentagem > 0 && form.retencaoPercentagem <= 100)) {
+            re.retencaoPercentagem = 'Indique uma percentagem entre 0 e 100';
+        }
+        if (form.retencaoAtiva && !form.retencaoDescricao.trim()) re.retencaoDescricao = 'Obrigatório';
+
         setErrors(e);
         setEndErrors(ee);
-        return Object.keys(e).length === 0 && ee.every(err => !err.morada && !err.cidade);
+        setRetErrors(re);
+        if (Object.keys(re).length && Object.keys(e).length === 0) setTab('comercial');
+        return Object.keys(e).length === 0 && Object.keys(re).length === 0 && ee.every(err => !err.morada && !err.cidade);
     };
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -199,7 +224,12 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
             const mapped = Object.fromEntries(
                 Object.entries(fe).filter(([key]) => !key.includes('.'))
             ) as FormErrors;
-            if (Object.keys(mapped).length) { setErrors(prev => ({ ...prev, ...mapped })); setTab('geral'); }
+            const { retencaoPercentagem, retencaoDescricao, ...gerais } = mapped as FormErrors & RetErrors;
+            if (retencaoPercentagem || retencaoDescricao) {
+                setRetErrors({ retencaoPercentagem, retencaoDescricao });
+                setTab('comercial');
+            }
+            if (Object.keys(gerais).length) { setErrors(prev => ({ ...prev, ...gerais })); setTab('geral'); }
         } finally {
             setSubmitting(false);
         }
@@ -245,6 +275,39 @@ const ClienteModal: React.FC<ModalProps> = ({ initial, onClose, onSave }) => {
                                     {modosPagamento.map(m => <option key={m.id} value={m.id}>{m.movimento} — {m.descricao}</option>)}
                                 </select>
                             </div>
+
+                            {/* #179 — retenção na fonte (Lei 19/14): só incide sobre Serviços sujeitos a retenção */}
+                            <fieldset className="form-group" style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '10px 12px' }}>
+                                <legend className="form-label" style={{ padding: '0 4px' }}>Retenção na fonte</legend>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.82rem', cursor: 'pointer' }}>
+                                    <input type="checkbox" checked={form.retencaoAtiva}
+                                        onChange={e => setForm(p => ({ ...p, retencaoAtiva: e.target.checked }))} />
+                                    Aplicar retenção na fonte às faturas deste cliente
+                                </label>
+                                <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', margin: '4px 0 8px' }}>
+                                    Incide só sobre as linhas de artigos do tipo Serviço com retenção habilitada. O valor retido é abatido ao que o cliente paga.
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: 10 }}>
+                                    <div>
+                                        <label className="form-label" htmlFor="cliente-ret-pct">Percentagem (%)</label>
+                                        <input id="cliente-ret-pct" type="number" step="0.01" min="0" max="100"
+                                            className={`form-input${retErrors.retencaoPercentagem ? ' err' : ''}`}
+                                            disabled={!form.retencaoAtiva} value={form.retencaoPercentagem}
+                                            onChange={e => setForm(p => ({ ...p, retencaoPercentagem: Number(e.target.value) }))}
+                                            {...fieldAria('cliente-ret-pct-err', retErrors.retencaoPercentagem)} />
+                                        <FieldError id="cliente-ret-pct-err" message={retErrors.retencaoPercentagem} />
+                                    </div>
+                                    <div>
+                                        <label className="form-label" htmlFor="cliente-ret-desc">Descrição (impressa na fatura)</label>
+                                        <input id="cliente-ret-desc" type="text" maxLength={120}
+                                            className={`form-input${retErrors.retencaoDescricao ? ' err' : ''}`}
+                                            disabled={!form.retencaoAtiva} value={form.retencaoDescricao}
+                                            onChange={e => setForm(p => ({ ...p, retencaoDescricao: e.target.value }))}
+                                            {...fieldAria('cliente-ret-desc-err', retErrors.retencaoDescricao)} />
+                                        <FieldError id="cliente-ret-desc-err" message={retErrors.retencaoDescricao} />
+                                    </div>
+                                </div>
+                            </fieldset>
                         </>}
 
                         {tab === 'geral' && <>

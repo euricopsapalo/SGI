@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateClienteEnderecoDto {
@@ -71,4 +71,20 @@ export class CreateClienteDto {
   @ValidateNested({ each: true })
   @Type(() => CreateClienteEnderecoDto)
   enderecos?: CreateClienteEnderecoDto[];
+
+  /** #179 — retenção na fonte (Lei 19/14). */
+  @IsOptional()
+  @IsBoolean()
+  retencaoAtiva?: boolean;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'A percentagem de retenção tem de ser um número' })
+  @Min(0, { message: 'A percentagem de retenção não pode ser negativa' })
+  @Max(100, { message: 'A percentagem de retenção não pode exceder 100' })
+  retencaoPercentagem?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  retencaoDescricao?: string;
 }

@@ -49,6 +49,54 @@ export function calcularTotais(linhas: LinhaCalculo[], descontoGlobal = 0): Tota
     return { linhas: liquidos, subtotal, desconto, valorIva, total: round2(subtotal - desconto + valorIva) };
 }
 
+/** #179 — configuração de retenção do cliente (Lei 19/14). */
+export interface RetencaoCliente {
+    retencaoAtiva: boolean;
+    retencaoPercentagem: number;
+    retencaoDescricao?: string | null;
+}
+
+export interface Retencao {
+    /** Base: Σ líquido (após desconto de linha e global) das linhas de Serviço sujeitas a retenção. */
+    incidencia: number;
+    percentagem: number;
+    valor: number;
+    descricao: string | null;
+}
+
+export const SEM_RETENCAO: Retencao = { incidencia: 0, percentagem: 0, valor: 0, descricao: null };
+
+/** #179 — a linha entra na incidência: Serviço com retenção habilitada (copiado do artigo, #195). */
+export function linhaComRetencao(l: { tipoArtigo?: unknown; sujeitoRetencao?: unknown }): boolean {
+    return l.tipoArtigo === TipoArtigo.SERVICO && l.sujeitoRetencao === true;
+}
+
+/**
+ * #179 — Retenção na fonte do documento. Só há retenção quando as três condições se
+ * verificam: linha de Serviço, artigo com retenção habilitada e cliente com a retenção
+ * activa e percentagem > 0. Sem limiar mínimo. O valor é a incidência × %, a 2 casas.
+ * `totaisLinhas` são os totais líquidos de `calcularTotais` (pela mesma ordem).
+ */
+export function calcularRetencao(
+    linhas: { tipoArtigo?: unknown; sujeitoRetencao?: unknown }[],
+    totaisLinhas: number[],
+    descontoGlobal: number,
+    cliente: RetencaoCliente | null | undefined,
+): Retencao {
+    const percentagem = Number(cliente?.retencaoPercentagem ?? 0);
+    if (!cliente?.retencaoAtiva || !(percentagem > 0)) return SEM_RETENCAO;
+    const fatorGlobal = 1 - Number(descontoGlobal ?? 0) / 100;
+    const incidencia = round2(linhas.reduce(
+        (s, l, i) => s + (linhaComRetencao(l) ? round2(Number(totaisLinhas[i] ?? 0) * fatorGlobal) : 0), 0));
+    if (incidencia <= 0) return SEM_RETENCAO;
+    return {
+        incidencia,
+        percentagem: round2(percentagem),
+        valor: round2(incidencia * percentagem / 100),
+        descricao: cliente.retencaoDescricao?.trim() || 'Retenção na fonte',
+    };
+}
+
 /** Natureza do movimento de CC a partir da natureza configurada no documento. */
 export function naturezaMovimento(naturezaDocumento: string | null): 'D' | 'C' {
     return naturezaDocumento === 'A_PAGAR' ? 'C' : 'D';

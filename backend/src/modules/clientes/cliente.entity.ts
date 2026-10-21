@@ -19,6 +19,7 @@ export enum TipoCliente {
 
 @Entity('clientes')
 @Check('chk_clientes_tipo', `"tipo" IN ('empresa','particular')`)
+@Check('chk_clientes_retencao_percentagem', `"retencao_percentagem" >= 0 AND "retencao_percentagem" <= 100`)
 export class Cliente {
     @PrimaryGeneratedColumn()
     id: number;
@@ -56,6 +57,16 @@ export class Cliente {
 
     @Column({ name: 'modo_pagamento_id', nullable: true })
     modoPagamentoId: number;
+
+    // #179 — retenção na fonte (Lei 19/14): aplica-se às linhas de Serviço sujeitas a retenção.
+    @Column({ name: 'retencao_ativa', default: false })
+    retencaoAtiva: boolean;
+
+    @Column({ name: 'retencao_percentagem', type: 'numeric', precision: 5, scale: 2, default: 6.5 })
+    retencaoPercentagem: number;
+
+    @Column({ name: 'retencao_descricao', length: 120, default: 'Retenção Clientes — Lei 19/14' })
+    retencaoDescricao: string;
 
     @CreateDateColumn({ name: 'data_criacao' })
     dataCriacao: Date;

@@ -76,7 +76,7 @@ describe('ImpressaoFaturaService', () => {
                 requisicao: 'R1', modoPagamento: 'Transferência', otNumero: 'OT-1', nrSerieEquipamento: 'SN1',
             });
             expect(r.linhas.map((l: any) => [l.artigoCodigo, l.unidade, l.valor])).toEqual([[null, 'UN', 70000], ['F1', 'CX', 60000]]);
-            expect(r.totais).toEqual({ mercadoriaServicos: 130000, descontosComerciais: 0, valorIva: 8400, total: 138400, valorPendente: 138400 });
+            expect(r.totais).toEqual({ mercadoriaServicos: 130000, descontosComerciais: 0, valorIva: 8400, total: 138400, retencao: 0, totalAReceber: 138400, valorPendente: 138400 });
             expect(r.impostos[1]).toMatchObject({ codigoIva: '90', motivoIsencao: 'Não sujeita' });
             expect(r.codigoHash).toBe('AKUe');
         });

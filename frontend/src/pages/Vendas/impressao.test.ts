@@ -108,6 +108,13 @@ describe('impressão — Fatura', () => {
         expect(r).toContain('Retenção Clientes - Lei 19/14');
         expect(r).toContain('6,50');
         expect(r).toContain('6 951,87');
+        // o que o cliente paga: total − retenção
+        expect(r).toContain('Retenção na Fonte</td><td class="num">-6 951,87');
+        expect(r).toContain('Total a Pagar ( AOA )');
+    });
+
+    it('sem retenção não há linha "Total a Pagar" (#179)', () => {
+        expect(buildFaturaHtml(fatura)).not.toContain('Total a Pagar');
     });
 
     it('#170 — NC: documento de origem e motivo de cada linha', () => {

@@ -9,10 +9,10 @@ import { erroValidacao, temErros } from '../vendas-config/erros';
 import { OrdemTrabalho } from '../ordens-trabalho/ordem-trabalho.entity';
 import { SysLogsService } from '../sys-logs/sys-logs.service';
 import { emitirNaSerie, serieBloqueada } from '../tesouraria/emissao';
-import { calcularTotais, dataLocal, hashDocumento, naturezaMovimento, numeroDocumento, round2 } from './vendas.rules';
+import { calcularRetencao, calcularTotais, dataLocal, hashDocumento, naturezaMovimento, numeroDocumento, Retencao, round2 } from './vendas.rules';
 import { abaterPendente, totalmenteEstornado, validarLinhasEstorno } from './estorno.rules';
 import { snapshotCliente, snapshotEmpresa } from './snapshot';
-import { DocumentosVendaService } from './documentos-venda.service';
+import { colunasRetencao, DocumentosVendaService } from './documentos-venda.service';
 import { EstornarDocumentoVendaDto } from './dto/documento-venda.dto';
 
 type Utilizador = { id?: number; email?: string } | undefined;
@@ -92,6 +92,9 @@ export class EstornosVendaService {
                 });
                 const totais = calcularTotais(linhas, Number(origem.descontoGlobal));
                 if (totais.total <= 0) throw erroValidacao({ linhas: 'O valor do estorno tem de ser superior a zero' });
+                // #179 — a retenção do estorno segue a do documento de origem (mesma %; só as linhas sujeitas).
+                const retencao = await this.retencaoEstorno(m, origem, linhas, totais.linhas, linhasOrigem, dto.linhas);
+                const aDevolver = round2(totais.total - retencao.valor);
 
                 // #178 — hash encadeado na série do estorno e cópia dos dados do cliente/empresa.
                 const anterior = numero > serie.limiteInferior + 1
@@ -122,6 +125,7 @@ export class EstornosVendaService {
                     desconto: totais.desconto,
                     valorIva: totais.valorIva,
                     total: totais.total,
+                    ...colunasRetencao(retencao),
                     moeda: origem.moeda,
                     hash,
                     dataDisposicao: origem.dataDisposicao,
@@ -146,7 +150,8 @@ export class EstornosVendaService {
                     ? await this.reporDocumentoOriginal(m, origem, dto.linhas.map((p) => ({ linha: porId.get(p.linhaId)!, quantidade: Number(p.quantidade) })))
                     : await this.libertarOt(m, origem, linhasOrigem);
 
-                const abatido = await this.movimentoCc(m, config, origem, doc, totais.total, dataHora);
+                // #179 — o pendente da origem já é líquido da retenção: o estorno abate o valor líquido.
+                const abatido = await this.movimentoCc(m, config, origem, doc, aDevolver, dataHora);
                 resumo = `${numeroEstorno} estorna ${numeroOrigem} — ${totais.total} AOA`
                     + (abatido ? ` (abate ${abatido} ao pendente)` : '')
                     + efeitoOt;
@@ -162,6 +167,38 @@ export class EstornosVendaService {
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────
+
+    /**
+     * #179 — Retenção do estorno: a percentagem do documento de origem sobre as linhas
+     * de Serviço sujeitas. Se este estorno fecha o documento, a retenção é o que falta
+     * da retenção da origem (sem diferenças de arredondamento a ficar pendentes).
+     */
+    private async retencaoEstorno(
+        m: EntityManager, origem: DocumentoVenda,
+        linhas: { tipoArtigo?: unknown; sujeitoRetencao?: unknown }[], totaisLinhas: number[],
+        linhasOrigem: DocumentoVendaLinha[], pedido: { linhaId: number; quantidade: number }[],
+    ): Promise<Retencao> {
+        const valorOrigem = Number(origem.retencaoValor ?? 0);
+        if (!(valorOrigem > 0)) return calcularRetencao(linhas, totaisLinhas, 0, null);
+        const calc = calcularRetencao(linhas, totaisLinhas, Number(origem.descontoGlobal), {
+            retencaoAtiva: true,
+            retencaoPercentagem: Number(origem.retencaoPercentagem),
+            retencaoDescricao: origem.retencaoDescricao,
+        });
+        const agora = new Map(pedido.map((p) => [p.linhaId, Number(p.quantidade)]));
+        const fecha = linhasOrigem.every((l) => Number(l.qtdEstornada) + (agora.get(l.id) ?? 0) >= Number(l.quantidade));
+        if (!fecha) return calc;
+        const [ja] = await m.query(
+            `SELECT COALESCE(sum(retencao_valor), 0)::float AS valor, COALESCE(sum(retencao_incidencia), 0)::float AS incidencia
+             FROM documentos_venda WHERE documento_origem_id = $1`, [origem.id]);
+        return {
+            ...calc,
+            incidencia: round2(Number(origem.retencaoIncidencia) - Number(ja?.incidencia ?? 0)),
+            valor: round2(valorOrigem - Number(ja?.valor ?? 0)),
+            percentagem: Number(origem.retencaoPercentagem),
+            descricao: origem.retencaoDescricao ?? calc.descricao,
+        };
+    }
 
     /** O documento admite estorno e o documento de estorno configurado é Financeiro, activo e de natureza inversa. */
     private async documentoEstorno(m: EntityManager, origem: DocumentoConfig | null): Promise<DocumentoConfig> {

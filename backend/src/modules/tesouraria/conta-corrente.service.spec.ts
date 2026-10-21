@@ -71,7 +71,8 @@ describe('ContaCorrenteService', () => {
                 .mockResolvedValueOnce([
                     { tipo: 'LIQUIDACAO', id: 2, data: '2026-02-01', ts: '2026-02-01T10:00:00Z', debito: 0, credito: 64000, desconto: 0 },
                     { tipo: 'LIQUIDACAO', id: 1, data: '2026-01-15', ts: '2026-01-15T10:00:00Z', debito: 0, credito: 50000, desconto: 0 },
-                ]);
+                ])
+                .mockResolvedValueOnce([]);
             const r = await svc.extrato({ clienteId: 3 });
             expect(r.linhas.map((l: any) => [l.tipo, l.id, l.saldo])).toEqual([['DOCUMENTO', 1, 114000], ['LIQUIDACAO', 1, 64000], ['LIQUIDACAO', 2, 0]]);
             expect(r.linhas[0]).not.toHaveProperty('ts');
@@ -80,9 +81,22 @@ describe('ContaCorrenteService', () => {
 
         it('com período: saldo anterior e só as linhas do intervalo; sem linhas → saldo final = anterior', async () => {
             const docs = [{ tipo: 'DOCUMENTO', id: 1, data: '2026-01-01', ts: '2026-01-01', debito: 100, credito: 0, desconto: 0 }];
-            ds.query.mockResolvedValueOnce([{ id: 3 }]).mockResolvedValueOnce(docs).mockResolvedValueOnce([]);
+            ds.query.mockResolvedValueOnce([{ id: 3 }]).mockResolvedValueOnce(docs).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
             const r = await svc.extrato({ clienteId: 3, de: '2026-02-01', ate: '2026-02-28' });
             expect(r).toMatchObject({ saldoAnterior: 100, saldoFinal: 100, linhas: [] });
+        });
+
+        it('#179 — a retenção aparece como crédito logo a seguir à fatura (pelo total)', async () => {
+            ds.query
+                .mockResolvedValueOnce([{ id: 3 }])
+                .mockResolvedValueOnce([{ tipo: 'DOCUMENTO', id: 1, data: '2026-01-01', ts: '2026-01-01T10:00:00Z', debito: 114000, credito: 0, desconto: 0 }])
+                .mockResolvedValueOnce([{ tipo: 'LIQUIDACAO', id: 1, data: '2026-01-20', ts: '2026-01-20T10:00:00Z', debito: 0, credito: 110100, desconto: 0 }])
+                .mockResolvedValueOnce([{ tipo: 'RETENCAO', id: 1, data: '2026-01-01', ts: '2026-01-01T10:00:00Z', debito: 0, credito: 3900, desconto: 0, documento: 'Retenção FT 2026/1' }]);
+            const r = await svc.extrato({ clienteId: 3 });
+            expect(r.linhas.map((l: any) => [l.tipo, l.saldo])).toEqual([['DOCUMENTO', 114000], ['RETENCAO', 110100], ['LIQUIDACAO', 0]]);
+            const sqlDocs = ds.query.mock.calls[1][0];
+            expect(sqlDocs).toMatch(/valor_original \+ COALESCE\(d\.retencao_valor, 0\)/);
+            expect(ds.query.mock.calls[3][0]).toMatch(/retencao_valor > 0/);
         });
 
         it('cliente inexistente → 404', async () => {
