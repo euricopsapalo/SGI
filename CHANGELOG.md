@@ -4,6 +4,12 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(stock): retirada a "Guia de Transporte", que mostrava sucesso sem gerar documento (closes #214)
+
+- **Antes:** a operação "Guia de Transporte" do Stock mostrava "Guia de transporte emitida." sem gerar nenhum documento. Já nenhum botão a abria, mas o código continuava lá.
+- **Agora:** saem o tipo, o rótulo, o ramo e o toast falso.
+- A guia volta quando existir como documento fiscal, com série e numeração próprias e impressão via `imprimirPdf` (#182).
+
 ### fix(stock): inventário, reposição e devolução passam a ser atómicos e o movimento é validado (closes #213)
 
 - **Antes:**
