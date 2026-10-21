@@ -22,6 +22,18 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
   - novos testes para tabelas do sistema, fornecedores e utilizadores, para os limites continuarem a passar.
 - **Testes do frontend:** sem avisos `act(...)` no `useConfirm.test.tsx`.
 
+### fix(context): as criações esperam pelo servidor e deixam de mostrar sucesso falso (closes #212)
+
+- **Antes:** `addCliente`, `addFornecedor`, `addModelo`, `addArmazem`, `addArtigo`, `addMovimento` e `addEncomenda` devolviam logo um registo provisório com `id: ''` e engoliam o erro (`.catch(() => {})`). As páginas mostravam "registado" e fechavam o modal mesmo quando o servidor recusava.
+- **Agora são `async`:** esperam pela resposta, guardam e devolvem o registo do servidor (com o id real) e propagam o erro, como no padrão do #49. Nenhum registo com `id: ''` entra no estado.
+- **Modais que agora esperam pela resposta:**
+  - artigo (Stock), modelo (Parque) e encomenda (Compras);
+  - em erro, ficam abertos com o motivo e os erros de campo;
+  - o botão Guardar fica desativado enquanto grava.
+- **Inventário, reposição, devolução, receção e "converter em encomenda":** esperam por cada pedido, param no primeiro erro e só confirmam o sucesso no fim. A atomicidade no servidor fica para o #213.
+- **Tabelas do sistema (armazéns e restantes):** a linha nova só é limpa depois de o servidor aceitar.
+- Teste: com o servidor a recusar, as 7 funções rejeitam e o estado não ganha registos sem id; com sucesso, guardam o registo devolvido.
+
 ### fix(api): violações de FK passam a devolver 409 com mensagem legível em vez de 500 (closes #211)
 
 - **Antes:** só o Parque traduzia a violação de FK do Postgres (`23503`). Nos outros módulos, apagar algo ainda referenciado dava 500. Exemplos: um cliente com documentos de venda, um utilizador ligado a um técnico, ou um registo das tabelas do sistema em uso.

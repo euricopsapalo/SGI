@@ -14,7 +14,7 @@ import {
     Search, Plus, Edit2, X, AlertCircle, Check, MapPin,
     Eye, AlertTriangle, RefreshCw, Package, Printer, Download, Trash2,
 } from 'lucide-react';
-import { showToast, extractErrorMessage } from '../../utils/errorHandler';
+import { showToast, extractErrorMessage, extractFieldErrors } from '../../utils/errorHandler';
 import { imprimirPdf } from '../../utils/imprimirPdf';
 
 const ESTADO_DOT: Record<EstadoEquip, string> = {
@@ -416,7 +416,7 @@ const RelatorioEstadoModal: React.FC<{ onClose: () => void; onPrint: (s: EstadoS
 interface ModeloModalProps {
     modelo?: ModeloEquipamento;
     onClose: () => void;
-    onSave: (m: Omit<ModeloEquipamento, 'id'>) => void;
+    onSave: (m: Omit<ModeloEquipamento, 'id'>) => Promise<void>;
 }
 const ModeloModal: React.FC<ModeloModalProps> = ({ modelo, onClose, onSave }) => {
     const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
@@ -424,6 +424,8 @@ const ModeloModal: React.FC<ModeloModalProps> = ({ modelo, onClose, onSave }) =>
     const [marca, setMarca] = useState(modelo?.marca ?? '');
     const [tipo, setTipo]   = useState<'maquina' | 'filtro'>(modelo?.tipo ?? 'maquina');
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [submitError, setSubmitError] = useState('');
+    const [saving, setSaving] = useState(false);
 
     const validate = () => {
         const e: Record<string, string> = {};
@@ -433,10 +435,21 @@ const ModeloModal: React.FC<ModeloModalProps> = ({ modelo, onClose, onSave }) =>
         return Object.keys(e).length === 0;
     };
 
-    const handleSave = (ev: React.FormEvent) => {
+    // #212 — espera pelo servidor; em erro o modal fica aberto com o motivo.
+    const handleSave = async (ev: React.FormEvent) => {
         ev.preventDefault();
-        if (!validate()) return;
-        onSave({ nome, marca, tipo });
+        if (!validate() || saving) return;
+        setSubmitError('');
+        setSaving(true);
+        try {
+            await onSave({ nome, marca, tipo });
+        } catch (err) {
+            const fe = extractFieldErrors(err);
+            if (Object.keys(fe).length) setErrors(prev => ({ ...prev, ...fe }));
+            setSubmitError(extractErrorMessage(err));
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -470,9 +483,14 @@ const ModeloModal: React.FC<ModeloModalProps> = ({ modelo, onClose, onSave }) =>
                             </div>
                         </div>
                     </div>
+                    {submitError && (
+                        <div className="form-error" style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 16px 4px', padding: '8px 10px', border: '1px solid var(--red)', borderRadius: 4, background: 'rgba(220,38,38,0.06)' }}>
+                            <AlertCircle size={13} /> {submitError}
+                        </div>
+                    )}
                     <div className="modal-footer">
-                        <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
-                        <button type="submit" className="abtn abtn-primary"><Check size={12} /> Guardar</button>
+                        <button type="button" className="abtn abtn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+                        <button type="submit" className="abtn abtn-primary" disabled={saving}><Check size={12} /> {saving ? 'A guardar…' : 'Guardar'}</button>
                     </div>
                 </form>
             </div>
@@ -991,13 +1009,14 @@ const ParquePage: React.FC = () => {
         count: equipInstalados.filter(e => e.modeloId === m.id).length,
     }));
 
-    const handleSaveModelo = (data: Omit<ModeloEquipamento, 'id'>) => {
+    // #212 — só fecha e confirma depois de o servidor aceitar; o erro sobe para o modal.
+    const handleSaveModelo = async (data: Omit<ModeloEquipamento, 'id'>) => {
         if (typeof mModal === 'string' && mModal !== 'new') {
-            updateModelo(mModal, data);
+            await updateModelo(mModal, data);
             showToast('Modelo actualizado.', 'success');
         } else {
-            const m = addModelo(data);
-            showToast(`Modelo ${m.id} criado.`, 'success');
+            const m = await addModelo(data);
+            showToast(`Modelo ${m.nome} criado.`, 'success');
         }
         setMModal(null);
     };
