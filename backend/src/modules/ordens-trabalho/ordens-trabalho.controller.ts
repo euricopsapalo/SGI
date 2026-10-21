@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe, Query, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe, Query, Request, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { OrdensTrabalhoService } from './ordens-trabalho.service';
 import { CreateOrdemTrabalhoDto } from './dto/create-ordem-trabalho.dto';
@@ -14,10 +14,13 @@ import {
 import { RegistarConsumoDto } from './dto/registar-consumo.dto';
 import { Roles, ESCRITORIO } from '../auth/roles.decorator';
 import { utilizadorDoPedido } from '../auth/utilizador-do-pedido';
+import { OtAcessoGuard } from './ot-acesso.guard';
 
 @ApiTags('ordens')
 @ApiBearerAuth('access-token')
 @Controller('ordens')
+// #220 — o técnico de campo só acede às suas OTs (404 nas restantes).
+@UseGuards(OtAcessoGuard)
 export class OrdensTrabalhoController {
     constructor(private readonly service: OrdensTrabalhoService) {}
 

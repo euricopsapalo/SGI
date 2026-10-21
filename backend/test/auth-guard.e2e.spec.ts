@@ -190,9 +190,7 @@ describe('JwtAuthGuard E2E — protecção global de endpoints', () => {
   // ─────────────────────────────────────────────
 
   describe('Inventário de endpoints @Public() do projecto', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const path = require('path');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const fs = require('fs');
 
     const PUBLIC_ALLOWLIST = [

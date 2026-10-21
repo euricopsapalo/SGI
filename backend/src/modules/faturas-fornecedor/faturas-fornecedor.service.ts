@@ -99,31 +99,40 @@ export class FaturasFornecedorService {
         return this.findOne(saved.id);
     }
 
+    /**
+     * #215 — Transição de estado da VNC numa só transação, com a fatura bloqueada
+     * (`FOR UPDATE`): a verificação da transição, a saída de stock da devolução, os
+     * movimentos e o novo estado gravam-se juntos. Uma falha a meio não deixa stock
+     * alterado, e duas validações em simultâneo não descontam o stock duas vezes.
+     */
     async updateEstado(id: number, novoEstado: string, usuario?: string) {
-        const fatura = await this.faturaRepo.findOne({ where: { id }, relations: ['linhas'] });
-        if (!fatura) throw new BadRequestException(`Fatura ${id} não encontrada.`);
-        if (fatura.tipoDocumento?.toUpperCase() !== 'VNC')
-            throw new BadRequestException('Transição de estado apenas permitida para documentos VNC.');
-
         const TRANSITIONS: Record<string, string[]> = {
             NA:               ['AguardaAprovacao', 'Rascunho'],  // fallback for legacy/pre-sync docs
             Rascunho:         ['AguardaAprovacao'],
             AguardaAprovacao: ['Validado', 'Rascunho'],
             Validado:         [],
         };
-        // Normalise: treat 'NA' on a VNC doc as 'Rascunho' for transition purposes
-        const current = (fatura.estadoDocumento === 'NA' || !fatura.estadoDocumento)
-            ? 'Rascunho'
-            : fatura.estadoDocumento;
-        if (!TRANSITIONS[current]?.includes(novoEstado))
-            throw new BadRequestException(`Transição inválida: ${current} → ${novoEstado}`);
 
-        // Impacto em stock: só Devolução ao transitar para Validado
-        if (novoEstado === 'Validado' && fatura.tipoNotaCredito === 'Devolucao') {
-            // #204 — a devolução sai de stock_armazem (armazém do artigo e, se faltar, dos
-            // restantes), com os movimentos, numa transação. Sem stock suficiente → 422.
-            await this.artigoRepo.manager.transaction(async (m) => {
-                for (const linha of fatura.linhas) {
+        await this.artigoRepo.manager.transaction(async (m) => {
+            // Lock só na linha da fatura (FOR UPDATE não se aplica a joins opcionais); as linhas lêem-se à parte.
+            const fatura = await m.findOne(FaturaFornecedor, { where: { id }, lock: { mode: 'pessimistic_write' } });
+            if (!fatura) throw new BadRequestException(`Fatura ${id} não encontrada.`);
+            if (fatura.tipoDocumento?.toUpperCase() !== 'VNC')
+                throw new BadRequestException('Transição de estado apenas permitida para documentos VNC.');
+
+            // Normalise: treat 'NA' on a VNC doc as 'Rascunho' for transition purposes
+            const current = (fatura.estadoDocumento === 'NA' || !fatura.estadoDocumento)
+                ? 'Rascunho'
+                : fatura.estadoDocumento;
+            if (!TRANSITIONS[current]?.includes(novoEstado))
+                throw new BadRequestException(`Transição inválida: ${current} → ${novoEstado}`);
+
+            // Impacto em stock: só Devolução ao transitar para Validado
+            if (novoEstado === 'Validado' && fatura.tipoNotaCredito === 'Devolucao') {
+                // #204 — a devolução sai de stock_armazem (armazém do artigo e, se faltar, dos
+                // restantes — a VNC não indica armazém). Sem stock suficiente → 422 e rollback.
+                const linhas = await m.find(LinhaFaturaFornecedor, { where: { fatura: { id } } });
+                for (const linha of linhas) {
                     const prodId = linha.produtoId ? Number(linha.produtoId) : null;
                     if (!prodId || !(Number(linha.quantidade) > 0)) continue;
                     const artigo = await m.findOne(Artigo, { where: { id: prodId } });
@@ -140,11 +149,11 @@ export class FaturasFornecedorService {
                         observacao: `Devolução via VNC id=${id}`,
                     } as any));
                 }
-            });
-        }
-        // AcertoPreco → sem impacto em stock
+            }
+            // AcertoPreco → sem impacto em stock
 
-        await this.faturaRepo.update(id, { estadoDocumento: novoEstado });
+            await m.update(FaturaFornecedor, id, { estadoDocumento: novoEstado });
+        });
         return this.findOne(id);
     }
 
