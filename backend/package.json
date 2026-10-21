@@ -10,6 +10,9 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --runInBand --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.config.js --runInBand",
+    "lint": "eslint \"{src,test}/**/*.ts\"",
+    "lint:fix": "eslint \"{src,test}/**/*.ts\" --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "migration:generate": "typeorm-ts-node-commonjs -d src/database/data-source.ts migration:generate src/migrations/Migration",
     "migration:run": "typeorm-ts-node-commonjs -d src/database/data-source.ts migration:run",
     "migration:revert": "typeorm-ts-node-commonjs -d src/database/data-source.ts migration:revert",
@@ -133,6 +136,7 @@
     "typeorm": "^0.3.20"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@nestjs/cli": "^10.4.9",
     "@nestjs/testing": "^10.4.22",
     "@types/bcryptjs": "^2.4.6",
@@ -142,12 +146,17 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/pdf-parse": "1.1.5",
     "@types/supertest": "^7.2.0",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.5.0",
     "jest": "^30.3.0",
     "pdf-parse": "1.1.1",
+    "prettier": "^3.9.10",
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.72.0"
   }
 }

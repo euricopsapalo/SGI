@@ -8,7 +8,6 @@ import { JwtModule, JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import * as request from 'supertest';
 // pdf-parse/lib evita o modo de depuração do index (que lê um ficheiro de teste).
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const pdfParse: (b: Buffer) => Promise<{ numpages: number; text: string }> = require('pdf-parse/lib/pdf-parse.js');
 import { JwtAuthGuard } from '../src/modules/auth/jwt-auth.guard';
 import { JwtStrategy } from '../src/modules/auth/jwt.strategy';
