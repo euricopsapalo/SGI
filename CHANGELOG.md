@@ -4,6 +4,16 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(faturacao): retirado o ecrã "Faturação (anterior)", que marcava faturas como Paga fora da Tesouraria (closes #218)
+
+- **Antes:** o menu ainda mostrava "Faturação (anterior)". O ecrã fazia `PUT /faturas/:id` com `estado: 'Paga'`, sem liquidação nem movimento de caixa ou de conta.
+- **Frontend:**
+  - saem o ecrã, a entrada de menu e, do contexto, as faturas antigas (estado, carregamento, `addFatura` e `updateFatura`);
+  - a rota `/faturacao` passa a levar a Vendas.
+- **Backend:** o `PUT /faturas/:id` deixa de aceitar `estado`, `dataPagamento`, `comprovativo` e `motivoAnulacao`. O DTO dá 400 e o serviço ignora-os se o DTO for contornado. O `POST` já estava fechado (410) desde o #165.
+- Na BD de dev há 0 faturas antigas. O `GET /faturas` continua disponível para consulta.
+- Testes: o DTO rejeita os 4 campos e o serviço retira-os do patch.
+
 ### feat(deploy): imagem de produção do frontend (build estático + nginx) (closes #208)
 
 - **Antes:** `frontend/Dockerfile` corria `npm start` (servidor de desenvolvimento) e o `docker-compose.prod.yml` não definia o serviço frontend. Em produção ficava o servidor de dev, com bind-mount do código.

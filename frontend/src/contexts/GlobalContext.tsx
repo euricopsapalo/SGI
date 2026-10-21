@@ -271,17 +271,7 @@ export interface FaturaFornecedor {
     linhas: LinhaFaturaFornecedor[];
 }
 
-// ── Invoices ───────────────────────────────────────────────
-export type FaturaEstado = 'Pendente' | 'Paga' | 'Anulada' | 'Emitido';
-export interface FaturaLinha { descricao: string; quantidade: number; precoUnit: number; }
-export interface Fatura {
-    id: string; tipoDocumento: string; otId: string; clienteId: string; dataEmissao: string;
-    linhas: FaturaLinha[];
-    precoServico: number; taxaIva: number;
-    valorSubtotal: number; valorIva: number; valorTotal: number;
-    moeda: string; estado: FaturaEstado; observacoes?: string;
-    dataPagamento?: string; motivoAnulacao?: string; comprovativo?: string; nrSerieEquip?: string;
-}
+// #218 — as faturas do módulo antigo saíram do frontend: a faturação é feita em Vendas.
 
 // ── Empresa Config ─────────────────────────────────────────
 export interface EmpresaConfig {
@@ -524,17 +514,6 @@ const normFaturaFornecedor = (f: any): FaturaFornecedor => ({
     })),
 });
 
-const normFatura = (f: any): Fatura => ({
-    id: f.id?.toString(), tipoDocumento: f.tipoDocumento ?? 'FAT',
-    otId: f.otId?.toString() ?? '', clienteId: f.cliente?.id?.toString() ?? f.clienteId?.toString() ?? '',
-    dataEmissao: f.dataEmissao, precoServico: Number(f.precoServico),
-    taxaIva: Number(f.taxaIva ?? 14), valorSubtotal: Number(f.valorSubtotal),
-    valorIva: Number(f.valorIva), valorTotal: Number(f.valorTotal),
-    moeda: f.moeda ?? 'AOA', estado: f.estado ?? 'Pendente',
-    observacoes: f.observacoes, dataPagamento: f.dataPagamento,
-    motivoAnulacao: f.motivoAnulacao, comprovativo: f.comprovativo, nrSerieEquip: f.nrSerieEquip,
-    linhas: (f.linhas ?? []).map((l: any) => ({ descricao: l.descricao, quantidade: Number(l.quantidade), precoUnit: Number(l.precoUnit) })),
-});
 
 /* ══════════════════════════════════════════════════════════════
    CONTEXT DEFINITION
@@ -598,7 +577,6 @@ interface GlobalContextType {
     criarRececao: (encId: string, recebidas: { artigoId: string; qtd: number }[], guiaRemessa: string, operador: string, armazem: string) => Promise<Encomenda>;
     anularRececao: (rececaoId: string) => Promise<Encomenda>;
     // Invoices
-    faturas: Fatura[]; addFatura: (f: Omit<Fatura, 'id'>) => Fatura; updateFatura: (id: string, f: Partial<Fatura>) => void;
     // Supplier Invoices
     faturasFornecedor: FaturaFornecedor[]; addFaturaFornecedor: (f: Omit<FaturaFornecedor, 'id'> & { faturasAssociadasIds?: string[] }) => Promise<FaturaFornecedor>; updateFaturaFornecedor: (id: string, f: Partial<FaturaFornecedor>) => void; updateEstadoVNC: (id: string, estado: string, usuario?: string) => Promise<void>;
     // Reload
@@ -722,7 +700,6 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [stockArmazem, setStockArmazem] = useState<StockArmazem[]>([]);
     const [movimentosStock, setMovimentosStock] = useState<MovimentoStock[]>([]);
     const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
-    const [faturas, setFaturas] = useState<Fatura[]>([]);
 
     /* ── Initial data load ──────────────────────────────────── */
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -760,7 +737,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 skip,                             // 16 artigos → React Query
                 api.get(`/movimentos-stock`),      // 17
                 api.get(`/compras`),            // 18
-                api.get(`/faturas`),               // 19
+                skip,                             // 19 faturas antigas → retiradas (#218)
                 api.get(`/logs`),                  // 20
                 api.get(`/configuracao`),          // 21
                 api.get(`/artigos/stock-armazem`), // 22
@@ -789,7 +766,6 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             try { setArmazens(ok(results[15]).map(norm)); } catch {}
             try { setMovimentosStock(ok(results[17]).map(normMovimento)); } catch {}
             try { setEncomendas(ok(results[18]).map(normEncomenda)); } catch {}
-            try { setFaturas(ok(results[19]).map(normFatura)); } catch {}
             try { setLogs(ok(results[20]).map(norm)); } catch {}
             try { setStockArmazem(ok(results[22]).map(normStockArmazem)); } catch {}
             try { setTaxasIva(ok(results[23]).map((r: any) => ({ ...norm(r), taxa: Number(r.taxa) }))); } catch {}
@@ -1567,25 +1543,6 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return enc;
     };
 
-    /* ── Invoices ───────────────────────────────────────────── */
-    const addFatura = (f: Omit<Fatura, 'id'>): Fatura => {
-        const placeholder: Fatura = { ...f, id: '' };
-        api.post(`/faturas`, f)
-            .then(({ data }) => {
-                const n = normFatura(data);
-                setFaturas(p => [...p, n]);
-                log('Faturação', 'Documento emitido', `Tipo: ${f.tipoDocumento} | Total: ${f.valorTotal} ${f.moeda}`);
-            })
-            .catch(() => {});
-        return placeholder;
-    };
-    const updateFatura = async (id: string, f: Partial<Fatura>) => {
-        try {
-            await api.put(`/faturas/${id}`, f);
-            setFaturas(p => p.map(x => x.id === id ? { ...x, ...f } : x));
-        } catch (e) { throw e; }
-    };
-
     /* ── Disponível e ruptura a partir do stock_reservado do backend ──
      * #202 — o reservado vem de `artigos.stock_reservado`, mantido pelo backend
      * (RF-OT-004: reserva na confirmação, liberta ao adiar, baixa no fecho).
@@ -1663,7 +1620,6 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             stockArmazem, upsertStockArmazem, removeStockArmazem,
             movimentosStock, addMovimento,
             encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao,
-            faturas, addFatura, updateFatura,
             faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC,
             loadingData,
             reloadData,

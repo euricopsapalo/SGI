@@ -28,7 +28,9 @@ export class FaturasService {
     }
 
     async update(id: number, body: any) {
-        const { linhas, clienteId, ...rest } = body;
+        // #218 — o estado e o pagamento nunca mudam por aqui, mesmo que o DTO seja contornado.
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { linhas, clienteId, estado, dataPagamento, comprovativo, motivoAnulacao, ...rest } = body;
         await this.repo.update(id, rest);
         return this.findOne(id);
     }
