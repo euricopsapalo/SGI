@@ -9,6 +9,7 @@ import { EncomendaLinha } from './encomenda-linha.entity';
 import { Rececao, RececaoItem } from './rececao.entity';
 import { Artigo } from '../artigos/artigo.entity';
 import { entradaStock, saidaStock } from '../artigos/stock-armazem.ops';
+import { MovimentoStock } from '../artigos/movimento-stock.entity';
 
 // #204 — o stock entra/sai via stock-armazem.ops (testado à parte).
 jest.mock('../artigos/stock-armazem.ops', () => ({
@@ -24,6 +25,8 @@ describe('EncomendaService', () => {
     let rececaoRepo: any;
     let artigoRepo: any;
     let artigos: Record<number, any>;
+    // #213 — movimentos gravados dentro da transação da receção/anulação.
+    let movimentos: any[];
 
     // Manager em memória para dataSource.transaction (receberLinhas).
     const makeManager = (repos: any) => {
@@ -33,18 +36,22 @@ describe('EncomendaService', () => {
             if (entity === Rececao) return repos.rececao;
             if (entity === RececaoItem) return repos.rececaoItem;
             if (entity === Artigo) return repos.artigo;
+            if (entity === MovimentoStock) return repos.mov;
             return {};
         };
         return {
             getRepository: repo,
             findOne: (entity: any, opts: any) => repo(entity).findOne(opts),
             update: (entity: any, id: any, patch: any) => repo(entity).update(id, patch),
+            create: (_entity: any, v: any) => ({ ...v }),
+            save: async (entity: any, v: any) => (entity === MovimentoStock ? (movimentos.push(v), v) : v),
         };
     };
 
     beforeEach(async () => {
         jest.clearAllMocks();
         artigos = { 1: { id: 1, existencia: 10, stockEncomendado: 4 } };
+        movimentos = [];
         encomendaRepo = {
             find: jest.fn(async () => [{ id: 1 }]),
             findOne: jest.fn(),
@@ -133,6 +140,8 @@ describe('EncomendaService', () => {
         expect(artigos[1].existencia).toBe(10); // a existência é recalculada pelo helper
         expect(artigos[1].stockEncomendado).toBe(0);
         expect(encomendaRepo.update).toHaveBeenCalledWith(1, { estado: EstadoEncomenda.RECEBIDA });
+        // #213 — o movimento de entrada é gravado na mesma transação (já não é o frontend)
+        expect(movimentos).toEqual([expect.objectContaining({ tipo: 'entrada', quantidade: 5, armazemId: 'ARM-01', artigo: { id: 1 } })]);
     });
 
     it('receberLinhas lança 404 se a encomenda não existe', async () => {
@@ -150,7 +159,10 @@ describe('EncomendaService', () => {
         // recalcularEstado → findOne devolve encomenda sem nada recebido
         encomendaRepo.findOne.mockResolvedValue({ id: 1, estado: EstadoEncomenda.RECEBIDA, linhas: [{ qtdEncomendada: 5, qtdRecebida: 0 }] });
 
-        await service.anularRececao(1);
+        (saidaStock as jest.Mock).mockResolvedValueOnce(5);
+        await service.anularRececao(1, 'ana@aquatex.ao');
+        // #213 — a reversão fica no histórico de movimentos
+        expect(movimentos).toEqual([expect.objectContaining({ tipo: 'saida', quantidade: 5, armazemId: 'ARM-02', usuario: 'ana@aquatex.ao' })]);
         // #204 — sai do armazém da receção (no máximo o que lá existe); encomendado 4 + 5 = 9
         expect(saidaStock).toHaveBeenCalledWith(expect.anything(), 1, 5, { armazem: 'ARM-02', limitarAoExistente: true });
         expect(artigos[1].stockEncomendado).toBe(9);

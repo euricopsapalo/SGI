@@ -2343,7 +2343,7 @@ function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: st
 
 /* ══ Page ════════════════════════════════════════════════════ */
 const EncomendaPage: React.FC = () => {
-    const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, taxasIva, updateArtigo, addMovimento, currentUser, empresaConfig, fmtMoney, fmtDate, fmt, simboloMoeda, faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC, condicoesPagamento, modosPagamento, loadingData } = useGlobal();
+    const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, taxasIva, updateArtigo, currentUser, empresaConfig, fmtMoney, fmtDate, fmt, simboloMoeda, faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC, condicoesPagamento, modosPagamento, loadingData } = useGlobal();
     const confirm = useConfirm();
 
     const [pageTab,   setPageTab]   = useState<'encomendas' | 'sugestoes' | 'compras' | 'relatorios'>('encomendas');
@@ -2469,10 +2469,9 @@ const EncomendaPage: React.FC = () => {
     const handleReceber = async (encId: string, recebidas: { artigoId: string; qtd: number }[], armazem: string, guiaRemessa: string) => {
         try {
             const updatedEnc = await criarRececao(encId, recebidas, guiaRemessa, currentUser?.nome ?? 'Operador', armazem);
-            const hoje = new Date().toISOString().split('T')[0];
+            // #213 — o movimento de entrada é registado pelo servidor, na transação da receção.
             for (const r of recebidas) {
                 await updateArtigo(r.artigoId, { codigoArmazem: armazem });
-                await addMovimento({ artigoId: r.artigoId, tipo: 'entrada', quantidade: r.qtd, armazemId: armazem, referencia: encId, usuario: currentUser?.email, observacao: `Recepção ${encId} · GR: ${guiaRemessa}`, data: hoje });
             }
             // Find the newly created rececao (most recent Ativa)
             const newRececao = [...updatedEnc.rececoes]
