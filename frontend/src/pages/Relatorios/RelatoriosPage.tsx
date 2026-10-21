@@ -1,8 +1,10 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
-import { BarChart3, TrendingUp, Users, Download, Package, Search, Briefcase, Trophy, MapPin, Receipt } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Download, Package, Search, Briefcase, Trophy, MapPin, Receipt, ChevronLeft, ChevronRight } from 'lucide-react';
+import { listarMovimentos, MovimentosResposta } from '../../services/movimentos';
+import type { TipoMovimento } from '../../contexts/GlobalContext';
 import { useGlobal } from '../../contexts/GlobalContext';
 import VendasRelatorioTab from './VendasRelatorioTab';
 import { useResumoFaturacao } from '../../utils/useResumoFaturacao';
@@ -101,7 +103,7 @@ const COLS: Record<Exclude<RelTab, 'vendas'>, ExportCol[]> = {
 
 /* ══════════════════════════════════════════════════════════ */
 const RelatoriosPage: React.FC = () => {
-    const { ordens, movimentosStock, artigos, armazens, clientes, equipInstalados, provincias, empresaConfig, fmtMoney, fmtDate, fmt: fmtNum } = useGlobal();
+    const { ordens, armazens, clientes, equipInstalados, provincias, empresaConfig, fmtMoney, fmtDate, fmt: fmtNum } = useGlobal();
     const fmtKz = fmtMoney;
 
     // #206 — faturação a partir dos documentos de venda emitidos (as NC abatem),
@@ -231,10 +233,16 @@ const RelatoriosPage: React.FC = () => {
     const [comTipo,    setComTipo]    = useState('');
     const [comSearch,  setComSearch]  = useState('');
     const [prodSearch, setProdSearch] = useState('');
-    const [movTipo,    setMovTipo]    = useState('');
+    const [movTipo,    setMovTipo]    = useState<TipoMovimento | ''>('');
     const [movDe,      setMovDe]      = useState('');
     const [movAte,     setMovAte]     = useState('');
     const [movSearch,  setMovSearch]  = useState('');
+    // #221 — os movimentos são pedidos ao servidor, por página, só quando o separador está aberto.
+    const [movQ,       setMovQ]       = useState('');
+    const [movPagina,  setMovPagina]  = useState(1);
+    const [movDados,   setMovDados]   = useState<MovimentosResposta | null>(null);
+    const [movLoading, setMovLoading] = useState(false);
+    const MOV_POR_PAGINA = 50;
 
     const filtFaturacao = useMemo(() =>
         faturacaoMensal.filter(m => (!fatDeEff || m.mes_key >= fatDeEff) && (!fatAteEff || m.mes_key <= fatAteEff)),
@@ -256,39 +264,44 @@ const RelatoriosPage: React.FC = () => {
         [produtividadeData, prodSearch]
     );
 
-    const movimentosEnrich = useMemo(() =>
-        [...movimentosStock].sort((a, b) => b.data.localeCompare(a.data)).map(m => {
-            const art  = artigos.find(a => a.id === m.artigoId);
+    useEffect(() => {
+        const t = setTimeout(() => { setMovQ(movSearch); setMovPagina(1); }, 300);
+        return () => clearTimeout(t);
+    }, [movSearch]);
+
+    useEffect(() => {
+        if (tab !== 'movimentos') return;
+        let ativo = true;
+        setMovLoading(true);
+        listarMovimentos({ pagina: movPagina, porPagina: MOV_POR_PAGINA, tipo: movTipo, q: movQ, de: movDe, ate: movAte })
+            .then(r => { if (ativo) setMovDados(r); })
+            .catch(() => { if (ativo) setMovDados(null); })
+            .finally(() => { if (ativo) setMovLoading(false); });
+        return () => { ativo = false; };
+    }, [tab, movPagina, movTipo, movQ, movDe, movAte]);
+
+    const filtMovimentos = useMemo(() =>
+        (movDados?.items ?? []).map(m => {
             const resolveArm = (val?: string) => val ? (armazens.find(a => a.codigo === val || a.id === val)?.codigo ?? val) : '';
             const armLabel = m.armazemDestinoId
                 ? `${resolveArm(m.armazemId)} → ${resolveArm(m.armazemDestinoId)}`
                 : resolveArm(m.armazemId);
             const tipoLabel = TIPO_LABEL[m.tipo] ?? m.tipo;
             const qtdDisplay = m.tipo === 'saida' || m.tipo === 'devolucao' ? -Math.abs(m.quantidade) : m.quantidade;
-            const rawData = m.data.includes('/') ? m.data.split('/').reverse().join('-') : m.data.split('T')[0];
             return {
-                id: m.id, data: fmtDate(rawData), rawData,
+                id: m.id, data: fmtDate(m.data), rawData: m.data,
                 tipo: tipoLabel,
-                artigo: art?.descricao ?? (m.artigoId || '—'), codigo: art?.codigo ?? '',
+                artigo: m.artigoDescricao || m.artigoId || '—', codigo: m.artigoCodigo,
                 armazem: armLabel,
                 quantidade: qtdDisplay,
                 origem: m.referencia ?? m.observacao ?? '',
                 utilizador: m.usuario ?? '',
             };
         }),
-        [movimentosStock, artigos, armazens, fmtDate]
+        [movDados, armazens, fmtDate]
     );
-
-    const filtMovimentos = useMemo(() =>
-        movimentosEnrich.filter(m =>
-            (!movTipo   || m.tipo === movTipo) &&
-            (!movDe     || m.rawData >= movDe) &&
-            (!movAte    || m.rawData <= movAte) &&
-            (!movSearch || m.artigo.toLowerCase().includes(movSearch.toLowerCase()) ||
-                           m.codigo.toLowerCase().includes(movSearch.toLowerCase()))
-        ),
-        [movimentosEnrich, movTipo, movDe, movAte, movSearch]
-    );
+    const movPorTipo = movDados?.porTipo ?? { entrada: 0, saida: 0, ajuste: 0, transferencia: 0, devolucao: 0 };
+    const movTotalPaginas = Math.max(1, Math.ceil((movDados?.total ?? 0) / MOV_POR_PAGINA));
 
     const [carteiraSearch, setCarteiraSearch] = useState('');
     const filtCarteira = useMemo(() =>
@@ -750,30 +763,30 @@ const RelatoriosPage: React.FC = () => {
                         <div className="filters-bar" style={{ marginBottom: 14 }}>
                             <div className="search-wrap">
                                 <Search className="search-icon" />
-                                <input className="search-input" placeholder="Artigo ou código…" value={movSearch} onChange={e => setMovSearch(e.target.value)} />
+                                <input className="search-input" placeholder="Artigo ou código…" aria-label="Pesquisar artigo" value={movSearch} onChange={e => setMovSearch(e.target.value)} />
                             </div>
-                            <select className="filter-select" value={movTipo} onChange={e => setMovTipo(e.target.value)}>
+                            <select className="filter-select" aria-label="Tipo de movimento" value={movTipo} onChange={e => { setMovTipo(e.target.value as TipoMovimento | ''); setMovPagina(1); }}>
                                 <option value="">Todos os tipos</option>
-                                <option value="Entrada">Entrada</option>
-                                <option value="Saída">Saída</option>
-                                <option value="Ajuste">Ajuste</option>
-                                <option value="Transferência">Transferência</option>
-                                <option value="Devolução">Devolução</option>
+                                <option value="entrada">Entrada</option>
+                                <option value="saida">Saída</option>
+                                <option value="ajuste">Ajuste</option>
+                                <option value="transferencia">Transferência</option>
+                                <option value="devolucao">Devolução</option>
                             </select>
                             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                De: <input type="date" className="filter-select" style={{ width: 130 }} value={movDe} onChange={e => setMovDe(e.target.value)} />
+                                De: <input type="date" className="filter-select" style={{ width: 130 }} value={movDe} onChange={e => { setMovDe(e.target.value); setMovPagina(1); }} />
                             </label>
                             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                                Até: <input type="date" className="filter-select" style={{ width: 130 }} value={movAte} onChange={e => setMovAte(e.target.value)} />
+                                Até: <input type="date" className="filter-select" style={{ width: 130 }} value={movAte} onChange={e => { setMovAte(e.target.value); setMovPagina(1); }} />
                             </label>
                         </div>
 
                         <div className="stats-row" style={{ marginBottom: 16 }}>
                             {[
-                                { label: 'Total',    value: filtMovimentos.length },
-                                { label: 'Entradas', value: filtMovimentos.filter(m => m.tipo === 'Entrada').length,                              cls: 'green' },
-                                { label: 'Saídas',   value: filtMovimentos.filter(m => m.tipo === 'Saída' || m.tipo === 'Devolução').length,  cls: 'muted' },
-                                { label: 'Outros',   value: filtMovimentos.filter(m => m.tipo === 'Ajuste' || m.tipo === 'Transferência').length, cls: 'blue' },
+                                { label: 'Total',    value: movPorTipo.entrada + movPorTipo.saida + movPorTipo.devolucao + movPorTipo.ajuste + movPorTipo.transferencia },
+                                { label: 'Entradas', value: movPorTipo.entrada,                               cls: 'green' },
+                                { label: 'Saídas',   value: movPorTipo.saida + movPorTipo.devolucao,          cls: 'muted' },
+                                { label: 'Outros',   value: movPorTipo.ajuste + movPorTipo.transferencia,     cls: 'blue' },
                             ].map(s => (
                                 <div key={s.label} className="stat-card">
                                     <span className="stat-label">{s.label}</span>
@@ -792,8 +805,9 @@ const RelatoriosPage: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filtMovimentos.length === 0 && <tr><td colSpan={8}><div className="empty-state">Sem movimentos de stock registados.</div></td></tr>}
-                                    {filtMovimentos.map((m, i) => (
+                                    {movLoading && <tr><td colSpan={8}><div className="empty-state">A carregar…</div></td></tr>}
+                                    {!movLoading && filtMovimentos.length === 0 && <tr><td colSpan={8}><div className="empty-state">Sem movimentos de stock registados.</div></td></tr>}
+                                    {!movLoading && filtMovimentos.map((m, i) => (
                                         <tr key={i}>
                                             <td style={{ fontSize: '0.78rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{m.data}</td>
                                             <td><span style={{ fontSize: '0.75rem', fontWeight: 700, color: TIPO_MOV_COLOR[m.tipo] ?? 'var(--text-primary)' }}>{m.tipo}</span></td>
@@ -809,7 +823,13 @@ const RelatoriosPage: React.FC = () => {
                                     ))}
                                 </tbody>
                             </table>
-                            <div className="table-count">{filtMovimentos.length} movimentos</div>
+                            <div className="table-count" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                {movDados?.total ?? 0} movimentos · Página {movPagina} de {movTotalPaginas}
+                                <button type="button" className="icon-btn" aria-label="Página anterior" disabled={movPagina <= 1}
+                                    onClick={() => setMovPagina(p => p - 1)}><ChevronLeft size={13} /></button>
+                                <button type="button" className="icon-btn" aria-label="Página seguinte" disabled={movPagina >= movTotalPaginas}
+                                    onClick={() => setMovPagina(p => p + 1)}><ChevronRight size={13} /></button>
+                            </div>
                         </div>
                     </>
                 )}

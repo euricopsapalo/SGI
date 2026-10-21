@@ -93,9 +93,12 @@ describe('AuthService — segurança (issue #100)', () => {
   });
 
   describe('política de passwords', () => {
-    it('changePassword rejeita password abaixo do mínimo', async () => {
+    it('changePassword rejeita password abaixo do mínimo, com o erro no campo (#219)', async () => {
       userRepo.findOne.mockResolvedValue(baseUser());
-      await expect(service.changePassword(1, senha, 'curta')).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.changePassword(1, senha, 'curta')).rejects.toMatchObject({
+        status: 422, response: { errors: { newPassword: expect.stringMatching(/pelo menos \d+ caracteres/) } },
+      });
+      expect(userRepo.update).not.toHaveBeenCalled();
     });
 
     it('resetPassword rejeita password abaixo do mínimo', async () => {
@@ -219,9 +222,19 @@ describe('AuthService — segurança (issue #100)', () => {
       expect(userRepo.update).toHaveBeenCalledWith(1, expect.objectContaining({ passwordHash: expect.any(String) }));
     });
 
-    it('changePassword com password atual errada lança 400', async () => {
+    it('changePassword com password atual errada → 422 no campo currentPassword (#219)', async () => {
       userRepo.findOne.mockResolvedValue(baseUser());
-      await expect(service.changePassword(1, 'errada', 'password-nova-123')).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.changePassword(1, 'errada', 'password-nova-123')).rejects.toMatchObject({
+        status: 422, response: { errors: { currentPassword: 'A password atual está incorreta.' } },
+      });
+      expect(userRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('changePassword recusa uma nova password igual à atual (#219)', async () => {
+      userRepo.findOne.mockResolvedValue(baseUser());
+      await expect(service.changePassword(1, senha, senha)).rejects.toMatchObject({
+        status: 422, response: { errors: { newPassword: 'A nova password tem de ser diferente da atual.' } },
+      });
     });
 
     it('changePassword para utilizador inexistente lança 404', async () => {

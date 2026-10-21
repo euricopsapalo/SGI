@@ -7,6 +7,7 @@ import { AjusteExistenciaDto } from './dto/ajuste-existencia.dto';
 import { UpsertStockArmazemDto } from './dto/upsert-stock-armazem.dto';
 import { CreateMovimentoStockDto } from './dto/create-movimento-stock.dto';
 import { TransferenciaStockDto } from './dto/transferencia-stock.dto';
+import { ListarMovimentosDto } from './dto/listar-movimentos.dto';
 import { RolesEscrita, ESCRITORIO, Roles } from '../auth/roles.decorator';
 import { utilizadorDoPedido } from '../auth/utilizador-do-pedido';
 
@@ -83,7 +84,7 @@ export class MovimentosStockController {
     constructor(private readonly service: ArtigosService) {}
 
     @Get()
-    findAll() { return this.service.findAllMovimentos(); }
+    findAll(@Query() filtros: ListarMovimentosDto) { return this.service.findAllMovimentos(filtros); }
 
     @Get(':id')
     findOne(@Param('id', ParseIntPipe) id: number) { return this.service.findOneMovimento(id); }

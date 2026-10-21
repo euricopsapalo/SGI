@@ -415,4 +415,60 @@ describe('OrdensTrabalhoService (regression #15)', () => {
             expect(ot.documentoVendaNumero).toBe('FT 2026/1');
         });
     });
+
+    // ── #220 — o técnico de campo só vê as suas OTs ──────────────────
+    describe('acesso do técnico de campo (#220)', () => {
+        const tecnico = { id: 7, role: 'campo', email: 't@aquatex.ao' };
+        let tecnicoRepo: any;
+        beforeEach(() => {
+            tecnicoRepo = module.get(getRepositoryToken(Tecnico));
+            tecnicoRepo.findOne = jest.fn(async () => ({ id: 3 }));   // técnico 3 ligado ao user 7
+            (module.get(DataSource) as any).getRepository = jest.fn(() => ({ find: jest.fn(async () => []) }));
+        });
+
+        it('GET /ordens com perfil campo: só as OTs em que é executante ou que registou, ignorando a query', async () => {
+            await service.findAll({ _currentUser: tecnico, prioridade: 'Alta' });
+            expect(tecnicoRepo.findOne).toHaveBeenCalledWith({ where: { userId: 7 }, select: ['id'] });
+            expect(repo.find).toHaveBeenCalledWith(expect.objectContaining({
+                where: [{ prioridade: 'Alta', executadoPorId: 3 }, { prioridade: 'Alta', registadoPorId: 7 }],
+            }));
+        });
+
+        it('pedir as OTs de outro executante devolve só as que registou (ou nada)', async () => {
+            await service.findAll({ _currentUser: tecnico, executadoPorId: '9' });
+            expect(repo.find).toHaveBeenCalledWith(expect.objectContaining({ where: [{ executadoPorId: 9, registadoPorId: 7 }] }));
+
+            repo.find.mockClear();
+            await expect(service.findAll({ _currentUser: tecnico, executadoPorId: '9', registadoPorId: '1' })).resolves.toEqual([]);
+            expect(repo.find).not.toHaveBeenCalled();
+        });
+
+        it('outros perfis não têm restrição', async () => {
+            await service.findAll({ _currentUser: { id: 1, role: 'coordenador' } });
+            expect(repo.find).toHaveBeenCalledWith(expect.objectContaining({ where: undefined }));
+            expect(await service.podeAceder(5, { id: 1, role: 'admin' })).toBe(true);
+        });
+
+        it('?mine=true resolve o técnico pela BD (o token não traz o tecnicoId)', async () => {
+            await service.findAll({ _currentUser: { id: 1, role: 'coordenador' }, mine: 'true' });
+            expect(repo.find).toHaveBeenCalledWith(expect.objectContaining({ where: { executadoPorId: 3 } }));
+        });
+
+        it('podeAceder: executante ou quem registou sim; outra OT não', async () => {
+            repo.findOne.mockResolvedValueOnce({ id: 5, executadoPorId: 3, registadoPorId: 1 });
+            expect(await service.podeAceder(5, tecnico)).toBe(true);
+            repo.findOne.mockResolvedValueOnce({ id: 6, executadoPorId: null, registadoPorId: 7 });
+            expect(await service.podeAceder(6, tecnico)).toBe(true);
+            repo.findOne.mockResolvedValueOnce({ id: 8, executadoPorId: 4, registadoPorId: 1 });
+            expect(await service.podeAceder(8, tecnico)).toBe(false);
+        });
+
+        it('utilizador campo sem técnico ligado só vê as OTs que registou', async () => {
+            tecnicoRepo.findOne = jest.fn(async () => null);
+            await service.findAll({ _currentUser: tecnico });
+            expect(repo.find).toHaveBeenCalledWith(expect.objectContaining({ where: [{ registadoPorId: 7 }] }));
+            repo.findOne.mockResolvedValueOnce({ id: 8, executadoPorId: null, registadoPorId: 1 });
+            expect(await service.podeAceder(8, tecnico)).toBe(false);
+        });
+    });
 });
