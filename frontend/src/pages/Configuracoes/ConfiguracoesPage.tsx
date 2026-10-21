@@ -183,7 +183,7 @@ const TabelaInlineEditor: React.FC<{
     titulo: string;
     colunas: { key: string; label: string; type?: 'text' | 'number' }[];
     rows: Record<string, any>[];
-    onAdd: (row: Record<string, any>) => void;
+    onAdd: (row: Record<string, any>) => void | Promise<unknown>;
     onUpdate: (id: string, field: string, val: any) => void;
     onRemove: (id: string) => void;
 }> = ({ titulo, colunas, rows, onAdd, onUpdate, onRemove }) => {
@@ -248,7 +248,8 @@ const TabelaInlineEditor: React.FC<{
                         />
                     ))}
                     <button type="button" className="abtn abtn-primary" style={{ flexShrink: 0, fontSize: '0.78rem', padding: '4px 12px', height: 30 }}
-                        onClick={() => { onAdd(newRow); setNewRow(emptyRow()); }}>
+                        // #212 — só limpa a linha depois de o servidor aceitar (o erro já é mostrado pelo interceptor).
+                        onClick={async () => { try { await onAdd(newRow); setNewRow(emptyRow()); } catch { /* mantém a linha */ } }}>
                         <Plus size={11} /> Adicionar
                     </button>
                 </div>
