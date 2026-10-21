@@ -3,6 +3,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { SysLogsService } from './sys-logs.service';
 import { Roles } from '../auth/roles.decorator';
 import { CreateLogDto } from './dto/create-log.dto';
+import { ListarLogsDto } from './dto/listar-logs.dto';
 import { utilizadorDoPedido } from '../auth/utilizador-do-pedido';
 
 @ApiTags('logs')
@@ -12,10 +13,11 @@ export class SysLogsController {
     constructor(private readonly service: SysLogsService) {}
 
     // #198 — leitura dos registos só para admin; o POST fica aberto (todos registam ações).
+    // #210 — paginada e filtrada no servidor.
     @Get()
     @Roles('admin')
-    findAll(@Query('usuario') usuario?: string) {
-        return this.service.findAll(usuario);
+    findAll(@Query() filtros: ListarLogsDto) {
+        return this.service.listar(filtros);
     }
 
     @Get(':id')
