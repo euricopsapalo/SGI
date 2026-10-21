@@ -4,6 +4,12 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(users): o `update` aplica a política de comprimento mínimo de password
+
+- **Antes:** `UsersService.update` gravava o `passwordHash` sem validar a password, ao contrário do `create` e do change-password. Um admin conseguia definir uma password curta a outro utilizador.
+- **Agora:** chama `assertPasswordPolicy` (`minPasswordLength` das Configurações, #100) antes do `bcrypt.hash`. Uma password curta dá 400 e nada é gravado.
+- Testes em `users.service.spec.ts`: password curta → 400 sem gravar; password válida → grava o hash.
+
 ### feat(deploy): imagem de produção do frontend (build estático + nginx) (closes #208)
 
 - **Antes:** `frontend/Dockerfile` corria `npm start` (servidor de desenvolvimento) e o `docker-compose.prod.yml` não definia o serviço frontend. Em produção ficava o servidor de dev, com bind-mount do código.
