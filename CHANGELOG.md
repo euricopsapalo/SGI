@@ -4,6 +4,19 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(api): DELETE de encomendas e armazéns deixa de apagar dados de stock em cascata (closes #216)
+
+- **Antes:**
+  - `DELETE /compras/:id` apagava qualquer encomenda e levava as linhas e as receções (FK `CASCADE`), deixando o stock recebido e o `stockEncomendado` incoerentes;
+  - `DELETE /armazens/:id` apagava o `stock_armazem` do armazém sem recalcular a existência.
+- **Encomendas:** só se apagam se estiverem **Abertas e sem receções** (nem anuladas, porque são histórico de stock). O `stockEncomendado` pendente é libertado na mesma transação. Nos outros casos → **409**, e usa-se "Cancelar".
+- **Armazéns:**
+  - com stock → **409** (transfira o stock ou desative o armazém);
+  - sendo o armazém por omissão de algum artigo → **409**;
+  - nos outros casos, apaga as linhas vazias de `stock_armazem` e o armazém.
+- A UI não usa estes endpoints (só cancela ou desativa); a guarda protege a API.
+- Testes: os casos permitidos e cada recusa, sem apagar nem mexer no stock.
+
 ### feat(deploy): imagem de produção do frontend (build estático + nginx) (closes #208)
 
 - **Antes:** `frontend/Dockerfile` corria `npm start` (servidor de desenvolvimento) e o `docker-compose.prod.yml` não definia o serviço frontend. Em produção ficava o servidor de dev, com bind-mount do código.

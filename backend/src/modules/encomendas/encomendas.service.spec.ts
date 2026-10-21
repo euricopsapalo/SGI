@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { EncomendaService } from './encomendas.service';
 import { Encomenda, EstadoEncomenda } from './encomenda.entity';
 import { EncomendaLinha } from './encomenda-linha.entity';
@@ -39,6 +39,7 @@ describe('EncomendaService', () => {
             getRepository: repo,
             findOne: (entity: any, opts: any) => repo(entity).findOne(opts),
             update: (entity: any, id: any, patch: any) => repo(entity).update(id, patch),
+            delete: (entity: any, id: any) => repo(entity).delete(id),
         };
     };
 
@@ -115,9 +116,33 @@ describe('EncomendaService', () => {
         expect(linhaRepo.update).toHaveBeenCalledWith(3, { taxaIva: 14, codigoIva: 'I14' });
     });
 
-    it('remove apaga por id', async () => {
-        await service.remove(1);
-        expect(encomendaRepo.delete).toHaveBeenCalledWith(1);
+    describe('#216 — remove só apaga encomendas abertas e sem receções', () => {
+        it('aberta e sem receções: liberta o encomendado pendente e apaga, na mesma transação', async () => {
+            encomendaRepo.findOne.mockResolvedValue({
+                id: 1, estado: EstadoEncomenda.ABERTA, rececoes: [],
+                linhas: [{ id: 1, artigoId: 1, qtdEncomendada: 3, qtdRecebida: 0 }],
+            });
+            await service.remove(1);
+            expect(artigos[1].stockEncomendado).toBe(1); // 4 − 3
+            expect(encomendaRepo.delete).toHaveBeenCalledWith(1);
+        });
+
+        it.each([
+            ['com receções', { estado: EstadoEncomenda.ABERTA, rececoes: [{ id: 9, estado: 'Anulada' }] }],
+            ['parcial', { estado: EstadoEncomenda.PARCIAL, rececoes: [] }],
+            ['recebida', { estado: EstadoEncomenda.RECEBIDA, rececoes: [] }],
+            ['cancelada', { estado: EstadoEncomenda.CANCELADA, rececoes: [] }],
+        ])('%s → 409 sem apagar nem mexer no stock', async (_n, enc) => {
+            encomendaRepo.findOne.mockResolvedValue({ id: 1, linhas: [{ artigoId: 1, qtdEncomendada: 3, qtdRecebida: 0 }], ...enc });
+            await expect(service.remove(1)).rejects.toBeInstanceOf(ConflictException);
+            expect(encomendaRepo.delete).not.toHaveBeenCalled();
+            expect(artigos[1].stockEncomendado).toBe(4);
+        });
+
+        it('inexistente → 404', async () => {
+            encomendaRepo.findOne.mockResolvedValue(null);
+            await expect(service.remove(99)).rejects.toBeInstanceOf(NotFoundException);
+        });
     });
 
     it('receberLinhas dá entrada de stock, baixa o encomendado e marca RECEBIDA', async () => {
