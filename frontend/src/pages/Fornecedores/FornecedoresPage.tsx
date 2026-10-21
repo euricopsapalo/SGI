@@ -199,7 +199,7 @@ const RelatoriosFornecedorModal: React.FC<RelatoriosFornecedorModalProps> = ({
     const buildHtml = (): string => {
         if (tipo === 'ficha') {
             const f = fornecedores.find(x => x.id === fornecedorId);
-            if (!f) { alert('Seleccione um fornecedor.'); return ''; }
+            if (!f) { showToast('Seleccione um fornecedor.', 'warning'); return ''; }
             return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${RF_CSS}</style></head><body>${buildFichaFornecedorHtml(f, encomendas, getProvinciaNome(f.provinciaId), getMunicipioNome(f.municipioId), empresaConfig)}</body></html>`;
         } else if (tipo === 'categoria') {
             return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${RF_CSS}</style></head><body>${buildFornecedoresPorCategoriaHtml(fornecedores, encomendas, artigos, provincias, municipios, empresaConfig)}</body></html>`;
@@ -211,7 +211,7 @@ const RelatoriosFornecedorModal: React.FC<RelatoriosFornecedorModalProps> = ({
     const handlePrint = () => {
         if (tipo === 'ficha') {
             const f = fornecedores.find(x => x.id === fornecedorId);
-            if (!f) return alert('Seleccione um fornecedor.');
+            if (!f) { showToast('Seleccione um fornecedor.', 'warning'); return; }
             printFichaFornecedor(f, encomendas, getProvinciaNome(f.provinciaId), getMunicipioNome(f.municipioId), empresaConfig);
         } else if (tipo === 'categoria') {
             printFornecedoresPorCategoria(fornecedores, encomendas, artigos, provincias, municipios, empresaConfig);

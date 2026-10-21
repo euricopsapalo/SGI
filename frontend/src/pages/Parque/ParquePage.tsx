@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useModalA11y } from '../../components/useModalA11y';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
@@ -350,6 +351,7 @@ function printEstadoParque(
 
 /* ══ Relatório Estado Modal ══════════════════════════════ */
 const RelatorioEstadoModal: React.FC<{ onClose: () => void; onPrint: (s: EstadoSeccoes) => void; onPreview: (s: EstadoSeccoes) => void }> = ({ onClose, onPrint, onPreview }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const [ativos,      setAtivos]      = useState(true);
     const [manutencoes, setManutencoes] = useState(true);
     const [problemas,   setProblemas]   = useState(true);
@@ -367,7 +369,7 @@ const RelatorioEstadoModal: React.FC<{ onClose: () => void; onPrint: (s: EstadoS
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 440 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 440 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Relatório de Estado do Parque</h3>
                     <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
@@ -417,6 +419,7 @@ interface ModeloModalProps {
     onSave: (m: Omit<ModeloEquipamento, 'id'>) => void;
 }
 const ModeloModal: React.FC<ModeloModalProps> = ({ modelo, onClose, onSave }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const [nome, setNome]   = useState(modelo?.nome  ?? '');
     const [marca, setMarca] = useState(modelo?.marca ?? '');
     const [tipo, setTipo]   = useState<'maquina' | 'filtro'>(modelo?.tipo ?? 'maquina');
@@ -438,7 +441,7 @@ const ModeloModal: React.FC<ModeloModalProps> = ({ modelo, onClose, onSave }) =>
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 460 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 460 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">{modelo ? 'Editar Modelo' : 'Novo Modelo de Equipamento'}</h3>
                     <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
@@ -484,6 +487,7 @@ interface RegisterModalProps {
     onSave: (e: Omit<EquipInstalado, 'id'>) => void | Promise<void>;
 }
 const RegisterModal: React.FC<RegisterModalProps> = ({ equip, onClose, onSave }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { clientes, modelosEquipamento } = useGlobal();
 
     const [clienteId, setClienteId]     = useState(equip?.clienteId ?? '');
@@ -531,7 +535,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ equip, onClose, onSave })
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 540 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 540 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">{equip ? 'Editar Equipamento' : 'Registar Equipamento'}</h3>
                     <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
@@ -615,6 +619,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ equip, onClose, onSave })
 /* ══ Detalhe Modal ═══════════════════════════════════════ */
 interface DetalheProps { equipId: string; onClose: () => void; onEdit: () => void; }
 const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { equipInstalados, clientes, modelosEquipamento, planos, ordens, fmtDate, empresaConfig } = useGlobal();
     const [tab, setTab] = useState<'info' | 'historico'>('info');
     const [previewHtml, setPreviewHtml] = useState('');
@@ -672,7 +677,7 @@ const EquipDetalhe: React.FC<DetalheProps> = ({ equipId, onClose, onEdit }) => {
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 680 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 680 }}>
                 <div className="modal-header">
                     <div>
                         <h3 className="modal-title">{eq.id} — {mod?.nome}</h3>

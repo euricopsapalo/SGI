@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe, GoneException, Query, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, ParseIntPipe, Query, Request } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { OrdensTrabalhoService } from './ordens-trabalho.service';
 import { CreateOrdemTrabalhoDto } from './dto/create-ordem-trabalho.dto';
@@ -98,24 +98,4 @@ export class OrdensTrabalhoController {
     reprogramar(@Param('id', ParseIntPipe) id: number, @Body() dto: ReprogramarOtDto, @Request() req: any) {
         return this.service.reprogramar(id, dto.novaData, dto.dataAnterior, dto.motivo, utilizadorDoPedido(req));
     }
-
-    // ── Aliases descontinuados (410 Gone) — remover após 1 sprint ─────
-
-    private gone(antigo: string, novo: string): never {
-        throw new GoneException(
-            `Endpoint '${antigo}' foi descontinuado (RF-OT-001). Use '${novo}'.`,
-        );
-    }
-
-    @Put(':id/emitir')
-    emitir() { return this.gone('PUT /:id/emitir', 'PUT /:id/iniciar (após confirmar)'); }
-
-    @Put(':id/terminar')
-    terminar() { return this.gone('PUT /:id/terminar', 'PUT /:id/finalizar'); }
-
-    @Put(':id/encerrar')
-    encerrar() { return this.gone('PUT /:id/encerrar', 'PUT /:id/finalizar'); }
-
-    @Put(':id/reverter')
-    reverter() { return this.gone('PUT /:id/reverter', 'as transições explícitas da máquina de estados'); }
 }

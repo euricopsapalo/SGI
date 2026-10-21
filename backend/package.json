@@ -44,7 +44,15 @@
       "modules/tesouraria/liquidacoes.service.ts",
       "modules/tesouraria/conta-corrente.service.ts",
       "modules/vendas/impressao-fatura.service.ts",
-      "modules/tesouraria/impressao-recibo.service.ts"
+      "modules/tesouraria/impressao-recibo.service.ts",
+      "modules/clientes/clientes.service.ts",
+      "modules/tecnicos/tecnicos.service.ts",
+      "modules/parque/parque.service.ts",
+      "modules/planos/planos.service.ts",
+      "modules/fornecedores/fornecedores.service.ts",
+      "modules/faturas-fornecedor/faturas-fornecedor.service.ts",
+      "modules/tabelas-sistema/tabelas-sistema.service.ts",
+      "modules/users/users.service.ts"
     ],
     "coverageThreshold": {
       "global": {

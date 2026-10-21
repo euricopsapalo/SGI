@@ -55,4 +55,47 @@ describe('UsersService — Issue #65 (proteção do vínculo Tecnico↔User)', (
         await service.update(5, { role: UserRole.COORDENADOR } as any);
         expect(repo.update).toHaveBeenCalled();
     });
+
+    // #223 — cobertura: leitura sem segredos, criação com política, ativar/desativar e eliminar.
+    describe('restantes operações', () => {
+        beforeEach(() => {
+            repo.save = jest.fn(async (u: any) => ({ ...u, id: 9 }));
+            repo.delete = jest.fn(async () => ({ affected: 1 }));
+        });
+
+        it('findAll/findOne nunca devolvem o hash nem o segredo 2FA', async () => {
+            repo.find.mockResolvedValue([{ id: 1, email: 'a@x', passwordHash: 'h', twoFactorSecret: 's' }]);
+            repo.findOne.mockResolvedValue({ id: 1, email: 'a@x', passwordHash: 'h', twoFactorSecret: 's' });
+            expect(await service.findAll()).toEqual([{ id: 1, email: 'a@x' }]);
+            expect(await service.findOne(1)).toEqual({ id: 1, email: 'a@x' });
+            repo.findOne.mockResolvedValue(null);
+            expect(await service.findOne(2)).toBeNull();
+        });
+
+        it('create aplica a política de password e grava o hash', async () => {
+            await expect(service.create({ nome: 'A', email: 'a@x', password: 'curta' })).rejects.toThrow(/pelo menos 8/);
+            const u = await service.create({ nome: 'A', email: 'a@x', password: 'password-longa', role: 'vendedor' });
+            expect(u).toEqual(expect.objectContaining({ id: 9, email: 'a@x', role: 'vendedor' }));
+            expect(u).not.toHaveProperty('passwordHash');
+            expect(repo.save.mock.calls[0][0].passwordHash).toEqual(expect.any(String));
+        });
+
+        it('update com password grava o hash e não a password em claro', async () => {
+            repo.findOne.mockResolvedValue({ id: 5 });
+            await service.update(5, { password: 'password-nova' } as any);
+            const patch = repo.update.mock.calls[0][1];
+            expect(patch.passwordHash).toEqual(expect.any(String));
+            expect(patch).not.toHaveProperty('password');
+        });
+
+        it('activate/deactivate/remove', async () => {
+            repo.findOne.mockResolvedValue({ id: 5 });
+            await service.activate(5);
+            await service.deactivate(5);
+            await service.remove(5);
+            expect(repo.update).toHaveBeenCalledWith(5, { ativo: true });
+            expect(repo.update).toHaveBeenCalledWith(5, { ativo: false });
+            expect(repo.delete).toHaveBeenCalledWith(5);
+        });
+    });
 });

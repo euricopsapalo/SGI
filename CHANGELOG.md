@@ -4,6 +4,24 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### chore: acabamento e dívida técnica da auditoria (parte de #223)
+
+- **Acessibilidade:** o `useModalA11y` (Esc fecha, foco no modal, `role="dialog"`, `aria-modal`) passa a estar nos 25 modais que faltavam: Agenda, Compras, Ordens, Parque, Planos, Stock e `ExportModal`.
+- **Diálogos nativos:**
+  - os `alert()` dos relatórios de Técnicos e Fornecedores passam a toast;
+  - remover uma foto ou a assinatura de uma OT usa o `ConfirmDialog` em vez de `window.confirm`.
+- **Código morto:**
+  - sai o `adjustReservado` (a reserva é do backend, #202);
+  - sai o `Sidebar.tsx`, que não era importado;
+  - saem os aliases 410 das OTs (`emitir`, `terminar`, `encerrar`, `reverter`), que agora dão 404.
+- **Comentários:** retirados os "RF-OT-004 — TODO" do `confirmar` e do `adiar`, porque a reserva já está implementada.
+- **Faturas de fornecedor:** o `DELETE` deixa de apagar documentos pagos, compras diretas (deram entrada de stock) e VNC validadas → 409.
+- **Sessão:** se o `/auth/me` falhar ao restaurar a sessão, termina a sessão e volta ao login. Antes só apagava o token.
+- **Cobertura:**
+  - o `collectCoverageFrom` passa a incluir os serviços de clientes, técnicos, parque, planos, fornecedores, faturas de fornecedor, tabelas do sistema e utilizadores;
+  - novos testes para tabelas do sistema, fornecedores e utilizadores, para os limites continuarem a passar.
+- **Testes do frontend:** sem avisos `act(...)` no `useConfirm.test.tsx`.
+
 ### feat(deploy): imagem de produção do frontend (build estático + nginx) (closes #208)
 
 - **Antes:** `frontend/Dockerfile` corria `npm start` (servidor de desenvolvimento) e o `docker-compose.prod.yml` não definia o serviço frontend. Em produção ficava o servidor de dev, com bind-mount do código.

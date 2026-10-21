@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useModalA11y } from '../../components/useModalA11y';
 import AppLayout from '../../components/Layout/AppLayout';
 import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
@@ -46,6 +47,7 @@ const TABS_A = [
 type ATab = typeof TABS_A[number]['id'];
 
 const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { armazens, stockArmazem, upsertStockArmazem, removeStockArmazem, fmt, fmtMoney, taxasIva, fornecedores, classesArtigo, familiasArtigo } = useGlobal();
     const [tab, setTab] = useState<ATab>('ident');
 
@@ -153,7 +155,7 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 620 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 620 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">{artigo ? 'Editar Artigo' : 'Novo Artigo'}</h3>
                     <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
@@ -538,6 +540,7 @@ const TABS_V = TABS_A;
 type VTab = ATab;
 
 const ArtigoViewModal: React.FC<ArtigoViewModalProps> = ({ artigo, onClose, onEdit }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { armazens, stockArmazem, fmt, fmtMoney, taxasIva, fornecedores } = useGlobal();
     const [tab, setTab] = useState<VTab>('ident');
     const saEntries = stockArmazem.filter(sa => sa.artigoId === artigo.id);
@@ -559,7 +562,7 @@ const ArtigoViewModal: React.FC<ArtigoViewModalProps> = ({ artigo, onClose, onEd
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 620 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 620 }}>
                 <div className="modal-header">
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Eye size={15} style={{ color: 'var(--blue)' }} />
@@ -771,6 +774,7 @@ const printInventSheet = (artigos: Artigo[], lines: InventLine[], armazens: Arma
 };
 
 const InventarioModal: React.FC<InventarioModalProps> = ({ artigos, armazens, onClose, onConfirm }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fmt } = useGlobal();
     const resolveArmazem = (val: string) =>
         armazens.find(a => a.id === val || a.codigo === val)?.codigo ?? val;
@@ -821,7 +825,7 @@ const InventarioModal: React.FC<InventarioModalProps> = ({ artigos, armazens, on
                     <iframe srcDoc={previewHtml} title="Pré-visualização" style={{ flex: 1, border: 'none', background: '#fff' }} />
                 </div>
             )}
-            <div className="modal" style={{ maxWidth: 720 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 720 }}>
                 <div className="modal-header">
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Archive size={14} /> Inventário de Stock
@@ -929,6 +933,7 @@ interface TransferenciaModalProps {
 }
 
 const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, armazens, onClose, onConfirm }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fmt, stockArmazem } = useGlobal();
     const ativos = armazens.filter(a => a.ativo);
     const [armazDe,   setArmazDe]   = useState(ativos[0]?.codigo ?? '');
@@ -969,7 +974,7 @@ const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, armaze
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 620 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 620 }}>
                 <div className="modal-header">
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <RefreshCw size={14} /> Transferência entre Armazéns
@@ -1065,6 +1070,7 @@ interface SimpleOpModalProps {
     onConfirm: (tipo: SimpleOpType, artigoId: string, quantidade: number, nota: string) => void;
 }
 const SimpleOpModal: React.FC<SimpleOpModalProps> = ({ tipo, artigos, onClose, onConfirm }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fmt } = useGlobal();
     const [artigoId, setArtigoId] = useState('');
     const [quantidade, setQtd]   = useState('');
@@ -1075,7 +1081,7 @@ const SimpleOpModal: React.FC<SimpleOpModalProps> = ({ tipo, artigos, onClose, o
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 480 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 480 }}>
                 <div className="modal-header">
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {cfg.icon} {cfg.titulo}
@@ -1120,6 +1126,7 @@ const SimpleOpModal: React.FC<SimpleOpModalProps> = ({ tipo, artigos, onClose, o
 
 /* ══ Stats Modal ════════════════════════════════════════════ */
 const StatsModal: React.FC<{ artigos: Artigo[]; onClose: () => void }> = ({ artigos, onClose }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fmt, fmtMoney } = useGlobal();
     const totalValor = artigos.reduce((s, a) => s + a.existencia * a.precoUnitario, 0);
     const criticos   = artigos.filter(a => a.critico && a.existencia <= a.stockSeguranca);
@@ -1128,7 +1135,7 @@ const StatsModal: React.FC<{ artigos: Artigo[]; onClose: () => void }> = ({ arti
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 520 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 520 }}>
                 <div className="modal-header">
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <BarChart2 size={14} /> Estatísticas de Stock
