@@ -4,6 +4,12 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(users): o `update` aplica a política de comprimento mínimo de password
+
+- **Antes:** `UsersService.update` gravava o `passwordHash` sem validar a password, ao contrário do `create` e do change-password. Um admin conseguia definir uma password curta a outro utilizador.
+- **Agora:** chama `assertPasswordPolicy` (`minPasswordLength` das Configurações, #100) antes do `bcrypt.hash`. Uma password curta dá 400 e nada é gravado.
+- Testes em `users.service.spec.ts`: password curta → 400 sem gravar; password válida → grava o hash.
+
 ### chore: acabamento e dívida técnica da auditoria (parte de #223)
 
 - **Acessibilidade:** o `useModalA11y` (Esc fecha, foco no modal, `role="dialog"`, `aria-modal`) passa a estar nos 25 modais que faltavam: Agenda, Compras, Ordens, Parque, Planos, Stock e `ExportModal`.
