@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { useGlobal, SysLog } from '../../contexts/GlobalContext';
 import EmptyState from '../../components/EmptyState';
 import TableSkeleton from '../../components/TableSkeleton';
-import { Search, AlertCircle, Info, AlertTriangle, ScrollText, Download } from 'lucide-react';
+import { Search, AlertCircle, Info, AlertTriangle, ScrollText, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { listarLogs, LogsResposta } from '../../services/logs';
 
 const TIPO_CFG: Record<SysLog['tipo'], { icon: React.ReactNode; color: string; label: string }> = {
     info:    { icon: <Info size={12} />,          color: 'var(--blue)',   label: 'Info'    },
@@ -13,30 +14,50 @@ const TIPO_CFG: Record<SysLog['tipo'], { icon: React.ReactNode; color: string; l
     error:   { icon: <AlertCircle size={12} />,   color: 'var(--red)',    label: 'Erro'    },
 };
 
+const POR_PAGINA = 50;
+
 const LogsPage: React.FC = () => {
-    const { logs, currentUser, fmtDate, loadingData } = useGlobal();
+    const { fmtDate } = useGlobal();
     const fmtTs = (ts: string) => {
         const d = new Date(ts);
         return fmtDate(ts) + ' ' + d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     };
+    // #210 — filtros e paginação no servidor; o admin vê os registos de todos os utilizadores.
     const [search, setSearch]       = useState('');
-    const [filterTipo, setFilterTipo] = useState('');
+    const [q, setQ]                 = useState('');
+    const [filterTipo, setFilterTipo] = useState<SysLog['tipo'] | ''>('');
     const [filterModulo, setFilterModulo] = useState('');
+    const [de, setDe]               = useState('');
+    const [ate, setAte]             = useState('');
+    const [pagina, setPagina]       = useState(1);
+    const [dados, setDados]         = useState<LogsResposta | null>(null);
+    const [loading, setLoading]     = useState(true);
+    const [erro, setErro]           = useState<string | null>(null);
     const [showExport, setShowExport] = useState(false);
 
-    const modulos = Array.from(new Set(logs.map(l => l.modulo))).sort();
+    // Pesquisa com atraso para não pedir ao servidor a cada tecla.
+    useEffect(() => {
+        const t = setTimeout(() => { setQ(search); setPagina(1); }, 300);
+        return () => clearTimeout(t);
+    }, [search]);
 
-    const userLogs = logs.filter(l => !currentUser || l.usuario === currentUser.email);
+    useEffect(() => {
+        let ativo = true;
+        setLoading(true);
+        listarLogs({ pagina, porPagina: POR_PAGINA, q, tipo: filterTipo, modulo: filterModulo, de, ate })
+            .then(r => { if (ativo) { setDados(r); setErro(null); } })
+            .catch(() => { if (ativo) setErro('Não foi possível carregar os registos.'); })
+            .finally(() => { if (ativo) setLoading(false); });
+        return () => { ativo = false; };
+    }, [pagina, q, filterTipo, filterModulo, de, ate]);
 
-    const filtered = userLogs.filter(l => {
-        const q = search.toLowerCase();
-        const matchQ = !q || l.acao.toLowerCase().includes(q) || l.detalhes.toLowerCase().includes(q) || l.modulo.toLowerCase().includes(q);
-        const matchT = !filterTipo   || l.tipo   === filterTipo;
-        const matchM = !filterModulo || l.modulo === filterModulo;
-        return matchQ && matchT && matchM;
-    });
+    const filtrar = (fn: () => void) => { fn(); setPagina(1); };
 
-    const exportData = filtered;
+    const items = dados?.items ?? [];
+    const total = dados?.total ?? 0;
+    const totalPaginas = Math.max(1, Math.ceil(total / POR_PAGINA));
+    const porTipo = dados?.porTipo ?? { info: 0, warning: 0, error: 0 };
+    const modulos = dados?.modulos ?? [];
 
     const EXPORT_COLS: ExportCol[] = [
         { key: 'timestamp', label: 'Data / Hora' },
@@ -52,20 +73,17 @@ const LogsPage: React.FC = () => {
             <ActionBar title="Logs do Sistema" breadcrumb="AQUATEX SGI · Logs">
                 <div className="actionbar-spacer" />
                 <button className="abtn abtn-secondary" type="button" onClick={() => setShowExport(true)}>
-                    <Download size={13} /> Exportar
+                    <Download size={13} /> Exportar página
                 </button>
-                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                    {currentUser ? `A mostrar logs de: ${currentUser.email}` : 'Sessão não iniciada'}
-                </span>
             </ActionBar>
 
             <div className="page-content">
                 <div className="stats-row">
                     {[
-                        { label: 'Total',   value: userLogs.length,                          cls: ''       },
-                        { label: 'Info',    value: userLogs.filter(l => l.tipo === 'info').length,    cls: 'blue'   },
-                        { label: 'Avisos',  value: userLogs.filter(l => l.tipo === 'warning').length, cls: 'orange' },
-                        { label: 'Erros',   value: userLogs.filter(l => l.tipo === 'error').length,   cls: 'muted'  },
+                        { label: 'Total',   value: porTipo.info + porTipo.warning + porTipo.error, cls: ''       },
+                        { label: 'Info',    value: porTipo.info,    cls: 'blue'   },
+                        { label: 'Avisos',  value: porTipo.warning, cls: 'orange' },
+                        { label: 'Erros',   value: porTipo.error,   cls: 'muted'  },
                     ].map(s => (
                         <div key={s.label} className="stat-card">
                             <span className="stat-label">{s.label}</span>
@@ -77,19 +95,22 @@ const LogsPage: React.FC = () => {
                 <div className="filters-bar">
                     <div className="search-wrap">
                         <Search className="search-icon" />
-                        <input className="search-input" placeholder="Pesquisar acção ou detalhe..."
+                        <input className="search-input" placeholder="Pesquisar acção, detalhe ou utilizador..."
+                            aria-label="Pesquisar registos"
                             value={search} onChange={e => setSearch(e.target.value)} />
                     </div>
-                    <select className="filter-select" value={filterModulo} onChange={e => setFilterModulo(e.target.value)}>
+                    <select className="filter-select" aria-label="Módulo" value={filterModulo} onChange={e => filtrar(() => setFilterModulo(e.target.value))}>
                         <option value="">Todos os módulos</option>
                         {modulos.map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
-                    <select className="filter-select" value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
+                    <select className="filter-select" aria-label="Tipo" value={filterTipo} onChange={e => filtrar(() => setFilterTipo(e.target.value as SysLog['tipo'] | ''))}>
                         <option value="">Todos os tipos</option>
                         <option value="info">Informação</option>
                         <option value="warning">Aviso</option>
                         <option value="error">Erro</option>
                     </select>
+                    <input type="date" className="filter-select" aria-label="De" value={de} onChange={e => filtrar(() => setDe(e.target.value))} />
+                    <input type="date" className="filter-select" aria-label="Até" value={ate} onChange={e => filtrar(() => setAte(e.target.value))} />
                 </div>
 
                 <div className="table-container">
@@ -106,11 +127,14 @@ const LogsPage: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {loadingData && <TableSkeleton cols={6} />}
-                                {!loadingData && filtered.length === 0 && (
+                                {loading && <TableSkeleton cols={6} />}
+                                {!loading && erro && (
+                                    <tr><td colSpan={6}><EmptyState icon={<AlertCircle size={28} />} title={erro} description="Tente novamente mais tarde." /></td></tr>
+                                )}
+                                {!loading && !erro && items.length === 0 && (
                                     <tr><td colSpan={6}><EmptyState icon={<ScrollText size={28} />} title="Sem registos de log" description="As atividades do sistema aparecem aqui à medida que os utilizadores operam a plataforma." /></td></tr>
                                 )}
-                                {!loadingData && filtered.map(l => {
+                                {!loading && !erro && items.map(l => {
                                     const cfg = TIPO_CFG[l.tipo];
                                     return (
                                         <tr key={l.id}>
@@ -130,7 +154,13 @@ const LogsPage: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
-                    <div className="table-count">{filtered.length} registos</div>
+                    <div className="table-count" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {total} registos · Página {pagina} de {totalPaginas}
+                        <button type="button" className="icon-btn" aria-label="Página anterior" disabled={pagina <= 1}
+                            onClick={() => setPagina(p => p - 1)}><ChevronLeft size={13} /></button>
+                        <button type="button" className="icon-btn" aria-label="Página seguinte" disabled={pagina >= totalPaginas}
+                            onClick={() => setPagina(p => p + 1)}><ChevronRight size={13} /></button>
+                    </div>
                 </div>
             </div>
 
@@ -138,7 +168,7 @@ const LogsPage: React.FC = () => {
                 <ExportModal
                     title="Logs do Sistema"
                     columns={EXPORT_COLS}
-                    data={exportData}
+                    data={items}
                     filename="logs_sistema"
                     onClose={() => setShowExport(false)}
                 />

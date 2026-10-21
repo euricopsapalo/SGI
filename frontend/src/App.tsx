@@ -42,6 +42,14 @@ function TecnicoGuard({ children }: { children: React.ReactElement }) {
     : children;
 }
 
+/* #210 — rotas só para o admin (o backend devolve 403 aos outros perfis). */
+function AdminGuard({ children }: { children: React.ReactElement }) {
+  const { currentUser } = useGlobal();
+  return currentUser && currentUser.role !== 'Administrador'
+    ? <Navigate to="/dashboard" replace />
+    : children;
+}
+
 function App() {
   return (
     <GlobalProvider>
@@ -67,7 +75,7 @@ function App() {
           <Route path="/vendas"       element={<AuthGuard><TecnicoGuard><VendasPage /></TecnicoGuard></AuthGuard>} />
           <Route path="/utilizadores" element={<AuthGuard><TecnicoGuard><UtilizadoresPage /></TecnicoGuard></AuthGuard>} />
           <Route path="/relatorios"   element={<AuthGuard><TecnicoGuard><RelatoriosPage /></TecnicoGuard></AuthGuard>} />
-          <Route path="/logs"         element={<AuthGuard><TecnicoGuard><LogsPage /></TecnicoGuard></AuthGuard>} />
+          <Route path="/logs"         element={<AuthGuard><AdminGuard><LogsPage /></AdminGuard></AuthGuard>} />
           <Route path="/configuracoes" element={<AuthGuard><TecnicoGuard><ConfiguracoesPage /></TecnicoGuard></AuthGuard>} />
 
           <Route path="*" element={<Navigate to="/login" replace />} />
