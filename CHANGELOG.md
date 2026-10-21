@@ -4,6 +4,19 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(fornecedores): validar uma VNC de devolução passa a ser uma só transação (closes #215)
+
+- **Antes:**
+  - desde o #204, a saída de stock da VNC já passava por `stock_armazem` numa transação;
+  - a verificação do estado e a gravação do novo estado ficavam fora dessa transação;
+  - dois pedidos de validação em simultâneo podiam descontar o stock duas vezes;
+  - uma falha depois do stock deixava a VNC por validar com o stock já alterado.
+- **Agora tudo corre numa transação**, com a fatura bloqueada (`FOR UPDATE`): verificação da transição, saída de stock por linha, movimentos e novo estado.
+  - Sem stock suficiente numa linha → 422 e nada fica gravado.
+  - Uma segunda validação → 400 "Transição inválida", sem mexer no stock.
+- A VNC não indica armazém. A saída usa a ordem habitual: primeiro o armazém do artigo, depois os restantes.
+- Testes: validação completa com o lock, rollback a meio, validação repetida e acerto de preço sem stock.
+
 ### feat(deploy): imagem de produção do frontend (build estático + nginx) (closes #208)
 
 - **Antes:** `frontend/Dockerfile` corria `npm start` (servidor de desenvolvimento) e o `docker-compose.prod.yml` não definia o serviço frontend. Em produção ficava o servidor de dev, com bind-mount do código.
