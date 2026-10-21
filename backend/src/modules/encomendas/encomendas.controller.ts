@@ -5,7 +5,7 @@ import { CreateEncomendaDto } from './dto/create-encomenda.dto';
 import { UpdateEncomendaDto } from './dto/update-encomenda.dto';
 import { ReceberLinhasDto } from './dto/receber-linhas.dto';
 import { Roles, ESCRITORIO } from '../auth/roles.decorator';
-import { nomeDoPedido } from '../auth/utilizador-do-pedido';
+import { nomeDoPedido, utilizadorDoPedido } from '../auth/utilizador-do-pedido';
 
 @ApiTags('compras')
 @ApiBearerAuth('access-token')
@@ -41,11 +41,12 @@ export class EncomendaController {
             dto.guiaRemessa ?? '',
             nomeDoPedido(req),
             dto.armazem ?? '',
+            utilizadorDoPedido(req),
         );
     }
 
     @Post('rececoes/:rececaoId/anular')
-    anularRececao(@Param('rececaoId', ParseIntPipe) rececaoId: number) {
-        return this.service.anularRececao(rececaoId);
+    anularRececao(@Param('rececaoId', ParseIntPipe) rececaoId: number, @Request() req: any) {
+        return this.service.anularRececao(rececaoId, utilizadorDoPedido(req));
     }
 }
