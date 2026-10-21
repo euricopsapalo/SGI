@@ -19,7 +19,6 @@ const OrdensPage = lazy(() => import('./pages/Ordens/OrdensPage'));
 const AgendaPage = lazy(() => import('./pages/Agenda/AgendaPage'));
 const EncomendaPage = lazy(() => import('./pages/Encomendas/EncomendaPage'));
 const StockPage = lazy(() => import('./pages/Stock/StockPage'));
-const FaturacaoPage = lazy(() => import('./pages/Faturacao/FaturacaoPage'));
 const VendasPage = lazy(() => import('./pages/Vendas/VendasPage'));
 const UtilizadoresPage = lazy(() => import('./pages/Utilizadores/UtilizadoresPage'));
 const RelatoriosPage = lazy(() => import('./pages/Relatorios/RelatoriosPage'));
@@ -71,7 +70,8 @@ function App() {
           <Route path="/agenda"       element={<AuthGuard><AgendaPage /></AuthGuard>} />
           <Route path="/compras"      element={<AuthGuard><TecnicoGuard><EncomendaPage /></TecnicoGuard></AuthGuard>} />
           <Route path="/stock"        element={<AuthGuard><TecnicoGuard><StockPage /></TecnicoGuard></AuthGuard>} />
-          <Route path="/faturacao"    element={<AuthGuard><TecnicoGuard><FaturacaoPage /></TecnicoGuard></AuthGuard>} />
+          {/* #218 — o ecrã "Faturação (anterior)" saiu (marcava faturas como Paga fora da Tesouraria). */}
+          <Route path="/faturacao"    element={<Navigate to="/vendas" replace />} />
           <Route path="/vendas"       element={<AuthGuard><TecnicoGuard><VendasPage /></TecnicoGuard></AuthGuard>} />
           <Route path="/utilizadores" element={<AuthGuard><TecnicoGuard><UtilizadoresPage /></TecnicoGuard></AuthGuard>} />
           <Route path="/relatorios"   element={<AuthGuard><TecnicoGuard><RelatoriosPage /></TecnicoGuard></AuthGuard>} />

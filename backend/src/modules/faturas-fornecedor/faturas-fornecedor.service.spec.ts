@@ -96,14 +96,46 @@ describe('FaturasFornecedorService (regression #14)', () => {
         expect(manager.update).not.toHaveBeenCalledWith(Artigo, 5, expect.objectContaining({ existencia: expect.anything() }));
     });
 
-    it('#204 — validar uma VNC de devolução tira o stock do stock_armazem e regista o movimento', async () => {
-        faturaRepo.findOne.mockResolvedValueOnce({
+    describe('#215 — validar uma VNC numa só transação', () => {
+        const vnc = (extra: any = {}) => ({
             id: 9, tipoDocumento: 'VNC', estadoDocumento: 'AguardaAprovacao', tipoNotaCredito: 'Devolucao',
-            numFaturaExterno: 'NC-1', linhas: [{ produtoId: 5, quantidade: 3 }],
+            numFaturaExterno: 'NC-1', ...extra,
         });
-        await service.updateEstado(9, 'Validado', 'op@x');
-        expect(saidaStock).toHaveBeenCalledWith(manager, 5, 3);
-        expect(manager.save).toHaveBeenCalledWith(MovimentoStock, expect.objectContaining({ quantidade: 3, tipo: 'devolucao' }));
+        beforeEach(() => {
+            manager.findOne = jest.fn(async (e: any, { where }: any) =>
+                e === FaturaFornecedor ? vnc() : { id: where.id, existencia: 10 });
+            manager.find = jest.fn(async () => [{ produtoId: 5, quantidade: 3 }, { produtoId: 6, quantidade: 2 }]);
+        });
+
+        it('tira o stock do stock_armazem, regista os movimentos e muda o estado, com a fatura bloqueada', async () => {
+            await service.updateEstado(9, 'Validado', 'op@x');
+            expect(manager.transaction).toHaveBeenCalledTimes(1);
+            expect(manager.findOne).toHaveBeenCalledWith(FaturaFornecedor, expect.objectContaining({ lock: { mode: 'pessimistic_write' } }));
+            expect(saidaStock).toHaveBeenCalledWith(manager, 5, 3);
+            expect(saidaStock).toHaveBeenCalledWith(manager, 6, 2);
+            expect(manager.save).toHaveBeenCalledWith(MovimentoStock, expect.objectContaining({ quantidade: 3, tipo: 'devolucao', usuario: 'op@x' }));
+            expect(manager.update).toHaveBeenCalledWith(FaturaFornecedor, 9, { estadoDocumento: 'Validado' });
+            expect(faturaRepo.update).not.toHaveBeenCalled();
+        });
+
+        it('falha a meio (sem stock na 2.ª linha) → erro e o estado não muda (rollback)', async () => {
+            (saidaStock as jest.Mock).mockResolvedValueOnce(3).mockRejectedValueOnce(new Error('Stock insuficiente'));
+            await expect(service.updateEstado(9, 'Validado', 'op@x')).rejects.toThrow('Stock insuficiente');
+            expect(manager.update).not.toHaveBeenCalledWith(FaturaFornecedor, 9, expect.anything());
+        });
+
+        it('VNC já validada (ex.: segundo pedido em simultâneo) → 400 sem mexer no stock', async () => {
+            manager.findOne = jest.fn(async () => vnc({ estadoDocumento: 'Validado' }));
+            await expect(service.updateEstado(9, 'Validado')).rejects.toThrow(/Transição inválida/);
+            expect(saidaStock).not.toHaveBeenCalled();
+        });
+
+        it('acerto de preço → valida sem mexer no stock', async () => {
+            manager.findOne = jest.fn(async () => vnc({ tipoNotaCredito: 'AcertoPreco' }));
+            await service.updateEstado(9, 'Validado');
+            expect(saidaStock).not.toHaveBeenCalled();
+            expect(manager.update).toHaveBeenCalledWith(FaturaFornecedor, 9, { estadoDocumento: 'Validado' });
+        });
     });
 
     it('create(VNC) — lê faturasAssociadas e cria uma linha vnc_faturas_associadas por cada {faturaAssociadaId}', async () => {

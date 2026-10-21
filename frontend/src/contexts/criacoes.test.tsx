@@ -61,4 +61,19 @@ describe('criações no GlobalContext (#212)', () => {
         expect(criado.id).toBe('42');
         expect(result.current.armazens.map(a => a.id)).toContain('42');
     });
+
+    it('#213 — addMovimento envia só os campos do DTO (sem `data`) e recarrega o stock', async () => {
+        mockApi.post.mockResolvedValue({ data: { id: 5, tipo: 'entrada', quantidade: 3, artigo: { id: 1 } } });
+        const { result } = montar();
+        mockApi.get.mockClear();
+
+        await act(async () => {
+            await result.current.addMovimento({ artigoId: '1', tipo: 'entrada', quantidade: 3, armazemId: 'ARM-01', usuario: 'x@y.ao', observacao: 'Reposição', data: '2026-10-21' } as any);
+        });
+
+        expect(mockApi.post).toHaveBeenCalledWith('/movimentos-stock', { artigoId: 1, tipo: 'entrada', quantidade: 3, armazemId: 'ARM-01', referencia: undefined, observacao: 'Reposição' });
+        const urls = mockApi.get.mock.calls.map(c => c[0]);
+        expect(urls).toEqual(expect.arrayContaining(['/artigos', '/artigos/stock-armazem']));
+        expect(urls).not.toContain('/movimentos-stock'); // #221 — os movimentos já não vivem no contexto
+    });
 });

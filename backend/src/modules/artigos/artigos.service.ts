@@ -1,6 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository, SelectQueryBuilder } from 'typeorm';
+import { DataSource, EntityManager, In, Repository, SelectQueryBuilder } from 'typeorm';
 import { Artigo } from './artigo.entity';
 import { MovimentoStock, TipoMovimento } from './movimento-stock.entity';
 import { StockArmazem } from './stock-armazem.entity';
@@ -218,20 +218,68 @@ export class ArtigosService {
         return { items, total, pagina, porPagina, porTipo };
     }
     findOneMovimento(id: number) { return this.movimentosRepo.findOne({ where: { id }, relations: ['artigo'] }); }
-    async createMovimento(body: any) {
+    /**
+     * Regista um movimento cujo efeito no stock já foi aplicado por outra operação
+     * (consumo da OT, receção de encomenda). **Não mexe no stock.** Com `manager`,
+     * grava dentro da transação do chamador.
+     */
+    async registarMovimento(body: any, manager?: EntityManager): Promise<MovimentoStock> {
+        const movRepo = manager ? manager.getRepository(MovimentoStock) : this.movimentosRepo;
+        const artRepo = manager ? manager.getRepository(Artigo) : this.artigosRepo;
         const { artigoId, ...rest } = body;
-        const mov = await this.movimentosRepo.save(this.movimentosRepo.create({
+        const mov = await movRepo.save(movRepo.create({
             ...rest,
             artigo: artigoId ? { id: Number(artigoId) } : undefined,
-        }));
+        } as Partial<MovimentoStock>));
         if (artigoId) {
             const tipo: string = rest.tipo ?? '';
-            const isEntrada = ['entrada', 'compra', 'ajuste_positivo', 'transferencia_entrada', 'inventario'].includes(tipo.toLowerCase());
-            const isSaida   = ['saida', 'consumo', 'ajuste_negativo', 'transferencia_saida'].includes(tipo.toLowerCase());
-            if (isEntrada) await this.artigosRepo.update(Number(artigoId), { dataUltimaEntrada: new Date() });
-            if (isSaida)   await this.artigosRepo.update(Number(artigoId), { dataUltimaSaida: new Date() });
+            const isEntrada = ['entrada', 'compra', 'ajuste_positivo', 'transferencia_entrada', 'inventario'].includes(tipo.toLowerCase())
+                || (tipo === 'ajuste' && Number(rest.quantidade) > 0);
+            const isSaida   = ['saida', 'consumo', 'ajuste_negativo', 'transferencia_saida', 'devolucao'].includes(tipo.toLowerCase())
+                || (tipo === 'ajuste' && Number(rest.quantidade) < 0);
+            if (isEntrada) await artRepo.update(Number(artigoId), { dataUltimaEntrada: new Date() });
+            if (isSaida)   await artRepo.update(Number(artigoId), { dataUltimaSaida: new Date() });
         }
         return mov;
+    }
+
+    /**
+     * #213 — `POST /movimentos-stock`: valida o movimento, aplica-o ao stock
+     * (`stock_armazem` + existência derivada) e regista-o, tudo na mesma transação.
+     * Uma falha a meio não deixa stock alterado sem movimento (nem o contrário).
+     * - `entrada` (> 0) entra no armazém indicado (ou no do artigo);
+     * - `saida`/`devolucao` (> 0) e `ajuste` negativo saem pela ordem habitual
+     *   (armazém do artigo primeiro); sem stock suficiente → 422;
+     * - `ajuste` ≠ 0 com sinal; `transferencia` tem endpoint próprio (atómico, #37).
+     */
+    async createMovimento(body: {
+        artigoId: number | string; tipo: string; quantidade: number;
+        armazemId?: string; armazemDestinoId?: string; referencia?: string; usuario?: string; observacao?: string;
+    }) {
+        const quantidade = Number(body.quantidade);
+        const tipo = body.tipo;
+        if (tipo === TipoMovimento.TRANSFERENCIA) {
+            throw new BadRequestException('Transferências entre armazéns usam POST /artigos/:id/transferencia.');
+        }
+        if (!Number.isFinite(quantidade)) throw new BadRequestException('Quantidade inválida.');
+        if (tipo === TipoMovimento.AJUSTE) {
+            if (quantidade === 0) throw new BadRequestException('O ajuste tem de ter quantidade diferente de zero.');
+        } else if (!(quantidade > 0)) {
+            throw new BadRequestException('A quantidade tem de ser positiva.');
+        }
+        const artigoId = Number(body.artigoId);
+        const artigo = await this.artigosRepo.findOne({ where: { id: artigoId } });
+        if (!artigo) throw new NotFoundException(`Artigo ${body.artigoId} não encontrado`);
+
+        const { armazemDestinoId: _ignorado, ...resto } = body;
+        return this.dataSource.transaction(async (m) => {
+            if (tipo === TipoMovimento.ENTRADA || (tipo === TipoMovimento.AJUSTE && quantidade > 0)) {
+                await entradaStock(m, artigoId, Math.abs(quantidade), body.armazemId);
+            } else {
+                await saidaStock(m, artigoId, Math.abs(quantidade));
+            }
+            return this.registarMovimento({ ...resto, artigoId, quantidade }, m);
+        });
     }
     removeMovimento(id: number) { return this.movimentosRepo.delete(id); }
 

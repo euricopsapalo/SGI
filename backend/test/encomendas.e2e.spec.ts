@@ -10,6 +10,7 @@ import { Encomenda } from '../src/modules/encomendas/encomenda.entity';
 import { EncomendaLinha } from '../src/modules/encomendas/encomenda-linha.entity';
 import { Rececao, RececaoItem } from '../src/modules/encomendas/rececao.entity';
 import { Artigo } from '../src/modules/artigos/artigo.entity';
+import { MovimentoStock } from '../src/modules/artigos/movimento-stock.entity';
 
 // #204 — o stock passa por stock-armazem.ops; aqui é simulado sobre o mesmo
 // artigoStore em memória (pelo artigoRepo.update, para a falha simulada e o rollback).
@@ -41,6 +42,8 @@ describe('Encomendas E2E — receção transacional (criar → parcial → compl
     let linhaStore: Record<number, any>;
     let artigoStore: Record<number, any>;
     let failOnArtigo: number | null; // força falha no update deste artigo (teste de rollback)
+    // #213 — movimentos de stock gravados pela receção, dentro da transação.
+    let movStore: any[];
 
     beforeAll(async () => {
         const encomendaRepo = {
@@ -105,10 +108,17 @@ describe('Encomendas E2E — receção transacional (criar → parcial → compl
                 const snapLinhas = Object.fromEntries(Object.entries(linhaStore).map(([k, v]: any) => [k, v.qtdRecebida]));
                 const snapArtigos = Object.fromEntries(Object.entries(artigoStore).map(([k, v]: any) => [k, { e: v.existencia, s: v.stockEncomendado }]));
                 const snapEnc = Object.fromEntries(Object.entries(encStore).map(([k, v]: any) => [k, { estado: v.estado, recLen: v.rececoes.length }]));
+                const snapMov = movStore.length;
                 const manager = {
                     getRepository: (E: any) => repoFor(E),
                     findOne: (E: any, opts: any) => (repoFor(E) as any).findOne(opts),
                     update: (E: any, id: any, patch: any) => (repoFor(E) as any).update(id, patch),
+                    create: (_E: any, v: any) => ({ ...v }),
+                    save: async (E: any, v: any) => {
+                        if (E !== MovimentoStock) throw new Error('save desconhecido');
+                        movStore.push(v);
+                        return v;
+                    },
                 };
                 try {
                     return await fn(manager);
@@ -116,6 +126,7 @@ describe('Encomendas E2E — receção transacional (criar → parcial → compl
                     for (const [k, q] of Object.entries(snapLinhas)) linhaStore[k].qtdRecebida = q;
                     for (const [k, a] of Object.entries(snapArtigos) as any) { artigoStore[k].existencia = a.e; artigoStore[k].stockEncomendado = a.s; }
                     for (const [k, e] of Object.entries(snapEnc) as any) { encStore[k].estado = e.estado; encStore[k].rececoes.length = e.recLen; }
+                    movStore.length = snapMov;
                     throw err;
                 }
             },
@@ -147,6 +158,7 @@ describe('Encomendas E2E — receção transacional (criar → parcial → compl
             11: { id: 11, existencia: 2, stockEncomendado: 0 },
         };
         failOnArtigo = null;
+        movStore = [];
     });
 
     afterAll(async () => {
@@ -183,6 +195,8 @@ describe('Encomendas E2E — receção transacional (criar → parcial → compl
         expect(res.body.estado).toBe('Parcial');
         expect(artigoStore[10].existencia).toBe(9);
         expect(res.body.rececoes).toHaveLength(1);
+        // #213 — o movimento de entrada é gravado pelo servidor, na transação da receção.
+        expect(movStore).toEqual([expect.objectContaining({ tipo: 'entrada', quantidade: 4, armazemId: 'AC', artigo: { id: 10 } })]);
     });
 
     it('receção completa (2 receções) → estado Recebida e stock final correto', async () => {
@@ -213,6 +227,7 @@ describe('Encomendas E2E — receção transacional (criar → parcial → compl
         expect(Object.values(linhaStore).every((l: any) => l.qtdRecebida === 0)).toBe(true);
         expect(encStore[enc.id].estado).toBe('Aberta');
         expect(encStore[enc.id].rececoes).toHaveLength(0);
+        expect(movStore).toHaveLength(0); // #213 — o movimento também é desfeito
     });
 
     it('receber numa encomenda inexistente → 404', () => {

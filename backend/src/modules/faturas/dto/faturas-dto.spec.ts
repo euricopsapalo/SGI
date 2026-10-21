@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { CreateFaturaDto } from './create-fatura.dto';
+import { UpdateFaturaDto } from './update-fatura.dto';
 
 describe('Faturas DTOs', () => {
   describe('CreateFaturaDto', () => {
@@ -48,6 +49,20 @@ describe('Faturas DTOs', () => {
         const errors = await validate(dto);
         expect(errors.length).toBe(0);
       }
+    });
+  });
+
+  // #218 — marcar como paga/anulada só em Vendas/Tesouraria.
+  describe('UpdateFaturaDto (#218)', () => {
+    it.each(['estado', 'dataPagamento', 'comprovativo', 'motivoAnulacao'])('rejeita %s', async (campo) => {
+      const dto = plainToInstance(UpdateFaturaDto, { [campo]: campo === 'estado' ? 'Paga' : 'x' });
+      const errors = await validate(dto, { whitelist: true, forbidNonWhitelisted: true });
+      expect(errors.map(e => e.property)).toContain(campo);
+    });
+
+    it('continua a aceitar as observações', async () => {
+      const dto = plainToInstance(UpdateFaturaDto, { observacoes: 'nota' });
+      expect(await validate(dto, { whitelist: true, forbidNonWhitelisted: true })).toHaveLength(0);
     });
   });
 });
