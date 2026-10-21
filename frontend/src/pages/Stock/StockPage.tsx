@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
-import { showToast as notify } from '../../utils/errorHandler';
+import { showToast as notify, extractFieldErrors } from '../../utils/errorHandler';
+import SubmitButton from '../../components/SubmitButton';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
 import { useGlobal, Artigo, Armazem, TipoArtigo, TIPO_ARTIGO_LABEL } from '../../contexts/GlobalContext';
@@ -35,7 +36,7 @@ const COLS_STOCK: ExportCol[] = [
 interface ArtigoModalProps {
     artigo?: Artigo;
     onClose: () => void;
-    onSave: (a: Omit<Artigo, 'id'>) => void;
+    onSave: (a: Omit<Artigo, 'id'>) => Promise<void>;
 }
 const TABS_A = [
     { id: 'ident', label: 'Identificação' },
@@ -102,6 +103,7 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
     const [codigoIva,  setCodigoIva] = useState(artigo?.codigoIva ?? '');
 
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [submitting, setSubmitting] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
 
     const handleImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,10 +124,13 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
         return Object.keys(e).length === 0;
     };
 
-    const handleSave = (ev: React.FormEvent) => {
+    // #212 — espera pelo servidor; em erro o modal fica aberto e mostra os erros de campo.
+    const handleSave = async (ev: React.FormEvent) => {
         ev.preventDefault();
-        if (!validate()) return;
-        onSave({
+        if (!validate() || submitting) return;
+        setSubmitting(true);
+        try {
+            await onSave({
             codigo, descricao, classe, familia, imagem,
             tipo, sujeitoRetencao: tipo === 'SERVICO' && sujeitoRetencao,
             precoUnitario: Number(precoUnitario), moeda,
@@ -142,7 +147,15 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
             refFornecedor: refFornecedor || undefined,
             dataUltimaEntrada: artigo?.dataUltimaEntrada,
             dataUltimaSaida: artigo?.dataUltimaSaida,
-        });
+            });
+        } catch (err) {
+            const fe = extractFieldErrors(err);
+            if (fe.precoUnitario) fe.preco = fe.precoUnitario;
+            if (fe.refFornecedor) fe.fornecedor = fe.refFornecedor;
+            if (Object.keys(fe).length) setErrors(prev => ({ ...prev, ...fe }));
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const tabErr = (t: ATab) => {
@@ -520,7 +533,7 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
                     </div>
                     <div className="modal-footer">
                         <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
-                        <button type="submit" className="abtn abtn-primary"><Check size={12} /> Guardar</button>
+                        <SubmitButton submitting={submitting} icon={<Check size={12} />}>Guardar</SubmitButton>
                     </div>
                 </form>
             </div>
@@ -1213,29 +1226,35 @@ const StockPage: React.FC = () => {
 
     const editTarget = typeof modal === 'string' && modal !== 'new' ? artigos.find(a => a.id === modal) : undefined;
 
-    const handleSave = (data: Omit<Artigo, 'id'>) => {
+    // #212 — só fecha e confirma depois de o servidor aceitar; o erro sobe para o modal.
+    const handleSave = async (data: Omit<Artigo, 'id'>) => {
         if (typeof modal === 'string' && modal !== 'new') {
-            updateArtigo(modal, data);
+            await updateArtigo(modal, data);
             showToast('Artigo actualizado.');
         } else {
-            const a = addArtigo(data);
+            const a = await addArtigo(data);
             showToast(`Artigo ${a.codigo} registado.`);
         }
         setModal(null);
     };
 
-    const handleInventario = (lines: InventLine[]) => {
+    // #212 — espera por cada pedido e pára no primeiro erro (já mostrado pelo interceptor).
+    const handleInventario = async (lines: InventLine[]) => {
         const hoje = new Date().toISOString().split('T')[0];
         let count = 0;
-        lines.forEach(l => {
-            const a = artigos.find(x => x.id === l.artigoId);
-            if (a) {
+        try {
+            for (const l of lines) {
+                const a = artigos.find(x => x.id === l.artigoId);
+                if (!a) continue;
                 const delta = Number(l.novaExist) - a.existencia;
-                adjustExistencia(l.artigoId, delta);
-                addMovimento({ artigoId: l.artigoId, tipo: 'ajuste', quantidade: delta, armazemId: a.codigoArmazem, usuario: currentUser?.email, observacao: 'Ajuste de inventário', data: hoje });
+                await adjustExistencia(l.artigoId, delta);
+                await addMovimento({ artigoId: l.artigoId, tipo: 'ajuste', quantidade: delta, armazemId: a.codigoArmazem, usuario: currentUser?.email, observacao: 'Ajuste de inventário', data: hoje });
                 count++;
             }
-        });
+        } catch {
+            if (count > 0) notify(`${count} de ${lines.length} artigo(s) ajustados antes do erro.`, 'warning');
+            return;
+        }
         showToast(`Inventário actualizado — ${count} artigo(s) ajustado(s).`);
     };
 
@@ -1257,20 +1276,26 @@ const StockPage: React.FC = () => {
         return true;
     };
 
-    const handleSimpleOp = (tipo: SimpleOpType, artigoId: string, quantidade: number) => {
+    const handleSimpleOp = async (tipo: SimpleOpType, artigoId: string, quantidade: number) => {
         const hoje = new Date().toISOString().split('T')[0];
         const a = artigos.find(x => x.id === artigoId);
-        if (tipo === 'reposicao') {
-            adjustExistencia(artigoId, quantidade);
-            addMovimento({ artigoId, tipo: 'entrada', quantidade, armazemId: a?.codigoArmazem, usuario: currentUser?.email, observacao: 'Reposição manual', data: hoje });
-            showToast(`Reposição de ${fmt(quantidade)} un registada.`);
-        } else if (tipo === 'devolucao') {
-            adjustExistencia(artigoId, -quantidade);
-            addMovimento({ artigoId, tipo: 'devolucao', quantidade, armazemId: a?.codigoArmazem, usuario: currentUser?.email, observacao: 'Devolução', data: hoje });
-            showToast(`Devolução de ${fmt(quantidade)} un registada.`);
-        } else {
-            showToast(`Guia de transporte emitida.`);
+        try {
+            if (tipo === 'reposicao') {
+                await adjustExistencia(artigoId, quantidade);
+                await addMovimento({ artigoId, tipo: 'entrada', quantidade, armazemId: a?.codigoArmazem, usuario: currentUser?.email, observacao: 'Reposição manual', data: hoje });
+                showToast(`Reposição de ${fmt(quantidade)} un registada.`);
+                return;
+            }
+            if (tipo === 'devolucao') {
+                await adjustExistencia(artigoId, -quantidade);
+                await addMovimento({ artigoId, tipo: 'devolucao', quantidade, armazemId: a?.codigoArmazem, usuario: currentUser?.email, observacao: 'Devolução', data: hoje });
+                showToast(`Devolução de ${fmt(quantidade)} un registada.`);
+                return;
+            }
+        } catch {
+            return; // #212 — erro já mostrado pelo interceptor global (api.ts); não confirma sucesso
         }
+        showToast(`Guia de transporte emitida.`);
     };
 
     const totalArtigos = artigos.length;
