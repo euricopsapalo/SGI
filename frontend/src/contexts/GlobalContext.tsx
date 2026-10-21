@@ -555,8 +555,8 @@ interface GlobalContextType {
     fmtDate: (iso?: string) => string;
     // Auth
     currentUser: CurrentUser | null; setCurrentUser: (u: CurrentUser | null) => void; logout: () => void;
-    // Logs
-    logs: SysLog[]; addLog: (l: Omit<SysLog, 'id' | 'timestamp'>) => void;
+    // Logs — #210: a listagem é paginada no servidor (services/logs.ts); aqui só se regista.
+    addLog: (l: Omit<SysLog, 'id' | 'timestamp'>) => void;
     // Entities
     clientes: Cliente[]; addCliente: (c: Omit<Cliente, 'id'>) => Cliente; updateCliente: (id: string, c: Partial<Cliente>) => void; removeCliente: (id: string) => Promise<void>;
     tecnicos: Tecnico[]; addTecnico: (t: Omit<Tecnico, 'id'> & { password?: string; passwordConfirm?: string }) => Promise<Tecnico>; updateTecnico: (id: string, t: Partial<Tecnico>) => Promise<void>; removeTecnico: (id: string) => Promise<void>;
@@ -637,16 +637,12 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const [logs, setLogs] = useState<SysLog[]>([]);
-
     /* ── Log helper — fire-and-forget ───────────────────────── */
     const currentUserRef = React.useRef<CurrentUser | null>(null);
     React.useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
     const log = (modulo: string, acao: string, detalhes = '', tipo: SysLog['tipo'] = 'info') => {
         const usuario = currentUserRef.current?.email ?? 'sistema';
-        api.post(`/logs`, { usuario, modulo, acao, detalhes, tipo })
-            .then(({ data }) => setLogs(p => [norm(data) as SysLog, ...p]))
-            .catch(() => {});
+        api.post(`/logs`, { usuario, modulo, acao, detalhes, tipo }).catch(() => {});
     };
 
     const [taxaIvaGlobal, setTaxaIvaGlobal] = useState<number>(0);
@@ -754,7 +750,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 skip,                             // 17 movimentos → paginados no Relatório (#221)
                 escritorio(`/compras`),           // 18
                 api.get(`/faturas`),               // 19
-                api.get(`/logs`),                  // 20
+                skip,                             // 20 logs → página Logs (#210)
                 api.get(`/configuracao`),          // 21
                 api.get(`/artigos/stock-armazem`), // 22
                 api.get(`/taxas-iva`),              // 23
@@ -782,7 +778,6 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             try { setArmazens(ok(results[15]).map(norm)); } catch {}
             try { setEncomendas(ok(results[18]).map(normEncomenda)); } catch {}
             try { setFaturas(ok(results[19]).map(normFatura)); } catch {}
-            try { setLogs(ok(results[20]).map(norm)); } catch {}
             try { setStockArmazem(ok(results[22]).map(normStockArmazem)); } catch {}
             try { setTaxasIva(ok(results[23]).map((r: any) => ({ ...norm(r), taxa: Number(r.taxa) }))); } catch {}
             try { setClassesArtigo(ok(results[24]).map(norm)); } catch {}
@@ -836,9 +831,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     /* ── Logs ───────────────────────────────────────────────── */
     const addLog = async (l: Omit<SysLog, 'id' | 'timestamp'>) => {
         try {
-            const { data } = await api.post(`/logs`, l);
-            const n = norm(data) as SysLog;
-            setLogs(p => [n, ...p]);
+            await api.post(`/logs`, l);
         } catch (e) {
             // Interceptor handles toast display
         }
@@ -1624,7 +1617,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return (
         <GlobalContext.Provider value={{
             currentUser, setCurrentUser, logout,
-            logs, addLog,
+            addLog,
             tiposTrabalho, addTipoTrabalho, updateTipoTrabalho, removeTipoTrabalho,
             tiposOT, addTipoOT, updateTipoOT, removeTipoOT,
             funcoesTecnico, addFuncaoTecnico, updateFuncaoTecnico, removeFuncaoTecnico,
