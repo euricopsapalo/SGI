@@ -4,6 +4,19 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(fornecedores): validar uma VNC de devolução passa a ser uma só transação (closes #215)
+
+- **Antes:**
+  - desde o #204, a saída de stock da VNC já passava por `stock_armazem` numa transação;
+  - a verificação do estado e a gravação do novo estado ficavam fora dessa transação;
+  - dois pedidos de validação em simultâneo podiam descontar o stock duas vezes;
+  - uma falha depois do stock deixava a VNC por validar com o stock já alterado.
+- **Agora tudo corre numa transação**, com a fatura bloqueada (`FOR UPDATE`): verificação da transição, saída de stock por linha, movimentos e novo estado.
+  - Sem stock suficiente numa linha → 422 e nada fica gravado.
+  - Uma segunda validação → 400 "Transição inválida", sem mexer no stock.
+- A VNC não indica armazém. A saída usa a ordem habitual: primeiro o armazém do artigo, depois os restantes.
+- Testes: validação completa com o lock, rollback a meio, validação repetida e acerto de preço sem stock.
+
 ### fix(stock): retirada a "Guia de Transporte", que mostrava sucesso sem gerar documento (closes #214)
 
 - **Antes:** a operação "Guia de Transporte" do Stock mostrava "Guia de transporte emitida." sem gerar nenhum documento. Já nenhum botão a abria, mas o código continuava lá.
@@ -33,7 +46,6 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
   - `createMovimento`: entrada, saídas, ajustes com sinal, rollback quando o stock falha, 400 por quantidade ou tipo inválido, 404;
   - receção e anulação registam o movimento;
   - o `addMovimento` não envia `data`.
-
 
 ### fix(context): as criações esperam pelo servidor e deixam de mostrar sucesso falso (closes #212)
 
