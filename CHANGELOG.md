@@ -34,6 +34,7 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
   - receção e anulação registam o movimento;
   - o `addMovimento` não envia `data`.
 
+
 ### fix(context): as criações esperam pelo servidor e deixam de mostrar sucesso falso (closes #212)
 
 - **Antes:** `addCliente`, `addFornecedor`, `addModelo`, `addArmazem`, `addArtigo`, `addMovimento` e `addEncomenda` devolviam logo um registo provisório com `id: ''` e engoliam o erro (`.catch(() => {})`). As páginas mostravam "registado" e fechavam o modal mesmo quando o servidor recusava.
