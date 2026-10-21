@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Encomenda, EstadoEncomenda } from './encomenda.entity';
@@ -98,8 +98,33 @@ export class EncomendaService {
         return this.findOne(id);
     }
 
-    remove(id: number) {
-        return this.encomendaRepo.delete(id);
+    /**
+     * #216 — Só se apaga uma encomenda **Aberta e sem receções** (nem anuladas: são
+     * histórico de stock). Liberta o `stockEncomendado` pendente na mesma transação.
+     * Nos restantes casos → 409; usa-se Cancelar.
+     */
+    async remove(id: number) {
+        const encomenda = await this.findOne(id);
+        if (!encomenda) throw new NotFoundException(`Encomenda ${id} não encontrada`);
+        if (encomenda.estado !== EstadoEncomenda.ABERTA || (encomenda.rececoes?.length ?? 0) > 0) {
+            throw new ConflictException(
+                'Só é possível eliminar encomendas abertas e sem receções. Use "Cancelar" para as restantes.',
+            );
+        }
+        await this.dataSource.transaction(async (m) => {
+            for (const linha of encomenda.linhas ?? []) {
+                const pendente = Number(linha.qtdEncomendada) - Number(linha.qtdRecebida);
+                if (pendente <= 0 || !linha.artigoId) continue;
+                const artigo = await m.findOne(Artigo, { where: { id: Number(linha.artigoId) } });
+                if (artigo) {
+                    await m.update(Artigo, artigo.id, {
+                        stockEncomendado: Math.max(0, Number(artigo.stockEncomendado) - pendente),
+                    });
+                }
+            }
+            await m.delete(Encomenda, id);
+        });
+        return { affected: 1 };
     }
 
     async receberLinhas(
