@@ -4,6 +4,19 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### feat(utilizadores): o utilizador pode alterar a sua palavra-passe (closes #219)
+
+- **Antes:** o `POST /auth/change-password` existia, mas nenhum ecrã o usava. As passwords por omissão do seed ficavam em uso.
+- **Novo botão "Alterar palavra-passe"** (ícone de chave) no menu do utilizador. Abre um formulário com a password atual, a nova e a confirmação.
+  - Valida antes de enviar: confirmação igual e mínimo da política (#100).
+  - Erros do servidor aparecem junto ao campo.
+  - Em caso de sucesso fecha e avisa que o próximo início de sessão usa a nova.
+- **Backend:** o `change-password` passa a devolver erros por campo (422 com `errors`, padrão #49):
+  - password atual errada → `currentPassword`;
+  - nova password abaixo do mínimo ou igual à atual → `newPassword`;
+  - o DTO passa a ter mensagens em português.
+- Testes: service (erros por campo, igual à atual) e modal (erros inline sem pedido, erro do servidor no campo, sucesso).
+
 ### feat(deploy): imagem de produção do frontend (build estático + nginx) (closes #208)
 
 - **Antes:** `frontend/Dockerfile` corria `npm start` (servidor de desenvolvimento) e o `docker-compose.prod.yml` não definia o serviço frontend. Em produção ficava o servidor de dev, com bind-mount do código.
