@@ -4,6 +4,22 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### chore(backend): ESLint, Prettier e `npm run lint` no CI (closes #222)
+
+- **Antes:** o backend não tinha ESLint, Prettier nem script de lint.
+- **ESLint 9** (configuração "flat", `eslint.config.mjs`) com as regras recomendadas do JS e do `typescript-eslint` 8.
+  - O `eslint-config-prettier` desliga as regras de estilo; o lint só trata de qualidade.
+  - Ajustes: `any` permitido (corpos de pedido e mocks); variáveis começadas por `_` ignoradas; nos testes, sem a regra de variáveis não usadas.
+- **Prettier** (`.prettierrc`, próximo do estilo atual): `npm run format` formata `src/` e `test/` quando se quiser. Não é verificado no CI, para não reformatar o código todo de uma vez.
+- **Scripts:** `npm run lint` e `npm run lint:fix`.
+- **CI:** novo job "Backend Lint", sem BD e em paralelo com os testes. O build passa a depender dele.
+- **Corrigidos os erros que o lint encontrou:**
+  - imports não usados em 5 entidades e no serviço de estornos;
+  - uma constante usada só como tipo;
+  - diretivas `eslint-disable` que já não faziam nada;
+  - o tipo `Function` no teste da matriz de perfis;
+  - a regex de nomes de PDF com caracteres de controlo, que passam a sair por código (como no frontend, #207).
+
 ### feat(deploy): imagem de produção do frontend (build estático + nginx) (closes #208)
 
 - **Antes:** `frontend/Dockerfile` corria `npm start` (servidor de desenvolvimento) e o `docker-compose.prod.yml` não definia o serviço frontend. Em produção ficava o servidor de dev, com bind-mount do código.

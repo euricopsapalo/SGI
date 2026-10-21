@@ -2,7 +2,6 @@ import { DataSource } from 'typeorm';
 import { readSecret } from './../config/read-secret';
 
 // Load .env file if present (for CLI usage outside NestJS context)
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 require('dotenv').config();
 
 export const AppDataSource = new DataSource({

@@ -88,8 +88,7 @@ export function diasAtraso(dataVencimento: string, hoje: string): number {
     return Math.round((Date.parse(`${hoje}T00:00:00Z`) - Date.parse(`${dataVencimento}T00:00:00Z`)) / 86_400_000);
 }
 
-const ESCALOES = ['naoVencido', 'ate30', 'ate60', 'ate90', 'mais90'] as const;
-type Escalao = typeof ESCALOES[number];
+type Escalao = 'naoVencido' | 'ate30' | 'ate60' | 'ate90' | 'mais90';
 
 export function escalao(dias: number): Escalao {
     if (dias <= 0) return 'naoVencido';
