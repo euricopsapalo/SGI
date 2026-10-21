@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import AppLayout from '../../components/Layout/AppLayout';
-import { showToast as notify } from '../../utils/errorHandler';
+import { showToast as notify, extractErrorMessage, extractFieldErrors } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
 import SearchableSelect from '../../components/SearchableSelect';
 import {
@@ -990,7 +990,7 @@ type ETab = typeof TABS_E[number]['id'];
 interface EncomendaModalProps {
     encomenda?: Encomenda;
     onClose: () => void;
-    onSave: (e: Omit<Encomenda, 'id' | 'numero'>) => void;
+    onSave: (e: Omit<Encomenda, 'id' | 'numero'>) => Promise<void>;
     onAnularRececao?: (rececaoId: string) => void;
 }
 const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onSave, onAnularRececao }) => {
@@ -1060,10 +1060,24 @@ const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onS
         return Object.keys(e).length === 0;
     };
 
-    const handleSave = () => {
+    // #212 — espera pelo servidor; em erro o modal fica aberto com o motivo.
+    const [submitError, setSubmitError] = useState('');
+    const [saving, setSaving] = useState(false);
+    const handleSave = async () => {
+        if (saving) return;
         if (!validate()) { setTab('cabecalho'); return; }
         const estado: EncomendaEstado = encomenda?.estado ?? 'Aberta';
-        onSave({ fornecedorId, data, dataEntrega, condicoesPagamento: condPagamento, responsavel, moeda, descricao, observacoes, estado, linhas, rececoes: encomenda?.rececoes ?? [] });
+        setSubmitError('');
+        setSaving(true);
+        try {
+            await onSave({ fornecedorId, data, dataEntrega, condicoesPagamento: condPagamento, responsavel, moeda, descricao, observacoes, estado, linhas, rececoes: encomenda?.rececoes ?? [] });
+        } catch (err) {
+            const fe = extractFieldErrors(err);
+            if (Object.keys(fe).length) setErrors(prev => ({ ...prev, ...fe }));
+            setSubmitError(extractErrorMessage(err));
+        } finally {
+            setSaving(false);
+        }
     };
 
     const subtotalEnc = linhas.reduce((s, l) => s + linhaTotal(l), 0);
@@ -1380,10 +1394,15 @@ const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onS
                     )}
                 </div>
 
+                {submitError && (
+                    <div className="form-error" style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 16px 4px', padding: '8px 10px', border: '1px solid var(--red)', borderRadius: 4, background: 'rgba(220,38,38,0.06)' }}>
+                        <AlertCircle size={13} /> {submitError}
+                    </div>
+                )}
                 <div className="modal-footer">
-                    <button type="button" className="abtn abtn-secondary" onClick={onClose}>Cancelar</button>
-                    <button type="button" className="abtn abtn-primary" onClick={handleSave}>
-                        <Check size={12} /> Guardar
+                    <button type="button" className="abtn abtn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+                    <button type="button" className="abtn abtn-primary" onClick={handleSave} disabled={saving} aria-busy={saving}>
+                        <Check size={12} /> {saving ? 'A guardar…' : 'Guardar'}
                     </button>
                 </div>
             </div>
@@ -2465,13 +2484,14 @@ const EncomendaPage: React.FC = () => {
     const editTarget  = typeof modal === 'string' && modal !== 'new' ? encomendas.find(e => e.id === modal) : undefined;
     const receberEnc  = receber ? encomendas.find(e => e.id === receber) : null;
 
-    const handleSave = (data: Omit<Encomenda, 'id' | 'numero'>) => {
+    // #212 — só fecha e confirma depois de o servidor aceitar; o erro sobe para o modal.
+    const handleSave = async (data: Omit<Encomenda, 'id' | 'numero'>) => {
         if (typeof modal === 'string' && modal !== 'new') {
-            updateEncomenda(modal, data);
+            await updateEncomenda(modal, data);
             showToast('Encomenda actualizada.');
         } else {
             const numero = `N-${String(encomendas.length + 1).padStart(6, '0')}`;
-            const e = addEncomenda({ ...data, numero });
+            const e = await addEncomenda({ ...data, numero });
             showToast(`Encomenda ${e.numero} criada.`);
         }
         setModal(null);
@@ -2481,10 +2501,10 @@ const EncomendaPage: React.FC = () => {
         try {
             const updatedEnc = await criarRececao(encId, recebidas, guiaRemessa, currentUser?.nome ?? 'Operador', armazem);
             const hoje = new Date().toISOString().split('T')[0];
-            recebidas.forEach(r => {
-                updateArtigo(r.artigoId, { codigoArmazem: armazem });
-                addMovimento({ artigoId: r.artigoId, tipo: 'entrada', quantidade: r.qtd, armazemId: armazem, referencia: encId, usuario: currentUser?.email, observacao: `Recepção ${encId} · GR: ${guiaRemessa}`, data: hoje });
-            });
+            for (const r of recebidas) {
+                await updateArtigo(r.artigoId, { codigoArmazem: armazem });
+                await addMovimento({ artigoId: r.artigoId, tipo: 'entrada', quantidade: r.qtd, armazemId: armazem, referencia: encId, usuario: currentUser?.email, observacao: `Recepção ${encId} · GR: ${guiaRemessa}`, data: hoje });
+            }
             // Find the newly created rececao (most recent Ativa)
             const newRececao = [...updatedEnc.rececoes]
                 .filter(r => r.estado === 'Ativa')
@@ -2507,7 +2527,7 @@ const EncomendaPage: React.FC = () => {
         } catch { /* erro já apresentado pelo interceptor global (api.ts) */ }
     };
 
-    const handleConverterEmEncomenda = (fornecedorId: string, dataEntrega: string, descricao: string, items: ConverterItem[]) => {
+    const handleConverterEmEncomenda = async (fornecedorId: string, dataEntrega: string, descricao: string, items: ConverterItem[]) => {
         const today = new Date().toISOString().split('T')[0];
         const numero = `N-${String(encomendas.length + 1).padStart(6, '0')}`;
         const linhas: EncomendaLinha[] = items.map(item => ({
@@ -2515,7 +2535,11 @@ const EncomendaPage: React.FC = () => {
             qtdEncomendada: item.qtd, qtdRecebida: 0,
             unidade: 'UN', custoUnit: item.preco, desconto: 0,
         }));
-        addEncomenda({ numero, fornecedorId, data: today, dataEntrega, condicoesPagamento: '30 Dias', responsavel: currentUser?.nome ?? '', moeda: 'AOA', descricao, estado: 'Aberta', linhas, rececoes: [] });
+        try {
+            await addEncomenda({ numero, fornecedorId, data: today, dataEntrega, condicoesPagamento: '30 Dias', responsavel: currentUser?.nome ?? '', moeda: 'AOA', descricao, estado: 'Aberta', linhas, rececoes: [] });
+        } catch {
+            return; // #212 — erro já mostrado pelo interceptor global (api.ts); não confirma sucesso
+        }
         showToast(`Encomenda ${numero} criada com ${linhas.length} artigo(s).`);
         setPageTab('encomendas');
     };
