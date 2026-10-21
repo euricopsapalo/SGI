@@ -312,16 +312,6 @@ export const comDisponibilidade = (a: Artigo): Artigo => {
 };
 
 const normArtigo = (a: any): Artigo => ({ ...a, id: a.id?.toString(), tipo: a.tipo === 'SERVICO' ? 'SERVICO' : 'PRODUTO', sujeitoRetencao: a.tipo === 'SERVICO' && !!a.sujeitoRetencao, classe: a.classe ?? '', familia: a.familia ?? '', precoUnitario: Number(a.precoUnitario), existencia: Number(a.existencia), stockReservado: Number(a.stockReservado ?? 0), nivelMaximo: Number(a.nivelMaximo), stockSeguranca: Number(a.stockSeguranca), custoMedio: Number(a.custoMedio), precoCusto: Number(a.precoCusto ?? 0), stockEncomendado: Number(a.stockEncomendado ?? 0), stockInicial: Number(a.stockInicial ?? 0), unidadeMedida: a.unidadeMedida ?? 'UN', refFornecedor: a.refFornecedor ?? undefined, dataUltimaEntrada: a.dataUltimaEntrada ?? undefined, dataUltimaSaida: a.dataUltimaSaida ?? undefined });
-const normMovimento = (m: any): MovimentoStock => ({
-    ...m,
-    id: m.id?.toString(),
-    artigoId: m.artigoId?.toString() ?? m.artigo?.id?.toString() ?? '',
-    armazemId: m.armazemId ?? '',
-    armazemDestinoId: m.armazemDestinoId ?? '',
-    quantidade: Number(m.quantidade),
-    data: m.data ? String(m.data).split('T')[0] : '',
-});
-
 const normCliente = (c: any): Cliente => {
     const principal = (c.enderecos ?? []).find((e: any) => e.principal) ?? c.enderecos?.[0];
     return {
@@ -571,7 +561,7 @@ interface GlobalContextType {
     /** #203 — transferência atómica entre armazéns (POST /artigos/:id/transferencia); a existência total não muda. */
     transferirStock: (artigoId: string, armazemOrigem: string, armazemDestino: string, quantidade: number) => Promise<void>;
     stockArmazem: StockArmazem[]; upsertStockArmazem: (artigoId: string, armazemId: string, quantidade: number, stockMinimo: number) => Promise<void>; removeStockArmazem: (saId: string) => Promise<void>;
-    movimentosStock: MovimentoStock[]; addMovimento: (m: Omit<MovimentoStock, 'id'>) => Promise<MovimentoStock>;
+    addMovimento: (m: Omit<MovimentoStock, 'id'>) => Promise<MovimentoStock>;
     // Purchases
     encomendas: Encomenda[]; addEncomenda: (e: Omit<Encomenda, 'id'>) => Promise<Encomenda>; updateEncomenda: (id: string, e: Partial<Encomenda>) => Promise<void>;
     criarRececao: (encId: string, recebidas: { artigoId: string; qtd: number }[], guiaRemessa: string, operador: string, armazem: string) => Promise<Encomenda>;
@@ -665,7 +655,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const tecnicos = useMemo<Tecnico[]>(() => tecnicosQ.data ?? [], [tecnicosQ.data]);
     const setTecnicos = useCacheSetter<Tecnico>(queryKeys.tecnicos);
 
-    const fornecedoresQ = useQuery<Fornecedor[]>({ queryKey: queryKeys.fornecedores, enabled: authEnabled, queryFn: async () => (await api.get(`/fornecedores`)).data.map(norm) });
+    const fornecedoresQ = useQuery<Fornecedor[]>({ queryKey: queryKeys.fornecedores, enabled: authEnabled && currentUser?.role !== 'Técnico de Campo', // #221 — 403 para o campo
+         queryFn: async () => (await api.get(`/fornecedores`)).data.map(norm) });
     const fornecedores = useMemo<Fornecedor[]>(() => fornecedoresQ.data ?? [], [fornecedoresQ.data]);
     const setFornecedores = useCacheSetter<Fornecedor>(queryKeys.fornecedores);
 
@@ -694,13 +685,16 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [modosPagamento, setModosPagamento] = useState<ModoPagamento[]>([]);
     const [faturasFornecedor, setFaturasFornecedor] = useState<FaturaFornecedor[]>([]);
     const [stockArmazem, setStockArmazem] = useState<StockArmazem[]>([]);
-    const [movimentosStock, setMovimentosStock] = useState<MovimentoStock[]>([]);
     const [encomendas, setEncomendas] = useState<Encomenda[]>([]);
 
     /* ── Initial data load ──────────────────────────────────── */
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const reloadData = React.useCallback(async () => {
             setLoadingBatch(true);
+            // #221 — o técnico de campo não pede o que o backend lhe recusa (403, #198).
+            const skip = Promise.resolve({ data: [] as any[] });
+            const eCampo = currentUserRef.current?.role === 'Técnico de Campo';
+            const escritorio = (url: string) => (eCampo ? skip : api.get(url));
             // #43 — clientes/tecnicos/fornecedores/ordens/artigos são geridos pelo
             // React Query; invalidamos as suas queries e removemo-los deste lote
             // (placeholders para preservar os índices posicionais).
@@ -711,7 +705,6 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             qc.invalidateQueries({ queryKey: queryKeys.artigos });
             const ok = (r: PromiseSettledResult<any>) =>
                 r.status === 'fulfilled' ? r.value.data : [];
-            const skip = Promise.resolve({ data: [] as any[] });
 
             const results = await Promise.allSettled([
                 api.get(`/tipos-trabalho`),       // 0
@@ -731,8 +724,8 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 skip,                             // 14 ordens → React Query
                 api.get(`/armazens`),             // 15
                 skip,                             // 16 artigos → React Query
-                api.get(`/movimentos-stock`),      // 17
-                api.get(`/compras`),            // 18
+                skip,                             // 17 movimentos → paginados no Relatório (#221)
+                escritorio(`/compras`),           // 18
                 skip,                             // 19 faturas antigas → retiradas (#218)
                 skip,                             // 20 logs → página Logs (#210)
                 api.get(`/configuracao`),          // 21
@@ -741,7 +734,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 api.get(`/classes-artigo`),         // 24
                 api.get(`/familias-artigo`),        // 25
                 api.get(`/documentos-compra`),      // 26
-                api.get(`/faturas-fornecedor`),     // 27
+                escritorio(`/faturas-fornecedor`),  // 27
                 api.get(`/condicoes-pagamento`),    // 28
                 api.get(`/modos-pagamento`),        // 29
             ]);
@@ -760,7 +753,6 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             try { setEquipInstalados(ok(results[12]).map(normEquip)); } catch {}
             try { setPlanos(ok(results[13]).map(normPlano)); } catch {}
             try { setArmazens(ok(results[15]).map(norm)); } catch {}
-            try { setMovimentosStock(ok(results[17]).map(normMovimento)); } catch {}
             try { setEncomendas(ok(results[18]).map(normEncomenda)); } catch {}
             try { setStockArmazem(ok(results[22]).map(normStockArmazem)); } catch {}
             try { setTaxasIva(ok(results[23]).map((r: any) => ({ ...norm(r), taxa: Number(r.taxa) }))); } catch {}
@@ -805,9 +797,11 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, []);
 
     // Only load data when authenticated (token exists)
+    // #221 — e só depois de se saber quem é o utilizador (`/auth/me`): antes carregava o lote
+    // duas vezes (uma sem perfil, com pedidos que o técnico de campo não pode fazer).
     useEffect(() => {
         const token = localStorage.getItem('sgi_token');
-        if (token) reloadData();
+        if (token && currentUser) reloadData();
     }, [reloadData, currentUser]);
 
     /* ── Logs ───────────────────────────────────────────────── */
@@ -1255,13 +1249,12 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // ── Máquina de estados RF-OT-001 ─────────────────────────────────
     const refreshStock = async () => {
-        const [artigosRes, movRes, saRes] = await Promise.all([
+        // #221 — os movimentos já não vivem no contexto (o Relatório pagina-os no servidor).
+        const [artigosRes, saRes] = await Promise.all([
             api.get(`/artigos`),
-            api.get(`/movimentos-stock`),
             api.get(`/artigos/stock-armazem`),
         ]);
         setArtigos(artigosRes.data.map(normArtigo));
-        setMovimentosStock(movRes.data.map(normMovimento));
         setStockArmazem(saRes.data.map(normStockArmazem));
     };
 
@@ -1461,8 +1454,15 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             armazemId: m.armazemId || undefined, referencia: m.referencia || undefined,
             observacao: m.observacao || undefined,
         });
-        const n = normMovimento(data);
-        await refreshStock().catch(() => setMovimentosStock(p => [...p, n]));
+        // #221 — os movimentos já não vivem no contexto (o Relatório pagina-os no servidor): só se devolve.
+        const n: MovimentoStock = {
+            ...data,
+            id: String(data.id),
+            artigoId: String(data.artigoId ?? data.artigo?.id ?? m.artigoId),
+            quantidade: Number(data.quantidade),
+            data: data.data ? String(data.data).split('T')[0] : '',
+        };
+        await refreshStock().catch(() => {});
         const artCodigo = artigos.find(a => a.id === m.artigoId)?.codigo ?? m.artigoId;
         const qtdStr = m.quantidade > 0 ? `+${m.quantidade}` : String(m.quantidade);
         const armazemStr = m.armazemDestinoId
@@ -1595,7 +1595,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             armazens, addArmazem, updateArmazem,
             artigos: artigosComReserva, addArtigo, updateArtigo, adjustExistencia, adjustReservado, transferirStock,
             stockArmazem, upsertStockArmazem, removeStockArmazem,
-            movimentosStock, addMovimento,
+            addMovimento,
             encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao,
             faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC,
             loadingData,

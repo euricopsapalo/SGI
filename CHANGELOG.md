@@ -4,6 +4,24 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### perf(context): o login deixa de carregar todos os movimentos de stock e o que o perfil não pode ver (closes #221)
+
+- **Antes:**
+  - o login fazia ~25 pedidos, incluindo **todos** os movimentos de stock, para qualquer perfil;
+  - com sessão guardada, o lote corria **duas vezes**: uma antes de se saber o perfil e outra depois;
+  - o técnico de campo recebia 403 em vários desses pedidos.
+- **Movimentos de stock:** o `GET /movimentos-stock` passa a paginar e a filtrar no servidor (`pagina`, `porPagina` até 500, `tipo`, `artigoId`, `q` no código ou descrição do artigo, `de`/`ate`). Devolve `{ items, total, pagina, porPagina, porTipo }`.
+- **Relatório "Movimentos de Stock":**
+  - pede os dados ao servidor só quando o separador está aberto, com paginação de 50 em 50;
+  - os cartões contam pelo servidor;
+  - a exportação leva a página atual.
+- **Contexto:**
+  - os movimentos saem do estado global e do carregamento inicial;
+  - o técnico de campo deixa de pedir compras, faturas de fornecedor e fornecedores (403);
+  - o lote só corre depois de se conhecer o utilizador, uma vez por login.
+- Os logs saíram do login no #210 e as faturas antigas no #218.
+- Testes: listagem paginada (omissões, filtros, contagem por tipo sem o filtro de tipo), serviço do frontend e carregamento inicial (sem movimentos, sem pedidos proibidos ao campo, um só lote).
+
 ### fix(ordens): o técnico de campo passa a ver só as suas OTs (closes #220)
 
 - **Antes:**

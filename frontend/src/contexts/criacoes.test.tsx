@@ -47,7 +47,7 @@ describe('criações no GlobalContext (#212)', () => {
         expect(semId(result.current.modelosEquipamento)).toEqual([]);
         expect(semId(result.current.armazens)).toEqual([]);
         expect(semId(result.current.encomendas)).toEqual([]);
-        expect(semId(result.current.movimentosStock)).toEqual([]);
+        // #221 — os movimentos já não estão no contexto (o addMovimento rejeita acima e não guarda nada).
         expect(semId(result.current.clientes)).toEqual([]);
     });
 
@@ -73,6 +73,7 @@ describe('criações no GlobalContext (#212)', () => {
 
         expect(mockApi.post).toHaveBeenCalledWith('/movimentos-stock', { artigoId: 1, tipo: 'entrada', quantidade: 3, armazemId: 'ARM-01', referencia: undefined, observacao: 'Reposição' });
         const urls = mockApi.get.mock.calls.map(c => c[0]);
-        expect(urls).toEqual(expect.arrayContaining(['/artigos', '/movimentos-stock', '/artigos/stock-armazem']));
+        expect(urls).toEqual(expect.arrayContaining(['/artigos', '/artigos/stock-armazem']));
+        expect(urls).not.toContain('/movimentos-stock'); // #221 — os movimentos já não vivem no contexto
     });
 });

@@ -228,11 +228,45 @@ describe('ArtigosService', () => {
         expect(resyncExistencia).toHaveBeenCalledWith(manager, 1);
     });
 
-    it('findAllMovimentos / findOneMovimento / removeMovimento delegam no repo', async () => {
-        await service.findAllMovimentos();
+    describe('findAllMovimentos (#221) — paginado e filtrado no servidor', () => {
+        let qb: any;
+        beforeEach(() => {
+            qb = { wheres: [] as any[] };
+            for (const k of ['leftJoinAndSelect', 'leftJoin', 'orderBy', 'addOrderBy', 'skip', 'take', 'select', 'addSelect', 'groupBy']) qb[k] = jest.fn(() => qb);
+            qb.getRawMany = jest.fn(async () => [{ tipo: 'entrada', n: '70' }, { tipo: 'saida', n: '50' }]);
+            qb.andWhere = jest.fn((sql: string, p: any) => { qb.wheres.push([sql, p]); return qb; });
+            qb.getManyAndCount = jest.fn(async () => [[{ id: 2 }, { id: 1 }], 120]);
+            movimentosRepo.createQueryBuilder = jest.fn(() => qb);
+        });
+
+        it('por omissão: página 1, 50 por página, mais recentes primeiro, sem filtros', async () => {
+            await expect(service.findAllMovimentos()).resolves.toEqual({
+                items: [{ id: 2 }, { id: 1 }], total: 120, pagina: 1, porPagina: 50,
+                porTipo: { entrada: 70, saida: 50, ajuste: 0, transferencia: 0, devolucao: 0 },
+            });
+            expect(qb.orderBy).toHaveBeenCalledWith('m.data', 'DESC');
+            expect(qb.skip).toHaveBeenCalledWith(0);
+            expect(qb.take).toHaveBeenCalledWith(50);
+            expect(qb.wheres).toEqual([]);
+        });
+
+        it('aplica os filtros e a página pedida', async () => {
+            await service.findAllMovimentos({ pagina: 3, porPagina: 20, tipo: 'entrada', artigoId: 4, q: ' fil ', de: '2026-10-01', ate: '2026-10-21' });
+            expect(qb.skip).toHaveBeenCalledWith(40);
+            expect(qb.take).toHaveBeenCalledWith(20);
+            expect(Object.assign({}, ...qb.wheres.map(([, p]: any) => p))).toEqual({
+                tipo: 'entrada', artigoId: 4, q: '%fil%', de: '2026-10-01', ate: '2026-10-21',
+            });
+            // a contagem por tipo não aplica o filtro de tipo (5 filtros na lista + 4 na contagem)
+            expect(qb.wheres.filter(([, p]: any) => 'tipo' in p)).toHaveLength(1);
+            expect(qb.wheres).toHaveLength(9);
+        });
+    });
+
+    it('findOneMovimento / removeMovimento delegam no repo', async () => {
         await service.findOneMovimento(1);
         await service.removeMovimento(1);
-        expect(movimentosRepo.find).toHaveBeenCalled();
+        expect(movimentosRepo.findOne).toHaveBeenCalled();
         expect(movimentosRepo.delete).toHaveBeenCalledWith(1);
     });
 });
