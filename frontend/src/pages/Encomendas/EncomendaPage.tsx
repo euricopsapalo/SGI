@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { imprimirPdf } from '../../utils/imprimirPdf';
+import { buildRelatorioComprasHtml } from './relatorioComprasHtml';
 
 /* ══ Helpers ════════════════════════════════════════════════ */
 const linhaTotal = (l: EncomendaLinha) =>
@@ -2431,6 +2432,36 @@ const EncomendaPage: React.FC = () => {
     });
     const maxDaily = Math.max(...dailyVolume.map(d => d.count), 1);
 
+    // #217 — o relatório sai em PDF do servidor (imprimirPdf, #182), com "Pág. x/y" (#180).
+    const imprimirRelatorio = () => {
+        const diasAtraso = (e: Encomenda) => e.dataEntrega
+            ? Math.floor((today.getTime() - new Date(e.dataEntrega).getTime()) / 86400000) : 0;
+        void imprimirPdf(buildRelatorioComprasHtml({
+            empresa: { nome: empresaConfig?.nome ?? '', nif: empresaConfig?.nif, morada: empresaConfig?.morada },
+            geradoEm: `${fmtDate(new Date().toISOString())} ${new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}`,
+            kpis: { emAberto: encEmAberto.length, emAtraso: encEmAtraso.length, hoje: encHoje.length, semana: encSemana.length },
+            porEstado: (['Aberta', 'Aprovada', 'Parcial', 'Recebida', 'Cancelada'] as const)
+                .map(est => ({ label: ESTADO_STYLE[est].label, count: statusCounts[est] ?? 0 })),
+            ultimos7Dias: dailyVolume.map(d => ({ label: d.label, count: d.count })),
+            emAberto: encEmAberto.map(e => {
+                const totalQtd = e.linhas.reduce((s, l) => s + l.qtdEncomendada, 0);
+                const recQtd   = e.linhas.reduce((s, l) => s + l.qtdRecebida, 0);
+                return {
+                    numero: e.numero, fornecedor: getFornNome(e.fornecedorId), data: fmtDate(e.data),
+                    entrega: fmtDate(e.dataEntrega), estado: ESTADO_STYLE[e.estado].label, valor: fmtMoney(encTotal(e)),
+                    pctRecebido: totalQtd > 0 ? Math.round(recQtd / totalQtd * 100) : 0,
+                    atrasada: !!e.dataEntrega && e.dataEntrega < todayStr,
+                };
+            }),
+            emAtraso: encEmAtraso.slice()
+                .sort((a, b) => (a.dataEntrega ?? '').localeCompare(b.dataEntrega ?? ''))
+                .map(e => ({
+                    numero: e.numero, fornecedor: getFornNome(e.fornecedorId), entrega: fmtDate(e.dataEntrega),
+                    diasAtraso: diasAtraso(e), estado: ESTADO_STYLE[e.estado].label, valor: fmtMoney(encTotal(e)),
+                })),
+        }));
+    };
+
     const editTarget  = typeof modal === 'string' && modal !== 'new' ? encomendas.find(e => e.id === modal) : undefined;
     const receberEnc  = receber ? encomendas.find(e => e.id === receber) : null;
 
@@ -2594,7 +2625,7 @@ const EncomendaPage: React.FC = () => {
                 )}
                 {pageTab === 'relatorios' && (
                     <button className="abtn abtn-secondary" type="button"
-                        onClick={() => window.print()}
+                        onClick={imprimirRelatorio}
                         style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <Printer size={13} /> Imprimir
                     </button>

@@ -4,6 +4,16 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(compras): o relatório de Compras passa a sair em PDF do servidor, como as outras impressões (closes #217)
+
+- **Antes:** o botão Imprimir do separador "Relatórios" das Compras usava `window.print()` sobre o ecrã, contra a regra do #182. Saía com o cabeçalho e o rodapé do navegador e sem "Pág. x/y".
+- **Agora gera o HTML do relatório** (`relatorioComprasHtml.ts`) e imprime via `imprimirPdf()`, com `comPaginacao()` e "Pág. x/y" (#180). O relatório inclui:
+  - os indicadores (em aberto, em atraso, hoje, esta semana);
+  - o estado das encomendas (com %) e o volume dos últimos 7 dias;
+  - as tabelas de encomendas em aberto e em atraso.
+- Deixa de haver `window.print()` na aplicação.
+- Testes: conteúdo, textos escapados, estado vazio e a regra de página.
+
 ### feat(deploy): imagem de produção do frontend (build estático + nginx) (closes #208)
 
 - **Antes:** `frontend/Dockerfile` corria `npm start` (servidor de desenvolvimento) e o `docker-compose.prod.yml` não definia o serviço frontend. Em produção ficava o servidor de dev, com bind-mount do código.
