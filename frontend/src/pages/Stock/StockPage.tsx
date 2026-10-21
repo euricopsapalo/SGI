@@ -8,7 +8,7 @@ import { useGlobal, Artigo, Armazem, TipoArtigo, TIPO_ARTIGO_LABEL } from '../..
 import {
     Search, Plus, Edit2, X, AlertCircle, Check, Package, Download,
     BarChart2, ArrowDownCircle, ArrowUpCircle, RefreshCw,
-    Truck, Archive, Star, FileText, Image as ImageIcon, Trash2,
+    Archive, Star, FileText, Image as ImageIcon, Trash2,
     ChevronRight, ChevronDown, Warehouse, Eye, Printer,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
@@ -1064,12 +1064,13 @@ const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, armaze
     );
 };
 
-/* ══ Simple Op Modal (Reposição / Devolução / Guia) ════════ */
-type SimpleOpType = 'reposicao' | 'devolucao' | 'guia';
+/* ══ Simple Op Modal (Reposição / Devolução) ════════════════ */
+// #214 — a "Guia de Transporte" saiu: não gerava documento e mostrava sucesso falso.
+// Volta quando existir como documento fiscal (série/numeração) com impressão via imprimirPdf (#182).
+type SimpleOpType = 'reposicao' | 'devolucao';
 const SIMPLE_OP_LABELS: Record<SimpleOpType, { titulo: string; acao: string; icon: React.ReactNode }> = {
     reposicao: { titulo: 'Reposição de Stock', acao: 'Repor',     icon: <ArrowDownCircle size={14} /> },
     devolucao: { titulo: 'Devolução',           acao: 'Devolver',  icon: <ArrowUpCircle size={14} /> },
-    guia:      { titulo: 'Guia de Transporte',  acao: 'Emitir',   icon: <Truck size={14} /> },
 };
 interface SimpleOpModalProps {
     tipo: SimpleOpType;
@@ -1187,10 +1188,10 @@ const StatsModal: React.FC<{ artigos: Artigo[]; onClose: () => void }> = ({ arti
 };
 
 /* ══ Page ════════════════════════════════════════════════════ */
-type OpState = 'inventario' | 'transferencia' | 'reposicao' | 'devolucao' | 'guia' | 'stats' | null;
+type OpState = 'inventario' | 'transferencia' | 'reposicao' | 'devolucao' | 'stats' | null;
 
 const StockPage: React.FC = () => {
-    const { artigos, addArtigo, updateArtigo, adjustExistencia, transferirStock, armazens, addMovimento, currentUser, stockArmazem, fmt, fmtMoney, classesArtigo, familiasArtigo, loadingData } = useGlobal();
+    const { artigos, addArtigo, updateArtigo, transferirStock, armazens, addMovimento, currentUser, stockArmazem, fmt, fmtMoney, classesArtigo, familiasArtigo, loadingData } = useGlobal();
 
     // Resolve warehouse code from either a code string or a numeric ID (legacy data)
     const resolveArmazem = (val: string) =>
@@ -1239,6 +1240,7 @@ const StockPage: React.FC = () => {
     };
 
     // #212 — espera por cada pedido e pára no primeiro erro (já mostrado pelo interceptor).
+    // #213 — cada linha é um único pedido: o servidor aplica o ajuste e regista o movimento juntos.
     const handleInventario = async (lines: InventLine[]) => {
         const hoje = new Date().toISOString().split('T')[0];
         let count = 0;
@@ -1247,7 +1249,7 @@ const StockPage: React.FC = () => {
                 const a = artigos.find(x => x.id === l.artigoId);
                 if (!a) continue;
                 const delta = Number(l.novaExist) - a.existencia;
-                await adjustExistencia(l.artigoId, delta);
+                if (delta === 0) continue;
                 await addMovimento({ artigoId: l.artigoId, tipo: 'ajuste', quantidade: delta, armazemId: a.codigoArmazem, usuario: currentUser?.email, observacao: 'Ajuste de inventário', data: hoje });
                 count++;
             }
@@ -1280,22 +1282,17 @@ const StockPage: React.FC = () => {
         const hoje = new Date().toISOString().split('T')[0];
         const a = artigos.find(x => x.id === artigoId);
         try {
+            // #213 — um só pedido: o servidor aplica o movimento ao stock e regista-o.
             if (tipo === 'reposicao') {
-                await adjustExistencia(artigoId, quantidade);
                 await addMovimento({ artigoId, tipo: 'entrada', quantidade, armazemId: a?.codigoArmazem, usuario: currentUser?.email, observacao: 'Reposição manual', data: hoje });
                 showToast(`Reposição de ${fmt(quantidade)} un registada.`);
                 return;
             }
-            if (tipo === 'devolucao') {
-                await adjustExistencia(artigoId, -quantidade);
-                await addMovimento({ artigoId, tipo: 'devolucao', quantidade, armazemId: a?.codigoArmazem, usuario: currentUser?.email, observacao: 'Devolução', data: hoje });
-                showToast(`Devolução de ${fmt(quantidade)} un registada.`);
-                return;
-            }
+            await addMovimento({ artigoId, tipo: 'devolucao', quantidade, armazemId: a?.codigoArmazem, usuario: currentUser?.email, observacao: 'Devolução', data: hoje });
+            showToast(`Devolução de ${fmt(quantidade)} un registada.`);
         } catch {
-            return; // #212 — erro já mostrado pelo interceptor global (api.ts); não confirma sucesso
+            // #212 — erro já mostrado pelo interceptor global (api.ts); não confirma sucesso
         }
-        showToast(`Guia de transporte emitida.`);
     };
 
     const totalArtigos = artigos.length;
@@ -1528,7 +1525,7 @@ const StockPage: React.FC = () => {
             {op === 'transferencia' && (
                 <TransferenciaModal artigos={artigos} armazens={armazens} onClose={() => setOp(null)} onConfirm={handleTransferencia} />
             )}
-            {(op === 'reposicao' || op === 'devolucao' || op === 'guia') && (
+            {(op === 'reposicao' || op === 'devolucao') && (
                 <SimpleOpModal tipo={op} artigos={artigos} onClose={() => setOp(null)}
                     onConfirm={(tipo, id, qtd, nota) => handleSimpleOp(tipo, id, qtd)} />
             )}

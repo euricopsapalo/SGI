@@ -56,11 +56,22 @@ describe('Faturas E2E — criar a partir de OT', () => {
         expect(Object.keys(store)).toHaveLength(0);
     });
 
-    it('as faturas antigas continuam consultáveis e editáveis', async () => {
+    it('as faturas antigas continuam consultáveis e editáveis (observações)', async () => {
         store[1] = { id: 1, otId: 99, valorTotal: 5000, estado: 'Pendente' };
         const res = await request(app.getHttpServer()).get('/faturas/1').expect(200);
         expect(res.body.otId).toBe(99);
-        await request(app.getHttpServer()).put('/faturas/1').send({ estado: 'Anulada' }).expect(200);
-        expect(store[1].estado).toBe('Anulada');
+        await request(app.getHttpServer()).put('/faturas/1').send({ observacoes: 'nota' }).expect(200);
+        expect(store[1].observacoes).toBe('nota');
+    });
+
+    // #218 — marcar como paga/anulada só em Vendas/Tesouraria: o PUT recusa o estado e o pagamento.
+    it.each([
+        [{ estado: 'Paga' }],
+        [{ estado: 'Anulada', motivoAnulacao: 'x' }],
+        [{ dataPagamento: '2026-10-21' }],
+    ])('PUT com %o → 400 e a fatura não muda', async (corpo) => {
+        store[1] = { id: 1, otId: 99, valorTotal: 5000, estado: 'Pendente' };
+        await request(app.getHttpServer()).put('/faturas/1').send(corpo).expect(400);
+        expect(store[1].estado).toBe('Pendente');
     });
 });

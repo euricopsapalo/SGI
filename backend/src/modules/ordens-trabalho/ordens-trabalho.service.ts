@@ -882,7 +882,8 @@ export class OrdensTrabalhoService {
         for (const art of (ot.artigos ?? [])) {
             const consumido = Number(art.qtdConsumida ?? art.quantidade ?? 0);
             if (!art.artigoId || consumido <= 0) continue;
-            await this.artigosService.createMovimento({
+            // #213 — só regista: o stock já saiu em StockReservaService.consumir.
+            await this.artigosService.registarMovimento({
                 artigoId: art.artigoId,
                 tipo: 'saida',
                 quantidade: consumido,

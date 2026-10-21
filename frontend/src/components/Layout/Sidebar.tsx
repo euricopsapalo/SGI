@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Wrench, Package, CalendarDays,
-  FileText, BarChart3, Settings, LogOut, Truck, MapPin,
+  BarChart3, Settings, LogOut, Truck, MapPin,
   ClipboardList, ShoppingCart, type LucideIcon,
 } from 'lucide-react';
 import AquatexLogo from '../AquatexLogo';
@@ -46,7 +46,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { to: '/compras', icon: ShoppingCart, label: 'Compras'    },
       { to: '/stock',      icon: Package,      label: 'Inventário' },
-      { to: '/faturacao',  icon: FileText,     label: 'Faturação'  },
     ],
   },
   {
