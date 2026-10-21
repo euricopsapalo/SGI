@@ -4,10 +4,11 @@ import {
     LayoutDashboard, Users, Wrench, Package,
     CalendarDays, BarChart3, Settings, Bell,
     Truck, MapPin, ClipboardList, ShoppingCart, ChevronDown,
-    LogOut, ScrollText, RefreshCw, UserCog, Menu, X, Receipt,
+    LogOut, ScrollText, RefreshCw, UserCog, Menu, X, Receipt, KeyRound,
     type LucideIcon,
 } from 'lucide-react';
 import AquatexLogo from '../AquatexLogo';
+import AlterarPasswordModal from '../AlterarPasswordModal';
 import { useGlobal } from '../../contexts/GlobalContext';
 
 interface NavItem { to: string; icon: LucideIcon; label: string; adminOnly?: boolean; }
@@ -163,6 +164,8 @@ const TopNav: React.FC = () => {
     const [reloading, setReloading] = useState(false);
     // #44 — menu móvel (hambúrguer) para tablet/telemóvel (< 1024px)
     const [menuOpen, setMenuOpen] = useState(false);
+    // #219 — alterar a própria palavra-passe
+    const [alterarPw, setAlterarPw] = useState(false);
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
 
     // Fecha o menu móvel ao mudar de rota
@@ -257,6 +260,17 @@ const TopNav: React.FC = () => {
                         <Settings size={16} strokeWidth={1.75} />
                     </NavLink>
                 )}
+                {currentUser && (
+                    <button
+                        className="topnav-icon-btn"
+                        type="button"
+                        aria-label="Alterar palavra-passe"
+                        title="Alterar palavra-passe"
+                        onClick={() => setAlterarPw(true)}
+                    >
+                        <KeyRound size={16} strokeWidth={1.75} />
+                    </button>
+                )}
                 <button
                     className="topnav-icon-btn"
                     aria-label="Terminar sessão"
@@ -300,6 +314,7 @@ const TopNav: React.FC = () => {
                     </div>
                 </div>
             )}
+            {alterarPw && <AlterarPasswordModal onClose={() => setAlterarPw(false)} />}
         </nav>
     );
 };
