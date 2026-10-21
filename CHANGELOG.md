@@ -14,6 +14,31 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 - Deixa de haver `window.print()` na aplicação.
 - Testes: conteúdo, textos escapados, estado vazio e a regra de página.
 
+### fix(api): violações de FK passam a devolver 409 com mensagem legível em vez de 500 (closes #211)
+
+- **Antes:** só o Parque traduzia a violação de FK do Postgres (`23503`). Nos outros módulos, apagar algo ainda referenciado dava 500. Exemplos: um cliente com documentos de venda, um utilizador ligado a um técnico, ou um registo das tabelas do sistema em uso.
+- **Novo filtro global `QueryFailedFilter`** (registado com `APP_FILTER`):
+  - `23503` ao apagar ou alterar algo referenciado → **409**, "está a ser usado em documentos de venda" (nome legível da tabela);
+  - `23503` ao gravar uma referência inexistente → **400**;
+  - `23505` (valor único repetido) → **409**;
+  - os restantes erros da BD continuam a dar 500, sem expor o SQL na resposta.
+- As mensagens específicas que os services já lançam (por exemplo, o Parque e a contagem do cliente) continuam a ter prioridade.
+- O frontend já mostra o `message` da resposta no toast.
+- Testes: os três casos da issue, a referência inexistente, o valor repetido e o 500 sem SQL.
+
+### fix(logs): o admin vê os registos de todos, paginados e filtrados no servidor (closes #210)
+
+- **Antes:** a página de Logs filtrava por `usuario === e-mail do utilizador atual`. Os registos gravados pelo backend (com o id ou `sistema`) nunca apareciam. O `GET /logs` devolvia a tabela inteira, sem paginação, e era carregado no login.
+- **`GET /logs` (só admin, desde o #198)** passa a aceitar `pagina`, `porPagina` (máx. 200), `usuario`, `modulo`, `tipo`, `q` (ação, detalhes ou utilizador) e `de`/`ate`. Devolve `{ items, total, pagina, porPagina, porTipo, modulos }`.
+- **Página de Logs:**
+  - pede os dados ao servidor, com pesquisa, módulo, tipo e intervalo de datas;
+  - mostra os registos de todos os utilizadores, com paginação de 50 em 50;
+  - os cartões contam pelo servidor;
+  - a exportação leva a página atual.
+- O menu "Logs do Sistema" e a rota `/logs` ficam só para o admin.
+- O `GET /logs` sai do carregamento inicial da aplicação; o contexto só regista (`addLog`).
+- Testes: service (paginação, filtros, contagem por tipo sem o filtro de tipo) e serviço do frontend (filtros vazios e normalização).
+
 ### feat(deploy): imagem de produção do frontend (build estático + nginx) (closes #208)
 
 - **Antes:** `frontend/Dockerfile` corria `npm start` (servidor de desenvolvimento) e o `docker-compose.prod.yml` não definia o serviço frontend. Em produção ficava o servidor de dev, com bind-mount do código.
