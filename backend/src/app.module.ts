@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 
+import { QueryFailedFilter } from './config/query-failed.filter';
 import { DatabaseModule } from './database/database.module';
 import { UsersModule } from './modules/users/users.module';
 import { ClientesModule } from './modules/clientes/clientes.module';
@@ -98,6 +99,8 @@ import { readSecret } from './config/read-secret';
   providers: [
     // Aplica o ThrottlerGuard globalmente (issue #41)
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // #211 — violações de FK/UNIQUE do Postgres → 409/400 legíveis em vez de 500
+    { provide: APP_FILTER, useClass: QueryFailedFilter },
   ],
 })
 export class AppModule {}
