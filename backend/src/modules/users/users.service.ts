@@ -58,6 +58,7 @@ export class UsersService {
     async update(id: number, body: Partial<User> & { password?: string }) {
         const update: Partial<User> = { ...body };
         if (body.password) {
+            await this.assertPasswordPolicy(body.password);
             update.passwordHash = await bcrypt.hash(body.password, 10);
         }
         delete (update as any).password;

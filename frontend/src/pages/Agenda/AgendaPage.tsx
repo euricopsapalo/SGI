@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useModalA11y } from '../../components/useModalA11y';
 import AppLayout from '../../components/Layout/AppLayout';
 import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
@@ -45,6 +46,7 @@ interface ReprogramarProps {
     onConfirm: (novaData: string, motivo: string) => void;
 }
 const ReprogramarModal: React.FC<ReprogramarProps> = ({ ot, novaData: initialData, onClose, onConfirm }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fmtDate: fmtDt } = useGlobal();
     const [data, setData]     = useState(initialData);
     const [motivo, setMotivo] = useState('');
@@ -59,7 +61,7 @@ const ReprogramarModal: React.FC<ReprogramarProps> = ({ ot, novaData: initialDat
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 440 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 440 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Reprogramar OT</h3>
                     <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
@@ -125,11 +127,12 @@ const OTCard: React.FC<OTCardProps> = ({ ot, nomeCliente, onClick, onDragStart, 
 
 /* ── OT Detail Modal ── */
 const OTDetail: React.FC<{ ot: OrdemTrabalho; nomeCliente: string; nomeEquip: string; onClose: () => void }> = ({ ot, nomeCliente, nomeEquip, onClose }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fmtDate: fmtDt } = useGlobal();
     const ec = ESTADO_COLOR[ot.estado];
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 460 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 460 }}>
                 <div className="modal-header">
                     <div>
                         <h3 className="modal-title">{ot.id} — {ot.naturezaIntervencao}</h3>

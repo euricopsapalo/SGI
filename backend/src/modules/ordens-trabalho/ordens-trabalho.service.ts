@@ -263,6 +263,33 @@ export class OrdensTrabalhoService {
      * `?mine=true` (executados pelo técnico do utilizador autenticado),
      * `?registadoPorId=`, `?executadoPorId=`, `?naturezaIntervencao=`, `?prioridade=`.
      */
+    /** Id do técnico ligado ao utilizador (#65), lido da BD — o token pode estar desatualizado. */
+    private async tecnicoDoUtilizador(user: any): Promise<number | null> {
+        const userId = Number(user?.id ?? user?.sub);
+        if (!userId) return null;
+        const tec = await this.tecnicoRepo.findOne({ where: { userId }, select: ['id'] });
+        return tec?.id ?? null;
+    }
+
+    /**
+     * #220 — O técnico de campo (perfil `campo`) só vê as OTs em que é executante ou que
+     * registou. Devolve as condições OR a aplicar, ou `null` para os perfis sem restrição.
+     */
+    private async escopoCampo(user: any): Promise<{ executadoPorId: number | null; registadoPorId: number } | null> {
+        if (user?.role !== 'campo') return null;
+        return { executadoPorId: await this.tecnicoDoUtilizador(user), registadoPorId: Number(user.id ?? user.sub) };
+    }
+
+    /** #220 — usado pelo `OtAcessoGuard` nas rotas `/ordens/:id…`. */
+    async podeAceder(id: number, user: any): Promise<boolean> {
+        const escopo = await this.escopoCampo(user);
+        if (!escopo) return true;
+        const ot = await this.repo.findOne({ where: { id }, select: ['id', 'executadoPorId', 'registadoPorId'] });
+        if (!ot) return true; // a rota responde 404 por si
+        return (escopo.executadoPorId != null && Number(ot.executadoPorId) === escopo.executadoPorId)
+            || Number(ot.registadoPorId) === escopo.registadoPorId;
+    }
+
     async findAll(query: any = {}) {
         const where: any = {};
         if (query.registadoPorId) where.registadoPorId = Number(query.registadoPorId);
@@ -272,16 +299,31 @@ export class OrdensTrabalhoService {
 
         // ?mine=true → técnico do user autenticado executa
         if (String(query.mine) === 'true') {
-            const tecnicoId = query._currentUser?.tecnicoId;
+            const tecnicoId = await this.tecnicoDoUtilizador(query._currentUser);
             if (!tecnicoId) {
                 // user não é técnico → devolve vazio (semantica: sem OTs "minhas" para executar)
                 return [];
             }
-            where.executadoPorId = Number(tecnicoId);
+            where.executadoPorId = tecnicoId;
+        }
+
+        // #220 — técnico de campo: sempre restrito às suas OTs, independentemente da query.
+        let condicoes: any = Object.keys(where).length ? where : undefined;
+        const escopo = await this.escopoCampo(query._currentUser);
+        if (escopo) {
+            const ramos: any[] = [];
+            if (escopo.executadoPorId != null && (where.executadoPorId === undefined || where.executadoPorId === escopo.executadoPorId)) {
+                ramos.push({ ...where, executadoPorId: escopo.executadoPorId });
+            }
+            if (where.registadoPorId === undefined || where.registadoPorId === escopo.registadoPorId) {
+                ramos.push({ ...where, registadoPorId: escopo.registadoPorId });
+            }
+            if (!ramos.length) return [];
+            condicoes = ramos;
         }
 
         const ots = await this.repo.find({
-            where: Object.keys(where).length ? where : undefined,
+            where: condicoes,
             relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes', 'registadoPor', 'executadoPor', 'aprovadoPor'],
         });
         const limite = await this.getLimiteAdiamentos();
@@ -508,8 +550,7 @@ export class OrdensTrabalhoService {
     /**
      * RF-OT-003 §3.2 — Programada → Confirmada.
      * Exige `dataExecucao` (dentro da janela, não no passado) e técnico de campo.
-     * Dispara a reserva de stock — **integração com RF-OT-004 fica como TODO**
-     * até esse RF estar implementado (chamada futura: `stockService.reservar(otId)`).
+     * Reserva o stock das Linhas de Consumo (RF-OT-004, `StockReservaService.reservar`).
      */
     async confirmar(id: number, opts: { dataExecucao?: string; executadoPorId?: number; usuario?: string } = {}) {
         const ot = await this.findOrFail(id);
@@ -567,7 +608,7 @@ export class OrdensTrabalhoService {
      *   nesse caso a janela é **estendida** para `novaData + 6 meses`).
      * - Incrementa `adiamentos`; regista em `ot_reprogramacoes`.
      * - Se `adiamentos >= limite`, exige `aprovadoPor` (admin) + `aprovacaoMotivo`.
-     * - Se a OT estava Confirmada, **liberta as reservas de stock** (RF-OT-004 — TODO).
+     * - Se a OT estava Confirmada, **liberta as reservas de stock** (RF-OT-004, `StockReservaService.libertar`).
      */
     async adiar(id: number, opts: {
         novaData?: string;
@@ -840,7 +881,8 @@ export class OrdensTrabalhoService {
         for (const art of (ot.artigos ?? [])) {
             const consumido = Number(art.qtdConsumida ?? art.quantidade ?? 0);
             if (!art.artigoId || consumido <= 0) continue;
-            await this.artigosService.createMovimento({
+            // #213 — só regista: o stock já saiu em StockReservaService.consumir.
+            await this.artigosService.registarMovimento({
                 artigoId: art.artigoId,
                 tipo: 'saida',
                 quantidade: consumido,

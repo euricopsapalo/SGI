@@ -40,8 +40,10 @@ describe('OT Registo e Marcação (RF-OT-002) E2E', () => {
             find: jest.fn(async ({ where }: any = {}) => {
                 let arr = Object.values(store);
                 if (where) {
+                    // #220 — `where` pode ser uma lista de ramos (OR), como no escopo do técnico de campo.
+                    const ramos = Array.isArray(where) ? where : [where];
                     arr = arr.filter((o: any) =>
-                        Object.entries(where).every(([k, v]) => o[k] === v),
+                        ramos.some((r: any) => Object.entries(r).every(([k, v]) => o[k] === v)),
                     );
                 }
                 return arr;
@@ -55,8 +57,8 @@ describe('OT Registo e Marcação (RF-OT-002) E2E', () => {
         const noopRepo = { save: jest.fn(), create: jest.fn(), delete: jest.fn(async () => ({})), find: jest.fn(async () => []) };
 
         const tecnicos: Record<number, any> = {
-            17: { id: 17, nome: 'Bruno José', ativo: true },
-            18: { id: 18, nome: 'Carlos Silva', ativo: false },
+            17: { id: 17, nome: 'Bruno José', ativo: true, userId: 50 },
+            18: { id: 18, nome: 'Carlos Silva', ativo: false, userId: 51 },
         };
         const equipInstalados: Record<number, any> = {
             5: { id: 5, clienteId: 7 },
@@ -78,7 +80,10 @@ describe('OT Registo e Marcação (RF-OT-002) E2E', () => {
                 { provide: getRepositoryToken(OtMaoObra), useValue: noopRepo },
                 { provide: getRepositoryToken(OtArtigo), useValue: noopRepo },
                 { provide: getRepositoryToken(OtReprogramacao), useValue: noopRepo },
-                { provide: getRepositoryToken(Tecnico), useValue: { findOne: jest.fn(async ({ where }: any) => tecnicos[where.id] ?? null) } },
+                // #220 — o técnico do utilizador é lido da BD (por `userId`), não do token.
+                { provide: getRepositoryToken(Tecnico), useValue: { findOne: jest.fn(async ({ where }: any) => (where.userId !== undefined
+                    ? Object.values(tecnicos).find((t: any) => t.userId === where.userId) ?? null
+                    : tecnicos[where.id] ?? null)) } },
                 { provide: getRepositoryToken(EquipInstalado), useValue: { findOne: jest.fn(async ({ where }: any) => equipInstalados[where.id] ?? null) } },
                 { provide: getRepositoryToken(User), useValue: { findOne: jest.fn(async ({ where }: any) => ({ id: where.id, role: 'admin' })) } },
                 { provide: getRepositoryToken(ConfiguracaoEmpresa), useValue: { find: jest.fn(async () => [{ limiteAdiamentos: 3 }]) } },
@@ -183,5 +188,20 @@ describe('OT Registo e Marcação (RF-OT-002) E2E', () => {
         const res = await request(srv()).get('/ordens?mine=true').expect(200);
         expect(res.body.every((o: any) => o.executadoPorId === 17)).toBe(true);
         expect(res.body.length).toBeGreaterThan(0);
+    });
+
+    // #220 — o técnico de campo só vê as suas OTs, mesmo sem `?mine=true`.
+    it('técnico de campo: GET /ordens só devolve as suas OTs; GET /ordens/:id de outra OT → 404', async () => {
+        injectedUser = { ...COORDENADOR_USER };
+        const alheia = (await request(srv()).post('/ordens').send({
+            descricao: 'OT de outro técnico', tipo: 'pontual', equipInstaladoId: 9,
+        }).expect(201)).body;
+
+        injectedUser = { id: 50, sub: 50, role: 'campo' };
+        const res = await request(srv()).get('/ordens').expect(200);
+        expect(res.body.length).toBeGreaterThan(0);
+        expect(res.body.every((o: any) => o.executadoPorId === 17 || o.registadoPorId === 50)).toBe(true);
+        expect(res.body.find((o: any) => o.id === alheia.id)).toBeUndefined();
+        await request(srv()).get(`/ordens/${alheia.id}`).expect(404);
     });
 });

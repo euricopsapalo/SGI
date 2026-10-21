@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useModalA11y } from '../../components/useModalA11y';
 import AppLayout from '../../components/Layout/AppLayout';
 import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
@@ -23,6 +24,7 @@ interface PlanoModalProps {
     onSave: (p: Omit<PlanoManutencao, 'id'>) => void;
 }
 const PlanoModal: React.FC<PlanoModalProps> = ({ plano, onClose, onSave }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { equipInstalados, clientes, modelosEquipamento, tiposTrabalho, funcoesTecnico, artigos } = useGlobal();
 
     const [equipId, setEquipId]     = useState(plano?.equipInstaladoId ?? '');
@@ -79,7 +81,7 @@ const PlanoModal: React.FC<PlanoModalProps> = ({ plano, onClose, onSave }) => {
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 620 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 620 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">{plano ? 'Editar Plano' : 'Novo Plano de Manutenção'}</h3>
                     <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
@@ -182,6 +184,7 @@ const PlanoModal: React.FC<PlanoModalProps> = ({ plano, onClose, onSave }) => {
 /* ══ Repetir Plano Modal ══════════════════════════════ */
 interface RepetirModalProps { plano: PlanoManutencao; onClose: () => void; onRepetir: (equipIds: string[]) => void; }
 const RepetirModal: React.FC<RepetirModalProps> = ({ plano, onClose, onRepetir }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { equipInstalados, clientes, modelosEquipamento, planos } = useGlobal();
     const modeloOrigem = equipInstalados.find(e => e.id === plano.equipInstaladoId)?.modeloId;
     // Show only equips of same model that don't have a plan yet
@@ -195,7 +198,7 @@ const RepetirModal: React.FC<RepetirModalProps> = ({ plano, onClose, onRepetir }
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 480 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 480 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Repetir Plano — {plano.id}</h3>
                     <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
