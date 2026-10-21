@@ -4,6 +4,31 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(stock): inventário, reposição e devolução passam a ser atómicos e o movimento é validado (closes #213)
+
+- **Antes:**
+  - inventário, reposição e devolução faziam dois pedidos independentes: o ajuste de stock e o movimento;
+  - o `POST /movimentos-stock` não validava o tipo nem a quantidade e não mexia no stock;
+  - o frontend enviava `data`, um campo que o DTO não aceita, por isso o movimento dava sempre 400 e o erro ficava escondido;
+  - o stock podia mudar sem movimento.
+- **`POST /movimentos-stock` agora valida, aplica e regista numa só transação** (`stock_armazem` e existência derivada):
+  - `entrada` (> 0) entra no armazém indicado;
+  - `saida`, `devolucao` e `ajuste` negativo saem pela ordem habitual; sem stock suficiente → 422;
+  - `ajuste` ≠ 0, com sinal;
+  - quantidade inválida → **400**;
+  - `transferencia` → 400 (tem endpoint próprio, atómico desde o #37);
+  - artigo inexistente → 404.
+- **`registarMovimento`** só regista. Usam-no a finalização da OT, em que o stock já saiu no `StockReservaService`, e a receção.
+- **Receção e anulação de receção:** o movimento (entrada ou saída) passa a ser gravado pelo servidor, na mesma transação do stock. O frontend deixa de o criar à parte.
+- **Frontend:**
+  - cada linha de inventário e cada reposição ou devolução é um único pedido;
+  - o `addMovimento` envia só os campos do DTO e recarrega artigos, movimentos e stock por armazém.
+- Testes:
+  - `createMovimento`: entrada, saídas, ajustes com sinal, rollback quando o stock falha, 400 por quantidade ou tipo inválido, 404;
+  - receção e anulação registam o movimento;
+  - o `addMovimento` não envia `data`.
+
+
 ### fix(context): as criações esperam pelo servidor e deixam de mostrar sucesso falso (closes #212)
 
 - **Antes:** `addCliente`, `addFornecedor`, `addModelo`, `addArmazem`, `addArtigo`, `addMovimento` e `addEncomenda` devolviam logo um registo provisório com `id: ''` e engoliam o erro (`.catch(() => {})`). As páginas mostravam "registado" e fechavam o modal mesmo quando o servidor recusava.

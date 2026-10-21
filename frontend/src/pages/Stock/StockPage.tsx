@@ -1190,7 +1190,7 @@ const StatsModal: React.FC<{ artigos: Artigo[]; onClose: () => void }> = ({ arti
 type OpState = 'inventario' | 'transferencia' | 'reposicao' | 'devolucao' | 'guia' | 'stats' | null;
 
 const StockPage: React.FC = () => {
-    const { artigos, addArtigo, updateArtigo, adjustExistencia, transferirStock, armazens, addMovimento, currentUser, stockArmazem, fmt, fmtMoney, classesArtigo, familiasArtigo, loadingData } = useGlobal();
+    const { artigos, addArtigo, updateArtigo, transferirStock, armazens, addMovimento, currentUser, stockArmazem, fmt, fmtMoney, classesArtigo, familiasArtigo, loadingData } = useGlobal();
 
     // Resolve warehouse code from either a code string or a numeric ID (legacy data)
     const resolveArmazem = (val: string) =>
@@ -1239,6 +1239,7 @@ const StockPage: React.FC = () => {
     };
 
     // #212 — espera por cada pedido e pára no primeiro erro (já mostrado pelo interceptor).
+    // #213 — cada linha é um único pedido: o servidor aplica o ajuste e regista o movimento juntos.
     const handleInventario = async (lines: InventLine[]) => {
         const hoje = new Date().toISOString().split('T')[0];
         let count = 0;
@@ -1247,7 +1248,7 @@ const StockPage: React.FC = () => {
                 const a = artigos.find(x => x.id === l.artigoId);
                 if (!a) continue;
                 const delta = Number(l.novaExist) - a.existencia;
-                await adjustExistencia(l.artigoId, delta);
+                if (delta === 0) continue;
                 await addMovimento({ artigoId: l.artigoId, tipo: 'ajuste', quantidade: delta, armazemId: a.codigoArmazem, usuario: currentUser?.email, observacao: 'Ajuste de inventário', data: hoje });
                 count++;
             }
@@ -1280,14 +1281,13 @@ const StockPage: React.FC = () => {
         const hoje = new Date().toISOString().split('T')[0];
         const a = artigos.find(x => x.id === artigoId);
         try {
+            // #213 — um só pedido: o servidor aplica o movimento ao stock e regista-o.
             if (tipo === 'reposicao') {
-                await adjustExistencia(artigoId, quantidade);
                 await addMovimento({ artigoId, tipo: 'entrada', quantidade, armazemId: a?.codigoArmazem, usuario: currentUser?.email, observacao: 'Reposição manual', data: hoje });
                 showToast(`Reposição de ${fmt(quantidade)} un registada.`);
                 return;
             }
             if (tipo === 'devolucao') {
-                await adjustExistencia(artigoId, -quantidade);
                 await addMovimento({ artigoId, tipo: 'devolucao', quantidade, armazemId: a?.codigoArmazem, usuario: currentUser?.email, observacao: 'Devolução', data: hoje });
                 showToast(`Devolução de ${fmt(quantidade)} un registada.`);
                 return;

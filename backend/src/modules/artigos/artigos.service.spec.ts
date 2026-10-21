@@ -132,22 +132,77 @@ describe('ArtigosService', () => {
         expect(artigosRepo.update).toHaveBeenCalledWith(1, { stockEncomendado: 0 });
     });
 
-    it('createMovimento de entrada atualiza dataUltimaEntrada', async () => {
-        await service.createMovimento({ artigoId: 1, tipo: 'entrada', quantidade: 3 });
+    it('registarMovimento de entrada atualiza dataUltimaEntrada (sem mexer no stock)', async () => {
+        await service.registarMovimento({ artigoId: 1, tipo: 'entrada', quantidade: 3 });
         const call = artigosRepo.update.mock.calls.find((c: any[]) => c[1]?.dataUltimaEntrada);
         expect(call).toBeDefined();
+        expect(entradaStock).not.toHaveBeenCalled();
     });
 
-    it('createMovimento de saída atualiza dataUltimaSaida', async () => {
-        await service.createMovimento({ artigoId: 1, tipo: 'saida', quantidade: 3 });
+    it('registarMovimento de saída atualiza dataUltimaSaida', async () => {
+        await service.registarMovimento({ artigoId: 1, tipo: 'saida', quantidade: 3 });
         const call = artigosRepo.update.mock.calls.find((c: any[]) => c[1]?.dataUltimaSaida);
         expect(call).toBeDefined();
+        expect(saidaStock).not.toHaveBeenCalled();
     });
 
-    it('createMovimento sem artigoId não toca no artigo', async () => {
-        await service.createMovimento({ tipo: 'entrada', quantidade: 3 });
+    it('registarMovimento sem artigoId não toca no artigo', async () => {
+        await service.registarMovimento({ tipo: 'entrada', quantidade: 3 });
         expect(movimentosRepo.save).toHaveBeenCalled();
         expect(artigosRepo.update).not.toHaveBeenCalled();
+    });
+
+    describe('createMovimento (#213) — valida, aplica o stock e regista na mesma transação', () => {
+        let movTx: any;
+        let artTx: any;
+        beforeEach(() => {
+            movTx = { create: jest.fn((e: any) => ({ ...e })), save: jest.fn(async (e: any) => ({ ...e, id: 9 })) };
+            artTx = { update: jest.fn(async () => ({ affected: 1 })) };
+            manager.getRepository = jest.fn((e: any) => (e === MovimentoStock ? movTx : artTx));
+        });
+
+        it('entrada: entra no armazém indicado e grava o movimento dentro da transação', async () => {
+            const r = await service.createMovimento({ artigoId: '1', tipo: 'entrada', quantidade: 4, armazemId: 'ARM-02', usuario: 'ana@aquatex.ao' });
+            expect(dataSource.transaction).toHaveBeenCalled();
+            expect(entradaStock).toHaveBeenCalledWith(manager, 1, 4, 'ARM-02');
+            expect(movTx.save).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'entrada', quantidade: 4, artigo: { id: 1 } }));
+            expect(movimentosRepo.save).not.toHaveBeenCalled();
+            expect(r.id).toBe(9);
+        });
+
+        it('saída, devolução e ajuste negativo tiram stock; ajuste positivo acrescenta', async () => {
+            await service.createMovimento({ artigoId: 1, tipo: 'saida', quantidade: 2 });
+            await service.createMovimento({ artigoId: 1, tipo: 'devolucao', quantidade: 1 });
+            await service.createMovimento({ artigoId: 1, tipo: 'ajuste', quantidade: -3 });
+            await service.createMovimento({ artigoId: 1, tipo: 'ajuste', quantidade: 5 });
+            expect((saidaStock as jest.Mock).mock.calls.map((c: any[]) => c[2])).toEqual([2, 1, 3]);
+            expect(entradaStock).toHaveBeenCalledWith(manager, 1, 5, undefined);
+            expect(movTx.save).toHaveBeenLastCalledWith(expect.objectContaining({ tipo: 'ajuste', quantidade: 5 }));
+        });
+
+        it('falha na aplicação do stock → nada é gravado (rollback)', async () => {
+            (saidaStock as jest.Mock).mockRejectedValueOnce(new Error('Stock insuficiente'));
+            await expect(service.createMovimento({ artigoId: 1, tipo: 'saida', quantidade: 99 })).rejects.toThrow('Stock insuficiente');
+            expect(movTx.save).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            [{ tipo: 'entrada', quantidade: 0 }, /positiva/],
+            [{ tipo: 'saida', quantidade: -2 }, /positiva/],
+            [{ tipo: 'devolucao', quantidade: NaN }, /inválida/],
+            [{ tipo: 'ajuste', quantidade: 0 }, /diferente de zero/],
+            [{ tipo: 'transferencia', quantidade: 1 }, /transferencia/],
+        ])('quantidade/tipo inválido → 400 sem mexer no stock (%o)', async (dto: any, msg) => {
+            await expect(service.createMovimento({ artigoId: 1, ...dto })).rejects.toMatchObject({ status: 400, message: expect.stringMatching(msg) });
+            expect(dataSource.transaction).not.toHaveBeenCalled();
+            expect(entradaStock).not.toHaveBeenCalled();
+            expect(saidaStock).not.toHaveBeenCalled();
+        });
+
+        it('artigo inexistente → 404', async () => {
+            artigosRepo.findOne.mockResolvedValueOnce(null);
+            await expect(service.createMovimento({ artigoId: 77, tipo: 'entrada', quantidade: 1 })).rejects.toMatchObject({ status: 404 });
+        });
     });
 
     it('upsertStockArmazem cria nova linha e ressincroniza a existência', async () => {
