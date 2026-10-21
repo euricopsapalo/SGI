@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useModalA11y } from '../../components/useModalA11y';
 import ReactDOM from 'react-dom';
 import AppLayout from '../../components/Layout/AppLayout';
 import { showToast as notify, extractErrorMessage, extractFieldErrors } from '../../utils/errorHandler';
@@ -64,6 +65,7 @@ interface ReceberModalProps {
     onConfirm: (recebidas: { artigoId: string; qtd: number }[], armazem: string, guiaRemessa: string) => void;
 }
 const ReceberModal: React.FC<ReceberModalProps> = ({ encomenda, onClose, onConfirm }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { armazens, fmt } = useGlobal();
     const armazensOpts = armazens.map(a => ({ value: a.codigo, label: `${a.codigo} — ${a.nome}` }));
     const defaultArmazem = armazens[0]?.codigo ?? '';
@@ -91,7 +93,7 @@ const ReceberModal: React.FC<ReceberModalProps> = ({ encomenda, onClose, onConfi
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 580 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 580 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Receber Encomenda — {encomenda.numero}</h3>
                     <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
@@ -994,6 +996,7 @@ interface EncomendaModalProps {
     onAnularRececao?: (rececaoId: string) => void;
 }
 const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onSave, onAnularRececao }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fornecedores, artigos, taxasIva, currentUser, empresaConfig, fmt, fmtMoney } = useGlobal();
     const [tab, setTab] = useState<ETab>('cabecalho');
 
@@ -1086,7 +1089,7 @@ const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onS
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 760 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 760 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">{encomenda ? `Encomenda ${encomenda.numero}` : 'Nova Encomenda'}</h3>
                     <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
@@ -1423,6 +1426,7 @@ interface ConvertFaturaModalProps {
     }) => void;
 }
 const ConvertFaturaModal: React.FC<ConvertFaturaModalProps> = ({ encomenda, onClose, onConfirm }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { documentosCompra, artigos, taxasIva, fmt, fmtMoney } = useGlobal();
     const docOpts = documentosCompra.filter(d => d.codigo !== 'VNC');
 
@@ -1492,7 +1496,7 @@ const ConvertFaturaModal: React.FC<ConvertFaturaModalProps> = ({ encomenda, onCl
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 780 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 780 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">
                         <FileText size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
@@ -1673,6 +1677,7 @@ interface CompraDiretaModalProps {
     onSave: (f: Omit<FaturaFornecedor, 'id'> & { faturasAssociadasIds?: string[] }) => void;
 }
 const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fornecedores, artigos, documentosCompra, taxasIva, fmtMoney, condicoesPagamento, modosPagamento, faturasFornecedor } = useGlobal();
 
     const [modalTab,    setModalTab]= useState<'documento' | 'condicoes'>('documento');
@@ -1818,7 +1823,7 @@ const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 820 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 820 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">
                         <CreditCard size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
@@ -2130,6 +2135,7 @@ interface ConverterModalProps {
     onConfirm: (fornecedorId: string, dataEntrega: string, descricao: string, items: ConverterItem[]) => void;
 }
 const ConverterModal: React.FC<ConverterModalProps> = ({ artigos, onClose, onConfirm }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fornecedores, fmt, fmtMoney } = useGlobal();
     const [fornId,      setFornId]  = useState('');
     const [dataEntrega, setDatEnt]  = useState('');
@@ -2184,7 +2190,7 @@ const ConverterModal: React.FC<ConverterModalProps> = ({ artigos, onClose, onCon
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 860 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 860 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Converter em Encomenda</h3>
                     <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>

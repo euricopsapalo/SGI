@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useModalA11y } from '../../components/useModalA11y';
 import AppLayout from '../../components/Layout/AppLayout';
 import { showToast as notify } from '../../utils/errorHandler';
 import ActionBar from '../../components/Layout/ActionBar';
@@ -176,6 +177,7 @@ function printHistoricoGeral(
 
 /* ── Relatório de Intervenções Modal ── */
 const RelatorioIntervModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { equipInstalados, clientes, modelosEquipamento, ordens, empresaConfig } = useGlobal();
     const [dateFrom,   setDateFrom]   = useState('');
     const [dateTo,     setDateTo]     = useState('');
@@ -223,7 +225,7 @@ const RelatorioIntervModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                     <iframe srcDoc={previewHtml} title="Pré-visualização" style={{ flex: 1, border: 'none', background: '#fff' }} />
                 </div>
             )}
-            <div className="modal" style={{ maxWidth: 520 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 520 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Relatório de Intervenções</h3>
                     <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
@@ -470,6 +472,7 @@ interface OTFormProps {
 }
 
 const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { equipInstalados, clientes, modelosEquipamento, planos, funcoesTecnico, artigos: catalog, tecnicos, currentUser, taxasIva, fmtMoney, simboloMoeda, empresaConfig } = useGlobal();
     const isTecnicoCampo = currentUser?.role === 'Técnico de Campo';
     // Issue #71 — 5 abas semânticas alinhadas com o ciclo de vida da OT.
@@ -706,7 +709,7 @@ const OTForm: React.FC<OTFormProps> = ({ ot, onClose, onSave, acoes, readOnly })
                     <iframe srcDoc={previewHtml} title="Pré-visualização" style={{ flex: 1, border: 'none', background: '#fff' }} />
                 </div>
             )}
-            <div className="modal" style={{ maxWidth: 700 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 700 }}>
                 <div className="modal-header">
                     <div>
                         <h3 className="modal-title">{ot ? `${ot.id} — Ordem de Trabalho` : 'Nova Ordem de Trabalho'}</h3>
@@ -1425,6 +1428,7 @@ type TransicaoModalProps = {
     onSubmit: (payload: any) => Promise<void>;
 };
 const TransicaoModal: React.FC<TransicaoModalProps> = ({ tipo, ot, tecnicos, currentUser, onClose, onSubmit }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const today = () => new Date().toISOString().split('T')[0];
     const isConfirmar = tipo === 'confirmar';
     const [data, setData] = useState<string>(today());
@@ -1458,7 +1462,7 @@ const TransicaoModal: React.FC<TransicaoModalProps> = ({ tipo, ot, tecnicos, cur
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 480 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 480 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">
                         {isConfirmar ? `Confirmar OT ${ot.id}` : `Adiar OT ${ot.id}`}
@@ -1543,6 +1547,7 @@ type ConsumoModalProps = {
     onSubmit: (linhas: { artigoId?: number; quantidade: number; descricao?: string }[]) => Promise<void>;
 };
 const ConsumoModal: React.FC<ConsumoModalProps> = ({ ot, artigosStock, simboloMoeda, onClose, onSubmit }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const [linhas, setLinhas] = useState<ConsumoLinha[]>(
         (ot.artigos ?? []).map(a => ({
             artigoId: a.artigoId,
@@ -1584,7 +1589,7 @@ const ConsumoModal: React.FC<ConsumoModalProps> = ({ ot, artigosStock, simboloMo
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 640 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 640 }}>
                 <div className="modal-header">
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Package size={14} /> Registar Consumo — OT {ot.numero ?? ot.id}
@@ -1656,6 +1661,7 @@ type FinalizarModalProps = {
     onSubmit: (dataFim: string) => Promise<void>;
 };
 const FinalizarModal: React.FC<FinalizarModalProps> = ({ ot, simboloMoeda, onClose, onSubmit }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const [dataFim, setDataFim] = useState(today());
     const [assinou, setAssinou] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -1669,7 +1675,7 @@ const FinalizarModal: React.FC<FinalizarModalProps> = ({ ot, simboloMoeda, onClo
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 480 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 480 }}>
                 <div className="modal-header">
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <CheckCircle size={14} /> Finalizar OT {ot.numero ?? ot.id}

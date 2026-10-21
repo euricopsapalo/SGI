@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { FaturaFornecedor } from './fatura-fornecedor.entity';
@@ -169,7 +169,25 @@ export class FaturasFornecedorService {
         return this.findOne(id);
     }
 
-    remove(id: number) {
+    /**
+     * #223 — Só se apaga um documento de fornecedor que não mexeu no stock nem foi pago:
+     * - pago → 409;
+     * - compra direta (VFA/VFR sem encomenda) → 409 (deu entrada de stock);
+     * - VNC validada → 409 (a devolução já saiu do stock).
+     */
+    async remove(id: number) {
+        const f = await this.faturaRepo.findOne({ where: { id } });
+        if (!f) throw new NotFoundException(`Fatura de fornecedor ${id} não encontrada.`);
+        const tipo = (f.tipoDocumento ?? '').toUpperCase();
+        if (['Pago', 'Paga'].includes(f.estadoPagamento)) {
+            throw new ConflictException('Não é possível eliminar um documento já pago.');
+        }
+        if ((tipo === 'VFA' || tipo === 'VFR') && !f.idEncomenda) {
+            throw new ConflictException('Não é possível eliminar uma compra direta: deu entrada de stock.');
+        }
+        if (tipo === 'VNC' && f.estadoDocumento === 'Validado') {
+            throw new ConflictException('Não é possível eliminar uma nota de crédito validada: o stock já foi movimentado.');
+        }
         return this.faturaRepo.delete(id);
     }
 }

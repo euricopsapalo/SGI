@@ -557,7 +557,7 @@ interface GlobalContextType {
     // Warehouse
     armazens: Armazem[]; addArmazem: (a: Omit<Armazem, 'id'>) => Promise<Armazem>; updateArmazem: (id: string, a: Partial<Armazem>) => Promise<void>;
     // Stock
-    artigos: Artigo[]; addArtigo: (a: Omit<Artigo, 'id'>) => Promise<Artigo>; updateArtigo: (id: string, a: Partial<Artigo>) => Promise<void>; adjustExistencia: (id: string, delta: number) => Promise<void>; adjustReservado: (id: string, delta: number) => void;
+    artigos: Artigo[]; addArtigo: (a: Omit<Artigo, 'id'>) => Promise<Artigo>; updateArtigo: (id: string, a: Partial<Artigo>) => Promise<void>; adjustExistencia: (id: string, delta: number) => Promise<void>;
     /** #203 — transferência atómica entre armazéns (POST /artigos/:id/transferencia); a existência total não muda. */
     transferirStock: (artigoId: string, armazemOrigem: string, armazemDestino: string, quantidade: number) => Promise<void>;
     stockArmazem: StockArmazem[]; upsertStockArmazem: (artigoId: string, armazemId: string, quantidade: number, stockMinimo: number) => Promise<void>; removeStockArmazem: (saId: string) => Promise<void>;
@@ -609,7 +609,10 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     tecnicoNome: u.tecnicoNome,
                 });
             }).catch(() => {
-                localStorage.removeItem('sgi_token');
+                // #223 — sessão inválida/expirada: termina a sessão e volta ao login
+                // (antes só apagava o token e o ecrã ficava sem dados até nova navegação).
+                logout();
+                if (window.location.pathname !== '/login') window.location.assign('/login');
             });
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1420,13 +1423,6 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } catch (e) { throw e; }
     };
 
-    const adjustReservado = async (id: string, delta: number) => {
-        try {
-            await api.put(`/artigos/${id}/reserva`, { delta });
-            setArtigos(p => p.map(x => x.id === id ? { ...x, stockReservado: Math.max(0, x.stockReservado + delta) } : x));
-        } catch (e) { /* interceptor handles toast */ }
-    };
-
     const upsertStockArmazem = async (artigoId: string, armazemId: string, quantidade: number, stockMinimo: number) => {
         const { data } = await api.post(`/artigos/${artigoId}/stock-armazem`, { armazemId: Number(armazemId), quantidade, stockMinimo });
         const entry = normStockArmazem(data);
@@ -1593,7 +1589,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             planos, addPlano, updatePlano, removePlano,
             ordens, addOrdem, updateOrdem, removeOrdem, agendarOT, confirmarOT, adiarOT, iniciarOT, registarConsumoOT, finalizarOT, reprogramarOT,
             armazens, addArmazem, updateArmazem,
-            artigos: artigosComReserva, addArtigo, updateArtigo, adjustExistencia, adjustReservado, transferirStock,
+            artigos: artigosComReserva, addArtigo, updateArtigo, adjustExistencia, transferirStock,
             stockArmazem, upsertStockArmazem, removeStockArmazem,
             addMovimento,
             encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao,

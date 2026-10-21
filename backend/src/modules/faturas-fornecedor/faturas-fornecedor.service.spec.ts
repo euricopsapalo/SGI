@@ -138,6 +138,32 @@ describe('FaturasFornecedorService (regression #14)', () => {
         });
     });
 
+    describe('#223 — remove só apaga documentos que não mexeram no stock nem foram pagos', () => {
+        it.each([
+            ['pago', { tipoDocumento: 'VFT', estadoPagamento: 'Pago', idEncomenda: 3 }],
+            ['compra direta (VFA sem encomenda)', { tipoDocumento: 'VFA', estadoPagamento: 'Pendente', idEncomenda: null }],
+            ['VNC validada', { tipoDocumento: 'VNC', estadoDocumento: 'Validado', estadoPagamento: 'Pendente' }],
+        ])('%s → 409 sem apagar', async (_n, f) => {
+            faturaRepo.findOne.mockResolvedValueOnce({ id: 9, ...f });
+            await expect(service.remove(9)).rejects.toMatchObject({ status: 409 });
+            expect(faturaRepo.delete).not.toHaveBeenCalled();
+        });
+
+        it('fatura de encomenda pendente ou VNC em rascunho → apaga', async () => {
+            faturaRepo.findOne.mockResolvedValueOnce({ id: 9, tipoDocumento: 'VFT', estadoPagamento: 'Pendente', idEncomenda: 3 });
+            await service.remove(9);
+            faturaRepo.findOne.mockResolvedValueOnce({ id: 10, tipoDocumento: 'VNC', estadoDocumento: 'Rascunho', estadoPagamento: 'Pendente' });
+            await service.remove(10);
+            expect(faturaRepo.delete).toHaveBeenCalledWith(9);
+            expect(faturaRepo.delete).toHaveBeenCalledWith(10);
+        });
+
+        it('inexistente → 404', async () => {
+            faturaRepo.findOne.mockResolvedValueOnce(null);
+            await expect(service.remove(99)).rejects.toMatchObject({ status: 404 });
+        });
+    });
+
     it('create(VNC) — lê faturasAssociadas e cria uma linha vnc_faturas_associadas por cada {faturaAssociadaId}', async () => {
         await service.create({
             tipoDocumento: 'VNC',

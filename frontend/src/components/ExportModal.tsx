@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useModalA11y } from './useModalA11y';
 import { X, Download, FileText, Braces, Printer } from 'lucide-react';
 import { imprimirPdf } from '../utils/imprimirPdf';
 
@@ -89,6 +90,7 @@ const FORMAT_OPTIONS: { id: Format; label: string; icon: React.ReactNode; desc: 
 ];
 
 const ExportModal: React.FC<Props> = ({ title, columns, data, filename, onClose }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const [format, setFormat]       = useState<Format>('csv');
     const [selected, setSelected]   = useState<Set<string>>(new Set(columns.map(c => c.key)));
 
@@ -123,7 +125,7 @@ const ExportModal: React.FC<Props> = ({ title, columns, data, filename, onClose 
 
     return (
         <div className="modal-overlay" onClick={onClose}>
-            <div className="modal" style={{ width: 480, maxWidth: '96vw' }} onClick={e => e.stopPropagation()}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ width: 480, maxWidth: '96vw' }} onClick={e => e.stopPropagation()}>
 
                 {/* Header */}
                 <div className="modal-header">

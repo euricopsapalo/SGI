@@ -550,8 +550,7 @@ export class OrdensTrabalhoService {
     /**
      * RF-OT-003 §3.2 — Programada → Confirmada.
      * Exige `dataExecucao` (dentro da janela, não no passado) e técnico de campo.
-     * Dispara a reserva de stock — **integração com RF-OT-004 fica como TODO**
-     * até esse RF estar implementado (chamada futura: `stockService.reservar(otId)`).
+     * Reserva o stock das Linhas de Consumo (RF-OT-004, `StockReservaService.reservar`).
      */
     async confirmar(id: number, opts: { dataExecucao?: string; executadoPorId?: number; usuario?: string } = {}) {
         const ot = await this.findOrFail(id);
@@ -609,7 +608,7 @@ export class OrdensTrabalhoService {
      *   nesse caso a janela é **estendida** para `novaData + 6 meses`).
      * - Incrementa `adiamentos`; regista em `ot_reprogramacoes`.
      * - Se `adiamentos >= limite`, exige `aprovadoPor` (admin) + `aprovacaoMotivo`.
-     * - Se a OT estava Confirmada, **liberta as reservas de stock** (RF-OT-004 — TODO).
+     * - Se a OT estava Confirmada, **liberta as reservas de stock** (RF-OT-004, `StockReservaService.libertar`).
      */
     async adiar(id: number, opts: {
         novaData?: string;
