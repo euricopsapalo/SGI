@@ -4,6 +4,18 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### fix(ordens): o técnico de campo passa a ver só as suas OTs (closes #220)
+
+- **Antes:**
+  - o `GET /ordens` só filtrava com `?mine=true`, que o frontend não enviava;
+  - esse filtro lia o `tecnicoId` do `req.user`, que o `JwtStrategy` não preenche, por isso devolvia sempre vazio;
+  - o técnico de campo via as OTs de todos, na lista e na Agenda.
+- **Perfil `campo`:** o servidor restringe **sempre** às OTs em que o técnico é executante ou que ele registou, qualquer que seja a query. Sem as registadas, uma OT acabada de criar desaparecia.
+- **Rotas `/ordens/:id…`** (detalhe, edição, transições, consumo, reprogramação, anexos): o novo `OtAcessoGuard` responde **404** a uma OT alheia, sem revelar que existe.
+- O técnico do utilizador é lido da BD (`tecnicos.id_user`), não do token. Isto corrige também o `?mine=true`.
+- Os outros perfis não têm restrição.
+- Testes: filtro OR com outros filtros, pedido de OTs de outro executante, perfis sem restrição, `mine=true`, `podeAceder` e o guard (404).
+
 ### feat(utilizadores): o utilizador pode alterar a sua palavra-passe (closes #219)
 
 - **Antes:** o `POST /auth/change-password` existia, mas nenhum ecrã o usava. As passwords por omissão do seed ficavam em uso.
