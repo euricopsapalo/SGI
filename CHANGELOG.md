@@ -17,6 +17,49 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 - A UI não usa estes endpoints (só cancela ou desativa); a guarda protege a API.
 - Testes: os casos permitidos e cada recusa, sem apagar nem mexer no stock.
 
+### fix(fornecedores): validar uma VNC de devolução passa a ser uma só transação (closes #215)
+
+- **Antes:**
+  - desde o #204, a saída de stock da VNC já passava por `stock_armazem` numa transação;
+  - a verificação do estado e a gravação do novo estado ficavam fora dessa transação;
+  - dois pedidos de validação em simultâneo podiam descontar o stock duas vezes;
+  - uma falha depois do stock deixava a VNC por validar com o stock já alterado.
+- **Agora tudo corre numa transação**, com a fatura bloqueada (`FOR UPDATE`): verificação da transição, saída de stock por linha, movimentos e novo estado.
+  - Sem stock suficiente numa linha → 422 e nada fica gravado.
+  - Uma segunda validação → 400 "Transição inválida", sem mexer no stock.
+- A VNC não indica armazém. A saída usa a ordem habitual: primeiro o armazém do artigo, depois os restantes.
+- Testes: validação completa com o lock, rollback a meio, validação repetida e acerto de preço sem stock.
+
+### fix(stock): retirada a "Guia de Transporte", que mostrava sucesso sem gerar documento (closes #214)
+
+- **Antes:** a operação "Guia de Transporte" do Stock mostrava "Guia de transporte emitida." sem gerar nenhum documento. Já nenhum botão a abria, mas o código continuava lá.
+- **Agora:** saem o tipo, o rótulo, o ramo e o toast falso.
+- A guia volta quando existir como documento fiscal, com série e numeração próprias e impressão via `imprimirPdf` (#182).
+
+### fix(stock): inventário, reposição e devolução passam a ser atómicos e o movimento é validado (closes #213)
+
+- **Antes:**
+  - inventário, reposição e devolução faziam dois pedidos independentes: o ajuste de stock e o movimento;
+  - o `POST /movimentos-stock` não validava o tipo nem a quantidade e não mexia no stock;
+  - o frontend enviava `data`, um campo que o DTO não aceita, por isso o movimento dava sempre 400 e o erro ficava escondido;
+  - o stock podia mudar sem movimento.
+- **`POST /movimentos-stock` agora valida, aplica e regista numa só transação** (`stock_armazem` e existência derivada):
+  - `entrada` (> 0) entra no armazém indicado;
+  - `saida`, `devolucao` e `ajuste` negativo saem pela ordem habitual; sem stock suficiente → 422;
+  - `ajuste` ≠ 0, com sinal;
+  - quantidade inválida → **400**;
+  - `transferencia` → 400 (tem endpoint próprio, atómico desde o #37);
+  - artigo inexistente → 404.
+- **`registarMovimento`** só regista. Usam-no a finalização da OT, em que o stock já saiu no `StockReservaService`, e a receção.
+- **Receção e anulação de receção:** o movimento (entrada ou saída) passa a ser gravado pelo servidor, na mesma transação do stock. O frontend deixa de o criar à parte.
+- **Frontend:**
+  - cada linha de inventário e cada reposição ou devolução é um único pedido;
+  - o `addMovimento` envia só os campos do DTO e recarrega artigos, movimentos e stock por armazém.
+- Testes:
+  - `createMovimento`: entrada, saídas, ajustes com sinal, rollback quando o stock falha, 400 por quantidade ou tipo inválido, 404;
+  - receção e anulação registam o movimento;
+  - o `addMovimento` não envia `data`.
+
 ### fix(context): as criações esperam pelo servidor e deixam de mostrar sucesso falso (closes #212)
 
 - **Antes:** `addCliente`, `addFornecedor`, `addModelo`, `addArmazem`, `addArtigo`, `addMovimento` e `addEncomenda` devolviam logo um registo provisório com `id: ''` e engoliam o erro (`.catch(() => {})`). As páginas mostravam "registado" e fechavam o modal mesmo quando o servidor recusava.
