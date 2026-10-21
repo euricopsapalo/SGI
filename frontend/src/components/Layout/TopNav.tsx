@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
     LayoutDashboard, Users, Wrench, Package,
-    CalendarDays, FileText, BarChart3, Settings, Bell,
+    CalendarDays, BarChart3, Settings, Bell,
     Truck, MapPin, ClipboardList, ShoppingCart, ChevronDown,
     LogOut, ScrollText, RefreshCw, UserCog, Menu, X, Receipt,
     type LucideIcon,
@@ -52,7 +52,6 @@ const NAV_GROUPS: NavGroup[] = [
             { to: '/compras', icon: ShoppingCart, label: 'Compras'    },
             { to: '/stock',      icon: Package,      label: 'Inventário' },
             { to: '/vendas',     icon: Receipt,      label: 'Vendas'     },
-            { to: '/faturacao',  icon: FileText,     label: 'Faturação (anterior)' },
         ],
     },
     {

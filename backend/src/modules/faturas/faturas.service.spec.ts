@@ -52,9 +52,12 @@ describe('FaturasService', () => {
         expect(arg.linhas).toEqual([]);
     });
 
-    it('update remove linhas/clienteId do patch e devolve a fatura', async () => {
-        await service.update(5, { clienteId: '9', linhas: [{ id: 1 }], estado: 'Emitida' });
-        expect(repo.update).toHaveBeenCalledWith(5, { estado: 'Emitida' });
+    it('update remove linhas/clienteId e — #218 — o estado e o pagamento do patch', async () => {
+        await service.update(5, {
+            clienteId: '9', linhas: [{ id: 1 }], estado: 'Paga', dataPagamento: '2026-10-21',
+            comprovativo: 'x', motivoAnulacao: 'y', observacoes: 'nota',
+        });
+        expect(repo.update).toHaveBeenCalledWith(5, { observacoes: 'nota' });
         expect(repo.findOne).toHaveBeenCalledWith({ where: { id: 5 }, relations: ['cliente', 'linhas'] });
     });
 
