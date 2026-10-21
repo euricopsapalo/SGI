@@ -7,6 +7,7 @@ import * as bcrypt from 'bcryptjs';
 import { User } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ConfiguracaoService } from '../configuracao/configuracao.service';
+import { erroValidacao } from '../vendas-config/erros';
 import { generateSecret, otpauthUri, verifyTotp } from './totp.util';
 
 @Injectable()
@@ -52,12 +53,16 @@ export class AuthService {
     }
 
     /** Aplica a política de comprimento mínimo de password (issue #100). */
-    private async assertPasswordPolicy(password: string): Promise<void> {
+    /** Mensagem da política de passwords (#100) violada, ou `null` se cumpre. */
+    private async violacaoPolitica(password: string): Promise<string | null> {
         const cfg = await this.configService.get();
         const min = Number(cfg.minPasswordLength) || 8;
-        if (!password || password.length < min) {
-            throw new BadRequestException(`A password tem de ter pelo menos ${min} caracteres.`);
-        }
+        return !password || password.length < min ? `A password tem de ter pelo menos ${min} caracteres.` : null;
+    }
+
+    private async assertPasswordPolicy(password: string): Promise<void> {
+        const erro = await this.violacaoPolitica(password);
+        if (erro) throw new BadRequestException(erro);
     }
 
     // ── 2FA TOTP (issue #100) ──────────────────────────────────────────────
@@ -144,12 +149,17 @@ export class AuthService {
         return { message: 'Password alterada com sucesso.' };
     }
 
+    /** #219 — erros por campo (422 com `errors`, padrão #49) para o formulário mostrar inline. */
     async changePassword(userId: number, currentPassword: string, newPassword: string) {
         const user = await this.userRepo.findOne({ where: { id: userId } });
         if (!user) throw new NotFoundException('Utilizador não encontrado.');
         const valid = await bcrypt.compare(currentPassword, user.passwordHash);
-        if (!valid) throw new BadRequestException('Password atual incorreta.');
-        await this.assertPasswordPolicy(newPassword);
+        if (!valid) throw erroValidacao({ currentPassword: 'A password atual está incorreta.' });
+        const politica = await this.violacaoPolitica(newPassword);
+        if (politica) throw erroValidacao({ newPassword: politica });
+        if (await bcrypt.compare(newPassword, user.passwordHash)) {
+            throw erroValidacao({ newPassword: 'A nova password tem de ser diferente da atual.' });
+        }
         const hash = await bcrypt.hash(newPassword, 10);
         await this.userRepo.update(userId, { passwordHash: hash });
         return { message: 'Password alterada com sucesso.' };

@@ -32,10 +32,13 @@ export function decidirPedido(url: string, navegacao: boolean): DecisaoPedido {
 
 /** Nome do ficheiro sem caracteres inválidos (ficheiro e cabeçalho HTTP), sempre `.pdf`. */
 export function nomeFicheiroPdf(nome: string | undefined | null): string {
-    const base = (nome ?? '')
-        .normalize('NFC')
+    const semControlo = Array.from((nome ?? '').normalize('NFC'), c => {
+        const cp = c.charCodeAt(0);
+        return cp < 0x20 || cp === 0x7f ? '-' : c;
+    }).join('');
+    const base = semControlo
         .replace(/\.pdf$/i, '')
-        .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '-')
+        .replace(/[\\/:*?"<>|]/g, '-')
         .replace(/\s+/g, ' ')
         .trim()
         .slice(0, 120)

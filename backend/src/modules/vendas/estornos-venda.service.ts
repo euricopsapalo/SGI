@@ -9,7 +9,7 @@ import { erroValidacao, temErros } from '../vendas-config/erros';
 import { OrdemTrabalho } from '../ordens-trabalho/ordem-trabalho.entity';
 import { SysLogsService } from '../sys-logs/sys-logs.service';
 import { emitirNaSerie, serieBloqueada } from '../tesouraria/emissao';
-import { calcularTotais, dataLocal, hashDocumento, naturezaMovimento, numeroDocumento, round2 } from './vendas.rules';
+import { calcularTotais, dataLocal, hashDocumento, naturezaMovimento, numeroDocumento } from './vendas.rules';
 import { abaterPendente, totalmenteEstornado, validarLinhasEstorno } from './estorno.rules';
 import { snapshotCliente, snapshotEmpresa } from './snapshot';
 import { DocumentosVendaService } from './documentos-venda.service';

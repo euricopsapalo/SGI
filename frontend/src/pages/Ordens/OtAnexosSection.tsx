@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import SignaturePad from 'signature_pad';
 import { Camera, Trash2, PenLine, RotateCcw, Check } from 'lucide-react';
 import api from '../../services/api';
+import { useConfirm } from '../../components/useConfirm';
 
 /**
  * #47 — Fotos da intervenção + assinatura digital do cliente numa OT.
@@ -20,6 +21,7 @@ export interface OtAnexo {
 }
 
 const OtAnexosSection: React.FC<{ otId: number | string }> = ({ otId }) => {
+    const confirm = useConfirm();
     const [anexos, setAnexos] = useState<OtAnexo[]>([]);
     const [urls, setUrls] = useState<Record<number, string>>({});
     const [busy, setBusy] = useState(false);
@@ -89,12 +91,14 @@ const OtAnexosSection: React.FC<{ otId: number | string }> = ({ otId }) => {
     };
 
     const remover = async (anexo: OtAnexo) => {
-        // NOTA: usa window.confirm para manter o #47 independente do #46
-        // (ConfirmDialog/useConfirm). Migrar para useConfirm após o #46 aterrar no master.
-        const msg = anexo.tipo === 'foto'
-            ? 'Remover esta foto da intervenção?'
-            : 'Remover a assinatura do cliente? Poderá capturar uma nova.';
-        if (!window.confirm(msg)) return;
+        // #223 — ConfirmDialog (useConfirm) em vez de window.confirm.
+        const foto = anexo.tipo === 'foto';
+        if (!(await confirm({
+            title: foto ? 'Remover foto' : 'Remover assinatura',
+            message: foto ? 'Remover esta foto da intervenção?' : 'Remover a assinatura do cliente? Poderá capturar uma nova.',
+            confirmLabel: 'Remover',
+            variant: 'danger',
+        }))) return;
         setBusy(true);
         try {
             await api.delete(`/ordens/${otId}/anexos/${anexo.id}`);

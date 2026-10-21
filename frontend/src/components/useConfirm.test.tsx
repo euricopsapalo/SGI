@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ConfirmProvider, useConfirm } from './useConfirm';
 
@@ -49,7 +49,9 @@ describe('useConfirm / ConfirmDialog', () => {
     it('resolve true ao confirmar', async () => {
         setup();
         await userEvent.click(screen.getByText(/resultado:/));
-        await userEvent.click(screen.getByRole('button', { name: 'Eliminar' }));
+        // #223 — a resolução do confirm() atualiza o estado: o clique (DOM) corre dentro de act().
+        const botaoEliminar = screen.getByRole('button', { name: 'Eliminar' });
+        await act(async () => { botaoEliminar.click(); });
         expect(await screen.findByText('resultado: confirmed')).toBeInTheDocument();
         expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     });
@@ -57,7 +59,9 @@ describe('useConfirm / ConfirmDialog', () => {
     it('resolve false ao cancelar', async () => {
         setup();
         await userEvent.click(screen.getByText(/resultado:/));
-        await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+        // #223 — a resolução do confirm() atualiza o estado: o clique (DOM) corre dentro de act().
+        const botaoCancelar = screen.getByRole('button', { name: 'Cancelar' });
+        await act(async () => { botaoCancelar.click(); });
         expect(await screen.findByText('resultado: cancelled')).toBeInTheDocument();
         expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     });
@@ -65,7 +69,9 @@ describe('useConfirm / ConfirmDialog', () => {
     it('resolve false ao premir Esc', async () => {
         setup();
         await userEvent.click(screen.getByText(/resultado:/));
-        fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' });
+        // #223 — a resolução do confirm() atualiza o estado: o evento (DOM) corre dentro de act().
+        const dialogo = screen.getByRole('alertdialog');
+        await act(async () => { dialogo.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
         expect(await screen.findByText('resultado: cancelled')).toBeInTheDocument();
     });
 });

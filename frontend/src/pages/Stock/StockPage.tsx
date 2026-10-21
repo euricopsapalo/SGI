@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { useModalA11y } from '../../components/useModalA11y';
 import AppLayout from '../../components/Layout/AppLayout';
 import { showToast as notify, extractFieldErrors } from '../../utils/errorHandler';
 import SubmitButton from '../../components/SubmitButton';
@@ -8,7 +9,7 @@ import { useGlobal, Artigo, Armazem, TipoArtigo, TIPO_ARTIGO_LABEL } from '../..
 import {
     Search, Plus, Edit2, X, AlertCircle, Check, Package, Download,
     BarChart2, ArrowDownCircle, ArrowUpCircle, RefreshCw,
-    Truck, Archive, Star, FileText, Image as ImageIcon, Trash2,
+    Archive, Star, FileText, Image as ImageIcon, Trash2,
     ChevronRight, ChevronDown, Warehouse, Eye, Printer,
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
@@ -47,6 +48,7 @@ const TABS_A = [
 type ATab = typeof TABS_A[number]['id'];
 
 const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { armazens, stockArmazem, upsertStockArmazem, removeStockArmazem, fmt, fmtMoney, taxasIva, fornecedores, classesArtigo, familiasArtigo } = useGlobal();
     const [tab, setTab] = useState<ATab>('ident');
 
@@ -166,7 +168,7 @@ const ArtigoModal: React.FC<ArtigoModalProps> = ({ artigo, onClose, onSave }) =>
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 620 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 620 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">{artigo ? 'Editar Artigo' : 'Novo Artigo'}</h3>
                     <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
@@ -551,6 +553,7 @@ const TABS_V = TABS_A;
 type VTab = ATab;
 
 const ArtigoViewModal: React.FC<ArtigoViewModalProps> = ({ artigo, onClose, onEdit }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { armazens, stockArmazem, fmt, fmtMoney, taxasIva, fornecedores } = useGlobal();
     const [tab, setTab] = useState<VTab>('ident');
     const saEntries = stockArmazem.filter(sa => sa.artigoId === artigo.id);
@@ -572,7 +575,7 @@ const ArtigoViewModal: React.FC<ArtigoViewModalProps> = ({ artigo, onClose, onEd
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 620 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 620 }}>
                 <div className="modal-header">
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Eye size={15} style={{ color: 'var(--blue)' }} />
@@ -784,6 +787,7 @@ const printInventSheet = (artigos: Artigo[], lines: InventLine[], armazens: Arma
 };
 
 const InventarioModal: React.FC<InventarioModalProps> = ({ artigos, armazens, onClose, onConfirm }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fmt } = useGlobal();
     const resolveArmazem = (val: string) =>
         armazens.find(a => a.id === val || a.codigo === val)?.codigo ?? val;
@@ -834,7 +838,7 @@ const InventarioModal: React.FC<InventarioModalProps> = ({ artigos, armazens, on
                     <iframe srcDoc={previewHtml} title="Pré-visualização" style={{ flex: 1, border: 'none', background: '#fff' }} />
                 </div>
             )}
-            <div className="modal" style={{ maxWidth: 720 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 720 }}>
                 <div className="modal-header">
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Archive size={14} /> Inventário de Stock
@@ -942,6 +946,7 @@ interface TransferenciaModalProps {
 }
 
 const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, armazens, onClose, onConfirm }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fmt, stockArmazem } = useGlobal();
     const ativos = armazens.filter(a => a.ativo);
     const [armazDe,   setArmazDe]   = useState(ativos[0]?.codigo ?? '');
@@ -982,7 +987,7 @@ const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, armaze
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 620 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 620 }}>
                 <div className="modal-header">
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <RefreshCw size={14} /> Transferência entre Armazéns
@@ -1064,12 +1069,13 @@ const TransferenciaModal: React.FC<TransferenciaModalProps> = ({ artigos, armaze
     );
 };
 
-/* ══ Simple Op Modal (Reposição / Devolução / Guia) ════════ */
-type SimpleOpType = 'reposicao' | 'devolucao' | 'guia';
+/* ══ Simple Op Modal (Reposição / Devolução) ════════════════ */
+// #214 — a "Guia de Transporte" saiu: não gerava documento e mostrava sucesso falso.
+// Volta quando existir como documento fiscal (série/numeração) com impressão via imprimirPdf (#182).
+type SimpleOpType = 'reposicao' | 'devolucao';
 const SIMPLE_OP_LABELS: Record<SimpleOpType, { titulo: string; acao: string; icon: React.ReactNode }> = {
     reposicao: { titulo: 'Reposição de Stock', acao: 'Repor',     icon: <ArrowDownCircle size={14} /> },
     devolucao: { titulo: 'Devolução',           acao: 'Devolver',  icon: <ArrowUpCircle size={14} /> },
-    guia:      { titulo: 'Guia de Transporte',  acao: 'Emitir',   icon: <Truck size={14} /> },
 };
 interface SimpleOpModalProps {
     tipo: SimpleOpType;
@@ -1078,6 +1084,7 @@ interface SimpleOpModalProps {
     onConfirm: (tipo: SimpleOpType, artigoId: string, quantidade: number, nota: string) => void;
 }
 const SimpleOpModal: React.FC<SimpleOpModalProps> = ({ tipo, artigos, onClose, onConfirm }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fmt } = useGlobal();
     const [artigoId, setArtigoId] = useState('');
     const [quantidade, setQtd]   = useState('');
@@ -1088,7 +1095,7 @@ const SimpleOpModal: React.FC<SimpleOpModalProps> = ({ tipo, artigos, onClose, o
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 480 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 480 }}>
                 <div className="modal-header">
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {cfg.icon} {cfg.titulo}
@@ -1133,6 +1140,7 @@ const SimpleOpModal: React.FC<SimpleOpModalProps> = ({ tipo, artigos, onClose, o
 
 /* ══ Stats Modal ════════════════════════════════════════════ */
 const StatsModal: React.FC<{ artigos: Artigo[]; onClose: () => void }> = ({ artigos, onClose }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fmt, fmtMoney } = useGlobal();
     const totalValor = artigos.reduce((s, a) => s + a.existencia * a.precoUnitario, 0);
     const criticos   = artigos.filter(a => a.critico && a.existencia <= a.stockSeguranca);
@@ -1141,7 +1149,7 @@ const StatsModal: React.FC<{ artigos: Artigo[]; onClose: () => void }> = ({ arti
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 520 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 520 }}>
                 <div className="modal-header">
                     <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <BarChart2 size={14} /> Estatísticas de Stock
@@ -1187,10 +1195,10 @@ const StatsModal: React.FC<{ artigos: Artigo[]; onClose: () => void }> = ({ arti
 };
 
 /* ══ Page ════════════════════════════════════════════════════ */
-type OpState = 'inventario' | 'transferencia' | 'reposicao' | 'devolucao' | 'guia' | 'stats' | null;
+type OpState = 'inventario' | 'transferencia' | 'reposicao' | 'devolucao' | 'stats' | null;
 
 const StockPage: React.FC = () => {
-    const { artigos, addArtigo, updateArtigo, adjustExistencia, transferirStock, armazens, addMovimento, currentUser, stockArmazem, fmt, fmtMoney, classesArtigo, familiasArtigo, loadingData } = useGlobal();
+    const { artigos, addArtigo, updateArtigo, transferirStock, armazens, addMovimento, currentUser, stockArmazem, fmt, fmtMoney, classesArtigo, familiasArtigo, loadingData } = useGlobal();
 
     // Resolve warehouse code from either a code string or a numeric ID (legacy data)
     const resolveArmazem = (val: string) =>
@@ -1239,6 +1247,7 @@ const StockPage: React.FC = () => {
     };
 
     // #212 — espera por cada pedido e pára no primeiro erro (já mostrado pelo interceptor).
+    // #213 — cada linha é um único pedido: o servidor aplica o ajuste e regista o movimento juntos.
     const handleInventario = async (lines: InventLine[]) => {
         const hoje = new Date().toISOString().split('T')[0];
         let count = 0;
@@ -1247,7 +1256,7 @@ const StockPage: React.FC = () => {
                 const a = artigos.find(x => x.id === l.artigoId);
                 if (!a) continue;
                 const delta = Number(l.novaExist) - a.existencia;
-                await adjustExistencia(l.artigoId, delta);
+                if (delta === 0) continue;
                 await addMovimento({ artigoId: l.artigoId, tipo: 'ajuste', quantidade: delta, armazemId: a.codigoArmazem, usuario: currentUser?.email, observacao: 'Ajuste de inventário', data: hoje });
                 count++;
             }
@@ -1280,22 +1289,17 @@ const StockPage: React.FC = () => {
         const hoje = new Date().toISOString().split('T')[0];
         const a = artigos.find(x => x.id === artigoId);
         try {
+            // #213 — um só pedido: o servidor aplica o movimento ao stock e regista-o.
             if (tipo === 'reposicao') {
-                await adjustExistencia(artigoId, quantidade);
                 await addMovimento({ artigoId, tipo: 'entrada', quantidade, armazemId: a?.codigoArmazem, usuario: currentUser?.email, observacao: 'Reposição manual', data: hoje });
                 showToast(`Reposição de ${fmt(quantidade)} un registada.`);
                 return;
             }
-            if (tipo === 'devolucao') {
-                await adjustExistencia(artigoId, -quantidade);
-                await addMovimento({ artigoId, tipo: 'devolucao', quantidade, armazemId: a?.codigoArmazem, usuario: currentUser?.email, observacao: 'Devolução', data: hoje });
-                showToast(`Devolução de ${fmt(quantidade)} un registada.`);
-                return;
-            }
+            await addMovimento({ artigoId, tipo: 'devolucao', quantidade, armazemId: a?.codigoArmazem, usuario: currentUser?.email, observacao: 'Devolução', data: hoje });
+            showToast(`Devolução de ${fmt(quantidade)} un registada.`);
         } catch {
-            return; // #212 — erro já mostrado pelo interceptor global (api.ts); não confirma sucesso
+            // #212 — erro já mostrado pelo interceptor global (api.ts); não confirma sucesso
         }
-        showToast(`Guia de transporte emitida.`);
     };
 
     const totalArtigos = artigos.length;
@@ -1528,7 +1532,7 @@ const StockPage: React.FC = () => {
             {op === 'transferencia' && (
                 <TransferenciaModal artigos={artigos} armazens={armazens} onClose={() => setOp(null)} onConfirm={handleTransferencia} />
             )}
-            {(op === 'reposicao' || op === 'devolucao' || op === 'guia') && (
+            {(op === 'reposicao' || op === 'devolucao') && (
                 <SimpleOpModal tipo={op} artigos={artigos} onClose={() => setOp(null)}
                     onConfirm={(tipo, id, qtd, nota) => handleSimpleOp(tipo, id, qtd)} />
             )}

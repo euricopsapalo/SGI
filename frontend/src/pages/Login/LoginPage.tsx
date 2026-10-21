@@ -39,8 +39,9 @@ const LoginPage: React.FC = () => {
             // Issue #100: conta com 2FA — pedir código e repetir o login
             if (data.twoFactorRequired) { setTwoFARequired(true); setLoading(false); return; }
             const user = { nome: data.user.nome, email: data.user.email, role: ROLE_MAP[data.user.role] || data.user.role };
-            setCurrentUser(user);
+            // #221 — o token primeiro: o carregamento inicial arranca quando o utilizador é definido.
             localStorage.setItem('sgi_token', data.access_token);
+            setCurrentUser(user);
             addLog({ usuario: user.email, modulo: 'Autenticação', acao: 'Login', detalhes: `Utilizador: ${user.nome} (${user.role})`, tipo: 'info' });
             navigate('/dashboard');
         } catch (err: any) {

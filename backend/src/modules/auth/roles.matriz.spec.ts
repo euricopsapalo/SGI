@@ -16,7 +16,8 @@ import { ROLES_KEY, ROLES_ESCRITA_KEY } from './roles.decorator';
  * controllers abertos de propósito.
  */
 
-type Endpoint = { rota: string; metodo: string; ctrl: Function; handler: Function };
+type Classe = abstract new (...args: any[]) => unknown;
+type Endpoint = { rota: string; metodo: string; ctrl: Classe; handler: (...args: any[]) => unknown };
 
 const PERFIS = ['admin', 'coordenador', 'suporte', 'campo', 'vendedor'] as const;
 
@@ -34,7 +35,6 @@ function carregarEndpoints(): Endpoint[] {
 
     const endpoints: Endpoint[] = [];
     for (const f of ficheiros) {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const mod = require(f);
         for (const ctrl of Object.values(mod)) {
             if (typeof ctrl !== 'function') continue;
@@ -47,7 +47,7 @@ function carregarEndpoints(): Endpoint[] {
                 const metodo = Reflect.getMetadata(METHOD_METADATA, handler);
                 if (sub === undefined || metodo === undefined) continue;
                 const rota = '/' + [base, sub].filter(s => s && s !== '/').join('/');
-                endpoints.push({ rota, metodo: RequestMethod[metodo], ctrl: ctrl as Function, handler });
+                endpoints.push({ rota, metodo: RequestMethod[metodo], ctrl: ctrl as Classe, handler });
             }
         }
     }

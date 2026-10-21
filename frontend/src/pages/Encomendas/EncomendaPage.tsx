@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useModalA11y } from '../../components/useModalA11y';
 import ReactDOM from 'react-dom';
 import AppLayout from '../../components/Layout/AppLayout';
 import { showToast as notify, extractErrorMessage, extractFieldErrors } from '../../utils/errorHandler';
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { imprimirPdf } from '../../utils/imprimirPdf';
+import { buildRelatorioComprasHtml } from './relatorioComprasHtml';
 
 /* ══ Helpers ════════════════════════════════════════════════ */
 const linhaTotal = (l: EncomendaLinha) =>
@@ -63,6 +65,7 @@ interface ReceberModalProps {
     onConfirm: (recebidas: { artigoId: string; qtd: number }[], armazem: string, guiaRemessa: string) => void;
 }
 const ReceberModal: React.FC<ReceberModalProps> = ({ encomenda, onClose, onConfirm }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { armazens, fmt } = useGlobal();
     const armazensOpts = armazens.map(a => ({ value: a.codigo, label: `${a.codigo} — ${a.nome}` }));
     const defaultArmazem = armazens[0]?.codigo ?? '';
@@ -90,7 +93,7 @@ const ReceberModal: React.FC<ReceberModalProps> = ({ encomenda, onClose, onConfi
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 580 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 580 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Receber Encomenda — {encomenda.numero}</h3>
                     <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
@@ -993,6 +996,7 @@ interface EncomendaModalProps {
     onAnularRececao?: (rececaoId: string) => void;
 }
 const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onSave, onAnularRececao }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fornecedores, artigos, taxasIva, currentUser, empresaConfig, fmt, fmtMoney } = useGlobal();
     const [tab, setTab] = useState<ETab>('cabecalho');
 
@@ -1085,7 +1089,7 @@ const EncomendaModal: React.FC<EncomendaModalProps> = ({ encomenda, onClose, onS
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 760 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 760 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">{encomenda ? `Encomenda ${encomenda.numero}` : 'Nova Encomenda'}</h3>
                     <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
@@ -1422,6 +1426,7 @@ interface ConvertFaturaModalProps {
     }) => void;
 }
 const ConvertFaturaModal: React.FC<ConvertFaturaModalProps> = ({ encomenda, onClose, onConfirm }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { documentosCompra, artigos, taxasIva, fmt, fmtMoney } = useGlobal();
     const docOpts = documentosCompra.filter(d => d.codigo !== 'VNC');
 
@@ -1491,7 +1496,7 @@ const ConvertFaturaModal: React.FC<ConvertFaturaModalProps> = ({ encomenda, onCl
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 780 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 780 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">
                         <FileText size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
@@ -1672,6 +1677,7 @@ interface CompraDiretaModalProps {
     onSave: (f: Omit<FaturaFornecedor, 'id'> & { faturasAssociadasIds?: string[] }) => void;
 }
 const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fornecedores, artigos, documentosCompra, taxasIva, fmtMoney, condicoesPagamento, modosPagamento, faturasFornecedor } = useGlobal();
 
     const [modalTab,    setModalTab]= useState<'documento' | 'condicoes'>('documento');
@@ -1817,7 +1823,7 @@ const CompraDiretaModal: React.FC<CompraDiretaModalProps> = ({ onClose, onSave }
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 820 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 820 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">
                         <CreditCard size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
@@ -2129,6 +2135,7 @@ interface ConverterModalProps {
     onConfirm: (fornecedorId: string, dataEntrega: string, descricao: string, items: ConverterItem[]) => void;
 }
 const ConverterModal: React.FC<ConverterModalProps> = ({ artigos, onClose, onConfirm }) => {
+    const modalRef = useModalA11y(onClose); // #223 — Esc fecha e foco no modal (#45)
     const { fornecedores, fmt, fmtMoney } = useGlobal();
     const [fornId,      setFornId]  = useState('');
     const [dataEntrega, setDatEnt]  = useState('');
@@ -2183,7 +2190,7 @@ const ConverterModal: React.FC<ConverterModalProps> = ({ artigos, onClose, onCon
 
     return (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-            <div className="modal" style={{ maxWidth: 860 }}>
+            <div className="modal" ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} style={{ maxWidth: 860 }}>
                 <div className="modal-header">
                     <h3 className="modal-title">Converter em Encomenda</h3>
                     <button className="modal-close" aria-label="Fechar" type="button" onClick={onClose}><X size={13} /></button>
@@ -2343,7 +2350,7 @@ function printSugestoes(artigos: Artigo[], empresa?: EmpresaConfig, simbolo?: st
 
 /* ══ Page ════════════════════════════════════════════════════ */
 const EncomendaPage: React.FC = () => {
-    const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, taxasIva, updateArtigo, addMovimento, currentUser, empresaConfig, fmtMoney, fmtDate, fmt, simboloMoeda, faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC, condicoesPagamento, modosPagamento, loadingData } = useGlobal();
+    const { encomendas, addEncomenda, updateEncomenda, criarRececao, anularRececao, fornecedores, artigos: todosArtigos, taxasIva, updateArtigo, currentUser, empresaConfig, fmtMoney, fmtDate, fmt, simboloMoeda, faturasFornecedor, addFaturaFornecedor, updateFaturaFornecedor, updateEstadoVNC, condicoesPagamento, modosPagamento, loadingData } = useGlobal();
     const confirm = useConfirm();
 
     const [pageTab,   setPageTab]   = useState<'encomendas' | 'sugestoes' | 'compras' | 'relatorios'>('encomendas');
@@ -2450,6 +2457,36 @@ const EncomendaPage: React.FC = () => {
     });
     const maxDaily = Math.max(...dailyVolume.map(d => d.count), 1);
 
+    // #217 — o relatório sai em PDF do servidor (imprimirPdf, #182), com "Pág. x/y" (#180).
+    const imprimirRelatorio = () => {
+        const diasAtraso = (e: Encomenda) => e.dataEntrega
+            ? Math.floor((today.getTime() - new Date(e.dataEntrega).getTime()) / 86400000) : 0;
+        void imprimirPdf(buildRelatorioComprasHtml({
+            empresa: { nome: empresaConfig?.nome ?? '', nif: empresaConfig?.nif, morada: empresaConfig?.morada },
+            geradoEm: `${fmtDate(new Date().toISOString())} ${new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}`,
+            kpis: { emAberto: encEmAberto.length, emAtraso: encEmAtraso.length, hoje: encHoje.length, semana: encSemana.length },
+            porEstado: (['Aberta', 'Aprovada', 'Parcial', 'Recebida', 'Cancelada'] as const)
+                .map(est => ({ label: ESTADO_STYLE[est].label, count: statusCounts[est] ?? 0 })),
+            ultimos7Dias: dailyVolume.map(d => ({ label: d.label, count: d.count })),
+            emAberto: encEmAberto.map(e => {
+                const totalQtd = e.linhas.reduce((s, l) => s + l.qtdEncomendada, 0);
+                const recQtd   = e.linhas.reduce((s, l) => s + l.qtdRecebida, 0);
+                return {
+                    numero: e.numero, fornecedor: getFornNome(e.fornecedorId), data: fmtDate(e.data),
+                    entrega: fmtDate(e.dataEntrega), estado: ESTADO_STYLE[e.estado].label, valor: fmtMoney(encTotal(e)),
+                    pctRecebido: totalQtd > 0 ? Math.round(recQtd / totalQtd * 100) : 0,
+                    atrasada: !!e.dataEntrega && e.dataEntrega < todayStr,
+                };
+            }),
+            emAtraso: encEmAtraso.slice()
+                .sort((a, b) => (a.dataEntrega ?? '').localeCompare(b.dataEntrega ?? ''))
+                .map(e => ({
+                    numero: e.numero, fornecedor: getFornNome(e.fornecedorId), entrega: fmtDate(e.dataEntrega),
+                    diasAtraso: diasAtraso(e), estado: ESTADO_STYLE[e.estado].label, valor: fmtMoney(encTotal(e)),
+                })),
+        }));
+    };
+
     const editTarget  = typeof modal === 'string' && modal !== 'new' ? encomendas.find(e => e.id === modal) : undefined;
     const receberEnc  = receber ? encomendas.find(e => e.id === receber) : null;
 
@@ -2469,10 +2506,9 @@ const EncomendaPage: React.FC = () => {
     const handleReceber = async (encId: string, recebidas: { artigoId: string; qtd: number }[], armazem: string, guiaRemessa: string) => {
         try {
             const updatedEnc = await criarRececao(encId, recebidas, guiaRemessa, currentUser?.nome ?? 'Operador', armazem);
-            const hoje = new Date().toISOString().split('T')[0];
+            // #213 — o movimento de entrada é registado pelo servidor, na transação da receção.
             for (const r of recebidas) {
                 await updateArtigo(r.artigoId, { codigoArmazem: armazem });
-                await addMovimento({ artigoId: r.artigoId, tipo: 'entrada', quantidade: r.qtd, armazemId: armazem, referencia: encId, usuario: currentUser?.email, observacao: `Recepção ${encId} · GR: ${guiaRemessa}`, data: hoje });
             }
             // Find the newly created rececao (most recent Ativa)
             const newRececao = [...updatedEnc.rececoes]
@@ -2618,7 +2654,7 @@ const EncomendaPage: React.FC = () => {
                 )}
                 {pageTab === 'relatorios' && (
                     <button className="abtn abtn-secondary" type="button"
-                        onClick={() => window.print()}
+                        onClick={imprimirRelatorio}
                         style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <Printer size={13} /> Imprimir
                     </button>
