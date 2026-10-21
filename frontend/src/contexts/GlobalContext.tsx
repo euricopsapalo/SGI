@@ -547,11 +547,11 @@ interface GlobalContextType {
     // Logs — #210: a listagem é paginada no servidor (services/logs.ts); aqui só se regista.
     addLog: (l: Omit<SysLog, 'id' | 'timestamp'>) => void;
     // Entities
-    clientes: Cliente[]; addCliente: (c: Omit<Cliente, 'id'>) => Cliente; updateCliente: (id: string, c: Partial<Cliente>) => void; removeCliente: (id: string) => Promise<void>;
+    clientes: Cliente[]; addCliente: (c: Omit<Cliente, 'id'>) => Promise<Cliente>; updateCliente: (id: string, c: Partial<Cliente>) => void; removeCliente: (id: string) => Promise<void>;
     tecnicos: Tecnico[]; addTecnico: (t: Omit<Tecnico, 'id'> & { password?: string; passwordConfirm?: string }) => Promise<Tecnico>; updateTecnico: (id: string, t: Partial<Tecnico>) => Promise<void>; removeTecnico: (id: string) => Promise<void>;
-    fornecedores: Fornecedor[]; addFornecedor: (f: Omit<Fornecedor, 'id'>) => Fornecedor; updateFornecedor: (id: string, f: Partial<Fornecedor>) => void; removeFornecedor: (id: string) => Promise<void>;
+    fornecedores: Fornecedor[]; addFornecedor: (f: Omit<Fornecedor, 'id'>) => Promise<Fornecedor>; updateFornecedor: (id: string, f: Partial<Fornecedor>) => void; removeFornecedor: (id: string) => Promise<void>;
     // Equipment
-    modelosEquipamento: ModeloEquipamento[]; addModelo: (m: Omit<ModeloEquipamento, 'id'>) => ModeloEquipamento; updateModelo: (id: string, m: Partial<ModeloEquipamento>) => void; removeModelo: (id: string) => Promise<void>;
+    modelosEquipamento: ModeloEquipamento[]; addModelo: (m: Omit<ModeloEquipamento, 'id'>) => Promise<ModeloEquipamento>; updateModelo: (id: string, m: Partial<ModeloEquipamento>) => Promise<void>; removeModelo: (id: string) => Promise<void>;
     equipInstalados: EquipInstalado[]; addEquipInstalado: (e: Omit<EquipInstalado, 'id'>) => Promise<EquipInstalado>; updateEquipInstalado: (id: string, e: Partial<EquipInstalado>) => void; removeEquipInstalado: (id: string) => Promise<void>;
     // Plans
     planos: PlanoManutencao[]; addPlano: (p: Omit<PlanoManutencao, 'id'>) => Promise<PlanoManutencao>; updatePlano: (id: string, p: Partial<PlanoManutencao>) => Promise<void>; removePlano: (id: string) => void;
@@ -565,15 +565,15 @@ interface GlobalContextType {
     finalizarOT: (id: string, opts?: { assinadaCliente: boolean; dataFim?: string; assinaturaRef?: string }) => Promise<{ otGeradaId?: string }>;
     reprogramarOT: (id: string, novaData: string, dataAnterior?: string, motivo?: string) => Promise<void>;
     // Warehouse
-    armazens: Armazem[]; addArmazem: (a: Omit<Armazem, 'id'>) => Armazem; updateArmazem: (id: string, a: Partial<Armazem>) => void;
+    armazens: Armazem[]; addArmazem: (a: Omit<Armazem, 'id'>) => Promise<Armazem>; updateArmazem: (id: string, a: Partial<Armazem>) => Promise<void>;
     // Stock
-    artigos: Artigo[]; addArtigo: (a: Omit<Artigo, 'id'>) => Artigo; updateArtigo: (id: string, a: Partial<Artigo>) => void; adjustExistencia: (id: string, delta: number) => void; adjustReservado: (id: string, delta: number) => void;
+    artigos: Artigo[]; addArtigo: (a: Omit<Artigo, 'id'>) => Promise<Artigo>; updateArtigo: (id: string, a: Partial<Artigo>) => Promise<void>; adjustExistencia: (id: string, delta: number) => Promise<void>; adjustReservado: (id: string, delta: number) => void;
     /** #203 — transferência atómica entre armazéns (POST /artigos/:id/transferencia); a existência total não muda. */
     transferirStock: (artigoId: string, armazemOrigem: string, armazemDestino: string, quantidade: number) => Promise<void>;
     stockArmazem: StockArmazem[]; upsertStockArmazem: (artigoId: string, armazemId: string, quantidade: number, stockMinimo: number) => Promise<void>; removeStockArmazem: (saId: string) => Promise<void>;
-    movimentosStock: MovimentoStock[]; addMovimento: (m: Omit<MovimentoStock, 'id'>) => MovimentoStock;
+    movimentosStock: MovimentoStock[]; addMovimento: (m: Omit<MovimentoStock, 'id'>) => Promise<MovimentoStock>;
     // Purchases
-    encomendas: Encomenda[]; addEncomenda: (e: Omit<Encomenda, 'id'>) => Encomenda; updateEncomenda: (id: string, e: Partial<Encomenda>) => void;
+    encomendas: Encomenda[]; addEncomenda: (e: Omit<Encomenda, 'id'>) => Promise<Encomenda>; updateEncomenda: (id: string, e: Partial<Encomenda>) => Promise<void>;
     criarRececao: (encId: string, recebidas: { artigoId: string; qtd: number }[], guiaRemessa: string, operador: string, armazem: string) => Promise<Encomenda>;
     anularRececao: (rececaoId: string) => Promise<Encomenda>;
     // Invoices
@@ -1091,16 +1091,13 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, [setClientes]);
 
     /* ── Entities ───────────────────────────────────────────── */
-    const addCliente = (c: Omit<Cliente, 'id'>): Cliente => {
-        const placeholder: Cliente = { ...c, id: '' };
-        api.post(`/clientes`, c)
-            .then(({ data }) => {
-                const n = normCliente(data);
-                setClientes(p => [...p, n]);
-                log('Clientes', 'Cliente criado', `Nome: ${c.nome}`);
-            })
-            .catch(() => {});
-        return placeholder;
+    // #212 — espera pelo servidor, propaga o erro e guarda o registo devolvido (padrão #49).
+    const addCliente = async (c: Omit<Cliente, 'id'>): Promise<Cliente> => {
+        const { data } = await api.post(`/clientes`, c);
+        const n = normCliente(data);
+        setClientes(p => [...p, n]);
+        log('Clientes', 'Cliente criado', `Nome: ${c.nome}`);
+        return n;
     };
     const updateCliente = async (id: string, c: Partial<Cliente>) => {
         try {
@@ -1138,16 +1135,13 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         log('Técnicos', 'Técnico eliminado', `Nome: ${nome}`, 'warning');
     };
 
-    const addFornecedor = (f: Omit<Fornecedor, 'id'>): Fornecedor => {
-        const placeholder: Fornecedor = { ...f, id: '' };
-        api.post(`/fornecedores`, f)
-            .then(({ data }) => {
-                const n = norm(data) as Fornecedor;
-                setFornecedores(p => [...p, n]);
-                log('Fornecedores', 'Fornecedor criado', `Nome: ${f.nome}`);
-            })
-            .catch(() => {});
-        return placeholder;
+    // #212 — espera pelo servidor, propaga o erro e guarda o registo devolvido (padrão #49).
+    const addFornecedor = async (f: Omit<Fornecedor, 'id'>): Promise<Fornecedor> => {
+        const { data } = await api.post(`/fornecedores`, f);
+        const n = norm(data) as Fornecedor;
+        setFornecedores(p => [...p, n]);
+        log('Fornecedores', 'Fornecedor criado', `Nome: ${f.nome}`);
+        return n;
     };
     const updateFornecedor = async (id: string, f: Partial<Fornecedor>) => {
         try {
@@ -1164,15 +1158,12 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     /* ── Equipment ──────────────────────────────────────────── */
-    const addModelo = (m: Omit<ModeloEquipamento, 'id'>): ModeloEquipamento => {
-        const placeholder: ModeloEquipamento = { ...m, id: '' };
-        api.post(`/modelos-equipamento`, m)
-            .then(({ data }) => {
-                const n = norm(data) as ModeloEquipamento;
-                setModelosEquipamento(p => [...p, n]);
-            })
-            .catch(() => {});
-        return placeholder;
+    // #212 — espera pelo servidor, propaga o erro e guarda o registo devolvido (padrão #49).
+    const addModelo = async (m: Omit<ModeloEquipamento, 'id'>): Promise<ModeloEquipamento> => {
+        const { data } = await api.post(`/modelos-equipamento`, m);
+        const n = norm(data) as ModeloEquipamento;
+        setModelosEquipamento(p => [...p, n]);
+        return n;
     };
     const updateModelo = async (id: string, m: Partial<ModeloEquipamento>) => {
         try {
@@ -1401,15 +1392,12 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
 
     /* ── Warehouse ──────────────────────────────────────────── */
-    const addArmazem = (a: Omit<Armazem, 'id'>): Armazem => {
-        const placeholder: Armazem = { ...a, id: '' };
-        api.post(`/armazens`, a)
-            .then(({ data }) => {
-                const n = norm(data) as Armazem;
-                setArmazens(p => [...p, n]);
-            })
-            .catch(() => {});
-        return placeholder;
+    // #212 — espera pelo servidor, propaga o erro e guarda o registo devolvido (padrão #49).
+    const addArmazem = async (a: Omit<Armazem, 'id'>): Promise<Armazem> => {
+        const { data } = await api.post(`/armazens`, a);
+        const n = norm(data) as Armazem;
+        setArmazens(p => [...p, n]);
+        return n;
     };
     const updateArmazem = async (id: string, a: Partial<Armazem>) => {
         try {
@@ -1419,15 +1407,12 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     /* ── Stock ──────────────────────────────────────────────── */
-    const addArtigo = (a: Omit<Artigo, 'id'>): Artigo => {
-        const placeholder: Artigo = { ...a, id: '' };
-        api.post(`/artigos`, a)
-            .then(({ data }) => {
-                const n = normArtigo(data);
-                setArtigos(p => [...p, n]);
-            })
-            .catch(() => {});
-        return placeholder;
+    // #212 — espera pelo servidor, propaga o erro e guarda o registo devolvido (padrão #49).
+    const addArtigo = async (a: Omit<Artigo, 'id'>): Promise<Artigo> => {
+        const { data } = await api.post(`/artigos`, a);
+        const n = normArtigo(data);
+        setArtigos(p => [...p, n]);
+        return n;
     };
     const updateArtigo = async (id: string, a: Partial<Artigo>) => {
         try {
@@ -1463,17 +1448,15 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setStockArmazem(p => p.filter(x => x.id !== saId));
     };
 
-    const addMovimento = (m: Omit<MovimentoStock, 'id'>): MovimentoStock => {
-        const placeholder: MovimentoStock = { ...m, id: '' };
+    // #212 — espera pelo servidor, propaga o erro e guarda o registo devolvido (padrão #49).
+    const addMovimento = async (m: Omit<MovimentoStock, 'id'>): Promise<MovimentoStock> => {
         const tipoLabel: Record<string, string> = {
             entrada: 'Entrada', saida: 'Saída', ajuste: 'Ajuste',
             transferencia: 'Transferência', devolucao: 'Devolução',
         };
-        api.post(`/movimentos-stock`, m)
-            .then(({ data }) => {
-                setMovimentosStock(p => [...p, normMovimento(data)]);
-            })
-            .catch(() => {});
+        const { data } = await api.post(`/movimentos-stock`, m);
+        const n = normMovimento(data);
+        setMovimentosStock(p => [...p, n]);
         const artCodigo = artigos.find(a => a.id === m.artigoId)?.codigo ?? m.artigoId;
         const qtdStr = m.quantidade > 0 ? `+${m.quantidade}` : String(m.quantidade);
         const armazemStr = m.armazemDestinoId
@@ -1482,21 +1465,18 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const obs = m.observacao ? ` — ${m.observacao}` : '';
         log('Stock', `${tipoLabel[m.tipo] ?? m.tipo}: ${artCodigo}`,
             `Qtd: ${qtdStr}${armazemStr}${obs}`);
-        return placeholder;
+        return n;
     };
 
     /* ── Purchases ──────────────────────────────────────────── */
-    const addEncomenda = (e: Omit<Encomenda, 'id'>): Encomenda => {
-        const placeholder: Encomenda = { ...e, id: '' };
-        api.post(`/compras`, e)
-            .then(({ data }) => {
-                const n = normEncomenda(data);
-                setEncomendas(p => [...p, n]);
-                // Refresh artigos so stockEncomendado reflects new PO
-                api.get(`/artigos`).then(r => setArtigos(r.data.map(normArtigo)));
-            })
-            .catch(() => {});
-        return placeholder;
+    // #212 — espera pelo servidor, propaga o erro e guarda o registo devolvido (padrão #49).
+    const addEncomenda = async (e: Omit<Encomenda, 'id'>): Promise<Encomenda> => {
+        const { data } = await api.post(`/compras`, e);
+        const n = normEncomenda(data);
+        setEncomendas(p => [...p, n]);
+        // Refresh artigos so stockEncomendado reflects new PO
+        api.get(`/artigos`).then(r => setArtigos(r.data.map(normArtigo))).catch(() => {});
+        return n;
     };
     const updateEncomenda = async (id: string, e: Partial<Encomenda>) => {
         try {
