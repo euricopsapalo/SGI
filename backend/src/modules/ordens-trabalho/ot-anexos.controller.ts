@@ -1,6 +1,6 @@
 import {
     Controller, Get, Post, Delete, Param, Body, ParseIntPipe,
-    UseInterceptors, UploadedFiles, Res, StreamableFile,
+    UseInterceptors, UploadedFiles, Res, StreamableFile, UseGuards,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
@@ -8,6 +8,7 @@ import type { Response } from 'express';
 import * as fs from 'fs';
 import { OtAnexosService } from './ot-anexos.service';
 import { AssinaturaOtDto } from './dto/assinatura-ot.dto';
+import { OtAcessoGuard } from './ot-acesso.guard';
 
 const MAX_FOTO_BYTES = 5 * 1024 * 1024; // 5 MB por foto
 
@@ -15,6 +16,8 @@ const MAX_FOTO_BYTES = 5 * 1024 * 1024; // 5 MB por foto
 @ApiTags('ordens')
 @ApiBearerAuth('access-token')
 @Controller('ordens')
+// #220 — o técnico de campo só acede aos anexos das suas OTs.
+@UseGuards(OtAcessoGuard)
 export class OtAnexosController {
     constructor(private readonly service: OtAnexosService) {}
 

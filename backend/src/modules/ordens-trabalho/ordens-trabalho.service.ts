@@ -263,6 +263,33 @@ export class OrdensTrabalhoService {
      * `?mine=true` (executados pelo técnico do utilizador autenticado),
      * `?registadoPorId=`, `?executadoPorId=`, `?naturezaIntervencao=`, `?prioridade=`.
      */
+    /** Id do técnico ligado ao utilizador (#65), lido da BD — o token pode estar desatualizado. */
+    private async tecnicoDoUtilizador(user: any): Promise<number | null> {
+        const userId = Number(user?.id ?? user?.sub);
+        if (!userId) return null;
+        const tec = await this.tecnicoRepo.findOne({ where: { userId }, select: ['id'] });
+        return tec?.id ?? null;
+    }
+
+    /**
+     * #220 — O técnico de campo (perfil `campo`) só vê as OTs em que é executante ou que
+     * registou. Devolve as condições OR a aplicar, ou `null` para os perfis sem restrição.
+     */
+    private async escopoCampo(user: any): Promise<{ executadoPorId: number | null; registadoPorId: number } | null> {
+        if (user?.role !== 'campo') return null;
+        return { executadoPorId: await this.tecnicoDoUtilizador(user), registadoPorId: Number(user.id ?? user.sub) };
+    }
+
+    /** #220 — usado pelo `OtAcessoGuard` nas rotas `/ordens/:id…`. */
+    async podeAceder(id: number, user: any): Promise<boolean> {
+        const escopo = await this.escopoCampo(user);
+        if (!escopo) return true;
+        const ot = await this.repo.findOne({ where: { id }, select: ['id', 'executadoPorId', 'registadoPorId'] });
+        if (!ot) return true; // a rota responde 404 por si
+        return (escopo.executadoPorId != null && Number(ot.executadoPorId) === escopo.executadoPorId)
+            || Number(ot.registadoPorId) === escopo.registadoPorId;
+    }
+
     async findAll(query: any = {}) {
         const where: any = {};
         if (query.registadoPorId) where.registadoPorId = Number(query.registadoPorId);
@@ -272,16 +299,31 @@ export class OrdensTrabalhoService {
 
         // ?mine=true → técnico do user autenticado executa
         if (String(query.mine) === 'true') {
-            const tecnicoId = query._currentUser?.tecnicoId;
+            const tecnicoId = await this.tecnicoDoUtilizador(query._currentUser);
             if (!tecnicoId) {
                 // user não é técnico → devolve vazio (semantica: sem OTs "minhas" para executar)
                 return [];
             }
-            where.executadoPorId = Number(tecnicoId);
+            where.executadoPorId = tecnicoId;
+        }
+
+        // #220 — técnico de campo: sempre restrito às suas OTs, independentemente da query.
+        let condicoes: any = Object.keys(where).length ? where : undefined;
+        const escopo = await this.escopoCampo(query._currentUser);
+        if (escopo) {
+            const ramos: any[] = [];
+            if (escopo.executadoPorId != null && (where.executadoPorId === undefined || where.executadoPorId === escopo.executadoPorId)) {
+                ramos.push({ ...where, executadoPorId: escopo.executadoPorId });
+            }
+            if (where.registadoPorId === undefined || where.registadoPorId === escopo.registadoPorId) {
+                ramos.push({ ...where, registadoPorId: escopo.registadoPorId });
+            }
+            if (!ramos.length) return [];
+            condicoes = ramos;
         }
 
         const ots = await this.repo.find({
-            where: Object.keys(where).length ? where : undefined,
+            where: condicoes,
             relations: ['cliente', 'maosObra', 'artigos', 'reprogramacoes', 'registadoPor', 'executadoPor', 'aprovadoPor'],
         });
         const limite = await this.getLimiteAdiamentos();
