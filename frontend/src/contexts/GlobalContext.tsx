@@ -22,13 +22,26 @@ export interface FamiliaArtigo { id: string; descricao: string; }
 export interface DocumentoCompra { id: string; codigo: string; descricao: string; }
 
 // ── Entities ───────────────────────────────────────────────
+export interface ClienteEndereco {
+    descricao: string; morada: string; cidade: string; codigoPostal?: string | null; principal: boolean;
+    provinciaId?: string; municipioId?: string;
+}
+/**
+ * Cliente — `morada`/`municipio`/`provincia*` são o endereço principal (os ecrãs que só
+ * precisam de um). #223 — o contexto guarda também os endereços, as condições e a retenção
+ * (#179): a página de Clientes deixou de ter os seus próprios pedidos e usa este estado.
+ */
 export interface Cliente {
     id: string; tipo: 'empresa' | 'particular'; nome: string;
     nif: string; email: string; telefone: string; morada: string;
     municipio: string; provincia: string; ativo: boolean;
     provinciaId?: string; municipioId?: string;
     condicaoPagamentoId?: string; modoPagamentoId?: string;
+    enderecos: ClienteEndereco[];
+    retencaoAtiva?: boolean; retencaoPercentagem?: number; retencaoDescricao?: string;
 }
+/** Corpo enviado à API ao criar/editar (o formulário da página de Clientes). */
+export type ClientePayload = Record<string, unknown>;
 export interface Tecnico {
     id: string; nome: string; telefone: string; email: string;
     funcaoId: string; custoHora: number; ativo: boolean;
@@ -321,6 +334,17 @@ const normCliente = (c: any): Cliente => {
         provincia: '', ativo: c.ativo ?? true,
         provinciaId: principal?.provinciaId != null ? String(principal.provinciaId) : undefined,
         municipioId: principal?.municipioId != null ? String(principal.municipioId) : undefined,
+        condicaoPagamentoId: c.condicaoPagamentoId != null ? String(c.condicaoPagamentoId) : undefined,
+        modoPagamentoId: c.modoPagamentoId != null ? String(c.modoPagamentoId) : undefined,
+        enderecos: (c.enderecos ?? []).map((e: any) => ({
+            descricao: e.descricao ?? '', morada: e.morada ?? '', cidade: e.cidade ?? '',
+            codigoPostal: e.codigoPostal ?? null, principal: !!e.principal,
+            provinciaId: e.provinciaId != null ? String(e.provinciaId) : undefined,
+            municipioId: e.municipioId != null ? String(e.municipioId) : undefined,
+        })),
+        retencaoAtiva: !!c.retencaoAtiva,
+        retencaoPercentagem: c.retencaoPercentagem != null ? Number(c.retencaoPercentagem) : undefined,
+        retencaoDescricao: c.retencaoDescricao ?? undefined,
     };
 };
 
@@ -537,7 +561,7 @@ interface GlobalContextType {
     // Logs — #210: a listagem é paginada no servidor (services/logs.ts); aqui só se regista.
     addLog: (l: Omit<SysLog, 'id' | 'timestamp'>) => void;
     // Entities
-    clientes: Cliente[]; addCliente: (c: Omit<Cliente, 'id'>) => Promise<Cliente>; updateCliente: (id: string, c: Partial<Cliente>) => void; removeCliente: (id: string) => Promise<void>;
+    clientes: Cliente[]; addCliente: (c: ClientePayload) => Promise<Cliente>; updateCliente: (id: string, c: ClientePayload) => Promise<Cliente>; removeCliente: (id: string) => Promise<void>;
     tecnicos: Tecnico[]; addTecnico: (t: Omit<Tecnico, 'id'> & { password?: string; passwordConfirm?: string }) => Promise<Tecnico>; updateTecnico: (id: string, t: Partial<Tecnico>) => Promise<void>; removeTecnico: (id: string) => Promise<void>;
     fornecedores: Fornecedor[]; addFornecedor: (f: Omit<Fornecedor, 'id'>) => Promise<Fornecedor>; updateFornecedor: (id: string, f: Partial<Fornecedor>) => void; removeFornecedor: (id: string) => Promise<void>;
     // Equipment
@@ -1089,19 +1113,20 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     /* ── Entities ───────────────────────────────────────────── */
     // #212 — espera pelo servidor, propaga o erro e guarda o registo devolvido (padrão #49).
-    const addCliente = async (c: Omit<Cliente, 'id'>): Promise<Cliente> => {
+    const addCliente = async (c: ClientePayload): Promise<Cliente> => {
         const { data } = await api.post(`/clientes`, c);
         const n = normCliente(data);
         setClientes(p => [...p, n]);
-        log('Clientes', 'Cliente criado', `Nome: ${c.nome}`);
+        log('Clientes', 'Cliente criado', `Nome: ${n.nome}`);
         return n;
     };
-    const updateCliente = async (id: string, c: Partial<Cliente>) => {
-        try {
-            await api.put(`/clientes/${id}`, c);
-            setClientes(p => p.map(x => x.id === id ? { ...x, ...c } : x));
-            log('Clientes', 'Cliente actualizado', `ID: ${id}`);
-        } catch (e) { throw e; }
+    // #223 — guarda o cliente devolvido pelo servidor (com endereços), não o pedido.
+    const updateCliente = async (id: string, c: ClientePayload): Promise<Cliente> => {
+        const { data } = await api.put(`/clientes/${id}`, c);
+        const n = normCliente(data);
+        setClientes(p => p.map(x => (x.id === id ? n : x)));
+        log('Clientes', 'Cliente actualizado', `Nome: ${n.nome}`);
+        return n;
     };
     const removeCliente = async (id: string) => {
         const nome = clientes.find(x => x.id === id)?.nome ?? id;
