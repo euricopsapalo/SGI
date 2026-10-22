@@ -325,7 +325,7 @@ const RelatoriosTecnicoModal: React.FC<RelatoriosTecnicoModalProps> = ({ tecnico
         if (tipo === 'disponibilidade')  return buildDisponibilidadeHtml(tecnicos, ordens, funcoes, dateFrom, dateTo, empresaConfig);
         if (tipo === 'agenda') {
             const t = getAgendaTecnico();
-            if (!t) { alert('Seleccione um técnico.'); return null; }
+            if (!t) { showToast('Seleccione um técnico.', 'warning'); return null; }
             return buildAgendaHtml(t, ordens, funcoes, clientes, equipInstalados, modelos, agendaDateFrom, agendaDateTo, agendaEstados, empresaConfig);
         }
         return null;
@@ -348,7 +348,7 @@ const RelatoriosTecnicoModal: React.FC<RelatoriosTecnicoModalProps> = ({ tecnico
             printOTAtraso(tecnicos, ordens, funcoes, empresaConfig);
         } else if (tipo === 'agenda') {
             const t = getAgendaTecnico();
-            if (!t) { alert('Seleccione um técnico.'); return; }
+            if (!t) { showToast('Seleccione um técnico.', 'warning'); return; }
             printAgendaTecnico(t, ordens, funcoes, clientes, equipInstalados, modelos, agendaDateFrom, agendaDateTo, agendaEstados, empresaConfig);
         } else if (tipo === 'carga') {
             printDistribuicaoCarga(tecnicos, ordens, funcoes, empresaConfig);

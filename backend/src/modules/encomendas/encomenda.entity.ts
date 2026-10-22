@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn, Check, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, Check, Index } from 'typeorm';
 import { Fornecedor } from '../fornecedores/fornecedor.entity';
 import { EncomendaLinha } from './encomenda-linha.entity';
 import { Rececao } from './rececao.entity';

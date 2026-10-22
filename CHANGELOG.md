@@ -15,6 +15,189 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 - **Cobertura do serviço:** instruções de 74 % para 96 %, branches de 51 % para 79 %.
 - **Novo limite no jest** para este serviço (90 % de linhas, 70 % de branches), para não voltar a descer.
 
+### feat(vendas): retenção na fonte configurada na ficha do cliente (Lei 19/14) (closes #179)
+
+- **Ficha do cliente** (separador Dados Comerciais): "Retenção na fonte", com a opção de aplicar, a percentagem (6,5 % por omissão) e a descrição impressa na fatura. Com a retenção ativa, a percentagem tem de ser maior que zero.
+- **Regra** (`calcularRetencao`, pura): só há retenção quando a linha é de um Serviço com retenção habilitada (#195) **e** o cliente tem a retenção ativa com % > 0.
+  - A incidência é a soma dos líquidos dessas linhas, depois do desconto de linha e do global.
+  - O valor é a incidência × %, a 2 casas.
+  - Sem limiar mínimo.
+- **Documento de venda:**
+  - o rascunho calcula a retenção com a ficha atual do cliente;
+  - a emissão fixa a incidência, a %, o valor e a descrição no documento, por isso alterar a ficha depois não muda faturas emitidas.
+- **Conta corrente:** o pendente nasce **já líquido** (total − retenção). A Fatura Recibo liquida esse valor.
+- **Estorno (NC/ND):** herda a percentagem da origem, só sobre as linhas sujeitas, e abate o valor líquido. Quando fecha a fatura, a retenção é a que falta, para não ficar pendente nenhum cêntimo de arredondamento.
+- **Impressão e extrato:**
+  - "Quadro de Retenção" na fatura (Entidade, Incidência, %, Valor), com as linhas "Retenção na Fonte" e "Total a Pagar";
+  - coluna Retenção no recibo, com o valor do documento pelo total;
+  - no extrato, o documento aparece pelo total e há uma linha "Retenção" associada.
+- **Editor de rascunho e detalhe:** assinalam as linhas que entram na incidência e mostram a retenção e o valor a receber do cliente.
+- **Migração `RetencaoNaFonte`:** novas colunas em `clientes` e `documentos_venda`, com CHECKs.
+- Testes:
+  - regra (Produto/Serviço × sujeito × cliente, fatura mista, desconto global, critério dos 106 951,87);
+  - emissão com e sem retenção, rascunho, estorno parcial e de fecho, recibo e extrato;
+  - impressão e regra espelhada no frontend;
+  - e2e contra BD real (`vendas-retencao.e2e.spec.ts`).
+
+### fix(users): o `update` aplica a política de comprimento mínimo de password
+
+- **Antes:** `UsersService.update` gravava o `passwordHash` sem validar a password, ao contrário do `create` e do change-password. Um admin conseguia definir uma password curta a outro utilizador.
+- **Agora:** chama `assertPasswordPolicy` (`minPasswordLength` das Configurações, #100) antes do `bcrypt.hash`. Uma password curta dá 400 e nada é gravado.
+- Testes em `users.service.spec.ts`: password curta → 400 sem gravar; password válida → grava o hash.
+
+### chore: acabamento e dívida técnica da auditoria (parte de #223)
+
+- **Acessibilidade:** o `useModalA11y` (Esc fecha, foco no modal, `role="dialog"`, `aria-modal`) passa a estar nos 25 modais que faltavam: Agenda, Compras, Ordens, Parque, Planos, Stock e `ExportModal`.
+- **Diálogos nativos:**
+  - os `alert()` dos relatórios de Técnicos e Fornecedores passam a toast;
+  - remover uma foto ou a assinatura de uma OT usa o `ConfirmDialog` em vez de `window.confirm`.
+- **Código morto:**
+  - sai o `adjustReservado` (a reserva é do backend, #202);
+  - sai o `Sidebar.tsx`, que não era importado;
+  - saem os aliases 410 das OTs (`emitir`, `terminar`, `encerrar`, `reverter`), que agora dão 404.
+- **Comentários:** retirados os "RF-OT-004 — TODO" do `confirmar` e do `adiar`, porque a reserva já está implementada.
+- **Faturas de fornecedor:** o `DELETE` deixa de apagar documentos pagos, compras diretas (deram entrada de stock) e VNC validadas → 409.
+- **Sessão:** se o `/auth/me` falhar ao restaurar a sessão, termina a sessão e volta ao login. Antes só apagava o token.
+- **Cobertura:**
+  - o `collectCoverageFrom` passa a incluir os serviços de clientes, técnicos, parque, planos, fornecedores, faturas de fornecedor, tabelas do sistema e utilizadores;
+  - novos testes para tabelas do sistema, fornecedores e utilizadores, para os limites continuarem a passar.
+- **Testes do frontend:** sem avisos `act(...)` no `useConfirm.test.tsx`.
+
+### chore(backend): ESLint, Prettier e `npm run lint` no CI (closes #222)
+
+- **Antes:** o backend não tinha ESLint, Prettier nem script de lint.
+- **ESLint 9** (configuração "flat", `eslint.config.mjs`) com as regras recomendadas do JS e do `typescript-eslint` 8.
+  - O `eslint-config-prettier` desliga as regras de estilo; o lint só trata de qualidade.
+  - Ajustes: `any` permitido (corpos de pedido e mocks); variáveis começadas por `_` ignoradas; nos testes, sem a regra de variáveis não usadas.
+- **Prettier** (`.prettierrc`, próximo do estilo atual): `npm run format` formata `src/` e `test/` quando se quiser. Não é verificado no CI, para não reformatar o código todo de uma vez.
+- **Scripts:** `npm run lint` e `npm run lint:fix`.
+- **CI:** novo job "Backend Lint", sem BD e em paralelo com os testes. O build passa a depender dele.
+- **Corrigidos os erros que o lint encontrou:**
+  - imports não usados em 5 entidades e no serviço de estornos;
+  - uma constante usada só como tipo;
+  - diretivas `eslint-disable` que já não faziam nada;
+  - o tipo `Function` no teste da matriz de perfis;
+  - a regex de nomes de PDF com caracteres de controlo, que passam a sair por código (como no frontend, #207).
+
+### perf(context): o login deixa de carregar todos os movimentos de stock e o que o perfil não pode ver (closes #221)
+
+- **Antes:**
+  - o login fazia ~25 pedidos, incluindo **todos** os movimentos de stock, para qualquer perfil;
+  - com sessão guardada, o lote corria **duas vezes**: uma antes de se saber o perfil e outra depois;
+  - o técnico de campo recebia 403 em vários desses pedidos.
+- **Movimentos de stock:** o `GET /movimentos-stock` passa a paginar e a filtrar no servidor (`pagina`, `porPagina` até 500, `tipo`, `artigoId`, `q` no código ou descrição do artigo, `de`/`ate`). Devolve `{ items, total, pagina, porPagina, porTipo }`.
+- **Relatório "Movimentos de Stock":**
+  - pede os dados ao servidor só quando o separador está aberto, com paginação de 50 em 50;
+  - os cartões contam pelo servidor;
+  - a exportação leva a página atual.
+- **Contexto:**
+  - os movimentos saem do estado global e do carregamento inicial;
+  - o técnico de campo deixa de pedir compras, faturas de fornecedor e fornecedores (403);
+  - o lote só corre depois de se conhecer o utilizador, uma vez por login.
+- Os logs saíram do login no #210 e as faturas antigas no #218.
+- Testes: listagem paginada (omissões, filtros, contagem por tipo sem o filtro de tipo), serviço do frontend e carregamento inicial (sem movimentos, sem pedidos proibidos ao campo, um só lote).
+
+### fix(ordens): o técnico de campo passa a ver só as suas OTs (closes #220)
+
+- **Antes:**
+  - o `GET /ordens` só filtrava com `?mine=true`, que o frontend não enviava;
+  - esse filtro lia o `tecnicoId` do `req.user`, que o `JwtStrategy` não preenche, por isso devolvia sempre vazio;
+  - o técnico de campo via as OTs de todos, na lista e na Agenda.
+- **Perfil `campo`:** o servidor restringe **sempre** às OTs em que o técnico é executante ou que ele registou, qualquer que seja a query. Sem as registadas, uma OT acabada de criar desaparecia.
+- **Rotas `/ordens/:id…`** (detalhe, edição, transições, consumo, reprogramação, anexos): o novo `OtAcessoGuard` responde **404** a uma OT alheia, sem revelar que existe.
+- O técnico do utilizador é lido da BD (`tecnicos.id_user`), não do token. Isto corrige também o `?mine=true`.
+- Os outros perfis não têm restrição.
+- Testes: filtro OR com outros filtros, pedido de OTs de outro executante, perfis sem restrição, `mine=true`, `podeAceder` e o guard (404).
+
+### feat(utilizadores): o utilizador pode alterar a sua palavra-passe (closes #219)
+
+- **Antes:** o `POST /auth/change-password` existia, mas nenhum ecrã o usava. As passwords por omissão do seed ficavam em uso.
+- **Novo botão "Alterar palavra-passe"** (ícone de chave) no menu do utilizador. Abre um formulário com a password atual, a nova e a confirmação.
+  - Valida antes de enviar: confirmação igual e mínimo da política (#100).
+  - Erros do servidor aparecem junto ao campo.
+  - Em caso de sucesso fecha e avisa que o próximo início de sessão usa a nova.
+- **Backend:** o `change-password` passa a devolver erros por campo (422 com `errors`, padrão #49):
+  - password atual errada → `currentPassword`;
+  - nova password abaixo do mínimo ou igual à atual → `newPassword`;
+  - o DTO passa a ter mensagens em português.
+- Testes: service (erros por campo, igual à atual) e modal (erros inline sem pedido, erro do servidor no campo, sucesso).
+
+### fix(faturacao): retirado o ecrã "Faturação (anterior)", que marcava faturas como Paga fora da Tesouraria (closes #218)
+
+- **Antes:** o menu ainda mostrava "Faturação (anterior)". O ecrã fazia `PUT /faturas/:id` com `estado: 'Paga'`, sem liquidação nem movimento de caixa ou de conta.
+- **Frontend:**
+  - saem o ecrã, a entrada de menu e, do contexto, as faturas antigas (estado, carregamento, `addFatura` e `updateFatura`);
+  - a rota `/faturacao` passa a levar a Vendas.
+- **Backend:** o `PUT /faturas/:id` deixa de aceitar `estado`, `dataPagamento`, `comprovativo` e `motivoAnulacao`. O DTO dá 400 e o serviço ignora-os se o DTO for contornado. O `POST` já estava fechado (410) desde o #165.
+- Na BD de dev há 0 faturas antigas. O `GET /faturas` continua disponível para consulta.
+- Testes: o DTO rejeita os 4 campos e o serviço retira-os do patch.
+
+### fix(compras): o relatório de Compras passa a sair em PDF do servidor, como as outras impressões (closes #217)
+
+- **Antes:** o botão Imprimir do separador "Relatórios" das Compras usava `window.print()` sobre o ecrã, contra a regra do #182. Saía com o cabeçalho e o rodapé do navegador e sem "Pág. x/y".
+- **Agora gera o HTML do relatório** (`relatorioComprasHtml.ts`) e imprime via `imprimirPdf()`, com `comPaginacao()` e "Pág. x/y" (#180). O relatório inclui:
+  - os indicadores (em aberto, em atraso, hoje, esta semana);
+  - o estado das encomendas (com %) e o volume dos últimos 7 dias;
+  - as tabelas de encomendas em aberto e em atraso.
+- Deixa de haver `window.print()` na aplicação.
+- Testes: conteúdo, textos escapados, estado vazio e a regra de página.
+
+### fix(api): DELETE de encomendas e armazéns deixa de apagar dados de stock em cascata (closes #216)
+
+- **Antes:**
+  - `DELETE /compras/:id` apagava qualquer encomenda e levava as linhas e as receções (FK `CASCADE`), deixando o stock recebido e o `stockEncomendado` incoerentes;
+  - `DELETE /armazens/:id` apagava o `stock_armazem` do armazém sem recalcular a existência.
+- **Encomendas:** só se apagam se estiverem **Abertas e sem receções** (nem anuladas, porque são histórico de stock). O `stockEncomendado` pendente é libertado na mesma transação. Nos outros casos → **409**, e usa-se "Cancelar".
+- **Armazéns:**
+  - com stock → **409** (transfira o stock ou desative o armazém);
+  - sendo o armazém por omissão de algum artigo → **409**;
+  - nos outros casos, apaga as linhas vazias de `stock_armazem` e o armazém.
+- A UI não usa estes endpoints (só cancela ou desativa); a guarda protege a API.
+- Testes: os casos permitidos e cada recusa, sem apagar nem mexer no stock.
+
+### fix(fornecedores): validar uma VNC de devolução passa a ser uma só transação (closes #215)
+
+- **Antes:**
+  - desde o #204, a saída de stock da VNC já passava por `stock_armazem` numa transação;
+  - a verificação do estado e a gravação do novo estado ficavam fora dessa transação;
+  - dois pedidos de validação em simultâneo podiam descontar o stock duas vezes;
+  - uma falha depois do stock deixava a VNC por validar com o stock já alterado.
+- **Agora tudo corre numa transação**, com a fatura bloqueada (`FOR UPDATE`): verificação da transição, saída de stock por linha, movimentos e novo estado.
+  - Sem stock suficiente numa linha → 422 e nada fica gravado.
+  - Uma segunda validação → 400 "Transição inválida", sem mexer no stock.
+- A VNC não indica armazém. A saída usa a ordem habitual: primeiro o armazém do artigo, depois os restantes.
+- Testes: validação completa com o lock, rollback a meio, validação repetida e acerto de preço sem stock.
+
+### fix(stock): retirada a "Guia de Transporte", que mostrava sucesso sem gerar documento (closes #214)
+
+- **Antes:** a operação "Guia de Transporte" do Stock mostrava "Guia de transporte emitida." sem gerar nenhum documento. Já nenhum botão a abria, mas o código continuava lá.
+- **Agora:** saem o tipo, o rótulo, o ramo e o toast falso.
+- A guia volta quando existir como documento fiscal, com série e numeração próprias e impressão via `imprimirPdf` (#182).
+
+### fix(stock): inventário, reposição e devolução passam a ser atómicos e o movimento é validado (closes #213)
+
+- **Antes:**
+  - inventário, reposição e devolução faziam dois pedidos independentes: o ajuste de stock e o movimento;
+  - o `POST /movimentos-stock` não validava o tipo nem a quantidade e não mexia no stock;
+  - o frontend enviava `data`, um campo que o DTO não aceita, por isso o movimento dava sempre 400 e o erro ficava escondido;
+  - o stock podia mudar sem movimento.
+- **`POST /movimentos-stock` agora valida, aplica e regista numa só transação** (`stock_armazem` e existência derivada):
+  - `entrada` (> 0) entra no armazém indicado;
+  - `saida`, `devolucao` e `ajuste` negativo saem pela ordem habitual; sem stock suficiente → 422;
+  - `ajuste` ≠ 0, com sinal;
+  - quantidade inválida → **400**;
+  - `transferencia` → 400 (tem endpoint próprio, atómico desde o #37);
+  - artigo inexistente → 404.
+- **`registarMovimento`** só regista. Usam-no a finalização da OT, em que o stock já saiu no `StockReservaService`, e a receção.
+- **Receção e anulação de receção:** o movimento (entrada ou saída) passa a ser gravado pelo servidor, na mesma transação do stock. O frontend deixa de o criar à parte.
+- **Frontend:**
+  - cada linha de inventário e cada reposição ou devolução é um único pedido;
+  - o `addMovimento` envia só os campos do DTO e recarrega artigos, movimentos e stock por armazém.
+- Testes:
+  - `createMovimento`: entrada, saídas, ajustes com sinal, rollback quando o stock falha, 400 por quantidade ou tipo inválido, 404;
+  - receção e anulação registam o movimento;
+  - o `addMovimento` não envia `data`.
+
 ### fix(context): as criações esperam pelo servidor e deixam de mostrar sucesso falso (closes #212)
 
 - **Antes:** `addCliente`, `addFornecedor`, `addModelo`, `addArmazem`, `addArtigo`, `addMovimento` e `addEncomenda` devolviam logo um registo provisório com `id: ''` e engoliam o erro (`.catch(() => {})`). As páginas mostravam "registado" e fechavam o modal mesmo quando o servidor recusava.

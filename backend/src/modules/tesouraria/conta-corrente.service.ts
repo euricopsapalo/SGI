@@ -119,8 +119,9 @@ export class ContaCorrenteService {
                    COALESCE(d.data_hora, m.created_at) AS ts,
                    COALESCE(${NUMERO_DOC}, m.origem_tipo || ' #' || m.origem_id) AS documento,
                    ot.numero AS "otNumero",
-                   CASE WHEN m.natureza = 'D' THEN m.valor_original ELSE 0 END::float AS debito,
-                   CASE WHEN m.natureza = 'C' THEN m.valor_original ELSE 0 END::float AS credito,
+                   -- #179 — o documento aparece pelo total; a retenção é uma linha à parte (abaixo).
+                   CASE WHEN m.natureza = 'D' THEN m.valor_original + COALESCE(d.retencao_valor, 0) ELSE 0 END::float AS debito,
+                   CASE WHEN m.natureza = 'C' THEN m.valor_original + COALESCE(d.retencao_valor, 0) ELSE 0 END::float AS credito,
                    0::float AS desconto
             FROM movimentos_cc m
             LEFT JOIN documentos_venda d ON m.origem_tipo = 'DOCUMENTO_VENDA' AND d.id = m.origem_id
@@ -140,10 +141,28 @@ export class ContaCorrenteService {
             JOIN series s ON s.id = l.serie_id
             WHERE l.cliente_id = $1`, [q.clienteId]);
 
-        const todas = [...documentos, ...liquidacoes]
+        // #179 — retenção na fonte: crédito (débito, num estorno) associado ao documento, logo a seguir a ele.
+        const retencoes: any[] = await this.dataSource.query(`
+            SELECT 'RETENCAO' AS tipo, m.id, m.data_documento::text AS data, m.created_at AS "dataExtrato",
+                   COALESCE(d.data_hora, m.created_at) AS ts,
+                   ('Retenção ' || ${NUMERO_DOC}) AS documento,
+                   ot.numero AS "otNumero",
+                   CASE WHEN m.natureza = 'C' THEN d.retencao_valor ELSE 0 END::float AS debito,
+                   CASE WHEN m.natureza = 'D' THEN d.retencao_valor ELSE 0 END::float AS credito,
+                   0::float AS desconto
+            FROM movimentos_cc m
+            JOIN documentos_venda d ON m.origem_tipo = 'DOCUMENTO_VENDA' AND d.id = m.origem_id
+            LEFT JOIN documentos_config dc ON dc.id = d.documento_config_id
+            LEFT JOIN series s ON s.id = d.serie_id
+            LEFT JOIN ordens_trabalho ot ON ot.id = d.ot_id
+            WHERE m.cliente_id = $1 AND d.retencao_valor > 0`, [q.clienteId]);
+
+        const ordemTipo = (t: string) => (t === 'RETENCAO' ? 1 : 0);
+        const todas = [...documentos, ...retencoes, ...liquidacoes]
             .sort((a, b) => a.data.localeCompare(b.data)
                 || new Date(a.ts).getTime() - new Date(b.ts).getTime()
-                || a.id - b.id);
+                || a.id - b.id
+                || ordemTipo(a.tipo) - ordemTipo(b.tipo));
 
         const anteriores = q.de ? todas.filter((l) => l.data < q.de!) : [];
         const saldoAnterior = round2(anteriores.reduce((s, l) => s + l.debito - l.credito, 0));

@@ -119,11 +119,11 @@ describe('OT Ciclo de Estados (RF-OT-001) E2E', () => {
         expect(store[1].estado).toBe('Finalizada');
     });
 
-    it('aliases descontinuados devolvem 410 Gone', async () => {
-        await request(srv()).put('/ordens/1/emitir').send({}).expect(410);
-        await request(srv()).put('/ordens/1/terminar').send({}).expect(410);
-        await request(srv()).put('/ordens/1/encerrar').send({}).expect(410);
-        await request(srv()).put('/ordens/1/reverter').send({}).expect(410);
+    // #223 — os aliases descontinuados (410 desde o RF-OT-001) foram retirados.
+    it('aliases antigos já não existem (404)', async () => {
+        for (const antigo of ['emitir', 'terminar', 'encerrar', 'reverter']) {
+            await request(srv()).put(`/ordens/1/${antigo}`).send({}).expect(404);
+        }
     });
 
     it('salto de estado Registada → Em execução devolve 422', async () => {

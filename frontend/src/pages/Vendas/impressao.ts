@@ -235,6 +235,7 @@ export function buildFaturaHtml(d: FaturaImpressao): string {
                 ${totalLinha('Descontos Comerciais', d.totais.descontosComerciais)}
                 ${totalLinha('IVA', d.totais.valorIva)}
                 ${totalLinha(`Total ( ${esc(moeda)} )`, d.totais.total, true)}
+                ${retencao ? `${totalLinha('Retenção na Fonte', -retencao.valor)}${totalLinha(`Total a Pagar ( ${esc(moeda)} )`, d.totais.totalAReceber ?? d.totais.total - retencao.valor, true)}` : ''}
             </tbody></table>
             ${liquidacao ? `<div class="pago">Pago — ${esc(liquidacao.numeroDocumento)} · ${esc(liquidacao.conta)}</div>` : ''}
         </div>
