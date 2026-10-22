@@ -4,6 +4,16 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### refactor(compras): EncomendaPage partida em componentes (parte de #223)
+
+- **Antes:** `EncomendaPage.tsx` tinha cerca de 3 450 linhas, com 6 modais, 9 geradores de impressão, os utilitários e a página no mesmo ficheiro.
+- **Agora**, em `pages/Encomendas/`:
+  - `encomendas.utils.ts`: totais, formato de impressão e estilos de estado;
+  - `encomendasImpressao.ts`: nota de encomenda e de entrada, fatura de fornecedor, VNC e sugestões;
+  - um ficheiro por modal (`ReceberModal`, `EncomendaModal`, `ConvertFaturaModal`, `CompraDiretaModal`, `ConverterModal`) e o `VNCEstadoBadge`;
+  - a página fica com cerca de 1 150 linhas.
+- **Só se move código:** nenhuma linha muda de conteúdo. Cada ficheiro importa apenas o que usa.
+
 ### refactor(clientes): a página de Clientes passa a usar o estado do contexto (parte de #223)
 
 - **Antes:** a página de Clientes fazia os seus próprios `GET`, `POST`, `PUT` e `DELETE /clientes`, em paralelo com o contexto (React Query, #43). Depois de cada gravação recarregava os dois, e havia dois modelos de cliente diferentes.
