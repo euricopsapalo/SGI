@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import api from '../services/api';
 import { GlobalProvider, useGlobal } from './GlobalContext';
@@ -75,5 +75,31 @@ describe('criações no GlobalContext (#212)', () => {
         const urls = mockApi.get.mock.calls.map(c => c[0]);
         expect(urls).toEqual(expect.arrayContaining(['/artigos', '/artigos/stock-armazem']));
         expect(urls).not.toContain('/movimentos-stock'); // #221 — os movimentos já não vivem no contexto
+    });
+
+    it('#223 — clientes: o contexto guarda o cliente completo devolvido pelo servidor (endereços e retenção)', async () => {
+        const doServidor = {
+            id: 7, tipo: 'empresa', nome: 'Alfa, Lda', nif: '500', email: 'a@x.ao', telefone: '9', ativo: true,
+            condicaoPagamentoId: 2, retencaoAtiva: true, retencaoPercentagem: '6.50', retencaoDescricao: 'Lei 19/14',
+            enderecos: [{ descricao: 'Sede', morada: 'Rua 1', cidade: 'Luanda', principal: true, provinciaId: 3, municipioId: 4 }],
+        };
+        mockApi.post.mockResolvedValue({ data: doServidor });
+        (api as any).put = jest.fn(async () => ({ data: { ...doServidor, nome: 'Alfa, SA' } }));
+        const { result } = montar();
+
+        let criado: any;
+        await act(async () => { criado = await result.current.addCliente({ nome: 'Alfa, Lda' }); });
+        expect(criado).toMatchObject({ id: '7' });
+        await waitFor(() => expect(result.current.clientes).toHaveLength(1));
+        expect(result.current.clientes[0]).toMatchObject({
+            id: '7', morada: 'Rua 1', municipio: 'Luanda', provinciaId: '3', condicaoPagamentoId: '2',
+            retencaoAtiva: true, retencaoPercentagem: 6.5,
+            enderecos: [expect.objectContaining({ morada: 'Rua 1', principal: true, provinciaId: '3' })],
+        });
+
+        await act(async () => { await result.current.updateCliente('7', { nome: 'Alfa, SA', enderecos: [] }); });
+        // guarda a resposta do servidor (com os endereços), não o pedido
+        await waitFor(() => expect(result.current.clientes[0]?.nome).toBe('Alfa, SA'));
+        expect(result.current.clientes[0]).toMatchObject({ enderecos: [expect.objectContaining({ morada: 'Rua 1' })] });
     });
 });

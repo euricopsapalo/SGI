@@ -4,6 +4,17 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### refactor(clientes): a página de Clientes passa a usar o estado do contexto (parte de #223)
+
+- **Antes:** a página de Clientes fazia os seus próprios `GET`, `POST`, `PUT` e `DELETE /clientes`, em paralelo com o contexto (React Query, #43). Depois de cada gravação recarregava os dois, e havia dois modelos de cliente diferentes.
+- **Agora há uma só fonte:**
+  - a página lê os clientes do contexto e grava com `addCliente`, `updateCliente` e `removeCliente`;
+  - o contexto guarda o cliente completo: endereços, condições de pagamento e retenção na fonte (#179);
+  - os campos de endereço principal que os outros ecrãs usam continuam iguais.
+- O `updateCliente` passa a guardar o cliente devolvido pelo servidor e não o pedido.
+- O registo da eliminação deixa de ser duplicado (era feito pela página e pelo contexto).
+- Teste: o contexto guarda o cliente completo devolvido pelo servidor, ao criar e ao editar.
+
 ### test(ordens): cobertura do serviço de OTs de 51 % para 79 % de branches (parte de #223)
 
 - **Novos testes ao `ordens-trabalho.service`:**
