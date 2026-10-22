@@ -4,6 +4,17 @@ Todas as alterações notáveis a este projeto serão documentadas neste ficheir
 
 ## [Não publicado]
 
+### test(ordens): cobertura do serviço de OTs de 51 % para 79 % de branches (parte de #223)
+
+- **Novos testes ao `ordens-trabalho.service`:**
+  - geração da OT periódica seguinte: data a partir da planeada (anti-deriva), "no passado → hoje", plano ou equipamento inativo, "Única", cópia da mão de obra e das peças previstas;
+  - validações de criação (máquina, cliente, periodicidade, técnico);
+  - confirmar (data, técnico, descrição, janela de 6 meses);
+  - aprovação de adiamentos acima do limite (403 sem aprovação ou não admin, extensão da janela);
+  - `reprogramar` (compatibilidade e delegação em `adiar`), `agendar`, `remove`, limite de adiamentos por omissão e custos.
+- **Cobertura do serviço:** instruções de 74 % para 96 %, branches de 51 % para 79 %.
+- **Novo limite no jest** para este serviço (90 % de linhas, 70 % de branches), para não voltar a descer.
+
 ### feat(vendas): retenção na fonte configurada na ficha do cliente (Lei 19/14) (closes #179)
 
 - **Ficha do cliente** (separador Dados Comerciais): "Retenção na fonte", com a opção de aplicar, a percentagem (6,5 % por omissão) e a descrição impressa na fatura. Com a retenção ativa, a percentagem tem de ser maior que zero.
