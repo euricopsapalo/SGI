@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import AppLayout from '../../components/Layout/AppLayout';
 import ActionBar from '../../components/Layout/ActionBar';
 import ExportModal, { ExportCol } from '../../components/ExportModal';
 import { Search, Plus, Pencil, Eye, Phone, Mail, MapPin, Building2, User, Users, X, Check, AlertCircle, Trash2, Download, Printer } from 'lucide-react';
 import SearchableSelect from '../../components/SearchableSelect';
-import api from '../../services/api';
 import { showToast, extractFieldErrors } from '../../utils/errorHandler';
-import { useGlobal, EquipInstalado, OrdemTrabalho, ModeloEquipamento } from '../../contexts/GlobalContext';
+import { useGlobal, EquipInstalado, OrdemTrabalho, ModeloEquipamento, Cliente as ClienteContexto } from '../../contexts/GlobalContext';
 import { useConfirm } from '../../components/useConfirm';
 import FieldError, { fieldAria } from '../../components/FieldError';
 import SubmitButton from '../../components/SubmitButton';
@@ -45,6 +44,14 @@ export interface Cliente {
 }
 
 /* ── Helpers ── */
+/** #223 — os clientes vêm do contexto (React Query); a página trabalha com o id numérico. */
+const paraClientePagina = (c: ClienteContexto): Cliente => ({
+    id: Number(c.id), tipo: c.tipo, nome: c.nome, nif: c.nif, email: c.email, telefone: c.telefone,
+    ativo: c.ativo, enderecos: c.enderecos ?? [],
+    condicaoPagamentoId: c.condicaoPagamentoId, modoPagamentoId: c.modoPagamentoId,
+    retencaoAtiva: c.retencaoAtiva, retencaoPercentagem: c.retencaoPercentagem, retencaoDescricao: c.retencaoDescricao,
+});
+
 const endPrincipal = (c: Cliente): Endereco =>
     (c.enderecos ?? []).find(e => e.principal) ?? c.enderecos?.[0] ?? { descricao: '', morada: '', cidade: '', principal: true };
 
@@ -1187,10 +1194,10 @@ const RelatoriosClienteModal: React.FC<RelatoriosClienteModalProps> = ({ cliente
    MAIN PAGE
 ══════════════════════════════════════════ */
 const ClientesPage: React.FC = () => {
-    const { equipInstalados, ordens, addLog, currentUser, refreshClientes } = useGlobal();
+    // #223 — uma só fonte de dados: o contexto (antes a página fazia os seus próprios pedidos).
+    const { equipInstalados, ordens, clientes: clientesContexto, addCliente, updateCliente, removeCliente, loadingData: loading } = useGlobal();
     const confirm = useConfirm();
-    const [clientes, setClientes] = useState<Cliente[]>([]);
-    const [loading, setLoading] = useState(true);
+    const clientes = useMemo(() => clientesContexto.map(paraClientePagina), [clientesContexto]);
     const [search, setSearch]     = useState('');
     const [detail, setDetail]     = useState<Cliente | null>(null);
     const [editTarget, setEditTarget] = useState<Cliente | null>(null);
@@ -1206,28 +1213,12 @@ const ClientesPage: React.FC = () => {
             variant: 'danger',
         }))) return;
         try {
-            await api.delete(`/clientes/${id}`);
+            await removeCliente(String(id));
             showToast(`Cliente "${nome}" eliminado.`, 'success');
-            addLog({ usuario: currentUser?.email ?? 'sistema', modulo: 'Clientes', acao: 'Cliente eliminado', detalhes: `Nome: ${nome}`, tipo: 'warning' });
-            loadClientes();
-            refreshClientes();
         } catch {
             /* erro já apresentado pelo interceptor global (api.ts) */
         }
     };
-
-    const loadClientes = useCallback(async () => {
-        try {
-            const { data } = await api.get(`/clientes`);
-            setClientes(data);
-        } catch (e) {
-            console.error('Erro ao carregar clientes', e);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => { loadClientes(); }, [loadClientes]);
 
     const openNew = () => { setEditTarget(null); setModalOpen(true); };
     const openEdit = (c: Cliente) => { setDetail(null); setEditTarget(c); setModalOpen(true); };
@@ -1236,14 +1227,12 @@ const ClientesPage: React.FC = () => {
     const handleSave = async (data: FormData) => {
         try {
             if (editTarget) {
-                await api.put(`/clientes/${editTarget.id}`, data);
+                await updateCliente(String(editTarget.id), data);
                 showToast('Cliente actualizado com sucesso.', 'success');
             } else {
-                await api.post(`/clientes`, data);
+                await addCliente(data);
                 showToast('Cliente criado com sucesso.', 'success');
             }
-            await loadClientes();
-            refreshClientes();
             closeModal();
         } catch (e) {
             // #49 — o toast global é tratado pelo interceptor (api.ts); propaga
