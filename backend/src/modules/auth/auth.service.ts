@@ -1,10 +1,10 @@
 import { Injectable, Logger, UnauthorizedException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomBytes } from 'crypto';
-import { Repository } from 'typeorm';
+import { FindOptionsWhere, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-import { User } from '../users/user.entity';
+import { User, USER_SELECT_COM_SEGREDOS } from '../users/user.entity';
 import { MailService } from '../mail/mail.service';
 import { ConfiguracaoService } from '../configuracao/configuracao.service';
 import { erroValidacao } from '../vendas-config/erros';
@@ -22,8 +22,13 @@ export class AuthService {
         private readonly configService: ConfiguracaoService,
     ) {}
 
+    /** #259 — o User esconde os campos sensíveis (`select: false`); a autenticação pede-os aqui. */
+    private findComSegredos(where: FindOptionsWhere<User>) {
+        return this.userRepo.findOne({ where, select: USER_SELECT_COM_SEGREDOS });
+    }
+
     async login(email: string, password: string, code?: string) {
-        const user = await this.userRepo.findOne({ where: { email } });
+        const user = await this.findComSegredos({ email });
         if (!user || !user.ativo) throw new UnauthorizedException('Credenciais inválidas.');
         const valid = await bcrypt.compare(password, user.passwordHash);
         if (!valid) throw new UnauthorizedException('Credenciais inválidas.');
@@ -81,7 +86,7 @@ export class AuthService {
 
     /** Confirma o código do authenticator e ativa o 2FA da conta. */
     async enableTwoFactor(userId: number, code: string) {
-        const user = await this.userRepo.findOne({ where: { id: userId } });
+        const user = await this.findComSegredos({ id: userId });
         if (!user) throw new NotFoundException('Utilizador não encontrado.');
         if (!user.twoFactorSecret) throw new BadRequestException('Execute o setup do 2FA primeiro.');
         if (!verifyTotp(user.twoFactorSecret, code)) throw new BadRequestException('Código inválido.');
@@ -91,7 +96,7 @@ export class AuthService {
 
     /** Desativa o 2FA, exigindo um código válido para confirmar a posse do dispositivo. */
     async disableTwoFactor(userId: number, code: string) {
-        const user = await this.userRepo.findOne({ where: { id: userId } });
+        const user = await this.findComSegredos({ id: userId });
         if (!user) throw new NotFoundException('Utilizador não encontrado.');
         if (user.twoFactorEnabled && user.twoFactorSecret && !verifyTotp(user.twoFactorSecret, code)) {
             throw new BadRequestException('Código inválido.');
@@ -139,7 +144,7 @@ export class AuthService {
         // O token é gerado em hex minúsculo; normalizar aqui torna a comparação
         // tolerante a espaços/case introduzidos ao colar o token (#153).
         const normalized = (token ?? '').trim().toLowerCase();
-        const user = await this.userRepo.findOne({ where: { resetToken: normalized } });
+        const user = await this.findComSegredos({ resetToken: normalized });
         if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
             throw new BadRequestException('Token inválido ou expirado.');
         }
@@ -151,7 +156,7 @@ export class AuthService {
 
     /** #219 — erros por campo (422 com `errors`, padrão #49) para o formulário mostrar inline. */
     async changePassword(userId: number, currentPassword: string, newPassword: string) {
-        const user = await this.userRepo.findOne({ where: { id: userId } });
+        const user = await this.findComSegredos({ id: userId });
         if (!user) throw new NotFoundException('Utilizador não encontrado.');
         const valid = await bcrypt.compare(currentPassword, user.passwordHash);
         if (!valid) throw erroValidacao({ currentPassword: 'A password atual está incorreta.' });
