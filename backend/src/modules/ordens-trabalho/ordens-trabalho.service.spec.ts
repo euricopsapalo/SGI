@@ -455,6 +455,18 @@ describe('OrdensTrabalhoService (regression #15)', () => {
                 expect(artigosService.createMovimento).not.toHaveBeenCalled();
             });
 
+            it('#257 — a seguinte tem número OT-NNNNNN, data de registo, janela e registador', async () => {
+                repo.findOne.mockResolvedValue(periodica({ numero: 'OT-000001', registadoPorId: 77, periodicidade: 'Anual' }));
+                await service.finalizar(1, { assinadaCliente: true, usuario: 'u' });
+                expect(novaOt()).toMatchObject({
+                    dataAgendada: '2100-01-10', dataRegisto: hoje(), janelaFim: '2100-07-10', registadoPorId: 77,
+                });
+                expect(managerMock.update).toHaveBeenCalledWith(OrdemTrabalho, 200, { numero: 'OT-000200' });
+                expect(logs()).toEqual(expect.arrayContaining([expect.objectContaining({
+                    acao: 'OT_PERIODICA_GERADA', detalhes: expect.stringMatching(/^OT-000200 gerada a partir de OT-000001/),
+                })]));
+            });
+
             it('anti-deriva: parte da data planeada original (1.ª reprogramação), não da executada', async () => {
                 repo.findOne.mockResolvedValue(periodica({
                     dataAgendada: '2099-03-20',

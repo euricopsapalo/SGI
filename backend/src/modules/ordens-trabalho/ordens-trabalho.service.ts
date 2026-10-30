@@ -43,6 +43,11 @@ export function addMonthsISO(fromDate: string, months: number): string {
     return d.toISOString().split('T')[0];
 }
 
+/** RF-OT-002 §3.1 — número da OT (OT-NNNNNN), derivado do id. */
+export function numeroOT(id: number): string {
+    return `OT-${String(id).padStart(6, '0')}`;
+}
+
 /**
  * #199 — Campos que só o servidor gere (máquina de estados, numeração,
  * assinatura, adiamentos, aprovação, faturação). Retirados de qualquer
@@ -427,7 +432,7 @@ export class OrdensTrabalhoService {
 
         // 6. gerar numero (OT-NNNNNN) — após save para conhecer o id
         if (!saved.numero) {
-            const numero = `OT-${String(saved.id).padStart(6, '0')}`;
+            const numero = numeroOT(saved.id);
             await this.repo.update(saved.id, { numero });
             saved.numero = numero;
         }
@@ -931,6 +936,9 @@ export class OrdensTrabalhoService {
         if (nextStart < today) { nextStart = today; avisoPassado = true; }
 
         // 3. Criar a nova OT ligada à anterior (via manager da transação do fecho).
+        //    #257 — mesmos defaults do `create()`: registo hoje, registador herdado
+        //    da origem; a janela conta a partir da data agendada (uma periodicidade
+        //    Anual cairia fora de hoje+6m).
         const newOt = await manager.save(this.repo.create({
             tipo: OTTipo.PERIODICA,
             cliente: origem.cliente,
@@ -946,8 +954,14 @@ export class OrdensTrabalhoService {
             causa: origem.causa,
             estado: OTEstado.PROGRAMADA,
             dataAgendada: nextStart,
+            dataRegisto: today,
+            janelaFim: addMonthsISO(nextStart, 6),
+            registadoPorId: origem.registadoPorId ?? null,
             geradaDeOtId: origem.id,
         }));
+        // #257 — numeração (OT-NNNNNN) após o save, como no `create()`.
+        newOt.numero = numeroOT(newOt.id);
+        await manager.update(OrdemTrabalho, newOt.id, { numero: newOt.numero });
 
         // 4. Copiar mão de obra e peças previstas (mesma transação).
         if ((origem.maosObra ?? []).length > 0) {
@@ -972,7 +986,7 @@ export class OrdensTrabalhoService {
 
         await this.sysLogs.create({
             usuario, modulo: 'OT', acao: 'OT_PERIODICA_GERADA',
-            detalhes: `#${newOt.id} gerada a partir de #${origem.id}, dataAgendada=${nextStart}`
+            detalhes: `${newOt.numero} gerada a partir de ${origem.numero ?? `#${origem.id}`}, dataAgendada=${nextStart}`
                 + (avisoPassado ? ' (planeada+intervalo no passado → hoje)' : ''),
         });
     }
