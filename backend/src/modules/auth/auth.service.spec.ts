@@ -65,6 +65,16 @@ describe('AuthService — segurança (issue #100)', () => {
       expect(jwt.sign).toHaveBeenCalledWith(expect.anything(), { expiresIn: 3600 });
     });
 
+    it('#259 — pede explicitamente os campos sensíveis (select: false na entidade) e não os devolve', async () => {
+      userRepo.findOne.mockResolvedValue(baseUser());
+      const res: any = await service.login('ana@aquatex.ao', senha);
+      expect(userRepo.findOne).toHaveBeenCalledWith({
+        where: { email: 'ana@aquatex.ao' },
+        select: expect.arrayContaining(['passwordHash', 'twoFactorSecret', 'twoFactorEnabled', 'ativo']),
+      });
+      expect(res.user).not.toHaveProperty('passwordHash');
+    });
+
     it('credenciais inválidas lançam 401', async () => {
       userRepo.findOne.mockResolvedValue(baseUser());
       await expect(service.login('ana@aquatex.ao', 'errada')).rejects.toBeInstanceOf(UnauthorizedException);
@@ -206,7 +216,7 @@ describe('AuthService — segurança (issue #100)', () => {
     it('resetPassword normaliza o token (case/whitespace) antes da consulta', async () => {
       userRepo.findOne.mockResolvedValue(baseUser({ resetToken: 'abc123', resetTokenExpiry: new Date(Date.now() + 100000) }));
       await service.resetPassword('  ABC123  ', 'password-nova-123');
-      expect(userRepo.findOne).toHaveBeenCalledWith({ where: { resetToken: 'abc123' } });
+      expect(userRepo.findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { resetToken: 'abc123' } }));
     });
 
     it('resetPassword com token inválido/expirado lança 400', async () => {
